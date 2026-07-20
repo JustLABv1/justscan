@@ -3,17 +3,12 @@
 import { useToast } from '@/components/toast';
 import { StatusAlert } from '@/components/ui/form-alert';
 import {
-  adminUpdateAuthSettings,
   adminUpdateMaintenanceSettings,
-  adminUpdateScannerSettings,
   getAdminSettings,
   setPublicScanEnabled,
-  updateAPILogRetention,
   updateRateLimit,
   updateRegisterRateLimit,
-  updateXRayLogRetention,
 } from '@/lib/api/admin';
-import type { ScannerSettings } from '@/lib/api/types/registries';
 import { Button, Card, Input, Link, Modal, Switch, TextArea, useOverlayState } from '@heroui/react';
 import { useEffect, useState } from 'react';
 
@@ -43,188 +38,6 @@ function SettingRow({
   );
 }
 
-function ScannerSettingsPanel() {
-  const toast = useToast();
-  const [settings, setSettings] = useState<ScannerSettings>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    getAdminSettings()
-      .then((s) => {
-        setSettings({
-          enable_trivy: s['scanner.enable_trivy'] !== 'false',
-          enable_grype: s['scanner.enable_grype'] !== 'false',
-          concurrency: parseInt(s['scanner.concurrency'] ?? '2', 10),
-          timeout_seconds: parseInt(s['scanner.timeout_seconds'] ?? '300', 10),
-          db_max_age_hours: parseInt(s['scanner.db_max_age_hours'] ?? '24', 10),
-          enable_osv_java_augmentation: s['scanner.enable_osv_java_augmentation'] === 'true',
-        });
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-        toast.error('Failed to load scanner settings');
-      });
-  }, [toast]);
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await adminUpdateScannerSettings(settings);
-      toast.success('Scanner settings updated');
-    } catch (saveError: unknown) {
-      toast.error(saveError instanceof Error ? saveError.message : 'Failed to update scanner settings');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (loading) return null;
-
-  return (
-    <Card className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold">Scanner Runtime</h2>
-        <p className="text-sm text-zinc-500">Tune scanner engines and job execution behavior.</p>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <Switch
-          isSelected={settings.enable_trivy ?? true}
-          onChange={(checked) => setSettings((p) => ({ ...p, enable_trivy: checked }))}
-        >
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            Enable Trivy
-          </Switch.Content>
-        </Switch>
-        <Switch
-          isSelected={settings.enable_grype ?? true}
-          onChange={(checked) => setSettings((p) => ({ ...p, enable_grype: checked }))}
-        >
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            Enable Grype
-          </Switch.Content>
-        </Switch>
-        <Switch
-          isSelected={settings.enable_osv_java_augmentation ?? false}
-          onChange={(checked) =>
-            setSettings((p) => ({ ...p, enable_osv_java_augmentation: checked }))
-          }
-        >
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            OSV Java Augmentation
-          </Switch.Content>
-        </Switch>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Input
-          type="number"
-          min={1}
-          max={32}
-          placeholder="Concurrency"
-          variant="secondary"
-          value={String(settings.concurrency ?? 2)}
-          onChange={(e) =>
-            setSettings((p) => ({ ...p, concurrency: parseInt(e.target.value || '0', 10) }))
-          }
-        />
-        <Input
-          type="number"
-          min={30}
-          placeholder="Timeout (seconds)"
-          variant="secondary"
-          value={String(settings.timeout_seconds ?? 300)}
-          onChange={(e) =>
-            setSettings((p) => ({ ...p, timeout_seconds: parseInt(e.target.value || '0', 10) }))
-          }
-        />
-        <Input
-          type="number"
-          min={1}
-          placeholder="DB Max Age (hours)"
-          variant="secondary"
-          value={String(settings.db_max_age_hours ?? 24)}
-          onChange={(e) =>
-            setSettings((p) => ({ ...p, db_max_age_hours: parseInt(e.target.value || '0', 10) }))
-          }
-        />
-      </div>
-
-      <div className="flex justify-end">
-        <Button variant="secondary" onPress={handleSave} isDisabled={saving}>
-          {saving ? 'Saving...' : 'Save Scanner Runtime'}
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-function AuthSettingsPanel() {
-  const toast = useToast();
-  const [localAuthEnabled, setLocalAuthEnabled] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    getAdminSettings()
-      .then((settings) => {
-        setLocalAuthEnabled(settings['auth.local_enabled'] !== 'false');
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-        toast.error('Failed to load authentication settings');
-      });
-  }, [toast]);
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await adminUpdateAuthSettings({ local_auth_enabled: localAuthEnabled });
-      toast.success('Authentication settings updated');
-    } catch (saveError: unknown) {
-      toast.error(saveError instanceof Error ? saveError.message : 'Failed to update auth settings');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (loading) return null;
-
-  return (
-    <Card className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold">Authentication</h2>
-        <p className="text-sm text-zinc-500">Control available login methods.</p>
-      </div>
-      <Switch isSelected={localAuthEnabled} onChange={setLocalAuthEnabled}>
-        <Switch.Content>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          Enable local username/password authentication
-        </Switch.Content>
-      </Switch>
-      <div className="flex justify-end">
-        <Button variant="secondary" onPress={handleSave} isDisabled={saving}>
-          {saving ? 'Saving...' : 'Save Authentication'}
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
 export function SettingsTab() {
   const toast = useToast();
   const [publicScanEnabled, setPublicScanEnabledState] = useState<boolean | null>(null);
@@ -232,10 +45,6 @@ export function SettingsTab() {
   const [rateLimitInput, setRateLimitInput] = useState('5');
   const [registerRateLimit, setRegisterRateLimitState] = useState(10);
   const [registerRateLimitInput, setRegisterRateLimitInput] = useState('10');
-  const [apiLogRetention, setApiLogRetention] = useState(30);
-  const [apiLogRetentionInput, setApiLogRetentionInput] = useState('30');
-  const [xrayLogRetention, setXrayLogRetention] = useState(30);
-  const [xrayLogRetentionInput, setXrayLogRetentionInput] = useState('30');
   const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState(DEFAULT_MAINTENANCE_MESSAGE);
   const [maintenanceDraft, setMaintenanceDraft] = useState(DEFAULT_MAINTENANCE_MESSAGE);
@@ -244,8 +53,6 @@ export function SettingsTab() {
   const [savingPublic, setSavingPublic] = useState(false);
   const [savingRl, setSavingRl] = useState(false);
   const [savingRegisterRl, setSavingRegisterRl] = useState(false);
-  const [savingApiRetention, setSavingApiRetention] = useState(false);
-  const [savingXrayRetention, setSavingXrayRetention] = useState(false);
   const [savingMaintenance, setSavingMaintenance] = useState(false);
 
   useEffect(() => {
@@ -254,16 +61,10 @@ export function SettingsTab() {
         setPublicScanEnabledState(settings['public_scan_enabled'] !== 'false');
         const rl = parseInt(settings['public_scan_rate_limit'] ?? '5', 10);
         const regRl = parseInt(settings['register_rate_limit'] ?? '10', 10);
-        const apiRet = parseInt(settings['api_log_retention_days'] ?? '30', 10);
-        const xrayRet = parseInt(settings['xray_log_retention_days'] ?? '30', 10);
         setRateLimitState(rl);
         setRateLimitInput(String(rl));
         setRegisterRateLimitState(regRl);
         setRegisterRateLimitInput(String(regRl));
-        setApiLogRetention(apiRet);
-        setApiLogRetentionInput(String(apiRet));
-        setXrayLogRetention(xrayRet);
-        setXrayLogRetentionInput(String(xrayRet));
         const nextMaintenanceEnabled = settings['maintenance.enabled'] === 'true';
         const nextMaintenanceMessage =
           settings['maintenance.message'] || DEFAULT_MAINTENANCE_MESSAGE;
@@ -368,45 +169,9 @@ export function SettingsTab() {
     }
   }
 
-  async function handleSaveApiLogRetention() {
-    const value = parseInt(apiLogRetentionInput, 10);
-    if (isNaN(value) || value < 0) {
-      toast.error('Retention must be 0 or more (0 = keep forever)');
-      return;
-    }
-    setSavingApiRetention(true);
-    try {
-      await updateAPILogRetention(value);
-      setApiLogRetention(value);
-      toast.success('API log retention updated');
-    } catch (saveError: unknown) {
-      toast.error(saveError instanceof Error ? saveError.message : 'Failed to update API log retention');
-    } finally {
-      setSavingApiRetention(false);
-    }
-  }
-
-  async function handleSaveXrayLogRetention() {
-    const value = parseInt(xrayLogRetentionInput, 10);
-    if (isNaN(value) || value < 0) {
-      toast.error('Retention must be 0 or more (0 = keep forever)');
-      return;
-    }
-    setSavingXrayRetention(true);
-    try {
-      await updateXRayLogRetention(value);
-      setXrayLogRetention(value);
-      toast.success('xRay log retention updated');
-    } catch (saveError: unknown) {
-      toast.error(saveError instanceof Error ? saveError.message : 'Failed to update xRay log retention');
-    } finally {
-      setSavingXrayRetention(false);
-    }
-  }
-
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div>
         <Card className="space-y-4">
           <div>
             <h2 className="text-base font-semibold">Access & Exposure</h2>
@@ -541,67 +306,6 @@ export function SettingsTab() {
           />
         </Card>
 
-        <Card className="space-y-4">
-          <div>
-            <h2 className="text-base font-semibold">Data Retention</h2>
-            <p className="text-sm text-zinc-500">Control operational log retention windows.</p>
-          </div>
-
-          <SettingRow
-            title="API Log Retention"
-            description="Days to keep API logs (0 = forever)."
-            input={
-              <Input
-                type="number"
-                min={0}
-                placeholder="Days"
-                variant="secondary"
-                value={apiLogRetentionInput}
-                onChange={(e) => setApiLogRetentionInput(e.target.value)}
-              />
-            }
-            action={
-              <Button
-                size="sm"
-                variant="secondary"
-                onPress={handleSaveApiLogRetention}
-                isDisabled={savingApiRetention || apiLogRetentionInput === String(apiLogRetention)}
-              >
-                {savingApiRetention ? 'Saving...' : 'Save'}
-              </Button>
-            }
-          />
-
-          <SettingRow
-            title="xRay Log Retention"
-            description="Days to keep xRay logs (0 = forever)."
-            input={
-              <Input
-                type="number"
-                min={0}
-                placeholder="Days"
-                variant="secondary"
-                value={xrayLogRetentionInput}
-                onChange={(e) => setXrayLogRetentionInput(e.target.value)}
-              />
-            }
-            action={
-              <Button
-                size="sm"
-                variant="secondary"
-                onPress={handleSaveXrayLogRetention}
-                isDisabled={savingXrayRetention || xrayLogRetentionInput === String(xrayLogRetention)}
-              >
-                {savingXrayRetention ? 'Saving...' : 'Save'}
-              </Button>
-            }
-          />
-        </Card>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <ScannerSettingsPanel />
-        <AuthSettingsPanel />
       </div>
 
       <Modal state={maintenanceModal}>

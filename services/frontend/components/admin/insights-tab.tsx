@@ -16,6 +16,7 @@ import type {
 } from '@/lib/api/types/admin';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
+import { TelemetryRetentionPanel } from '@/components/admin/telemetry-retention-panel';
 import {
   Button,
   Card,
@@ -29,7 +30,6 @@ import {
 } from '@heroui/react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { SegmentedControl } from '../ui/segmented-control';
 
 const PAGE_SIZE = 25;
 
@@ -292,15 +292,28 @@ export function InsightsTab() {
 
   return (
     <div className="space-y-4">
-      <SegmentedControl
-        options={[
-          { id: 'api', label: 'API Requests' },
-          { id: 'xray', label: 'xRay Calls' },
-        ]}
-        value={section}
-        onChange={setSection}
-        ariaLabel="Insights section"
-      />
+      <div className="flex justify-end">
+        <Select
+          aria-label="Telemetry source"
+          value={section}
+          onChange={(value) => setSection(value as 'api' | 'xray')}
+          variant="secondary"
+          className="w-full sm:w-56"
+        >
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              <ListBox.Item id="api">API requests</ListBox.Item>
+              <ListBox.Item id="xray">xRay calls</ListBox.Item>
+            </ListBox>
+          </Select.Popover>
+        </Select>
+      </div>
+
+      <TelemetryRetentionPanel />
 
       {section === 'api' && (
         <div className="space-y-4">

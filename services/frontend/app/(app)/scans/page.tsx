@@ -37,6 +37,7 @@ import {
   listScanArtifacts,
   listScans,
   listTags,
+  reScan,
   Scan,
   Tag,
   updateCollection,
@@ -162,6 +163,7 @@ const SCANS_VIEW_STORAGE_KEY_PREFIX = 'justscan:scans-view';
 const SCANS_PAGE_SIZE_STORAGE_KEY_PREFIX = 'justscan:scans-page-size';
 const SCANS_PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
 const SEARCH_DEBOUNCE_MS = 600;
+const BULK_RETRY_CONCURRENCY = 4;
 
 type WorkspaceAction = 'share' | 'transfer' | null;
 type PaginationItem = number | `ellipsis-${number}`;
@@ -219,19 +221,19 @@ function normalizeGroupingMode(value?: string | null): ScansGroupingMode {
 }
 
 const ScansSearchField = memo(function ScansSearchField({
-  appliedValue,
+  initialValue,
   cancelVersion,
   hasRecentWindow,
   requestVersionRef,
   onCommit,
 }: {
-  appliedValue: string;
+  initialValue: string;
   cancelVersion: number;
   hasRecentWindow: boolean;
   requestVersionRef: React.MutableRefObject<number>;
   onCommit: (value: string) => void;
 }) {
-  const [value, setValue] = useState(appliedValue);
+  const [value, setValue] = useState(() => initialValue);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearPendingCommit = useCallback(() => {
@@ -424,6 +426,7 @@ export default function ScansPage() {
 
   // Multi-select state
   const [selectedScans, setSelectedScans] = useState<Set<string>>(new Set());
+  const [bulkRetrying, setBulkRetrying] = useState(false);
 
   // Available tags for bulk tagging
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
@@ -972,6 +975,59 @@ export default function ScansPage() {
     }
   }
 
+  async function handleRetry(scanId: string, imageName: string) {
+    if (!canMutateCurrentScope) return;
+    try {
+      await reScan(scanId);
+      toast.success('Retry queued');
+      setChildRefreshKey((prev) => ({ ...prev, [imageName]: (prev[imageName] ?? 0) + 1 }));
+      refreshCurrentView();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to queue retry');
+    }
+  }
+
+  async function handleBulkRetry() {
+    if (!canMutateCurrentScope || selectedScans.size === 0 || bulkRetrying) return;
+
+    const scanIDs = Array.from(selectedScans);
+    setBulkRetrying(true);
+    try {
+      const failedIDs = new Set<string>();
+      let nextScanIndex = 0;
+
+      await Promise.all(
+        Array.from({ length: Math.min(BULK_RETRY_CONCURRENCY, scanIDs.length) }, async () => {
+          while (nextScanIndex < scanIDs.length) {
+            const scanID = scanIDs[nextScanIndex];
+            nextScanIndex += 1;
+            try {
+              await reScan(scanID);
+            } catch {
+              failedIDs.add(scanID);
+            }
+          }
+        })
+      );
+
+      const queued = scanIDs.length - failedIDs.size;
+
+      if (queued > 0) {
+        toast.success(`${queued} ${queued === 1 ? 'retry' : 'retries'} queued`);
+      }
+      if (failedIDs.size > 0) {
+        toast.error(
+          `${failedIDs.size} scan${failedIDs.size !== 1 ? 's' : ''} could not be retried`
+        );
+      }
+
+      setSelectedScans(failedIDs);
+      refreshCurrentView();
+    } finally {
+      setBulkRetrying(false);
+    }
+  }
+
   async function handleBulkDelete() {
     if (!canMutateCurrentScope) return;
     if (selectedScans.size === 0) return;
@@ -1308,7 +1364,7 @@ export default function ScansPage() {
             <div className="flex flex-wrap items-end gap-3">
               <ScansSearchField
                 key={appliedImageFilter}
-                appliedValue={appliedImageFilter}
+                initialValue={appliedImageFilter}
                 cancelVersion={searchCancelVersion}
                 hasRecentWindow={hasRecentWindow}
                 requestVersionRef={listRequestRef}
@@ -1504,6 +1560,15 @@ export default function ScansPage() {
               Generate Report
             </Button>
             <Button
+              isDisabled={bulkRetrying}
+              isPending={bulkRetrying}
+              onPress={handleBulkRetry}
+              className="flex flex-1 min-w-[120px] items-center justify-center gap-1.5 sm:flex-none"
+              variant="secondary"
+            >
+              Retry selected
+            </Button>
+            <Button
               onPress={() => openWorkspaceModal('share', Array.from(selectedScans))}
               className="flex flex-1 min-w-[150px] items-center justify-center gap-1.5 sm:flex-none"
               variant="secondary"
@@ -1680,6 +1745,7 @@ export default function ScansPage() {
           loading={loading}
           onCancel={handleCancel}
           onDelete={handleDelete}
+          onRetry={handleRetry}
           onExpandedChange={setExpanded}
           onSelectedScansChange={setSelectedScans}
           onShareToWorkspace={(scanIds) => openWorkspaceModal('share', scanIds)}

@@ -19,6 +19,7 @@ import {
   Delete01Icon,
   FileSearchIcon,
   LinkSquare02Icon,
+  Refresh01Icon,
   Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
@@ -46,6 +47,7 @@ type ArtifactScansTableProps = {
   loading: boolean;
   onCancel: (scanId: string, artifactKey: string) => Promise<void> | void;
   onDelete: (scanId: string, artifactKey: string) => Promise<void> | void;
+  onRetry: (scanId: string, artifactKey: string) => Promise<void> | void;
   onExpandedChange: (next: Set<string>) => void;
   onSelectedScansChange: Dispatch<SetStateAction<Set<string>>>;
   onShareToWorkspace: (scanIds: string[]) => void;
@@ -206,6 +208,7 @@ function ArtifactHistoryRows({
   refreshToken,
   onCancel,
   onDelete,
+  onRetry,
   onSelectScan,
   onShareToWorkspace,
   onTransferToWorkspace,
@@ -216,6 +219,7 @@ function ArtifactHistoryRows({
   refreshToken: number;
   onCancel: (scanId: string) => void;
   onDelete: (scanId: string) => void;
+  onRetry: (scanId: string) => void;
   onSelectScan: (scanId: string, selected: boolean) => void;
   onShareToWorkspace: (scanIds: string[]) => void;
   onTransferToWorkspace: (scanIds: string[]) => void;
@@ -383,6 +387,16 @@ function ArtifactHistoryRows({
                           },
                         ]
                       : []),
+                    ...(allowMutationActions && scan.status === 'failed'
+                      ? [
+                          {
+                            id: 'retry',
+                            label: 'Retry failed scan',
+                            icon: <Refresh01Icon size={14} aria-hidden />,
+                            onAction: () => onRetry(scan.id),
+                          },
+                        ]
+                      : []),
                     ...(allowMutationActions
                       ? [
                           {
@@ -427,6 +441,7 @@ export function ArtifactScansTable({
   loading,
   onCancel,
   onDelete,
+  onRetry,
   onExpandedChange,
   onSelectedScansChange,
   onShareToWorkspace,
@@ -728,6 +743,16 @@ export function ArtifactScansTable({
                                     },
                                   ]
                                 : []),
+                              ...(allowMutationActions && artifact.latest_status === 'failed'
+                                ? [
+                                    {
+                                      id: 'retry',
+                                      label: 'Retry failed scan',
+                                      icon: <Refresh01Icon size={14} aria-hidden />,
+                                      onAction: () => onRetry(artifact.latest_scan_id, key),
+                                    },
+                                  ]
+                                : []),
                               ...(allowMutationActions
                                 ? [
                                     {
@@ -763,6 +788,7 @@ export function ArtifactScansTable({
                         refreshToken={childRefreshKey[key] ?? 0}
                         onCancel={(scanId) => onCancel(scanId, key)}
                         onDelete={(scanId) => onDelete(scanId, key)}
+                        onRetry={(scanId) => onRetry(scanId, key)}
                         onSelectScan={setScanSelection}
                         onShareToWorkspace={onShareToWorkspace}
                         onTransferToWorkspace={onTransferToWorkspace}

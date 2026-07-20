@@ -101,18 +101,14 @@ function DetailPoint({ children }: { children: string }) {
 
 export function LandingHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-divider/50 bg-background/72 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-5 sm:px-6">
-        <NextLink
-          aria-label="JustScan home"
-          className="flex shrink-0 items-center gap-2.5"
-          href="/"
-        >
-          <Logo size={30} />
+    <header className="pointer-events-none fixed inset-x-0 top-4 z-50 px-4 sm:px-6">
+      <div className="pointer-events-auto mx-auto flex h-12 max-w-5xl items-center justify-between gap-3 rounded-2xl border border-foreground/10 bg-background/78 px-3 shadow-lg shadow-foreground/5 backdrop-blur-xl sm:rounded-full sm:px-4">
+        <NextLink aria-label="JustScan home" className="flex shrink-0 items-center gap-2" href="/">
+          <Logo size={24} />
           <span className="text-sm font-semibold text-foreground">JustScan</span>
         </NextLink>
 
-        <nav aria-label="Primary navigation" className="hidden items-center gap-7 lg:flex">
+        <nav aria-label="Primary navigation" className="hidden items-center gap-5 md:flex">
           <Link className="text-sm text-muted" href="#product">
             Product
           </Link>
@@ -126,7 +122,7 @@ export function LandingHeader() {
 
         <div className="flex items-center gap-2">
           <LandingThemeToggle />
-          <Link className="hidden text-sm text-muted sm:flex" href="/login">
+          <Link className="hidden text-sm text-muted lg:flex" href="/login">
             Sign in
           </Link>
           <LandingButtonLink href="/public/scan/image" label="Scan free" size="sm" />
@@ -138,7 +134,7 @@ export function LandingHeader() {
 
 export function LandingHeroSection() {
   return (
-    <section className="relative isolate flex min-h-[calc(100svh-4rem)] items-center justify-center overflow-hidden px-5 py-24 sm:px-6 sm:py-28">
+    <section className="relative isolate flex min-h-svh items-center justify-center overflow-hidden px-5 py-24 sm:px-6 sm:py-28">
       <LandingGlitchHero />
       <div aria-hidden className="landing-hero-scrim pointer-events-none absolute inset-0 z-10" />
       <div
@@ -186,25 +182,27 @@ export function LandingHeroSection() {
 
 export function LandingProofStrip() {
   return (
-    <section aria-label="Platform capabilities" className="relative px-5 pb-8 sm:px-6 sm:pb-12">
-      <div className="mx-auto max-w-7xl border-y border-divider/60 py-6">
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 lg:gap-0">
+    <section
+      aria-label="Platform capabilities"
+      className="relative px-5 pb-12 pt-2 sm:px-6 sm:pb-16"
+    >
+      <LandingReveal className="mx-auto max-w-5xl text-center">
+        <p className="text-sm font-medium text-foreground">A scanner that fits the way you ship.</p>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-3 text-sm text-muted">
           {[
             ['Trivy + Xray', 'Flexible scan engines'],
-            ['Self-hosted control', 'Your environment and data'],
-            ['OIDC SSO', 'Existing identity providers'],
-            ['API + CI/CD', 'Release workflow automation'],
+            ['Self-hosted by design', 'Your environment and data'],
+            ['OIDC-ready', 'Existing identity providers'],
+            ['Built for CI/CD', 'Release workflow automation'],
           ].map(([title, description], index) => (
-            <div
-              key={title}
-              className={`px-1 lg:px-6 ${index > 0 ? 'lg:border-l lg:border-divider/60' : ''}`}
-            >
-              <p className="text-sm font-medium text-foreground">{title}</p>
-              <p className="mt-1 text-xs leading-5 text-muted">{description}</p>
+            <div key={title} className="flex items-center gap-2">
+              {index > 0 ? <span aria-hidden className="size-1 rounded-full bg-accent" /> : null}
+              <span className="font-medium text-foreground">{title}</span>
+              <span className="hidden text-muted sm:inline">{description}</span>
             </div>
           ))}
         </div>
-      </div>
+      </LandingReveal>
     </section>
   );
 }
@@ -288,14 +286,14 @@ export function LandingCapabilitiesSection() {
 
         <LandingReveal className="mt-12" delay={0.06}>
           <Surface
-            className="overflow-hidden rounded-2xl border border-divider/70"
+            className="overflow-hidden rounded-2xl border border-foreground/20"
             variant="secondary"
           >
             <div className="grid sm:grid-cols-2 lg:grid-cols-4">
               {CAPABILITIES.map(({ title, description, Icon }, index) => (
                 <div
                   key={title}
-                  className={`px-6 py-7 ${index > 0 ? 'lg:border-l lg:border-divider/60' : ''}`}
+                  className={`px-6 py-7 ${index > 0 ? 'lg:border-l lg:border-foreground/15' : ''}`}
                 >
                   <div className="flex size-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
                     <Icon aria-hidden size={20} />
@@ -305,7 +303,7 @@ export function LandingCapabilitiesSection() {
                 </div>
               ))}
             </div>
-            <Separator variant="tertiary" />
+            <Separator className="bg-foreground/15" variant="tertiary" />
             <div
               id="workflow"
               className="scroll-mt-24 grid gap-6 px-6 py-7 md:grid-cols-3 md:gap-0"
@@ -313,7 +311,7 @@ export function LandingCapabilitiesSection() {
               {WORKFLOW_STEPS.map(({ number, title, description, Icon }, index) => (
                 <div
                   key={title}
-                  className={`relative ${index > 0 ? 'md:border-l md:border-divider/60 md:pl-7' : 'md:pr-7'}`}
+                  className={`relative ${index > 0 ? 'md:border-l md:border-foreground/15 md:pl-7' : 'md:pr-7'}`}
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-semibold tracking-[0.18em] text-accent">

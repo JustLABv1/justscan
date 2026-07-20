@@ -2287,6 +2287,7 @@ export default function ScanDetailPage() {
           startedAt={scan.started_at}
           image={`${scan.image_name}:${scan.image_tag}`}
           scanProvider={scan.scan_provider}
+          xrayMode={scan.xray_mode}
           currentStep={scan.current_step}
           stepLogs={scan.step_logs}
         />
@@ -2339,6 +2340,8 @@ export default function ScanDetailPage() {
           status={scan.status}
           externalStatus={scan.external_status}
           scanProvider={scan.scan_provider}
+          xrayMode={scan.xray_mode}
+          xrayProviderScannedAt={scan.xray_provider_scanned_at}
         />
       )}
       {/* SBOM tab */}

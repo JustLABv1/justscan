@@ -16,6 +16,7 @@ type Registry struct {
 	XrayURL           string     `bun:"xray_url,type:text,default:''" json:"xray_url"`
 	XrayArtifactoryID string     `bun:"xray_artifactory_id,type:text,notnull,default:'default'" json:"xray_artifactory_id"`
 	XrayRepository    string     `bun:"xray_repository,type:text,notnull,default:''" json:"xray_repository,omitempty"`
+	XrayMode          string     `bun:"xray_mode,type:text,notnull,default:'limited'" json:"xray_mode,omitempty"`
 	AuthType          string     `bun:"auth_type,type:text,notnull,default:'basic'" json:"auth_type"`
 	ScanProvider      string     `bun:"scan_provider,type:text,notnull,default:'trivy'" json:"scan_provider"`
 	Username          string     `bun:"username,type:text,default:''" json:"-"`
@@ -39,3 +40,17 @@ const (
 	RegistryAuthToken  = "token"
 	RegistryAuthAWSECR = "aws_ecr"
 )
+
+const (
+	XrayModeFull    = "full"
+	XrayModeLimited = "limited"
+)
+
+// NormalizeXrayMode preserves the safe, least-privileged default for existing
+// Artifactory Xray registry configurations.
+func NormalizeXrayMode(mode string) string {
+	if mode == XrayModeFull {
+		return XrayModeFull
+	}
+	return XrayModeLimited
+}

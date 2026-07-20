@@ -1,7 +1,7 @@
 import type { OwnerType } from './common';
 import type { Collection } from './collections';
 import type { ResourceShare } from './orgs';
-import type { ScanProvider } from './registries';
+import type { ScanProvider, XrayMode } from './registries';
 
 export interface ScanStepLog {
   id: string;
@@ -121,6 +121,8 @@ export interface Scan {
   image_tag: string;
   image_digest: string;
   scan_provider: ScanProvider;
+  xray_mode?: XrayMode;
+  xray_provider_scanned_at?: string | null;
   scan_source?: 'registry' | 'uploaded_archive';
   external_scan_id?: string;
   external_status?: string;

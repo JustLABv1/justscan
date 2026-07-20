@@ -147,6 +147,15 @@ If you plan to use OIDC, configure it before first login using the section below
 | `oidc.roles_claim`                     | Claim name containing role memberships                                                              | `"roles"`                        |
 | `local_auth.enabled`                   | Keep local username/password auth enabled alongside OIDC                                            | `true`                           |
 
+### Artifactory Xray registry modes
+
+Artifactory Xray registries are configured in the JustScan UI and reuse their registry credential for both the Artifactory image pull and Xray API requests. Existing Xray registries default to **Limited** mode after upgrading.
+
+- **Limited** is for consumer credentials. JustScan warms the image through Artifactory and waits for Xray to expose an artifact result, then imports it. It never triggers a rescan, so a completed result is valid but its freshness cannot be verified. Ensure the repository is indexed in Xray; remote artifacts must also be permitted to enter the Artifactory cache.
+- **Full** is for a service account with Xray Read plus **Manage Xray Metadata**. After warming the image, JustScan requests `scanArtifact` and waits for Xray to confirm a new completed run before importing findings. A denied request fails the scan with an actionable error; JustScan never silently downgrades this mode.
+
+Full mode deliberately does not use Artifactory's legacy force-index endpoint. For both modes, Xray remains responsible for the vulnerability analysis and policy evaluation.
+
 ### Example `config.yaml`
 
 ```yaml

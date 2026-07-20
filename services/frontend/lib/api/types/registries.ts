@@ -2,6 +2,7 @@ import type { OwnerType } from './common';
 import type { Tag } from './scans';
 
 export type ScanProvider = 'trivy' | 'artifactory_xray';
+export type XrayMode = 'full' | 'limited';
 
 export interface Registry {
   id: string;
@@ -10,6 +11,7 @@ export interface Registry {
   xray_url?: string;
   xray_artifactory_id?: string;
   xray_repository?: string;
+  xray_mode?: XrayMode;
   auth_type: 'none' | 'basic' | 'token' | 'aws_ecr';
   scan_provider: ScanProvider;
   username: string;

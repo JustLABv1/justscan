@@ -239,6 +239,18 @@ type xrayArtifactPathCandidate struct {
 	ArtifactPath string
 }
 
+type xrayArtifactStatusResponse struct {
+	Overall struct {
+		Status string `json:"status"`
+		Time   string `json:"time"`
+	} `json:"overall"`
+}
+
+type xrayArtifactScanStatus struct {
+	Status string
+	Time   *time.Time
+}
+
 func (e *registryHTTPError) Error() string {
 	if e.Body == "" {
 		return fmt.Sprintf("registry API returned HTTP %d", e.StatusCode)
@@ -273,6 +285,14 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	registry := &models.Registry{}
 	if err := db.NewSelect().Model(registry).Where("id = ?", *scan.RegistryID).Scan(ctx); err != nil {
 		return fmt.Errorf("failed to load registry for xray scan: %w", err)
+	}
+	mode := models.NormalizeXrayMode(registry.XrayMode)
+	scan.XrayMode = mode
+	if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
+		Set("xray_mode = ?", mode).
+		Where("id = ?", scan.ID).
+		Exec(ctx); err != nil {
+		return fmt.Errorf("failed to persist xray scan mode: %w", err)
 	}
 
 	client, err := newXrayClient(registry, db, scan.RegistryID)
@@ -350,10 +370,12 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		if normalizedMessage, ok := normalizeXrayDownloadBlockedError(err); ok {
 			targets := blockedViolationLookupTargets(err, repoKey, artifactRepoPath)
 
-			// Trigger re-index then poll summary/artifact to get the authoritative
-			// component name and path from Xray before building any exportDetails requests.
-			client.bestEffortTriggerBlockedArtifactScan(ctx, componentID, targets)
-			recordScanStepOutput(ctx, db, scan.ID, "Triggered best-effort blocked-artifact indexing so any available findings can still be imported.")
+			// In Full mode, request a best-effort artifact scan, then poll the summary
+			// to get the authoritative component name and path before exportDetails.
+			client.bestEffortTriggerBlockedArtifactScan(ctx, mode, componentID)
+			if mode == models.XrayModeFull {
+				recordScanStepOutput(ctx, db, scan.ID, "Requested a best-effort Xray scan for the blocked artifact so any available findings can still be imported.")
+			}
 
 			var blockedSummary *xraySummaryResponse
 			if summary, blockedArtifactPath, summaryErr := client.bestEffortBlockedArtifactSummary(ctx, targets); summaryErr != nil {
@@ -452,39 +474,34 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Artifactory cache warm-up completed for %s.", artifactPath))
 
-	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "indexing", models.ScanStepIndexingArtifact); err != nil {
+	baselineStatus, baselineCandidate, err := client.waitForArtifactStatus(ctx, artifactCandidates, nil, false)
+	if err != nil {
 		return err
 	}
-	scan.ExternalStatus = "indexing"
-	scan.CurrentStep = models.ScanStepIndexingArtifact
-	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Requested Xray indexing for %s.", repoPath))
-
-	if err := client.scanNow(ctx, repoPath); err != nil {
-		if !isNonFatalXrayIndexError(err) {
-			return fmt.Errorf("failed to trigger a fresh xray index run for %s: %w", repoPath, err)
-		}
-		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayIndexError(repoPath, err))
-	}
-
-	if err := client.scanArtifact(ctx, componentID); err != nil {
-		if !isNonFatalXrayScanArtifactError(err) {
-			return fmt.Errorf("failed to trigger a fresh xray scanArtifact run for %s: %w", componentID, err)
-		}
-		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXrayScanArtifactError(componentID, err))
-	}
-
-	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "queued", models.ScanStepQueuedInXray); err != nil {
+	artifactRepoPath = baselineCandidate.Path
+	repoPath = baselineCandidate.RepoPath
+	artifactPath = baselineCandidate.ArtifactPath
+	scan.XrayProviderScannedAt = baselineStatus.Time
+	if err := persistXrayProviderScannedAt(ctx, db, scan.ID, baselineStatus.Time); err != nil {
 		return err
 	}
-	scan.ExternalStatus = "queued"
-	scan.CurrentStep = models.ScanStepQueuedInXray
-	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Submitted the artifact scan request for component %s.", componentID))
 
-	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Waiting %s before polling Xray summary so we import from the active scan run.", xrayFreshScanSettleDelay))
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(xrayFreshScanSettleDelay):
+	if mode == models.XrayModeFull {
+		freshComponentID := "docker://" + buildImageRef(artifactName, imageTag)
+		if err := updateXrayMetadata(ctx, db, scan.ID, freshComponentID, "queued", models.ScanStepQueuedInXray); err != nil {
+			return err
+		}
+		scan.ExternalScanID = freshComponentID
+		scan.ExternalStatus = "queued"
+		scan.CurrentStep = models.ScanStepQueuedInXray
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Requesting a fresh Xray scan for component %s.", freshComponentID))
+		if err := client.triggerFreshArtifactScan(ctx, freshComponentID); err != nil {
+			return err
+		}
+		recordScanStepOutput(ctx, db, scan.ID, "Xray accepted the fresh scan request; waiting for the provider status to advance.")
+		componentID = freshComponentID
+	} else {
+		recordScanStepOutput(ctx, db, scan.ID, "Limited Xray mode does not request a rescan. JustScan will import the provider-managed result once it is available.")
 	}
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "waiting_for_xray", models.ScanStepWaitingForXray); err != nil {
@@ -492,6 +509,22 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	scan.ExternalStatus = "waiting_for_xray"
 	scan.CurrentStep = models.ScanStepWaitingForXray
+	if mode == models.XrayModeFull {
+		freshStatus, freshCandidate, err := client.waitForArtifactStatus(ctx, artifactCandidates, baselineStatus.Time, true)
+		if err != nil {
+			return err
+		}
+		artifactRepoPath = freshCandidate.Path
+		repoPath = freshCandidate.RepoPath
+		artifactPath = freshCandidate.ArtifactPath
+		scan.XrayProviderScannedAt = freshStatus.Time
+		if err := persistXrayProviderScannedAt(ctx, db, scan.ID, freshStatus.Time); err != nil {
+			return err
+		}
+		recordScanStepOutput(ctx, db, scan.ID, "Xray confirmed completion of the requested fresh scan.")
+	} else {
+		recordScanStepOutput(ctx, db, scan.ID, "Xray reported a completed provider-managed result; its freshness cannot be verified in Limited mode.")
+	}
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Polling Xray for the artifact summary at %s.", artifactPath))
 
 	summary, resolvedArtifact, err := client.pollArtifactSummary(ctx, artifactCandidates)
@@ -902,18 +935,59 @@ func (c *xrayClient) listDockerRepositories(ctx context.Context) ([]ArtifactoryR
 	return repositories, nil
 }
 
-func (c *xrayClient) scanNow(ctx context.Context, repoPath string) error {
-	_, err := c.doJSON(ctx, http.MethodPost, "/xray/api/v2/index", map[string]string{
-		"repo_path": repoPath,
-	}, nil, http.StatusOK)
-	return err
-}
-
 func (c *xrayClient) scanArtifact(ctx context.Context, componentID string) error {
 	_, err := c.doJSON(ctx, http.MethodPost, "/xray/api/v1/scanArtifact", map[string]string{
 		"componentID": componentID,
 	}, nil, http.StatusOK)
 	return err
+}
+
+func (c *xrayClient) triggerFreshArtifactScan(ctx context.Context, componentID string) error {
+	var lastErr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		err := c.scanArtifact(ctx, componentID)
+		if err == nil {
+			return nil
+		}
+		var httpErr *xrayHTTPError
+		if errors.As(err, &httpErr) && (httpErr.StatusCode == http.StatusUnauthorized || httpErr.StatusCode == http.StatusForbidden) {
+			return fmt.Errorf("Xray Full mode requires credentials with Manage Xray Metadata to request a rescan; scanArtifact was denied for %s: %w", componentID, err)
+		}
+		if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusConflict {
+			return nil
+		}
+		if !isRetriableXrayScanArtifactError(err) {
+			return fmt.Errorf("failed to request a fresh Xray scan for %s: %w", componentID, err)
+		}
+		lastErr = err
+		if attempt == 3 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt) * 2 * time.Second):
+		}
+	}
+	return fmt.Errorf("Xray did not accept a fresh scan request for %s after retries: %w", componentID, lastErr)
+}
+
+func (c *xrayClient) artifactStatus(ctx context.Context, candidate xrayArtifactPathCandidate) (xrayArtifactScanStatus, error) {
+	var response xrayArtifactStatusResponse
+	_, err := c.doJSON(ctx, http.MethodPost, "/xray/api/v1/artifact/status", map[string]string{
+		"repo": candidate.Repository,
+		"path": candidate.Path,
+	}, &response, http.StatusOK)
+	if err != nil {
+		return xrayArtifactScanStatus{}, err
+	}
+	status := xrayArtifactScanStatus{Status: strings.ToUpper(strings.TrimSpace(response.Overall.Status))}
+	if rawTime := strings.TrimSpace(response.Overall.Time); rawTime != "" {
+		if parsed, err := time.Parse(time.RFC3339, rawTime); err == nil {
+			status.Time = &parsed
+		}
+	}
+	return status, nil
 }
 
 func (c *xrayClient) artifactSummary(ctx context.Context, artifactPath string) (*xraySummaryResponse, error) {
@@ -1288,6 +1362,71 @@ func (c *xrayClient) pollArtifactSummary(ctx context.Context, candidates []xrayA
 	return c.pollArtifactSummaryWithin(ctx, candidates, xraySummaryWaitWindow())
 }
 
+// waitForArtifactStatus waits for an indexed artifact. When requireFresh is true,
+// it additionally requires Xray to expose a completion newer than the baseline
+// (or to pass through a pending state), preventing Full mode from importing a
+// known stale result after a scanArtifact request.
+func (c *xrayClient) waitForArtifactStatus(ctx context.Context, candidates []xrayArtifactPathCandidate, baseline *time.Time, requireFresh bool) (xrayArtifactScanStatus, xrayArtifactPathCandidate, error) {
+	candidates = dedupeXrayArtifactPathCandidates(candidates)
+	if len(candidates) == 0 {
+		return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("missing Xray artifact status path")
+	}
+
+	deadline := time.Now().Add(xraySummaryWaitWindow())
+	var missingSince time.Time
+	seenPending := false
+	for {
+		allMissing := true
+		for _, candidate := range candidates {
+			status, err := c.artifactStatus(ctx, candidate)
+			if err != nil {
+				if isRetriableXrayRequestError(err) {
+					allMissing = false
+					continue
+				}
+				var httpErr *xrayHTTPError
+				if errors.As(err, &httpErr) && (httpErr.StatusCode == http.StatusNotFound || httpErr.StatusCode == http.StatusBadRequest) {
+					continue
+				}
+				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("failed to read Xray artifact status for %s: %w", candidate.ArtifactPath, err)
+			}
+			allMissing = false
+			switch status.Status {
+			case "PENDING", "IN_PROGRESS", "SCANNING", "INDEXING":
+				seenPending = true
+			case "DONE":
+				if !requireFresh || seenPending || (baseline != nil && status.Time != nil && status.Time.After(*baseline)) {
+					return status, candidate, nil
+				}
+			case "NOT_SUPPORTED":
+				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("Xray does not support scanning artifact %s", candidate.ArtifactPath)
+			}
+		}
+
+		if allMissing {
+			if missingSince.IsZero() {
+				missingSince = time.Now()
+			}
+			if time.Since(missingSince) >= xrayMissingArtifactWindow {
+				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("Xray did not expose an artifact status within %s; ensure the Artifactory repository is indexed and the image is available in its cache", xrayMissingArtifactWindow)
+			}
+		} else {
+			missingSince = time.Time{}
+		}
+		if time.Now().After(deadline) {
+			if requireFresh {
+				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("timed out after %s waiting for Xray to complete the requested fresh scan for %s", xraySummaryWaitWindow(), joinXrayArtifactPaths(candidates))
+			}
+			return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("timed out after %s waiting for Xray artifact status for %s", xraySummaryWaitWindow(), joinXrayArtifactPaths(candidates))
+		}
+		select {
+		case <-ctx.Done():
+			return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, ctx.Err()
+		case <-time.After(xraySummaryPollInterval):
+		}
+	}
+}
+
 func (c *xrayClient) pollArtifactSummaryWithin(ctx context.Context, candidates []xrayArtifactPathCandidate, waitWindow time.Duration) (*xraySummaryResponse, xrayArtifactPathCandidate, error) {
 	candidates = dedupeXrayArtifactPathCandidates(candidates)
 	if len(candidates) == 0 {
@@ -1418,25 +1557,8 @@ func (c *xrayClient) bestEffortBlockedArtifactSummary(ctx context.Context, targe
 	}
 }
 
-func (c *xrayClient) bestEffortTriggerBlockedArtifactScan(ctx context.Context, componentID string, targets []xrayViolationLookupTarget) {
-	for _, target := range targets {
-		repository := strings.TrimSpace(target.Repository)
-		path := strings.TrimSpace(target.Path)
-		if repository == "" || path == "" {
-			continue
-		}
-
-		repoPath := repository + "/" + path
-		if err := c.scanNow(ctx, repoPath); err != nil {
-			if shouldWarnBlockedReindexError(err) {
-				log.Warnf("Failed to trigger Xray re-index for blocked artifact %s: %v", repoPath, err)
-			} else {
-				log.Debugf("Skipping blocked-artifact re-index warning for %s: %v", repoPath, err)
-			}
-		}
-	}
-
-	if componentID == "" {
+func (c *xrayClient) bestEffortTriggerBlockedArtifactScan(ctx context.Context, mode, componentID string) {
+	if mode != models.XrayModeFull || componentID == "" {
 		return
 	}
 	if err := c.scanArtifact(ctx, componentID); err != nil && !isRetriableXrayScanArtifactError(err) {
@@ -3056,6 +3178,16 @@ func updateXrayMetadata(ctx context.Context, db *bun.DB, scanID uuid.UUID, exter
 	}
 	if message := xrayStepOutputMessage(externalStatus); message != "" {
 		recordScanStepOutput(ctx, db, scanID, message)
+	}
+	return nil
+}
+
+func persistXrayProviderScannedAt(ctx context.Context, db *bun.DB, scanID uuid.UUID, scannedAt *time.Time) error {
+	if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
+		Set("xray_provider_scanned_at = ?", scannedAt).
+		Where("id = ?", scanID).
+		Exec(ctx); err != nil {
+		return fmt.Errorf("failed to persist Xray provider scan time for scan %s: %w", scanID, err)
 	}
 	return nil
 }

@@ -32,7 +32,7 @@ func ListRegistries(db *bun.DB) gin.HandlerFunc {
 
 		var registries []models.Registry
 		query := db.NewSelect().Model(&registries).
-			Column("id", "name", "url", "xray_url", "xray_artifactory_id", "auth_type", "scan_provider", "username", "created_by_id", "owner_type", "owner_user_id", "owner_org_id", "is_default", "created_at", "updated_at", "health_status", "health_message", "last_health_check_at").
+			Column("id", "name", "url", "xray_url", "xray_artifactory_id", "xray_repository", "xray_mode", "auth_type", "scan_provider", "username", "created_by_id", "owner_type", "owner_user_id", "owner_org_id", "is_default", "created_at", "updated_at", "health_status", "health_message", "last_health_check_at").
 			OrderExpr("name ASC")
 		query = authz.ApplyOwnershipVisibility(query, "", "created_by_id", "owner_user_id", "owner_org_id", "org_registries", "registry_id", userID, isAdmin, accessibleOrgIDs)
 		query = authz.ApplyWorkspaceScope(c, query, "", "owner_user_id", "owner_org_id", "org_registries", "registry_id", userID)
@@ -59,6 +59,7 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 			XrayURL           string `json:"xray_url"`
 			XrayArtifactoryID string `json:"xray_artifactory_id"`
 			XrayRepository    string `json:"xray_repository"`
+			XrayMode          string `json:"xray_mode" binding:"omitempty,oneof=full limited"`
 			OrgID             string `json:"org_id"`
 			AuthType          string `json:"auth_type" binding:"omitempty,oneof=basic token aws_ecr none"`
 			ScanProvider      string `json:"scan_provider" binding:"omitempty,oneof=trivy artifactory_xray"`
@@ -82,6 +83,7 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 		if body.XrayArtifactoryID == "" {
 			body.XrayArtifactoryID = "default"
 		}
+		body.XrayMode = models.NormalizeXrayMode(body.XrayMode)
 		var ownerOrgID *uuid.UUID
 		if body.OrgID != "" {
 			parsedOrgID, err := uuid.Parse(body.OrgID)
@@ -109,6 +111,7 @@ func CreateRegistry(db *bun.DB) gin.HandlerFunc {
 			XrayURL:           body.XrayURL,
 			XrayArtifactoryID: body.XrayArtifactoryID,
 			XrayRepository:    strings.Trim(strings.TrimSpace(body.XrayRepository), "/"),
+			XrayMode:          body.XrayMode,
 			AuthType:          body.AuthType,
 			ScanProvider:      body.ScanProvider,
 			Username:          body.Username,
@@ -152,6 +155,7 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 			XrayURL           string `json:"xray_url"`
 			XrayArtifactoryID string `json:"xray_artifactory_id"`
 			XrayRepository    string `json:"xray_repository"`
+			XrayMode          string `json:"xray_mode" binding:"omitempty,oneof=full limited"`
 			AuthType          string `json:"auth_type"`
 			ScanProvider      string `json:"scan_provider"`
 			Username          string `json:"username"`
@@ -186,6 +190,9 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 		if body.ScanProvider != "" {
 			registry.ScanProvider = body.ScanProvider
 		}
+		if body.XrayMode != "" {
+			registry.XrayMode = models.NormalizeXrayMode(body.XrayMode)
+		}
 		if err := scanner.ValidateRegistryProviderSelection(registry.ScanProvider); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -194,7 +201,9 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 			registry.XrayURL = ""
 			registry.XrayArtifactoryID = "default"
 			registry.XrayRepository = ""
+			registry.XrayMode = models.XrayModeLimited
 		}
+		registry.XrayMode = models.NormalizeXrayMode(registry.XrayMode)
 		if body.Username != "" {
 			registry.Username = body.Username
 		}
@@ -209,7 +218,7 @@ func UpdateRegistry(db *bun.DB) gin.HandlerFunc {
 		}
 		registry.UpdatedAt = time.Now()
 		if _, err := db.NewUpdate().Model(registry).
-			Column("name", "url", "xray_url", "xray_artifactory_id", "xray_repository", "auth_type", "scan_provider", "username", "password", "updated_at").
+			Column("name", "url", "xray_url", "xray_artifactory_id", "xray_repository", "xray_mode", "auth_type", "scan_provider", "username", "password", "updated_at").
 			Where("id = ?", registryID).
 			Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update registry"})

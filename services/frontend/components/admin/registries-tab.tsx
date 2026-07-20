@@ -1,6 +1,7 @@
 'use client';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { XrayModeSelector } from '@/components/registries/xray-mode-selector';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
@@ -11,7 +12,7 @@ import {
   adminUnsetDefaultRegistry,
   adminUpdateGlobalRegistry,
 } from '@/lib/api/admin';
-import type { Registry, RegistryWithHealth, ScanProvider } from '@/lib/api/types/registries';
+import type { Registry, RegistryWithHealth, ScanProvider, XrayMode } from '@/lib/api/types/registries';
 import { deferEffect } from '@/lib/defer-effect';
 import { Button, Card, Chip, Input, ListBox, Modal, SearchField, Select, Table, useOverlayState } from '@heroui/react';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
@@ -40,6 +41,7 @@ export function RegistriesTab() {
   const [xrayUrl, setXrayUrl] = useState('');
   const [xrayArtifactoryId, setXrayArtifactoryId] = useState('default');
   const [xrayRepository, setXrayRepository] = useState('');
+  const [xrayMode, setXrayMode] = useState<XrayMode>('limited');
   const [authType, setAuthType] = useState<'none' | 'basic' | 'token' | 'aws_ecr'>('none');
   const [scanProvider, setScanProvider] = useState<ScanProvider>('trivy');
   const [username, setUsername] = useState('');
@@ -83,6 +85,7 @@ export function RegistriesTab() {
     setXrayUrl(registry?.xray_url ?? '');
     setXrayArtifactoryId(registry?.xray_artifactory_id ?? 'default');
     setXrayRepository(registry?.xray_repository ?? '');
+    setXrayMode(registry?.xray_mode ?? 'limited');
     setAuthType(registry?.auth_type ?? 'none');
     setScanProvider(registry?.scan_provider ?? 'trivy');
     setUsername('');
@@ -153,6 +156,7 @@ export function RegistriesTab() {
         xray_url: scanProvider === 'artifactory_xray' ? xrayUrl.trim() || undefined : undefined,
         xray_artifactory_id: scanProvider === 'artifactory_xray' ? xrayArtifactoryId.trim() || 'default' : undefined,
         xray_repository: scanProvider === 'artifactory_xray' ? xrayRepository.trim() || undefined : undefined,
+        xray_mode: scanProvider === 'artifactory_xray' ? xrayMode : undefined,
         auth_type: authType,
         scan_provider: scanProvider,
         ...(!editingRegistry || username.trim() ? { username: username.trim() } : {}),
@@ -383,6 +387,7 @@ export function RegistriesTab() {
                           <div className="space-y-1 min-w-0 md:col-span-2"><p className="text-xs text-zinc-500">{requiredLabel('Xray URL')}</p><Input className="w-full" variant="secondary" placeholder="https://xray.example.com" value={xrayUrl} onChange={(event) => setXrayUrl(event.target.value)} required /></div>
                           <div className="space-y-1 min-w-0"><p className="text-xs text-zinc-500">Artifactory ID</p><Input className="w-full" variant="secondary" placeholder="default" value={xrayArtifactoryId} onChange={(event) => setXrayArtifactoryId(event.target.value)} /></div>
                           <div className="space-y-1 min-w-0"><p className="text-xs text-zinc-500">Repository Key</p><Input className="w-full" variant="secondary" placeholder="docker-remote" value={xrayRepository} onChange={(event) => setXrayRepository(event.target.value)} /></div>
+                          <div className="md:col-span-2"><XrayModeSelector value={xrayMode} onChange={setXrayMode} /></div>
                         </div>
                       )}
                     </div>

@@ -554,6 +554,7 @@ export default function SharedScanPage() {
             status={scan?.status ?? 'pending'}
             startedAt={scan?.started_at ?? null}
             scanProvider={scan?.scan_provider}
+            xrayMode={scan?.xray_mode}
             currentStep={scan?.current_step ?? null}
             stepLogs={scan?.step_logs ?? null}
           />
@@ -619,6 +620,8 @@ export default function SharedScanPage() {
             status={scan.status}
             externalStatus={scan.external_status}
             scanProvider={scan.scan_provider}
+            xrayMode={scan.xray_mode}
+            xrayProviderScannedAt={scan.xray_provider_scanned_at}
           />
         )}
 

@@ -1,6 +1,7 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
+import { XrayModeSelector } from '@/components/registries/xray-mode-selector';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -51,6 +52,7 @@ import {
   TestTube01Icon,
 } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { XrayMode } from '@/lib/api/types/registries';
 
 const selectTriggerCls = heroSelectTriggerClassName;
 
@@ -157,6 +159,7 @@ export default function RegistriesPage() {
   const [xrayUrl, setXrayUrl] = useState('');
   const [xrayArtifactoryId, setXrayArtifactoryId] = useState('default');
   const [xrayRepository, setXrayRepository] = useState('');
+  const [xrayMode, setXrayMode] = useState<XrayMode>('limited');
   const [authType, setAuthType] = useState<'none' | 'basic' | 'token' | 'aws_ecr'>('none');
   const [scanProvider, setScanProvider] = useState<'trivy' | 'artifactory_xray'>('trivy');
   const [username, setUsername] = useState('');
@@ -212,6 +215,7 @@ export default function RegistriesPage() {
     setXrayUrl('');
     setXrayArtifactoryId('default');
     setXrayRepository('');
+    setXrayMode('limited');
     setAuthType('none');
     setScanProvider(capabilities.enable_trivy ? 'trivy' : 'artifactory_xray');
     setUsername('');
@@ -227,6 +231,7 @@ export default function RegistriesPage() {
     setXrayUrl(r.xray_url ?? '');
     setXrayArtifactoryId(r.xray_artifactory_id ?? 'default');
     setXrayRepository(r.xray_repository ?? '');
+    setXrayMode(r.xray_mode ?? 'limited');
     setAuthType(r.auth_type ?? 'none');
     setScanProvider(r.scan_provider ?? 'trivy');
     setUsername(r.username ?? '');
@@ -258,6 +263,7 @@ export default function RegistriesPage() {
           scanProvider === 'artifactory_xray' ? xrayArtifactoryId || 'default' : undefined,
         xray_repository:
           scanProvider === 'artifactory_xray' ? xrayRepository.trim() || undefined : undefined,
+        xray_mode: scanProvider === 'artifactory_xray' ? xrayMode : undefined,
         auth_type: authType,
         scan_provider: scanProvider,
         username,
@@ -733,6 +739,7 @@ export default function RegistriesPage() {
                         placeholder="docker-remote"
                         value={xrayRepository}
                       />
+                      <XrayModeSelector value={xrayMode} onChange={setXrayMode} />
                     </>
                   )}
                   <div className="space-y-1.5">

@@ -36,6 +36,7 @@ export function FormField({
   className,
   containerClassName,
   type,
+  variant = 'secondary',
   ...props
 }: FormFieldProps) {
   const generatedId = useId();
@@ -128,7 +129,7 @@ export function FormField({
           heroFieldClassName,
           className,
         )}
-        variant="secondary"
+        variant={variant}
         disabled={disabled}
         id={fieldId}
         name={name}

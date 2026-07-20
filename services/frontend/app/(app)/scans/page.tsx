@@ -46,6 +46,7 @@ import { deferEffect } from '@/lib/defer-effect';
 import { canMutateOrg } from '@/lib/org-permissions';
 import {
   Button,
+  ButtonGroup,
   Card,
   Chip,
   Disclosure,
@@ -61,11 +62,18 @@ import {
   useOverlayState,
 } from '@heroui/react';
 import {
+  ArrowRight01Icon,
+  Cancel01Icon,
   Delete01Icon,
+  FileExportIcon,
+  FolderLibraryIcon,
   GitCompareIcon,
   PencilEdit01Icon,
   PlusSignIcon,
+  Refresh01Icon,
+  Share01Icon,
   Shield01Icon,
+  Tag01Icon,
 } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1547,43 +1555,37 @@ export default function ScansPage() {
 
       {/* Bulk action toolbar */}
       {!hasRecentWindow && canMutateCurrentScope && selectedScans.size > 0 && (
-        <Card className="px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <Card className="flex flex-col gap-3 px-4 py-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+          <span className="shrink-0 text-sm font-medium text-zinc-700 dark:text-zinc-300">
             {selectedScans.size} scan{selectedScans.size !== 1 ? 's' : ''} selected
           </span>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              onPress={handleGenerateReport}
-              className="flex flex-1 min-w-[110px] items-center justify-center gap-1.5 sm:flex-none"
-              variant="secondary"
+          <div className="flex flex-wrap items-center gap-2 2xl:justify-end">
+            <ButtonGroup aria-label="Run selected scan actions" size="sm" variant="secondary">
+              <Button onPress={handleGenerateReport}>
+                <FileExportIcon size={14} aria-hidden />
+                Generate report
+              </Button>
+              <Button
+                isDisabled={bulkRetrying}
+                isPending={bulkRetrying}
+                onPress={handleBulkRetry}
+              >
+                <ButtonGroup.Separator />
+                <Refresh01Icon size={14} aria-hidden />
+                Retry selected
+              </Button>
+            </ButtonGroup>
+
+            <div
+              aria-label="Organize selected scans"
+              className="flex flex-wrap items-center gap-1 rounded-xl border border-default-200 bg-surface-secondary/60 p-1"
+              role="group"
             >
-              Generate Report
-            </Button>
-            <Button
-              isDisabled={bulkRetrying}
-              isPending={bulkRetrying}
-              onPress={handleBulkRetry}
-              className="flex flex-1 min-w-[120px] items-center justify-center gap-1.5 sm:flex-none"
-              variant="secondary"
-            >
-              Retry selected
-            </Button>
-            <Button
-              onPress={() => openWorkspaceModal('share', Array.from(selectedScans))}
-              className="flex flex-1 min-w-[150px] items-center justify-center gap-1.5 sm:flex-none"
-              variant="secondary"
-            >
-              Share with workspace
-            </Button>
-            <Button
-              onPress={() => openWorkspaceModal('transfer', Array.from(selectedScans))}
-              className="flex flex-1 min-w-[150px] items-center justify-center gap-1.5 sm:flex-none"
-              variant="danger-soft"
-            >
-              Transfer ownership
-            </Button>
-            <Popover>
-              <Button variant="secondary">Add Tag</Button>
+              <Popover>
+                <Button size="sm" variant="tertiary">
+                  <Tag01Icon size={14} aria-hidden />
+                  Add tag
+                </Button>
               <Popover.Content className="rounded-xl min-w-[160px]" placement="bottom end">
                 <Popover.Dialog className="p-1">
                   {availableTags.length === 0 ? (
@@ -1611,9 +1613,12 @@ export default function ScansPage() {
                   )}
                 </Popover.Dialog>
               </Popover.Content>
-            </Popover>
-            <Popover>
-              <Button variant="secondary">Add Collection</Button>
+              </Popover>
+              <Popover>
+                <Button size="sm" variant="tertiary">
+                  <FolderLibraryIcon size={14} aria-hidden />
+                  Add collection
+                </Button>
               <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
                 <Popover.Dialog className="p-1">
                   {availableCollections.length === 0 ? (
@@ -1635,9 +1640,12 @@ export default function ScansPage() {
                   )}
                 </Popover.Dialog>
               </Popover.Content>
-            </Popover>
-            <Popover>
-              <Button variant="secondary">Remove Collection</Button>
+              </Popover>
+              <Popover>
+                <Button size="sm" variant="tertiary">
+                  <FolderLibraryIcon size={14} aria-hidden />
+                  Remove collection
+                </Button>
               <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
                 <Popover.Dialog className="p-1">
                   {availableCollections.length === 0 ? (
@@ -1659,21 +1667,42 @@ export default function ScansPage() {
                   )}
                 </Popover.Dialog>
               </Popover.Content>
-            </Popover>
-            <Button
-              onPress={() => setSelectedScans(new Set())}
-              className="flex-1 min-w-[90px] sm:flex-none"
-              variant="secondary"
+              </Popover>
+            </div>
+
+            <div
+              aria-label="Workspace actions"
+              className="flex items-center gap-1 rounded-xl border border-default-200 bg-surface-secondary/60 p-1"
+              role="group"
             >
-              Clear
-            </Button>
-            <Button
-              onPress={handleBulkDelete}
-              className="flex-1 min-w-[90px] sm:flex-none"
-              variant="danger-soft"
-            >
-              Delete
-            </Button>
+              <Button
+                size="sm"
+                onPress={() => openWorkspaceModal('share', Array.from(selectedScans))}
+                variant="tertiary"
+              >
+                <Share01Icon size={14} aria-hidden />
+                Share
+              </Button>
+              <Button
+                size="sm"
+                onPress={() => openWorkspaceModal('transfer', Array.from(selectedScans))}
+                variant="danger-soft"
+              >
+                <ArrowRight01Icon size={14} aria-hidden />
+                Transfer
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Button size="sm" onPress={() => setSelectedScans(new Set())} variant="tertiary">
+                <Cancel01Icon size={14} aria-hidden />
+                Clear
+              </Button>
+              <Button size="sm" onPress={handleBulkDelete} variant="danger-soft">
+                <Delete01Icon size={14} aria-hidden />
+                Delete
+              </Button>
+            </div>
           </div>
         </Card>
       )}

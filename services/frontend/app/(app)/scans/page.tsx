@@ -67,7 +67,7 @@ import {
   Shield01Icon,
 } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
 
@@ -161,6 +161,7 @@ const DEFAULT_ACTIVITY_RANGE: RecentActivityRange = '24h';
 const SCANS_VIEW_STORAGE_KEY_PREFIX = 'justscan:scans-view';
 const SCANS_PAGE_SIZE_STORAGE_KEY_PREFIX = 'justscan:scans-page-size';
 const SCANS_PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
+const SEARCH_DEBOUNCE_MS = 600;
 
 type WorkspaceAction = 'share' | 'transfer' | null;
 type PaginationItem = number | `ellipsis-${number}`;
@@ -216,6 +217,75 @@ function normalizeOrgPolicyFilter(value?: string | null): OrgPolicyFilter {
 function normalizeGroupingMode(value?: string | null): ScansGroupingMode {
   return value === 'collections' ? 'collections' : '';
 }
+
+const ScansSearchField = memo(function ScansSearchField({
+  appliedValue,
+  cancelVersion,
+  hasRecentWindow,
+  requestVersionRef,
+  onCommit,
+}: {
+  appliedValue: string;
+  cancelVersion: number;
+  hasRecentWindow: boolean;
+  requestVersionRef: React.MutableRefObject<number>;
+  onCommit: (value: string) => void;
+}) {
+  const [value, setValue] = useState(appliedValue);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPendingCommit = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    clearPendingCommit();
+  }, [cancelVersion, clearPendingCommit]);
+
+  useEffect(() => clearPendingCommit, [clearPendingCommit]);
+
+  function handleChange(nextValue: string) {
+    setValue(nextValue);
+    clearPendingCommit();
+    requestVersionRef.current += 1;
+
+    if (!nextValue) {
+      onCommit(nextValue);
+      return;
+    }
+
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      onCommit(nextValue);
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
+  return (
+    <SearchField
+      aria-label="Search images or tags"
+      className="min-w-[220px] flex-1"
+      value={value}
+      onChange={handleChange}
+      variant="secondary"
+    >
+      <Label className="sr-only">Search images or tags</Label>
+      <SearchField.Group>
+        <SearchField.SearchIcon />
+        <SearchField.Input
+          placeholder={
+            hasRecentWindow
+              ? 'Filter recent activity by image or tag…'
+              : 'Search image or tag…'
+          }
+        />
+        <SearchField.ClearButton />
+      </SearchField.Group>
+    </SearchField>
+  );
+});
 
 function getScansView(status: string, range: ScansTimeRange): ScansView {
   if (range) return 'recent';
@@ -325,7 +395,6 @@ export default function ScansPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [imageFilter, setImageFilter] = useState(initialViewState.image);
   const [appliedImageFilter, setAppliedImageFilter] = useState(initialViewState.image);
   const [statusFilter, setStatusFilter] = useState(initialViewState.status);
   const [activityRange, setActivityRange] = useState<ScansTimeRange>(initialViewState.range);
@@ -345,7 +414,8 @@ export default function ScansPage() {
     has_policy_fail: false,
   });
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchCancelVersion, setSearchCancelVersion] = useState(0);
+  const listRequestRef = useRef(0);
 
   // Which image rows are expanded; collection-grouped rows include their collection scope.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -382,6 +452,7 @@ export default function ScansPage() {
       collection: string,
       options?: { silent?: boolean }
     ) => {
+      const requestId = ++listRequestRef.current;
       const silent = options?.silent ?? false;
       if (!silent) {
         setLoading(true);
@@ -397,6 +468,7 @@ export default function ScansPage() {
           collection || undefined,
           orgPolicyFilter
         );
+        if (requestId !== listRequestRef.current) return;
         setArtifacts(res.data ?? []);
         setTotal(res.total);
         setArtifactFilterOptions(res.filters);
@@ -409,11 +481,12 @@ export default function ScansPage() {
           setError('');
         }
       } catch (e: unknown) {
+        if (requestId !== listRequestRef.current) return;
         if (!silent) {
           setError(e instanceof Error ? e.message : 'Failed to load');
         }
       } finally {
-        if (!silent) {
+        if (!silent && requestId === listRequestRef.current) {
           setLoading(false);
         }
       }
@@ -429,6 +502,7 @@ export default function ScansPage() {
       collection: string,
       options?: { silent?: boolean }
     ) => {
+      const requestId = ++listRequestRef.current;
       const silent = options?.silent ?? false;
       if (!silent) {
         setLoading(true);
@@ -451,6 +525,7 @@ export default function ScansPage() {
           undefined,
           img || undefined
         );
+        if (requestId !== listRequestRef.current) return;
         setActivityScans(res.data ?? []);
         setTotal(res.total);
         const lastPage = Math.max(1, Math.ceil(res.total / pageSize));
@@ -462,11 +537,12 @@ export default function ScansPage() {
           setError('');
         }
       } catch (e: unknown) {
+        if (requestId !== listRequestRef.current) return;
         if (!silent) {
           setError(e instanceof Error ? e.message : 'Failed to load');
         }
       } finally {
-        if (!silent) {
+        if (!silent && requestId === listRequestRef.current) {
           setLoading(false);
         }
       }
@@ -495,13 +571,6 @@ export default function ScansPage() {
     statusFilter,
   ]);
 
-  useEffect(
-    () => () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    },
-    []
-  );
-
   useEffect(() => {
     return deferEffect(() => {
       const nextViewState = readScansViewFromSearchParams(searchParams);
@@ -517,14 +586,10 @@ export default function ScansPage() {
       };
 
       if (areScansViewStatesEqual(nextViewState, currentViewState)) {
-        if (imageFilter !== nextViewState.image) {
-          setImageFilter(nextViewState.image);
-        }
         return;
       }
 
       clearPendingImageCommit();
-      setImageFilter(nextViewState.image);
       setAppliedImageFilter(nextViewState.image);
       setStatusFilter(nextViewState.status);
       setActivityRange(nextViewState.range);
@@ -542,7 +607,6 @@ export default function ScansPage() {
     criticalFilter,
     orgPolicyFilter,
     groupingMode,
-    imageFilter,
     searchParams,
     statusFilter,
     tagFilter,
@@ -718,10 +782,7 @@ export default function ScansPage() {
   }
 
   function clearPendingImageCommit() {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
+    setSearchCancelVersion((version) => version + 1);
   }
 
   function handleActivityRangeChange(nextRange: RecentActivityRange) {
@@ -763,7 +824,6 @@ export default function ScansPage() {
 
   function handleClearFilters() {
     clearPendingImageCommit();
-    setImageFilter('');
     setAppliedImageFilter('');
     setStatusFilter('');
     setActivityRange('');
@@ -785,15 +845,14 @@ export default function ScansPage() {
     });
   }
 
-  function handleImageFilterChange(value: string) {
-    setImageFilter(value);
-    clearPendingImageCommit();
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
+  function handleImageFilterCommit(value: string) {
+    // The input invalidates prior requests as each character is entered. This
+    // commit runs only after the user pauses typing.
+    if (value !== appliedImageFilter) {
       setAppliedImageFilter(value);
       setPage(1);
       syncRoute({ image: value });
-    }, 300);
+    }
   }
 
   function handleStatusFilterChange(value: string) {
@@ -1094,7 +1153,7 @@ export default function ScansPage() {
     RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === resolvedActivityRange)?.label ??
     'Last 24 hours';
   const hasActiveFilters =
-    Boolean(imageFilter) ||
+    Boolean(appliedImageFilter) ||
     Boolean(statusFilter) ||
     hasRecentWindow ||
     Boolean(tagFilter) ||
@@ -1102,7 +1161,7 @@ export default function ScansPage() {
     Boolean(criticalFilter) ||
     Boolean(orgPolicyFilter);
   const hasFilterBeyondView =
-    Boolean(imageFilter) ||
+    Boolean(appliedImageFilter) ||
     (Boolean(statusFilter) && statusFilter !== ACTIVE_SCAN_STATUS_FILTER) ||
     Boolean(tagFilter) ||
     Boolean(collectionFilter) ||
@@ -1247,26 +1306,14 @@ export default function ScansPage() {
             className="contents"
           >
             <div className="flex flex-wrap items-end gap-3">
-              <SearchField
-                aria-label="Search images or tags"
-                className="min-w-[220px] flex-1"
-                value={imageFilter}
-                onChange={handleImageFilterChange}
-                variant="secondary"
-              >
-                <Label className="sr-only">Search images or tags</Label>
-                <SearchField.Group>
-                  <SearchField.SearchIcon />
-                  <SearchField.Input
-                    placeholder={
-                      hasRecentWindow
-                        ? 'Filter recent activity by image or tag…'
-                        : 'Search image or tag…'
-                    }
-                  />
-                  <SearchField.ClearButton />
-                </SearchField.Group>
-              </SearchField>
+              <ScansSearchField
+                key={appliedImageFilter}
+                appliedValue={appliedImageFilter}
+                cancelVersion={searchCancelVersion}
+                hasRecentWindow={hasRecentWindow}
+                requestVersionRef={listRequestRef}
+                onCommit={handleImageFilterCommit}
+              />
 
               {scanView === 'recent' ? (
                 <Select

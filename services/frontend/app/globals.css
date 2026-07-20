@@ -39,137 +39,32 @@
     transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
   }
 
-  .landing-page-glow {
+  .landing-hero-scrim {
     background:
       radial-gradient(
-        circle at 72% 18%,
-        color-mix(in srgb, var(--accent) 14%, transparent),
-        transparent 34%
+        ellipse at 50% 48%,
+        color-mix(in oklab, var(--background) 94%, transparent) 0%,
+        color-mix(in oklab, var(--background) 78%, transparent) 42%,
+        transparent 76%
       ),
-      linear-gradient(180deg, color-mix(in srgb, var(--surface) 32%, transparent), transparent 84%);
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--background) 40%, transparent),
+        transparent 28%,
+        color-mix(in oklab, var(--background) 48%, transparent)
+      );
   }
 
-  .landing-hero-halo {
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  .landing-hero-fade {
+    background: linear-gradient(180deg, transparent, var(--background));
   }
 
-  .landing-cta-glow {
+  .landing-final-glow {
     background: radial-gradient(
-      circle at 50% 0%,
-      color-mix(in srgb, var(--accent) 15%, transparent),
-      transparent 56%
+      circle at 50% 55%,
+      color-mix(in oklab, var(--accent) 13%, transparent),
+      transparent 46%
     );
-  }
-
-  .landing-feature-card {
-    transition-duration: 140ms;
-    transition-property: border-color, background-color;
-    transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
-  }
-
-  .landing-demo-highlight {
-    animation: landing-demo-track 12s cubic-bezier(0.77, 0, 0.175, 1) infinite;
-    will-change: transform;
-  }
-
-  .landing-demo-phase {
-    opacity: 0;
-    transform: translateY(6px);
-    animation-duration: 12s;
-    animation-iteration-count: infinite;
-    animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
-    will-change: transform, opacity;
-  }
-
-  .landing-demo-phase--source {
-    animation-name: landing-demo-source;
-  }
-
-  .landing-demo-phase--scan {
-    animation-name: landing-demo-scan;
-  }
-
-  .landing-demo-phase--result {
-    animation-name: landing-demo-result;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .landing-feature-card:hover {
-      border-color: color-mix(in srgb, var(--accent) 28%, var(--divider));
-      background-color: color-mix(in srgb, var(--surface) 72%, transparent);
-    }
-  }
-
-  @keyframes landing-demo-track {
-    0%,
-    22% {
-      transform: translateX(0%);
-    }
-    30%,
-    50% {
-      transform: translateX(100%);
-    }
-    58%,
-    90% {
-      transform: translateX(200%);
-    }
-    96%,
-    100% {
-      transform: translateX(0%);
-    }
-  }
-
-  @keyframes landing-demo-source {
-    0%,
-    22% {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    28%,
-    94% {
-      opacity: 0;
-      transform: translateY(-6px);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes landing-demo-scan {
-    0%,
-    24% {
-      opacity: 0;
-      transform: translateY(6px);
-    }
-    30%,
-    50% {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    56%,
-    100% {
-      opacity: 0;
-      transform: translateY(-6px);
-    }
-  }
-
-  @keyframes landing-demo-result {
-    0%,
-    52% {
-      opacity: 0;
-      transform: translateY(6px);
-    }
-    58%,
-    90% {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    96%,
-    100% {
-      opacity: 0;
-      transform: translateY(-6px);
-    }
   }
 
   @starting-style {
@@ -203,27 +98,6 @@
 
     [data-landing-motion] {
       transform: none !important;
-    }
-
-    .landing-demo-highlight {
-      animation: none;
-      transform: translateX(200%);
-      will-change: auto;
-    }
-
-    .landing-demo-phase {
-      animation: none;
-      transform: none;
-      will-change: auto;
-    }
-
-    .landing-demo-phase--source,
-    .landing-demo-phase--scan {
-      opacity: 0 !important;
-    }
-
-    .landing-demo-phase--result {
-      opacity: 1 !important;
     }
 
     @starting-style {

@@ -271,6 +271,7 @@ export interface ArtifactSummary {
   latest_scan_id: string;
   latest_status: string;
   latest_external_status?: string;
+  latest_current_step?: string;
   latest_scan_at: string;
   owner_type?: OwnerType;
   owner_user_id?: string | null;
@@ -281,6 +282,7 @@ export interface ArtifactSummary {
   low_count: number;
   compliance_summary?: ScanComplianceSummary | null;
   collections?: Collection[];
+  tags?: Tag[];
 }
 
 export interface ArtifactFilterOptions {
@@ -288,6 +290,12 @@ export interface ArtifactFilterOptions {
   collection_ids: string[];
   has_critical: boolean;
   has_policy_fail: boolean;
+}
+
+export interface ScanQueueSummary {
+  queued_in_justscan: number;
+  active: number;
+  worker_capacity: number;
 }
 
 export interface SBOMComponent {

@@ -27,15 +27,20 @@ import {
   deleteCollection,
   deleteScan,
   getTokenType,
+  getScanQueueSummary,
   ArtifactFilterOptions,
   ArtifactSummary,
+  bulkGrantScansToOrg,
+  bulkTransferScansOwnership,
   listCollections,
   listOrgs,
   Org,
   listScanArtifacts,
   listScans,
   listTags,
+  reScan,
   Scan,
+  ScanQueueSummary,
   Tag,
   updateCollection,
 } from '@/lib/api';
@@ -43,6 +48,7 @@ import { deferEffect } from '@/lib/defer-effect';
 import { canMutateOrg } from '@/lib/org-permissions';
 import {
   Button,
+  ButtonGroup,
   Card,
   Chip,
   Disclosure,
@@ -58,14 +64,21 @@ import {
   useOverlayState,
 } from '@heroui/react';
 import {
+  ArrowRight01Icon,
+  Cancel01Icon,
   Delete01Icon,
+  FileExportIcon,
+  FolderLibraryIcon,
   GitCompareIcon,
   PencilEdit01Icon,
   PlusSignIcon,
+  Refresh01Icon,
+  Share01Icon,
   Shield01Icon,
+  Tag01Icon,
 } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
 
@@ -76,7 +89,7 @@ const STATUS_FILTER_OPTIONS = [
   { id: '', label: 'All latest states' },
   { id: 'failed', label: 'Failed' },
   { id: 'blocked_by_xray_policy', label: 'Blocked by Xray Policy' },
-  { id: 'pending', label: 'Pending' },
+  { id: 'pending', label: 'Queued in JustScan' },
   { id: 'running', label: 'Running' },
   { id: 'waiting_for_xray', label: 'Waiting for Xray' },
   { id: 'warming_artifactory_cache', label: 'Warming Artifactory Cache' },
@@ -157,6 +170,38 @@ type ScansViewState = {
 
 const DEFAULT_ACTIVITY_RANGE: RecentActivityRange = '24h';
 const SCANS_VIEW_STORAGE_KEY_PREFIX = 'justscan:scans-view';
+const SCANS_PAGE_SIZE_STORAGE_KEY_PREFIX = 'justscan:scans-page-size';
+const SCANS_PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
+const SEARCH_DEBOUNCE_MS = 600;
+const BULK_RETRY_CONCURRENCY = 4;
+
+type WorkspaceAction = 'share' | 'transfer' | null;
+type PaginationItem = number | `ellipsis-${number}`;
+
+function readSavedPageSize(key: string) {
+  if (typeof window === 'undefined') return 30;
+  const parsed = Number(window.localStorage.getItem(key));
+  return SCANS_PAGE_SIZE_OPTIONS.includes(parsed as (typeof SCANS_PAGE_SIZE_OPTIONS)[number])
+    ? parsed
+    : 30;
+}
+
+function buildPaginationItems(currentPage: number, totalPages: number): PaginationItem[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+
+  const pages = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+  const sortedPages = Array.from(pages)
+    .filter((candidate) => candidate >= 1 && candidate <= totalPages)
+    .sort((left, right) => left - right);
+  const result: PaginationItem[] = [];
+
+  for (const item of sortedPages) {
+    const previous = result[result.length - 1];
+    if (typeof previous === 'number' && item - previous > 1) result.push(`ellipsis-${item}`);
+    result.push(item);
+  }
+  return result;
+}
 
 function normalizeScansTimeRange(
   value?: string | null,
@@ -184,6 +229,73 @@ function normalizeOrgPolicyFilter(value?: string | null): OrgPolicyFilter {
 function normalizeGroupingMode(value?: string | null): ScansGroupingMode {
   return value === 'collections' ? 'collections' : '';
 }
+
+const ScansSearchField = memo(function ScansSearchField({
+  initialValue,
+  cancelVersion,
+  hasRecentWindow,
+  requestVersionRef,
+  onCommit,
+}: {
+  initialValue: string;
+  cancelVersion: number;
+  hasRecentWindow: boolean;
+  requestVersionRef: React.MutableRefObject<number>;
+  onCommit: (value: string) => void;
+}) {
+  const [value, setValue] = useState(() => initialValue);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPendingCommit = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    clearPendingCommit();
+  }, [cancelVersion, clearPendingCommit]);
+
+  useEffect(() => clearPendingCommit, [clearPendingCommit]);
+
+  function handleChange(nextValue: string) {
+    setValue(nextValue);
+    clearPendingCommit();
+    requestVersionRef.current += 1;
+
+    if (!nextValue) {
+      onCommit(nextValue);
+      return;
+    }
+
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      onCommit(nextValue);
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
+  return (
+    <SearchField
+      aria-label="Search images or tags"
+      className="min-w-[220px] flex-1"
+      value={value}
+      onChange={handleChange}
+      variant="secondary"
+    >
+      <Label className="sr-only">Search images or tags</Label>
+      <SearchField.Group>
+        <SearchField.SearchIcon />
+        <SearchField.Input
+          placeholder={
+            hasRecentWindow ? 'Filter recent activity by image or tag…' : 'Search image or tag…'
+          }
+        />
+        <SearchField.ClearButton />
+      </SearchField.Group>
+    </SearchField>
+  );
+});
 
 function getScansView(status: string, range: ScansTimeRange): ScansView {
   if (range) return 'recent';
@@ -276,6 +388,7 @@ export default function ScansPage() {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const savedViewStorageKey = `${SCANS_VIEW_STORAGE_KEY_PREFIX}:${scopeKey}`;
+  const savedPageSizeStorageKey = `${SCANS_PAGE_SIZE_STORAGE_KEY_PREFIX}:${scopeKey}`;
   const initialViewState = useMemo(
     () => readScansViewFromSearchParams(searchParams),
     [searchParams]
@@ -287,10 +400,17 @@ export default function ScansPage() {
   const [activityScans, setActivityScans] = useState<Scan[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSizesByWorkspace, setPageSizesByWorkspace] = useState<Record<string, number>>({});
+  const pageSize =
+    pageSizesByWorkspace[savedPageSizeStorageKey] ?? readSavedPageSize(savedPageSizeStorageKey);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [queueSummary, setQueueSummary] = useState<ScanQueueSummary>({
+    queued_in_justscan: 0,
+    active: 0,
+    worker_capacity: 0,
+  });
 
-  const [imageFilter, setImageFilter] = useState(initialViewState.image);
   const [appliedImageFilter, setAppliedImageFilter] = useState(initialViewState.image);
   const [statusFilter, setStatusFilter] = useState(initialViewState.status);
   const [activityRange, setActivityRange] = useState<ScansTimeRange>(initialViewState.range);
@@ -300,9 +420,7 @@ export default function ScansPage() {
   const [criticalFilter, setCriticalFilter] = useState<'' | 'yes' | 'no'>(
     initialViewState.critical
   );
-  const [orgPolicyFilter, setOrgPolicyFilter] = useState<OrgPolicyFilter>(
-    initialViewState.policy
-  );
+  const [orgPolicyFilter, setOrgPolicyFilter] = useState<OrgPolicyFilter>(initialViewState.policy);
   const [artifactFilterOptions, setArtifactFilterOptions] = useState<ArtifactFilterOptions>({
     statuses: [],
     collection_ids: [],
@@ -310,7 +428,8 @@ export default function ScansPage() {
     has_policy_fail: false,
   });
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchCancelVersion, setSearchCancelVersion] = useState(0);
+  const listRequestRef = useRef(0);
 
   // Which image rows are expanded; collection-grouped rows include their collection scope.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -319,6 +438,7 @@ export default function ScansPage() {
 
   // Multi-select state
   const [selectedScans, setSelectedScans] = useState<Set<string>>(new Set());
+  const [bulkRetrying, setBulkRetrying] = useState(false);
 
   // Available tags for bulk tagging
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
@@ -329,10 +449,22 @@ export default function ScansPage() {
   const [collectionName, setCollectionName] = useState('');
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
   const [collectionSaving, setCollectionSaving] = useState(false);
+  const workspaceModal = useOverlayState();
+  const [workspaceAction, setWorkspaceAction] = useState<WorkspaceAction>(null);
+  const [workspaceScanIds, setWorkspaceScanIds] = useState<string[]>([]);
+  const [workspaceTarget, setWorkspaceTarget] = useState('user');
+  const [workspaceSaving, setWorkspaceSaving] = useState(false);
+  const [workspaceOrgs, setWorkspaceOrgs] = useState<Org[]>([]);
   const isPlatformAdmin = getTokenType() === 'admin';
-  const LIMIT = 30;
   const hasRecentWindow = activityRange !== '';
   const resolvedActivityRange = activityRange || DEFAULT_ACTIVITY_RANGE;
+  const loadQueueSummary = useCallback(async () => {
+    try {
+      setQueueSummary(await getScanQueueSummary());
+    } catch {
+      // Queue capacity is supplementary; keep the scan list usable when unavailable.
+    }
+  }, []);
 
   const loadImages = useCallback(
     async (
@@ -342,6 +474,7 @@ export default function ScansPage() {
       collection: string,
       options?: { silent?: boolean }
     ) => {
+      const requestId = ++listRequestRef.current;
       const silent = options?.silent ?? false;
       if (!silent) {
         setLoading(true);
@@ -350,30 +483,37 @@ export default function ScansPage() {
       try {
         const res = await listScanArtifacts(
           p,
-          LIMIT,
+          pageSize,
           img || undefined,
           status || undefined,
           criticalFilter,
           collection || undefined,
           orgPolicyFilter
         );
+        if (requestId !== listRequestRef.current) return;
         setArtifacts(res.data ?? []);
         setTotal(res.total);
         setArtifactFilterOptions(res.filters);
+        const lastPage = Math.max(1, Math.ceil(res.total / pageSize));
+        if (p > lastPage) {
+          setPage(lastPage);
+          return;
+        }
         if (silent) {
           setError('');
         }
       } catch (e: unknown) {
+        if (requestId !== listRequestRef.current) return;
         if (!silent) {
           setError(e instanceof Error ? e.message : 'Failed to load');
         }
       } finally {
-        if (!silent) {
+        if (!silent && requestId === listRequestRef.current) {
           setLoading(false);
         }
       }
     },
-    [criticalFilter, orgPolicyFilter]
+    [criticalFilter, orgPolicyFilter, pageSize]
   );
 
   const loadActivity = useCallback(
@@ -384,6 +524,7 @@ export default function ScansPage() {
       collection: string,
       options?: { silent?: boolean }
     ) => {
+      const requestId = ++listRequestRef.current;
       const silent = options?.silent ?? false;
       if (!silent) {
         setLoading(true);
@@ -394,7 +535,7 @@ export default function ScansPage() {
         const { from, to } = getRecentActivityBounds(range);
         const res = await listScans(
           p,
-          LIMIT,
+          pageSize,
           undefined,
           undefined,
           undefined,
@@ -406,22 +547,29 @@ export default function ScansPage() {
           undefined,
           img || undefined
         );
+        if (requestId !== listRequestRef.current) return;
         setActivityScans(res.data ?? []);
         setTotal(res.total);
+        const lastPage = Math.max(1, Math.ceil(res.total / pageSize));
+        if (p > lastPage) {
+          setPage(lastPage);
+          return;
+        }
         if (silent) {
           setError('');
         }
       } catch (e: unknown) {
+        if (requestId !== listRequestRef.current) return;
         if (!silent) {
           setError(e instanceof Error ? e.message : 'Failed to load');
         }
       } finally {
-        if (!silent) {
+        if (!silent && requestId === listRequestRef.current) {
           setLoading(false);
         }
       }
     },
-    []
+    [pageSize]
   );
 
   useEffect(() => {
@@ -445,12 +593,11 @@ export default function ScansPage() {
     statusFilter,
   ]);
 
-  useEffect(
-    () => () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    },
-    []
-  );
+  useEffect(() => {
+    return deferEffect(() => {
+      void loadQueueSummary();
+    });
+  }, [loadQueueSummary, scopeKey]);
 
   useEffect(() => {
     return deferEffect(() => {
@@ -467,14 +614,10 @@ export default function ScansPage() {
       };
 
       if (areScansViewStatesEqual(nextViewState, currentViewState)) {
-        if (imageFilter !== nextViewState.image) {
-          setImageFilter(nextViewState.image);
-        }
         return;
       }
 
       clearPendingImageCommit();
-      setImageFilter(nextViewState.image);
       setAppliedImageFilter(nextViewState.image);
       setStatusFilter(nextViewState.status);
       setActivityRange(nextViewState.range);
@@ -492,7 +635,6 @@ export default function ScansPage() {
     criticalFilter,
     orgPolicyFilter,
     groupingMode,
-    imageFilter,
     searchParams,
     statusFilter,
     tagFilter,
@@ -549,6 +691,16 @@ export default function ScansPage() {
   }, [scopeKey]);
 
   useEffect(() => {
+    listOrgs()
+      .then(setWorkspaceOrgs)
+      .catch(() => setWorkspaceOrgs([]));
+  }, [scopeKey]);
+
+  useEffect(() => {
+    return deferEffect(() => setPage(1));
+  }, [scopeKey]);
+
+  useEffect(() => {
     let cancelled = false;
     const loadScopedOrgPolicy = async () => {
       if (workScope.kind !== 'org') {
@@ -577,6 +729,10 @@ export default function ScansPage() {
     workScope.kind !== 'org' ||
     !scopedOrgPolicy ||
     canMutateOrg(scopedOrgPolicy.current_user_role);
+  const manageableWorkspaceOrgs = useMemo(
+    () => workspaceOrgs.filter((org) => isPlatformAdmin || canMutateOrg(org.current_user_role)),
+    [isPlatformAdmin, workspaceOrgs]
+  );
   function openCreatePage() {
     if (!canMutateCurrentScope) return;
     router.push('/scans/new');
@@ -593,17 +749,11 @@ export default function ScansPage() {
 
   const refreshCurrentView = useCallback(
     (options?: { silent?: boolean }) => {
-      if (hasRecentWindow) {
-        return loadActivity(
-          page,
-          appliedImageFilter,
-          resolvedActivityRange,
-          collectionFilter,
-          options
-        );
-      }
+      const loadView = hasRecentWindow
+        ? loadActivity(page, appliedImageFilter, resolvedActivityRange, collectionFilter, options)
+        : loadImages(page, appliedImageFilter, statusFilter, collectionFilter, options);
 
-      return loadImages(page, appliedImageFilter, statusFilter, collectionFilter, options);
+      return Promise.all([loadView, loadQueueSummary()]);
     },
     [
       collectionFilter,
@@ -611,6 +761,7 @@ export default function ScansPage() {
       hasRecentWindow,
       loadActivity,
       loadImages,
+      loadQueueSummary,
       page,
       resolvedActivityRange,
       statusFilter,
@@ -621,11 +772,14 @@ export default function ScansPage() {
     () => {
       void refreshCurrentView({ silent: true });
     },
-    hasRecentWindow
-      ? activityScans.some((scan) => scan.status === 'running' || scan.status === 'pending')
-      : artifacts.some(
-          (artifact) => artifact.latest_status === 'running' || artifact.latest_status === 'pending'
-        ),
+    queueSummary.queued_in_justscan > 0 ||
+      queueSummary.active > 0 ||
+      (hasRecentWindow
+        ? activityScans.some((scan) => scan.status === 'running' || scan.status === 'pending')
+        : artifacts.some(
+            (artifact) =>
+              artifact.latest_status === 'running' || artifact.latest_status === 'pending'
+          )),
     5000
   );
 
@@ -656,10 +810,7 @@ export default function ScansPage() {
   }
 
   function clearPendingImageCommit() {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
+    setSearchCancelVersion((version) => version + 1);
   }
 
   function handleActivityRangeChange(nextRange: RecentActivityRange) {
@@ -701,7 +852,6 @@ export default function ScansPage() {
 
   function handleClearFilters() {
     clearPendingImageCommit();
-    setImageFilter('');
     setAppliedImageFilter('');
     setStatusFilter('');
     setActivityRange('');
@@ -723,15 +873,14 @@ export default function ScansPage() {
     });
   }
 
-  function handleImageFilterChange(value: string) {
-    setImageFilter(value);
-    clearPendingImageCommit();
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
+  function handleImageFilterCommit(value: string) {
+    // The input invalidates prior requests as each character is entered. This
+    // commit runs only after the user pauses typing.
+    if (value !== appliedImageFilter) {
       setAppliedImageFilter(value);
       setPage(1);
       syncRoute({ image: value });
-    }, 300);
+    }
   }
 
   function handleStatusFilterChange(value: string) {
@@ -760,6 +909,61 @@ export default function ScansPage() {
     setOrgPolicyFilter(value);
     setPage(1);
     syncRoute({ policy: value });
+  }
+
+  function handlePageSizeChange(nextSize: number) {
+    if (!SCANS_PAGE_SIZE_OPTIONS.includes(nextSize as (typeof SCANS_PAGE_SIZE_OPTIONS)[number])) {
+      return;
+    }
+    setPageSizesByWorkspace((current) => ({ ...current, [savedPageSizeStorageKey]: nextSize }));
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(savedPageSizeStorageKey, String(nextSize));
+    }
+    setPage(1);
+  }
+
+  function openWorkspaceModal(action: Exclude<WorkspaceAction, null>, scanIds: string[]) {
+    const uniqueScanIds = Array.from(new Set(scanIds));
+    if (!uniqueScanIds.length) return;
+    setWorkspaceAction(action);
+    setWorkspaceScanIds(uniqueScanIds);
+    setWorkspaceTarget(action === 'share' ? (manageableWorkspaceOrgs[0]?.id ?? '') : 'user');
+    workspaceModal.open();
+  }
+
+  async function handleWorkspaceAction() {
+    if (!workspaceAction || workspaceScanIds.length === 0) return;
+    if (workspaceAction === 'share' && !workspaceTarget) {
+      toast.error('Choose an organization workspace');
+      return;
+    }
+
+    setWorkspaceSaving(true);
+    try {
+      if (workspaceAction === 'share') {
+        await bulkGrantScansToOrg(workspaceTarget, workspaceScanIds);
+        toast.success(
+          `Shared ${workspaceScanIds.length} scan${workspaceScanIds.length === 1 ? '' : 's'} with workspace`
+        );
+      } else {
+        await bulkTransferScansOwnership(
+          workspaceScanIds,
+          workspaceTarget === 'user' ? { type: 'user' } : { type: 'org', orgId: workspaceTarget }
+        );
+        toast.success(
+          `Transferred ${workspaceScanIds.length} scan${workspaceScanIds.length === 1 ? '' : 's'} to workspace`
+        );
+      }
+      setSelectedScans(new Set());
+      workspaceModal.close();
+      setWorkspaceAction(null);
+      setWorkspaceScanIds([]);
+      void refreshCurrentView();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update scan workspace');
+    } finally {
+      setWorkspaceSaving(false);
+    }
   }
 
   async function handleDelete(scanId: string, imageName: string) {
@@ -797,6 +1001,59 @@ export default function ScansPage() {
       refreshCurrentView();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to cancel');
+    }
+  }
+
+  async function handleRetry(scanId: string, imageName: string) {
+    if (!canMutateCurrentScope) return;
+    try {
+      await reScan(scanId);
+      toast.success('Retry queued');
+      setChildRefreshKey((prev) => ({ ...prev, [imageName]: (prev[imageName] ?? 0) + 1 }));
+      refreshCurrentView();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to queue retry');
+    }
+  }
+
+  async function handleBulkRetry() {
+    if (!canMutateCurrentScope || selectedScans.size === 0 || bulkRetrying) return;
+
+    const scanIDs = Array.from(selectedScans);
+    setBulkRetrying(true);
+    try {
+      const failedIDs = new Set<string>();
+      let nextScanIndex = 0;
+
+      await Promise.all(
+        Array.from({ length: Math.min(BULK_RETRY_CONCURRENCY, scanIDs.length) }, async () => {
+          while (nextScanIndex < scanIDs.length) {
+            const scanID = scanIDs[nextScanIndex];
+            nextScanIndex += 1;
+            try {
+              await reScan(scanID);
+            } catch {
+              failedIDs.add(scanID);
+            }
+          }
+        })
+      );
+
+      const queued = scanIDs.length - failedIDs.size;
+
+      if (queued > 0) {
+        toast.success(`${queued} ${queued === 1 ? 'retry' : 'retries'} queued`);
+      }
+      if (failedIDs.size > 0) {
+        toast.error(
+          `${failedIDs.size} scan${failedIDs.size !== 1 ? 's' : ''} could not be retried`
+        );
+      }
+
+      setSelectedScans(failedIDs);
+      refreshCurrentView();
+    } finally {
+      setBulkRetrying(false);
     }
   }
 
@@ -972,12 +1229,16 @@ export default function ScansPage() {
   const visibleRows = hasRecentWindow ? filteredActivityScans.length : filteredArtifacts.length;
   const hasClientSideFilters = Boolean(tagFilter) || (hasRecentWindow && Boolean(statusFilter));
   const totalForDisplay = hasClientSideFilters ? visibleRows : total;
-  const totalPages = hasClientSideFilters ? 1 : Math.max(1, Math.ceil(total / LIMIT));
+  const totalPages = hasClientSideFilters ? 1 : Math.max(1, Math.ceil(total / pageSize));
+  const paginationItems = buildPaginationItems(page, totalPages);
+  const pageStart = totalForDisplay === 0 ? 0 : (page - 1) * pageSize + 1;
+  const pageEnd = Math.min(page * pageSize, totalForDisplay);
+
   const activityRangeLabel =
     RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === resolvedActivityRange)?.label ??
     'Last 24 hours';
   const hasActiveFilters =
-    Boolean(imageFilter) ||
+    Boolean(appliedImageFilter) ||
     Boolean(statusFilter) ||
     hasRecentWindow ||
     Boolean(tagFilter) ||
@@ -985,7 +1246,7 @@ export default function ScansPage() {
     Boolean(criticalFilter) ||
     Boolean(orgPolicyFilter);
   const hasFilterBeyondView =
-    Boolean(imageFilter) ||
+    Boolean(appliedImageFilter) ||
     (Boolean(statusFilter) && statusFilter !== ACTIVE_SCAN_STATUS_FILTER) ||
     Boolean(tagFilter) ||
     Boolean(collectionFilter) ||
@@ -1093,12 +1354,46 @@ export default function ScansPage() {
                 </Tabs.Panel>
               ))}
             </Tabs>
-            <p className="text-sm text-muted">
-              {totalForDisplay}{' '}
-              {hasRecentWindow
-                ? `scan event${totalForDisplay !== 1 ? 's' : ''}`
-                : `image tag${totalForDisplay !== 1 ? 's' : ''}`}
-            </p>
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <Chip
+                className="whitespace-nowrap text-xs"
+                color="default"
+                size="sm"
+                title="Queue and active scan counts are limited to this workspace. Worker capacity is shared across JustScan."
+                variant="soft"
+              >
+                JustScan: {queueSummary.queued_in_justscan} queued · {queueSummary.active} active ·{' '}
+                {queueSummary.worker_capacity} shared worker
+                {queueSummary.worker_capacity === 1 ? '' : 's'}
+              </Chip>
+              <Select
+                aria-label="Rows per page"
+                className="w-[132px]"
+                value={String(pageSize)}
+                onChange={(value) => handlePageSizeChange(Number(value))}
+                variant="secondary"
+              >
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    {SCANS_PAGE_SIZE_OPTIONS.map((size) => (
+                      <ListBox.Item key={size} id={String(size)}>
+                        {size} rows
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+              <p className="text-sm text-muted">
+                {totalForDisplay}{' '}
+                {hasRecentWindow
+                  ? `scan event${totalForDisplay !== 1 ? 's' : ''}`
+                  : `image tag${totalForDisplay !== 1 ? 's' : ''}`}
+              </p>
+            </div>
           </div>
 
           <Disclosure
@@ -1107,26 +1402,14 @@ export default function ScansPage() {
             className="contents"
           >
             <div className="flex flex-wrap items-end gap-3">
-              <SearchField
-                aria-label="Search images or tags"
-                className="min-w-[220px] flex-1"
-                value={imageFilter}
-                onChange={handleImageFilterChange}
-                variant="secondary"
-              >
-                <Label className="sr-only">Search images or tags</Label>
-                <SearchField.Group>
-                  <SearchField.SearchIcon />
-                  <SearchField.Input
-                    placeholder={
-                      hasRecentWindow
-                        ? 'Filter recent activity by image or tag…'
-                        : 'Search image or tag…'
-                    }
-                  />
-                  <SearchField.ClearButton />
-                </SearchField.Group>
-              </SearchField>
+              <ScansSearchField
+                key={appliedImageFilter}
+                initialValue={appliedImageFilter}
+                cancelVersion={searchCancelVersion}
+                hasRecentWindow={hasRecentWindow}
+                requestVersionRef={listRequestRef}
+                onCommit={handleImageFilterCommit}
+              />
 
               {scanView === 'recent' ? (
                 <Select
@@ -1192,56 +1475,58 @@ export default function ScansPage() {
 
                   {showCollectionFilter ? (
                     <Select
-                    className="min-w-[200px] flex-1"
-                    value={collectionFilter || '__all__'}
-                    onChange={(value) =>
-                      handleCollectionFilterChange(String(value === '__all__' ? '' : (value ?? '')))
-                    }
-                    variant="secondary"
-                  >
-                    <Label>Collection</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        <ListBox.Item id="__all__">All collections</ListBox.Item>
-                        {availableFilterCollections.map((collection) => (
-                          <ListBox.Item key={collection.id} id={collection.id}>
-                            {collection.name}
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
+                      className="min-w-[200px] flex-1"
+                      value={collectionFilter || '__all__'}
+                      onChange={(value) =>
+                        handleCollectionFilterChange(
+                          String(value === '__all__' ? '' : (value ?? ''))
+                        )
+                      }
+                      variant="secondary"
+                    >
+                      <Label>Collection</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__all__">All collections</ListBox.Item>
+                          {availableFilterCollections.map((collection) => (
+                            <ListBox.Item key={collection.id} id={collection.id}>
+                              {collection.name}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
                     </Select>
                   ) : null}
 
                   {showCriticalFilter ? (
                     <Select
-                    className="min-w-[180px] flex-1"
-                    value={criticalFilter || '__all__'}
-                    onChange={(value) =>
-                      handleCriticalFilterChange(
-                        (value === '__all__' ? '' : (value ?? '')) as '' | 'yes' | 'no'
-                      )
-                    }
-                    variant="secondary"
-                  >
-                    <Label>Critical findings</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {CRITICAL_FILTER_OPTIONS.map((option) => (
-                          <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>
-                            {option.label}
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
+                      className="min-w-[180px] flex-1"
+                      value={criticalFilter || '__all__'}
+                      onChange={(value) =>
+                        handleCriticalFilterChange(
+                          (value === '__all__' ? '' : (value ?? '')) as '' | 'yes' | 'no'
+                        )
+                      }
+                      variant="secondary"
+                    >
+                      <Label>Critical findings</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {CRITICAL_FILTER_OPTIONS.map((option) => (
+                            <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>
+                              {option.label}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
                     </Select>
                   ) : null}
 
@@ -1304,110 +1589,150 @@ export default function ScansPage() {
 
       {/* Bulk action toolbar */}
       {!hasRecentWindow && canMutateCurrentScope && selectedScans.size > 0 && (
-        <Card className="px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <Card className="flex flex-col gap-3 px-4 py-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+          <span className="shrink-0 text-sm font-medium text-zinc-700 dark:text-zinc-300">
             {selectedScans.size} scan{selectedScans.size !== 1 ? 's' : ''} selected
           </span>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              onPress={handleGenerateReport}
-              className="flex flex-1 min-w-[110px] items-center justify-center gap-1.5 sm:flex-none"
-              variant="secondary"
+          <div className="flex flex-wrap items-center gap-2 2xl:justify-end">
+            <ButtonGroup aria-label="Run selected scan actions" size="sm" variant="secondary">
+              <Button onPress={handleGenerateReport}>
+                <FileExportIcon size={14} aria-hidden />
+                Generate report
+              </Button>
+              <Button isDisabled={bulkRetrying} isPending={bulkRetrying} onPress={handleBulkRetry}>
+                <ButtonGroup.Separator />
+                <Refresh01Icon size={14} aria-hidden />
+                Retry selected
+              </Button>
+            </ButtonGroup>
+
+            <div
+              aria-label="Organize selected scans"
+              className="flex flex-wrap items-center gap-1 rounded-xl border border-default-200 bg-surface-secondary/60 p-1"
+              role="group"
             >
-              Generate Report
-            </Button>
-            <Popover>
-              <Button variant="secondary">Add Tag</Button>
-              <Popover.Content className="rounded-xl min-w-[160px]" placement="bottom end">
-                <Popover.Dialog className="p-1">
-                  {availableTags.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-zinc-500">No tags created yet</div>
-                  ) : (
-                    <ListBox
-                      onAction={(key) => {
-                        handleBulkAddTag(String(key));
-                      }}
-                    >
-                      {availableTags.map((tag) => (
-                        <ListBox.Item
-                          key={tag.id}
-                          id={tag.id}
-                          className="px-3 py-1.5 text-sm rounded-lg cursor-pointer flex items-center gap-2"
-                        >
-                          <span
-                            className="size-2.5 rounded-full shrink-0"
-                            style={{ background: tag.color }}
-                          />
-                          {tag.name}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  )}
-                </Popover.Dialog>
-              </Popover.Content>
-            </Popover>
-            <Popover>
-              <Button variant="secondary">Add Collection</Button>
-              <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
-                <Popover.Dialog className="p-1">
-                  {availableCollections.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-zinc-500">
-                      No collections created yet
-                    </div>
-                  ) : (
-                    <ListBox onAction={(key) => void handleBulkAddCollection(String(key))}>
-                      {availableCollections.map((collection) => (
-                        <ListBox.Item
-                          key={collection.id}
-                          id={collection.id}
-                          className="px-3 py-1.5 text-sm rounded-lg cursor-pointer"
-                        >
-                          {collection.name}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  )}
-                </Popover.Dialog>
-              </Popover.Content>
-            </Popover>
-            <Popover>
-              <Button variant="secondary">Remove Collection</Button>
-              <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
-                <Popover.Dialog className="p-1">
-                  {availableCollections.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-zinc-500">
-                      No collections created yet
-                    </div>
-                  ) : (
-                    <ListBox onAction={(key) => void handleBulkRemoveCollection(String(key))}>
-                      {availableCollections.map((collection) => (
-                        <ListBox.Item
-                          key={collection.id}
-                          id={collection.id}
-                          className="px-3 py-1.5 text-sm rounded-lg cursor-pointer"
-                        >
-                          {collection.name}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  )}
-                </Popover.Dialog>
-              </Popover.Content>
-            </Popover>
-            <Button
-              onPress={() => setSelectedScans(new Set())}
-              className="flex-1 min-w-[90px] sm:flex-none"
-              variant="secondary"
+              <Popover>
+                <Button size="sm" variant="tertiary">
+                  <Tag01Icon size={14} aria-hidden />
+                  Add tag
+                </Button>
+                <Popover.Content className="rounded-xl min-w-[160px]" placement="bottom end">
+                  <Popover.Dialog className="p-1">
+                    {availableTags.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-zinc-500">No tags created yet</div>
+                    ) : (
+                      <ListBox
+                        onAction={(key) => {
+                          handleBulkAddTag(String(key));
+                        }}
+                      >
+                        {availableTags.map((tag) => (
+                          <ListBox.Item
+                            key={tag.id}
+                            id={tag.id}
+                            className="px-3 py-1.5 text-sm rounded-lg cursor-pointer flex items-center gap-2"
+                          >
+                            <span
+                              className="size-2.5 rounded-full shrink-0"
+                              style={{ background: tag.color }}
+                            />
+                            {tag.name}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    )}
+                  </Popover.Dialog>
+                </Popover.Content>
+              </Popover>
+              <Popover>
+                <Button size="sm" variant="tertiary">
+                  <FolderLibraryIcon size={14} aria-hidden />
+                  Add collection
+                </Button>
+                <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
+                  <Popover.Dialog className="p-1">
+                    {availableCollections.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-zinc-500">
+                        No collections created yet
+                      </div>
+                    ) : (
+                      <ListBox onAction={(key) => void handleBulkAddCollection(String(key))}>
+                        {availableCollections.map((collection) => (
+                          <ListBox.Item
+                            key={collection.id}
+                            id={collection.id}
+                            className="px-3 py-1.5 text-sm rounded-lg cursor-pointer"
+                          >
+                            {collection.name}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    )}
+                  </Popover.Dialog>
+                </Popover.Content>
+              </Popover>
+              <Popover>
+                <Button size="sm" variant="tertiary">
+                  <FolderLibraryIcon size={14} aria-hidden />
+                  Remove collection
+                </Button>
+                <Popover.Content className="rounded-xl min-w-[180px]" placement="bottom end">
+                  <Popover.Dialog className="p-1">
+                    {availableCollections.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-zinc-500">
+                        No collections created yet
+                      </div>
+                    ) : (
+                      <ListBox onAction={(key) => void handleBulkRemoveCollection(String(key))}>
+                        {availableCollections.map((collection) => (
+                          <ListBox.Item
+                            key={collection.id}
+                            id={collection.id}
+                            className="px-3 py-1.5 text-sm rounded-lg cursor-pointer"
+                          >
+                            {collection.name}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    )}
+                  </Popover.Dialog>
+                </Popover.Content>
+              </Popover>
+            </div>
+
+            <div
+              aria-label="Workspace actions"
+              className="flex items-center gap-1 rounded-xl border border-default-200 bg-surface-secondary/60 p-1"
+              role="group"
             >
-              Clear
-            </Button>
-            <Button
-              onPress={handleBulkDelete}
-              className="flex-1 min-w-[90px] sm:flex-none"
-              variant="danger-soft"
-            >
-              Delete
-            </Button>
+              <Button
+                size="sm"
+                onPress={() => openWorkspaceModal('share', Array.from(selectedScans))}
+                variant="tertiary"
+              >
+                <Share01Icon size={14} aria-hidden />
+                Share
+              </Button>
+              <Button
+                size="sm"
+                onPress={() => openWorkspaceModal('transfer', Array.from(selectedScans))}
+                variant="danger-soft"
+              >
+                <ArrowRight01Icon size={14} aria-hidden />
+                Transfer
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Button size="sm" onPress={() => setSelectedScans(new Set())} variant="tertiary">
+                <Cancel01Icon size={14} aria-hidden />
+                Clear
+              </Button>
+              <Button size="sm" onPress={handleBulkDelete} variant="danger-soft">
+                <Delete01Icon size={14} aria-hidden />
+                Delete
+              </Button>
+            </div>
           </div>
         </Card>
       )}
@@ -1479,43 +1804,128 @@ export default function ScansPage() {
           loading={loading}
           onCancel={handleCancel}
           onDelete={handleDelete}
+          onRetry={handleRetry}
           onExpandedChange={setExpanded}
           onSelectedScansChange={setSelectedScans}
+          onShareToWorkspace={(scanIds) => openWorkspaceModal('share', scanIds)}
+          onTransferToWorkspace={(scanIds) => openWorkspaceModal('transfer', scanIds)}
           selectedScans={selectedScans}
         />
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <>
-          <Pagination className="justify-center">
-            <Pagination.Content>
-              <Pagination.Item>
-                <Pagination.Previous isDisabled={page === 1} onPress={() => setPage((p) => p - 1)}>
-                  <Pagination.PreviousIcon />
-                  <span>Previous</span>
-                </Pagination.Previous>
-              </Pagination.Item>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <Pagination.Item key={p}>
-                  <Pagination.Link isActive={p === page} onPress={() => setPage(p)}>
-                    {p}
-                  </Pagination.Link>
+      {totalForDisplay > 0 ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center">
+            <p className="shrink-0 whitespace-nowrap text-xs text-muted">
+              Showing {pageStart}-{pageEnd} of {totalForDisplay}
+            </p>
+          </div>
+          {totalPages > 1 ? (
+            <Pagination className="justify-center sm:justify-end" size="sm">
+              <Pagination.Content>
+                <Pagination.Item>
+                  <Pagination.Previous
+                    isDisabled={page === 1}
+                    onPress={() => setPage((p) => p - 1)}
+                  >
+                    <Pagination.PreviousIcon />
+                    <span>Previous</span>
+                  </Pagination.Previous>
                 </Pagination.Item>
-              ))}
-              <Pagination.Item>
-                <Pagination.Next
-                  isDisabled={page === totalPages}
-                  onPress={() => setPage((p) => p + 1)}
+                {paginationItems.map((item) =>
+                  typeof item === 'string' ? (
+                    <Pagination.Item key={item}>
+                      <Pagination.Ellipsis />
+                    </Pagination.Item>
+                  ) : (
+                    <Pagination.Item key={item}>
+                      <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
+                        {item}
+                      </Pagination.Link>
+                    </Pagination.Item>
+                  )
+                )}
+                <Pagination.Item>
+                  <Pagination.Next
+                    isDisabled={page === totalPages}
+                    onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    <span>Next</span>
+                    <Pagination.NextIcon />
+                  </Pagination.Next>
+                </Pagination.Item>
+              </Pagination.Content>
+            </Pagination>
+          ) : null}
+        </div>
+      ) : null}
+      <Modal state={workspaceModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog className="overflow-hidden">
+              <Modal.Header>
+                <Modal.Heading className="font-semibold">
+                  {workspaceAction === 'transfer'
+                    ? 'Transfer scan ownership'
+                    : 'Share scans with workspace'}
+                </Modal.Heading>
+                <Modal.CloseTrigger />
+              </Modal.Header>
+              <Modal.Body className="space-y-4 py-5">
+                <p className="text-sm text-muted">
+                  {workspaceAction === 'transfer'
+                    ? 'The destination becomes the sole workspace. Previous workspace access, labels, collections, and compliance results that are not available there will be removed.'
+                    : 'The destination organization will be granted access while the current owner and existing access remain unchanged.'}
+                </p>
+                <p className="text-sm font-medium">
+                  {workspaceScanIds.length} scan{workspaceScanIds.length === 1 ? '' : 's'} selected
+                </p>
+                <Select
+                  value={workspaceTarget || null}
+                  onChange={(value) => setWorkspaceTarget(String(value ?? ''))}
+                  placeholder="Choose a workspace"
+                  variant="secondary"
                 >
-                  <span>Next</span>
-                  <Pagination.NextIcon />
-                </Pagination.Next>
-              </Pagination.Item>
-            </Pagination.Content>
-          </Pagination>
-        </>
-      )}
+                  <Label>Destination workspace</Label>
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {workspaceAction === 'transfer' ? (
+                        <ListBox.Item id="user">Personal workspace</ListBox.Item>
+                      ) : null}
+                      {manageableWorkspaceOrgs.map((org) => (
+                        <ListBox.Item key={org.id} id={org.id}>
+                          {org.name}
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button onPress={workspaceModal.close} variant="secondary">
+                  Cancel
+                </Button>
+                <Button
+                  isDisabled={workspaceSaving || (workspaceAction === 'share' && !workspaceTarget)}
+                  onPress={() => void handleWorkspaceAction()}
+                  variant={workspaceAction === 'transfer' ? 'danger-soft' : 'primary'}
+                >
+                  {workspaceSaving
+                    ? 'Saving…'
+                    : workspaceAction === 'transfer'
+                      ? 'Transfer ownership'
+                      : 'Share scans'}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
       <Modal state={collectionModal}>
         <Modal.Backdrop isDismissable>
           <Modal.Container size="md" placement="center">

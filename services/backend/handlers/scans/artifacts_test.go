@@ -1,11 +1,22 @@
 package scans
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 )
+
+func TestArtifactSummarySerializesLatestCurrentStep(t *testing.T) {
+	payload, err := json.Marshal(ArtifactSummary{LatestCurrentStep: "queued"})
+	if err != nil {
+		t.Fatalf("failed to marshal artifact summary: %v", err)
+	}
+	if !strings.Contains(string(payload), `"latest_current_step":"queued"`) {
+		t.Fatalf("expected latest current step in response, got %s", payload)
+	}
+}
 
 func TestArtifactCollectionWhere(t *testing.T) {
 	tests := []struct {

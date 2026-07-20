@@ -32,10 +32,11 @@ import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
 import {
   Button,
   Card,
+  ColorArea,
   ColorField,
   ColorPicker,
+  ColorSlider,
   ColorSwatch,
-  ColorSwatchPicker,
   Label,
   ListBox,
   Modal,
@@ -56,16 +57,7 @@ import {
 } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-const COLORS = [
-  '#6366f1',
-  '#ec4899',
-  '#f59e0b',
-  '#10b981',
-  '#3b82f6',
-  '#ef4444',
-  'color-mix(in srgb, var(--accent) 88%, white)',
-  '#14b8a6',
-];
+const DEFAULT_TAG_COLOR = '#6366f1';
 const selectTriggerCls = heroSelectTriggerClassName;
 
 export default function TagsPage() {
@@ -76,7 +68,7 @@ export default function TagsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
-  const [color, setColor] = useState(COLORS[0]);
+  const [color, setColor] = useState(DEFAULT_TAG_COLOR);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [editing, setEditing] = useState<Tag | null>(null);
@@ -98,7 +90,7 @@ export default function TagsPage() {
     try {
       return parseColor(color);
     } catch {
-      return parseColor(COLORS[0]);
+      return parseColor(DEFAULT_TAG_COLOR);
     }
   }, [color]);
   const modal = useOverlayState();
@@ -135,7 +127,7 @@ export default function TagsPage() {
     if (!canMutateActiveScope) return;
     setEditing(null);
     setName('');
-    setColor(COLORS[0]);
+    setColor(DEFAULT_TAG_COLOR);
     setFormError('');
     modal.open();
   }
@@ -635,15 +627,25 @@ export default function TagsPage() {
                           {name || 'preview'}
                         </span>
                       </ColorPicker.Trigger>
-                      <ColorPicker.Popover className="w-[min(320px,calc(100vw-3rem))] space-y-3 p-3">
-                        <ColorSwatchPicker size="sm" className="justify-center">
-                          {COLORS.map((c) => (
-                            <ColorSwatchPicker.Item key={c} color={c}>
-                              <ColorSwatchPicker.Swatch />
-                              <ColorSwatchPicker.Indicator />
-                            </ColorSwatchPicker.Item>
-                          ))}
-                        </ColorSwatchPicker>
+                      <ColorPicker.Popover className="w-[min(340px,calc(100vw-3rem))] space-y-4 p-4">
+                        <ColorArea
+                          colorSpace="hsb"
+                          xChannel="saturation"
+                          yChannel="brightness"
+                          className="aspect-[4/3] w-full max-w-none rounded-xl"
+                        >
+                          <ColorArea.Thumb className="size-4 border-2 border-white shadow-md" />
+                        </ColorArea>
+                        <ColorSlider
+                          aria-label="Hue"
+                          channel="hue"
+                          className="w-full"
+                          colorSpace="hsb"
+                        >
+                          <ColorSlider.Track className="h-3 rounded-full">
+                            <ColorSlider.Thumb className="size-4 border-2 border-white shadow-md" />
+                          </ColorSlider.Track>
+                        </ColorSlider>
                         <ColorField aria-label="Tag color">
                           <ColorField.Group variant="secondary">
                             <ColorField.Prefix>

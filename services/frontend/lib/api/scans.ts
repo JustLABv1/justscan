@@ -13,6 +13,7 @@ import type {
   SBOMComponent,
   Scan,
   ScanComparison,
+  ScanQueueSummary,
   ScanShareResponse,
   ScanTrendPoint,
   SharedScanRescanResponse,
@@ -86,6 +87,13 @@ export const listScanImages = (
   if (collection) params.set('collection', collection);
   appendScope(params);
   return req<{ data: ImageSummary[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
+};
+
+export const getScanQueueSummary = () => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const query = params.toString();
+  return req<ScanQueueSummary>('GET', `/api/v1/scans/queue-summary${query ? `?${query}` : ''}`);
 };
 
 export const getScan = (id: string) => req<Scan>('GET', `/api/v1/scans/${id}`);
@@ -268,6 +276,22 @@ export const bulkDeleteScans = (ids: string[]) =>
 
 export const bulkAddTagToScans = (tagId: string, ids: string[]) =>
   req<{ result: string }>('POST', `/api/v1/scans/bulk/tags/${tagId}`, { ids });
+
+export const bulkGrantScansToOrg = (orgId: string, ids: string[]) =>
+  req<{ result: string; count: number }>('POST', '/api/v1/scans/bulk/org-grants', {
+    ids,
+    org_id: orgId,
+  });
+
+export const bulkTransferScansOwnership = (
+  ids: string[],
+  target: { type: 'user' } | { type: 'org'; orgId: string }
+) =>
+  req<{ result: string; count: number }>('POST', '/api/v1/scans/bulk/transfer-ownership', {
+    ids,
+    target_type: target.type,
+    ...(target.type === 'org' ? { target_org_id: target.orgId } : {}),
+  });
 
 export const bulkAddCollectionToScans = (collectionId: string, ids: string[]) => {
   const params = new URLSearchParams();

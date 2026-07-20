@@ -27,6 +27,7 @@ type ArtifactSummary struct {
 	LatestScanID         string                        `json:"latest_scan_id"`
 	LatestStatus         string                        `json:"latest_status"`
 	LatestExternalStatus string                        `json:"latest_external_status,omitempty"`
+	LatestCurrentStep    string                        `json:"latest_current_step,omitempty"`
 	LatestScanAt         time.Time                     `json:"latest_scan_at"`
 	OwnerType            string                        `json:"owner_type,omitempty"`
 	OwnerUserID          *uuid.UUID                    `json:"owner_user_id,omitempty"`
@@ -37,6 +38,7 @@ type ArtifactSummary struct {
 	LowCount             int                           `json:"low_count"`
 	ComplianceSummary    *models.ScanComplianceSummary `json:"compliance_summary,omitempty"`
 	Collections          []models.ScanCollection       `json:"collections,omitempty"`
+	Tags                 []models.Tag                  `json:"tags,omitempty"`
 }
 
 // ArtifactFilterOptions describes only filters that can match at least one
@@ -169,8 +171,18 @@ func ListScanArtifacts(db *bun.DB) gin.HandlerFunc {
 		var searchArgs []interface{}
 		if query := strings.TrimSpace(c.Query("q")); query != "" {
 			pattern := "%" + query + "%"
-			searchWhere = "(s.image_name ILIKE ? OR s.image_tag ILIKE ? OR (s.image_name || ':' || s.image_tag) ILIKE ?)"
-			searchArgs = []interface{}{pattern, pattern, pattern}
+			searchWhere = `(
+    s.image_name ILIKE ?
+    OR s.image_tag ILIKE ?
+    OR (s.image_name || ':' || s.image_tag) ILIKE ?
+    OR EXISTS (
+        SELECT 1
+        FROM scan_tags AS st
+        JOIN tags AS t ON t.id = st.tag_id
+        WHERE st.scan_id = s.id AND t.name ILIKE ?
+    )
+)`
+			searchArgs = []interface{}{pattern, pattern, pattern, pattern}
 		}
 
 		baseArgs := append([]interface{}{}, userArgs...)
@@ -196,6 +208,7 @@ WITH ranked AS (
         s.id::text AS latest_scan_id,
         s.status AS latest_status,
         COALESCE(s.external_status, '') AS latest_external_status,
+        COALESCE(s.current_step, '') AS latest_current_step,
         s.created_at AS latest_scan_at,
         s.owner_type,
         s.owner_user_id,
@@ -247,6 +260,7 @@ SELECT
     l.latest_scan_id,
     l.latest_status,
     l.latest_external_status,
+    l.latest_current_step,
     l.latest_scan_at,
     l.owner_type,
     l.owner_user_id,
@@ -282,6 +296,7 @@ LIMIT ? OFFSET ?`
 				&artifact.LatestScanID,
 				&artifact.LatestStatus,
 				&artifact.LatestExternalStatus,
+				&artifact.LatestCurrentStep,
 				&artifact.LatestScanAt,
 				&artifact.OwnerType,
 				&artifact.OwnerUserID,
@@ -340,6 +355,29 @@ LIMIT ? OFFSET ?`
 			}
 			for index := range artifacts {
 				collectionhandlers.SortCollectionsForDisplay(artifacts[index].Collections)
+			}
+
+			var scanTags []models.ScanTag
+			if err := db.NewSelect().
+				Model(&scanTags).
+				Relation("Tag").
+				Where("scan_tag.scan_id IN (?)", bun.In(scanIDs)).
+				Scan(c.Request.Context(), &scanTags); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load artifact tags"})
+				return
+			}
+			for _, scanTag := range scanTags {
+				if scanTag.Tag == nil {
+					continue
+				}
+				if index, ok := artifactIndexByScanID[scanTag.ScanID]; ok {
+					artifacts[index].Tags = append(artifacts[index].Tags, *scanTag.Tag)
+				}
+			}
+			for index := range artifacts {
+				sort.Slice(artifacts[index].Tags, func(left, right int) bool {
+					return artifacts[index].Tags[left].Name < artifacts[index].Tags[right].Name
+				})
 			}
 
 			if orgScoped {

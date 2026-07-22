@@ -1,0 +1,49 @@
+name: JustScan local image gate
+description: Scan a locally built Docker image and fail when the organization policy rejects it.
+
+inputs:
+  image-tags:
+    description: Newline-delimited image tags produced by docker/metadata-action.
+    required: true
+  timeout:
+    description: Maximum time to wait for JustScan to finish evaluating the image.
+    required: false
+    default: 45m
+  cli-image:
+    description: Container image that provides the JustScan CLI and Docker client.
+    required: false
+    default: ghcr.io/justlabv1/justscan-cli:latest
+
+runs:
+  using: composite
+  steps:
+    - name: Scan image with JustScan
+      shell: bash
+      env:
+        IMAGE_TAGS: ${{ inputs.image-tags }}
+        JUSTSCAN_URL: ${{ env.JUSTSCAN_URL }}
+        JUSTSCAN_ORG_ID: ${{ env.JUSTSCAN_ORG_ID }}
+        JUSTSCAN_TOKEN: ${{ env.JUSTSCAN_TOKEN }}
+        JUSTSCAN_TIMEOUT: ${{ inputs.timeout }}
+        JUSTSCAN_CLI_IMAGE: ${{ inputs.cli-image }}
+      run: |
+        for required in JUSTSCAN_URL JUSTSCAN_ORG_ID JUSTSCAN_TOKEN; do
+          if [[ -z "${!required:-}" ]]; then
+            echo "Missing required GitHub Actions secret: $required" >&2
+            exit 1
+          fi
+        done
+
+        image="$(printf '%s\n' "$IMAGE_TAGS" | sed -n '/./{p;q;}')"
+        if [[ -z "$image" ]]; then
+          echo "No image tag was supplied to the JustScan gate" >&2
+          exit 1
+        fi
+
+        echo "Scanning $image with JustScan before publishing"
+        docker run --rm \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -e JUSTSCAN_URL \
+          -e JUSTSCAN_ORG_ID \
+          -e JUSTSCAN_TOKEN \
+          "$JUSTSCAN_CLI_IMAGE" scan --local "$image" --engine docker --timeout "$JUSTSCAN_TIMEOUT"

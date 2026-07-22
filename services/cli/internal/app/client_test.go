@@ -1,10 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -23,41 +25,57 @@ func TestNormalizeAPIURL(t *testing.T) {
 }
 
 func TestClientUploadsArchive(t *testing.T) {
+	const orgID = "c7a11e8d-82a2-43fc-a978-a0319b1c7130"
+	const sessionID = "a7a11e8d-82a2-43fc-a978-a0319b1c7130"
+	var uploaded strings.Builder
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/orgs/c7a11e8d-82a2-43fc-a978-a0319b1c7130/archive-scans" {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/orgs/"+orgID+"/archive-upload-sessions":
+			_, _ = w.Write([]byte(`{"id":"` + sessionID + `","chunk_size":8}`))
+		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/orgs/"+orgID+"/archive-upload-sessions/"+sessionID:
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := r.Header.Get("Upload-Offset"); got != strconv.Itoa(uploaded.Len()) {
+				t.Fatalf("upload offset = %q", got)
+			}
+			uploaded.Write(body)
+			w.Header().Set("Upload-Offset", strconv.Itoa(uploaded.Len()))
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/orgs/"+orgID+"/archive-upload-sessions/"+sessionID+"/complete":
+			if got := uploaded.String(); got != "archive bytes" {
+				t.Fatalf("archive = %q", got)
+			}
+			_, _ = w.Write([]byte(`{"id":"` + orgID + `","status":"pending","current_step":"queued"}`))
+		default:
 			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
 		}
-		if err := r.ParseMultipartForm(1024 * 1024); err != nil {
-			t.Fatal(err)
-		}
-		if got := r.FormValue("image_name"); got != "local-app" {
-			t.Fatalf("image_name = %q", got)
-		}
-		file, _, err := r.FormFile("archive")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer file.Close()
-		body, err := io.ReadAll(file)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(body) != "archive bytes" {
-			t.Fatalf("archive = %q", body)
-		}
-		_, _ = w.Write([]byte(`{"id":"c7a11e8d-82a2-43fc-a978-a0319b1c7130","status":"pending","current_step":"queued"}`))
 	}))
 	defer server.Close()
 	client, err := newClient(server.URL, "token", "", false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := client.UploadArchive(context.Background(), "c7a11e8d-82a2-43fc-a978-a0319b1c7130", strings.NewReader("archive bytes"), "local-app.tar", 13, "local-app", "local", "")
+	result, err := client.UploadArchive(context.Background(), orgID, strings.NewReader("archive bytes"), "local-app.tar", 13, "local-app", "local", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.ID != "c7a11e8d-82a2-43fc-a978-a0319b1c7130" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestPrintUploadedArchiveScan(t *testing.T) {
+	var output bytes.Buffer
+	err := printValue(&output, "human", UploadedArchiveScan{
+		ID: "c7a11e8d-82a2-43fc-a978-a0319b1c7130", ImageName: "local/app", ImageTag: "latest", Status: "pending",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); !strings.Contains(got, "Archive scan accepted") || !strings.Contains(got, "ID: c7a11e8d-82a2-43fc-a978-a0319b1c7130") {
+		t.Fatalf("output = %q", got)
 	}
 }
 

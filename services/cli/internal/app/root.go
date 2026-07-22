@@ -70,7 +70,10 @@ func newRoot(version, commit, date string) *cobra.Command {
 	root.PersistentFlags().BoolVar(&opt.allowInsecureHTTP, "allow-insecure-http", false, "allow HTTP to non-loopback hosts")
 	root.PersistentFlags().BoolVar(&opt.tokenStdin, "token-stdin", false, "read bearer token from stdin")
 	root.PersistentFlags().StringVarP(&opt.output, "output", "o", "human", "output format: human or json")
-	root.AddCommand(newLoginCommand(opt), newLogoutCommand(opt), newScanCommand(opt), newArchiveScanCommand(opt), newLocalImageScanCommand(opt), newStatusCommand(opt), newConfigCommand(opt), newVersionCommand(opt), newCompletionCommand(root))
+	scanCommand := newScanCommand(opt)
+	scanCommand.AddCommand(newArchiveScanCommand(opt), newLocalImageScanCommand(opt))
+	// Keep the former subcommands and top-level commands as compatibility aliases.
+	root.AddCommand(newLoginCommand(opt), newLogoutCommand(opt), scanCommand, newArchiveScanCommand(opt), newLocalImageScanCommand(opt), newStatusCommand(opt), newConfigCommand(opt), newVersionCommand(opt), newCompletionCommand(root))
 	return root
 }
 
@@ -177,13 +180,32 @@ func resolveToken(opt *options, profileName, server string) (string, error) {
 func newScanCommand(opt *options) *cobra.Command {
 	var registryID, platform, xrayRepository, source, externalRef string
 	var tagIDs []string
-	var noWait bool
+	var noWait, localMode bool
+	var archiveSource string
+	var engine, imageName, imageTag, archiveFilename string
 	var timeout, pollInterval time.Duration
 	cmd := &cobra.Command{
-		Use:   "scan IMAGE",
+		Use:   "scan IMAGE | scan --local IMAGE | scan --archive FILE_OR_HTTPS_URL",
 		Short: "Submit an image scan and wait for its policy verdict",
-		Args:  cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if localMode && archiveSource != "" {
+				return errors.New("--local and --archive cannot be used together")
+			}
+			if archiveSource != "" {
+				if len(args) != 0 {
+					return errors.New("scan --archive accepts the archive path or URL as the flag value, not a positional image")
+				}
+				return nil
+			}
+			return cobra.ExactArgs(1)(cmd, args)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if localMode {
+				return runLocalImageScan(cmd, opt, args[0], localImageScanOptions{engine: engine, imageName: imageName, imageTag: imageTag, platform: platform, noWait: noWait, timeout: timeout, pollInterval: pollInterval})
+			}
+			if archiveSource != "" {
+				return runArchiveScan(cmd, opt, archiveSource, archiveScanOptions{imageName: imageName, imageTag: imageTag, platform: platform, filename: archiveFilename, noWait: noWait, timeout: timeout, pollInterval: pollInterval})
+			}
 			if err := validateOutput(opt.output); err != nil {
 				return &exitError{code: 2, err: err}
 			}
@@ -220,6 +242,12 @@ func newScanCommand(opt *options) *cobra.Command {
 	cmd.Flags().DurationVar(&timeout, "timeout", 30*time.Minute, "maximum wait duration")
 	cmd.Flags().DurationVar(&pollInterval, "poll-interval", 5*time.Second, "scan status polling interval")
 	cmd.Flags().BoolVar(&noWait, "no-wait", false, "return after scan acceptance")
+	cmd.Flags().BoolVar(&localMode, "local", false, "scan an image from the local Docker or Podman engine")
+	cmd.Flags().StringVar(&archiveSource, "archive", "", "scan an image archive from disk or an HTTPS URL")
+	cmd.Flags().StringVar(&engine, "engine", "docker", "container engine command for --local (for example docker or podman)")
+	cmd.Flags().StringVar(&imageName, "name", "", "image name displayed in JustScan for --local or --archive")
+	cmd.Flags().StringVar(&imageTag, "tag", "", "image tag displayed in JustScan for --local or --archive")
+	cmd.Flags().StringVar(&archiveFilename, "filename", "", "archive filename when --archive URL does not include one")
 	return cmd
 }
 
@@ -394,6 +422,9 @@ func printValue(w io.Writer, format string, value any) error {
 		switch result := value.(type) {
 		case AcceptedScan:
 			_, err := fmt.Fprintf(w, "Scan accepted\nID: %s\nStatus: %s\n", result.ScanID, result.ScanStatus)
+			return err
+		case UploadedArchiveScan:
+			_, err := fmt.Fprintf(w, "Archive scan accepted\nID: %s\nImage: %s:%s\nStatus: %s\n", result.ID, result.ImageName, result.ImageTag, result.Status)
 			return err
 		case ScanResult:
 			_, err := fmt.Fprintf(w, "Scan %s\nImage: %s:%s\nProvider: %s\nStatus: %s\nVerdict: %s\nVulnerabilities: critical=%d high=%d medium=%d low=%d unknown=%d\n%s", result.ScanID, result.ImageName, result.ImageTag, result.ScanProvider, result.Status, result.Verdict, result.CriticalCount, result.HighCount, result.MediumCount, result.LowCount, result.UnknownCount, scanURLLine(result.ScanURL))

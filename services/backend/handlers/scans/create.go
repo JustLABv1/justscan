@@ -14,6 +14,7 @@ import (
 
 	"justscan-backend/functions/audit"
 	"justscan-backend/functions/authz"
+	"justscan-backend/pipelines"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -516,6 +517,11 @@ func createUploadedArchiveScan(db *bun.DB, orgInPath bool) gin.HandlerFunc {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to scope scan to organization"})
 				return
 			}
+			if err := recordUploadedArchivePipeline(c.Request.Context(), db, c, scan.ID, *requestedOrgID, userID); err != nil {
+				_ = os.Remove(archivePath)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to track uploaded archive scan"})
+				return
+			}
 		}
 
 		if len(tagIDs) > 0 {
@@ -549,6 +555,18 @@ func createUploadedArchiveScan(db *bun.DB, orgInPath bool) gin.HandlerFunc {
 			ID: scan.ID, ImageName: scan.ImageName, ImageTag: scan.ImageTag, Status: scan.Status, CurrentStep: scan.CurrentStep,
 		})
 	}
+}
+
+func recordUploadedArchivePipeline(ctx context.Context, db *bun.DB, c *gin.Context, scanID, orgID, userID uuid.UUID) error {
+	initiatorTokenID, initiatorDescription, err := resolvePipelineInitiator(c, db, userID)
+	if err != nil {
+		return err
+	}
+	return pipelines.CreateScanRequest(ctx, db, scanID.String(), orgID.String(), pipelines.ScanCreateConfig{
+		Source:                    models.PipelineSourceJustScanCLI,
+		InitiatorTokenID:          initiatorTokenID,
+		InitiatorTokenDescription: initiatorDescription,
+	})
 }
 
 func uploadedArchiveFile(c *gin.Context) (*multipart.FileHeader, error) {

@@ -181,18 +181,27 @@ func GetPipelineScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		req, err := pipelines.LoadScanRequest(c.Request.Context(), db, scanID.String())
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "pipeline scan not found"})
-			return
-		}
-		if req.OrgID != orgID {
+		scan := &models.Scan{}
+		if err := db.NewSelect().Model(scan).Where("id = ?", scanID).Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "pipeline scan not found"})
 			return
 		}
 
-		scan := &models.Scan{}
-		if err := db.NewSelect().Model(scan).Where("id = ?", scanID).Scan(c.Request.Context()); err != nil {
+		req, err := pipelines.LoadScanRequest(c.Request.Context(), db, scanID.String())
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "pipeline scan not found"})
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			linked, linkErr := db.NewSelect().Model((*models.OrgScan)(nil)).
+				Where("org_id = ? AND scan_id = ?", orgID, scanID).
+				Exists(c.Request.Context())
+			if linkErr != nil || !linked || scan.ScanSource != models.ScanSourceUploadedArchive {
+				c.JSON(http.StatusNotFound, gin.H{"error": "pipeline scan not found"})
+				return
+			}
+			req = &models.PipelineScanRequest{ScanID: scanID, OrgID: orgID, Source: models.PipelineSourceJustScanCLI}
+		} else if req.OrgID != orgID {
 			c.JSON(http.StatusNotFound, gin.H{"error": "pipeline scan not found"})
 			return
 		}

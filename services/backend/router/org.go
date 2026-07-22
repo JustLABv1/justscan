@@ -42,6 +42,9 @@ func Orgs(router *gin.RouterGroup, db *bun.DB) {
 		r.DELETE("/:id/scans/:scanId", orgs.RemoveScan(db))
 		r.POST("/:id/pipeline-scans", scans.CreatePipelineScan(db))
 		r.POST("/:id/archive-scans", scans.CreateOrgUploadedArchiveScan(db))
+		r.POST("/:id/archive-upload-sessions", scans.CreateArchiveUploadSession(db))
+		r.PATCH("/:id/archive-upload-sessions/:uploadId", scans.UploadArchiveUploadChunk(db))
+		r.POST("/:id/archive-upload-sessions/:uploadId/complete", scans.CompleteArchiveUploadSession(db))
 		r.GET("/:id/pipeline-scans", scans.ListPipelineScans(db))
 		r.GET("/:id/pipeline-scans/:scanId", scans.GetPipelineScan(db))
 

@@ -29,23 +29,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-    env:
-      JUSTSCAN_URL: ${{ secrets.JUSTSCAN_URL }}
-      JUSTSCAN_ORG_ID: ${{ secrets.JUSTSCAN_ORG_ID }}
-      JUSTSCAN_TOKEN: ${{ secrets.JUSTSCAN_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version-file: services/cli/go.mod
-          cache-dependency-path: services/cli/go.sum
-
-      - name: Build JustScan CLI for the image gate
-        working-directory: services/cli
-        run: |
-          go build -o "$RUNNER_TEMP/justscan" ./cmd/justscan
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
@@ -68,8 +53,7 @@ jobs:
         with:
           context: .
           file: services/cli/Dockerfile
-          load: true
-          push: false
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -78,36 +62,13 @@ jobs:
           cache-from: type=gha,scope=cli-image
           cache-to: type=gha,scope=cli-image,mode=max
 
-      - name: Select local CLI image tag
-        id: cli-image
-        env:
-          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
-        run: |
-          image="$(printf '%s\n' "$IMAGE_TAGS" | sed -n '/./{p;q;}')"
-          echo "image=$image" >> "$GITHUB_OUTPUT"
-
-      - uses: ./.github/actions/justscan-local-image-gate
-        with:
-          image-tags: ${{ steps.meta.outputs.tags }}
-          cli-image: ${{ steps.cli-image.outputs.image }}
-
-      - name: Push CLI image
-        env:
-          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
-        run: printf '%s\n' "$IMAGE_TAGS" | xargs -r -n1 docker push
-
   build-backend:
     name: Build & Push Backend
     if: github.event_name == 'push'
-    needs: build-cli-image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    env:
-      JUSTSCAN_URL: ${{ secrets.JUSTSCAN_URL }}
-      JUSTSCAN_ORG_ID: ${{ secrets.JUSTSCAN_ORG_ID }}
-      JUSTSCAN_TOKEN: ${{ secrets.JUSTSCAN_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -141,55 +102,30 @@ jobs:
         with:
           context: services/backend
           file: services/backend/Dockerfile
-          load: true
-          push: false
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
-
-      - uses: ./.github/actions/justscan-local-image-gate
-        with:
-          image-tags: ${{ steps.meta.outputs.tags }}
-
-      - name: Push backend image
-        env:
-          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
-        run: printf '%s\n' "$IMAGE_TAGS" | xargs -r -n1 docker push
 
       - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: services/backend
           file: services/backend/Dockerfile
           target: runner-minimal
-          load: true
-          push: false
+          push: true
           tags: ${{ steps.meta-minimal.outputs.tags }}
           labels: ${{ steps.meta-minimal.outputs.labels }}
           cache-from: type=gha,scope=backend-minimal
           cache-to: type=gha,scope=backend-minimal,mode=max
 
-      - uses: ./.github/actions/justscan-local-image-gate
-        with:
-          image-tags: ${{ steps.meta-minimal.outputs.tags }}
-
-      - name: Push minimal backend image
-        env:
-          IMAGE_TAGS: ${{ steps.meta-minimal.outputs.tags }}
-        run: printf '%s\n' "$IMAGE_TAGS" | xargs -r -n1 docker push
-
   build-frontend:
     name: Build & Push Frontend
     if: github.event_name == 'push'
-    needs: build-cli-image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    env:
-      JUSTSCAN_URL: ${{ secrets.JUSTSCAN_URL }}
-      JUSTSCAN_ORG_ID: ${{ secrets.JUSTSCAN_ORG_ID }}
-      JUSTSCAN_TOKEN: ${{ secrets.JUSTSCAN_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -214,8 +150,7 @@ jobs:
         with:
           context: services/frontend
           file: services/frontend/Dockerfile
-          load: true
-          push: false
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # NEXT_PUBLIC_API_URL is intentionally empty so API calls use relative paths (/api/v1/...).
@@ -223,27 +158,13 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
 
-      - uses: ./.github/actions/justscan-local-image-gate
-        with:
-          image-tags: ${{ steps.meta.outputs.tags }}
-
-      - name: Push frontend image
-        env:
-          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
-        run: printf '%s\n' "$IMAGE_TAGS" | xargs -r -n1 docker push
-
   build-combined:
     name: Build & Push Combined Image
     if: github.event_name == 'push'
-    needs: build-cli-image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    env:
-      JUSTSCAN_URL: ${{ secrets.JUSTSCAN_URL }}
-      JUSTSCAN_ORG_ID: ${{ secrets.JUSTSCAN_ORG_ID }}
-      JUSTSCAN_TOKEN: ${{ secrets.JUSTSCAN_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -268,21 +189,11 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          load: true
-          push: false
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=combined
           cache-to: type=gha,scope=combined,mode=max
-
-      - uses: ./.github/actions/justscan-local-image-gate
-        with:
-          image-tags: ${{ steps.meta.outputs.tags }}
-
-      - name: Push combined image
-        env:
-          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
-        run: printf '%s\n' "$IMAGE_TAGS" | xargs -r -n1 docker push
 
   build-cli:
     name: Build CLI archives

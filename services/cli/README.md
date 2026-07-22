@@ -1,11 +1,16 @@
 # JustScan CLI
 
-`justscan` is the command-line client for a running JustScan instance. It submits remote
-pipeline scans and evaluates the verdict produced by that instance; it does not run a scanner
-locally.
+`justscan` is the command-line client for a running JustScan instance. It submits registry and
+archive scans for remote analysis; it does not run a scanner locally.
 
 For installation, authentication, every scan source, CI/CD examples, best practices, command
 reference, and troubleshooting, see the [complete CLI guide](../../docs/justscan-cli.md).
+
+Check for a newer published release with:
+
+```sh
+justscan version --check
+```
 
 ## Build locally
 

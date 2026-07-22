@@ -35,6 +35,18 @@ justscan completion zsh > "$HOME/.zfunc/_justscan"
 
 Bash, fish, and PowerShell completion are also supported.
 
+### Find updates
+
+The CI/CD & CLI tab in JustScan links to the latest release and this guide. From a terminal, check
+the installed version against the latest GitHub release on demand:
+
+~~~sh
+justscan version --check
+~~~
+
+The check is opt-in; normal CLI commands never contact GitHub. Development builds show the latest
+release but are not compared as a semantic version.
+
 ## First-time setup
 
 Every command needs a JustScan server URL and organization UUID. Store these non-secret values in

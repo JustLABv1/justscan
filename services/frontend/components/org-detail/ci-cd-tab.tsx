@@ -11,7 +11,7 @@ import {
 import { getApiBase } from '@/lib/api/base';
 import { deferEffect } from '@/lib/defer-effect';
 import { Alert, Button, Card, Chip, Label, ListBox, Select } from '@heroui/react';
-import { Copy01Icon, Key01Icon } from 'hugeicons-react';
+import { Copy01Icon, Download01Icon, Key01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -169,6 +169,46 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
             <CopyValue label="JustScan instance URL" value={publicURL} />
             <CopyValue label="Organization ID" value={org.id} />
           </div>
+
+          <Card variant="secondary">
+            <Card.Header>
+              <Card.Title>Get the JustScan CLI</Card.Title>
+              <Card.Description>
+                Download the latest release for your platform. Use{' '}
+                <code>justscan version --check</code> anytime to see whether a newer version is
+                available.
+              </Card.Description>
+            </Card.Header>
+            <Card.Content className="flex flex-wrap gap-2">
+              <Button
+                variant="primary"
+                render={(props: any) => (
+                  <a
+                    {...props}
+                    href="https://github.com/JustLABv1/justscan/releases/latest"
+                    target="_blank"
+                    rel="noreferrer"
+                  />
+                )}
+              >
+                <Download01Icon size={15} />
+                Download latest CLI
+              </Button>
+              <Button
+                variant="outline"
+                render={(props: any) => (
+                  <a
+                    {...props}
+                    href="https://github.com/JustLABv1/justscan/blob/main/docs/justscan-cli.md"
+                    target="_blank"
+                    rel="noreferrer"
+                  />
+                )}
+              >
+                View CLI guide
+              </Button>
+            </Card.Content>
+          </Card>
 
           <div className="flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-divider bg-surface-tertiary p-4">
             <div>

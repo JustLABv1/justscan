@@ -556,7 +556,7 @@ export default function StatusPagesPage() {
                 className="w-full sm:w-[180px]"
                 variant="secondary"
               >
-                <Select.Trigger className="h-10">
+                <Select.Trigger className={selectTriggerCls}>
                   <Select.Value />
                   <Select.Indicator />
                 </Select.Trigger>

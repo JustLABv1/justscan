@@ -784,11 +784,39 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                         if (key === 'signout') handleLogout();
                       }}
                     >
-                      <Dropdown.Item id="settings" textValue="Profile"><Label>Profile</Label></Dropdown.Item>
-                      <Dropdown.Item id="theme" textValue={themeToggleTitle}><Label>{themeToggleTitle}</Label></Dropdown.Item>
-                      <Dropdown.Item id="api-docs" textValue="API Docs"><Label>API Docs</Label></Dropdown.Item>
-                      <Dropdown.Item id="retake-tour" textValue="Retake tour"><Label>Retake tour</Label></Dropdown.Item>
-                      <Dropdown.Item id="signout" textValue="Sign out" variant="danger"><Label>Sign out</Label></Dropdown.Item>
+                      <Dropdown.Item id="settings" textValue="Profile">
+                        <div className="flex items-center gap-2">
+                          <Settings01Icon size={14} className="text-muted" />
+                          <Label>Profile</Label>
+                        </div>
+                      </Dropdown.Item>
+                      <Dropdown.Item id="theme" textValue={themeToggleTitle}>
+                        <div className="flex items-center gap-2">
+                          {mounted ? (isDark ? <Sun01Icon size={14} className="text-muted" /> : <Moon02Icon size={14} className="text-muted" />) : <span aria-hidden className="block size-[14px]" />}
+                          <Label>{themeToggleTitle}</Label>
+                        </div>
+                      </Dropdown.Item>
+                      <Dropdown.Item id="api-docs" textValue="API Docs">
+                        <div className="flex items-center gap-2">
+                          <FileExportIcon size={14} className="text-muted" />
+                          <Label>API Docs</Label>
+                        </div>
+                      </Dropdown.Item>
+                      <Dropdown.Item id="retake-tour" textValue="Retake tour">
+                        <div className="flex items-center gap-2">
+                          <AiContentGenerator01Icon size={14} className="text-muted" />
+                          <Label>Retake tour</Label>
+                        </div>
+                      </Dropdown.Item>
+                      <Dropdown.Section>
+                        <Separator className="my-1" />
+                        <Dropdown.Item id="signout" textValue="Sign out" variant="danger">
+                          <div className="flex items-center gap-2">
+                            <Logout02Icon size={14} />
+                            <Label>Sign out</Label>
+                          </div>
+                        </Dropdown.Item>
+                      </Dropdown.Section>
                     </Dropdown.Menu>
                   </Dropdown.Popover>
                 </Dropdown>

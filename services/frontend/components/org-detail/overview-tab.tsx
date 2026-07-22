@@ -11,7 +11,7 @@ interface OrgOverviewTabProps {
 
 function SummaryMetric({ label, value, detail, color = 'default' }: { label: string; value: string | number; detail: string; color?: 'default' | 'danger' | 'warning' | 'success' }) {
   return (
-    <Card variant="secondary">
+    <Card>
       <Card.Content className="gap-1">
         <p className="text-xs font-medium text-muted">{label}</p>
         <div className="flex items-baseline gap-2">
@@ -41,7 +41,18 @@ export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabPro
           policyName: result.policy_name,
         }))
     );
-  const uniqueFailingItems = Array.from(new Map(failingItems.map((item) => [item.key, item])).values()).slice(0, 5);
+  const failingPolicies = Array.from(
+    failingItems.reduce((policies, item) => {
+      const key = item.policyName || 'Unnamed policy';
+      const existing = policies.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        policies.set(key, { ...item, count: 1 });
+      }
+      return policies;
+    }, new Map<string, (typeof failingItems)[number] & { count: number }>()).values()
+  ).slice(0, 4);
   const critical = riskScore?.totals.critical ?? orgScans.reduce((total, scan) => total + scan.critical_count, 0);
   const high = riskScore?.totals.high ?? orgScans.reduce((total, scan) => total + scan.high_count, 0);
   const passRate = riskScore?.compliance_pass_rate ?? 0;
@@ -58,7 +69,7 @@ export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabPro
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <SummaryMetric label="Critical findings" value={critical} detail={critical === 1 ? '1 finding' : `${critical} findings`} color={critical > 0 ? 'danger' : 'success'} />
           <SummaryMetric label="High findings" value={high} detail={high === 1 ? '1 finding' : `${high} findings`} color={high > 0 ? 'warning' : 'success'} />
-          <SummaryMetric label="Policy pass rate" value={`${Math.round(passRate)}%`} detail={uniqueFailingItems.length > 0 ? `${uniqueFailingItems.length} recent failures` : 'No recent failures'} color={uniqueFailingItems.length > 0 ? 'warning' : 'success'} />
+          <SummaryMetric label="Policy pass rate" value={`${Math.round(passRate)}%`} detail={failingItems.length > 0 ? `${failingItems.length} recent failures` : 'No recent failures'} color={failingItems.length > 0 ? 'warning' : 'success'} />
         </div>
       </section>
 
@@ -80,17 +91,20 @@ export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabPro
         <Card>
           <Card.Header>
             <div>
-              <Card.Title>Recent policy failures</Card.Title>
-              <Card.Description>Start with the most recently evaluated images.</Card.Description>
+              <Card.Title>Failing policies</Card.Title>
+              <Card.Description>Policies with the most recent failed evaluations.</Card.Description>
             </div>
           </Card.Header>
           <Card.Content className="gap-2">
-            {uniqueFailingItems.length === 0 ? (
+            {failingPolicies.length === 0 ? (
               <div className="rounded-xl border border-dashed border-divider p-5 text-sm text-muted">No recent failed policy evaluations.</div>
-            ) : uniqueFailingItems.map((item) => (
-              <Link key={item.key} href={`/scans/${item.scanId}`} className="block rounded-xl border border-divider bg-surface-secondary p-3 no-underline hover:bg-surface-tertiary">
-                <p className="truncate text-sm font-medium text-foreground">{item.policyName || 'Unnamed policy'}</p>
-                <p className="mt-1 truncate font-mono text-xs text-muted">{item.imageRef}</p>
+            ) : failingPolicies.map((item) => (
+              <Link key={item.policyName} href={`/scans/${item.scanId}`} className="group block rounded-xl border border-divider p-3 no-underline transition-colors hover:bg-surface-secondary">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="truncate text-sm font-medium text-foreground group-hover:text-accent">{item.policyName || 'Unnamed policy'}</p>
+                  <Chip color="danger" size="sm" variant="soft">{item.count} {item.count === 1 ? 'failure' : 'failures'}</Chip>
+                </div>
+                <p className="mt-1 truncate font-mono text-xs text-muted">Latest: {item.imageRef}</p>
               </Link>
             ))}
           </Card.Content>

@@ -4,8 +4,7 @@ import { NotificationManager } from '@/components/notifications/notification-man
 import { OrgAutomationTab } from '@/components/org-detail/automation-tab';
 import { OrgCICDTab } from '@/components/org-detail/ci-cd-tab';
 import { OrgOverviewTab } from '@/components/org-detail/overview-tab';
-import { OrgScansTab } from '@/components/org-detail/scans-tab';
-import { OrgScanItem, StatusBadge } from '@/components/org-detail/shared';
+import { OrgScanItem } from '@/components/org-detail/shared';
 import { OrgTeamTab } from '@/components/org-detail/team-tab';
 import { OrgTokensTab } from '@/components/org-detail/tokens-tab';
 import { OrgVulnerabilityDefaults } from '@/components/org-detail/vulnerability-defaults';
@@ -15,7 +14,6 @@ import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import {
-  assignScanToOrg,
   createOrgInvite,
   createPolicy,
   deletePolicy,
@@ -26,7 +24,6 @@ import {
   listOrgInvites,
   listOrgMembers,
   listOrgScans,
-  listScans,
   Org,
   OrgInvite,
   OrgMember,
@@ -35,9 +32,7 @@ import {
   OrgRole,
   PolicyRule,
   removeOrgMember,
-  removeScanFromOrg,
   revokeOrgInvite,
-  Scan,
   transferOrgOwnership,
   TrendPoint,
   updateOrg,
@@ -47,8 +42,7 @@ import {
   VulnerabilityViewSettings,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { canManageOrg, canMutateOrg, canOwnOrg } from '@/lib/org-permissions';
-import { timeAgo } from '@/lib/time';
+import { canManageOrg, canOwnOrg } from '@/lib/org-permissions';
 import {
   Button,
   Card,
@@ -100,11 +94,6 @@ const ORG_TABS = [
     description: 'Review this organization’s risk posture and recent compliance failures.',
   },
   {
-    id: 'scans',
-    label: 'Scans',
-    description: 'Review the scans in this organization’s scope and their current ownership.',
-  },
-  {
     id: 'policies',
     label: 'Policies',
     description: 'Define the compliance rules evaluated against organization scans.',
@@ -124,6 +113,7 @@ const ORG_TABS = [
 type OrgTabId = (typeof ORG_TABS)[number]['id'];
 
 const LEGACY_ORG_TABS: Record<string, OrgTabId> = {
+  scans: 'overview',
   automation: 'policies',
   team: 'access',
   members: 'access',
@@ -170,14 +160,10 @@ export default function OrgDetailPage() {
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
 
-  const [allScans, setAllScans] = useState<Scan[]>([]);
-  const [assignLoading, setAssignLoading] = useState(false);
-  const assignModal = useOverlayState();
   const currentOrgRole = org?.current_user_role;
   const canManageMembers = isSystemAdmin || canManageOrg(currentOrgRole);
   const canEditRoles = isSystemAdmin || canOwnOrg(currentOrgRole);
   const canManageOrgSettings = canManageMembers;
-  const canMutateOrgScans = isSystemAdmin || canMutateOrg(currentOrgRole);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -245,13 +231,16 @@ export default function OrgDetailPage() {
 
   const requestedTab = searchParams.get('tab');
   const normalizedTab = requestedTab ? LEGACY_ORG_TABS[requestedTab] || requestedTab : 'overview';
-  const activeTab = (ORG_TABS.find((tab) => tab.id === normalizedTab)?.id ?? 'overview') as OrgTabId;
+  const activeTab = (ORG_TABS.find((tab) => tab.id === normalizedTab)?.id ??
+    'overview') as OrgTabId;
   const requestedSection = searchParams.get('section');
   const activeSection =
     activeTab === 'access'
       ? 'members'
       : activeTab === 'integrations'
-        ? requestedSection === 'notifications' ? 'notifications' : 'ci-cd'
+        ? requestedSection === 'notifications'
+          ? 'notifications'
+          : 'ci-cd'
         : null;
 
   function openInviteModal() {
@@ -427,44 +416,6 @@ export default function OrgDetailPage() {
     setPolicyRules((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  async function openAssignModal() {
-    if (!canMutateOrgScans) return;
-    setAssignLoading(true);
-    assignModal.open();
-    try {
-      const res = await listScans(1, 50);
-      const assignedIds = new Set(orgScans.map((s) => s.id));
-      setAllScans((res.data ?? []).filter((s) => !assignedIds.has(s.id)));
-    } catch {
-      /* ignore */
-    } finally {
-      setAssignLoading(false);
-    }
-  }
-
-  async function handleAssign(scanId: string) {
-    if (!canMutateOrgScans) return;
-    await assignScanToOrg(id, scanId).catch(() => {});
-    toast.success('Scan assigned to organization');
-    assignModal.close();
-    await loadOrgScans();
-  }
-
-  async function handleRemoveScan(scanId: string) {
-    if (!canMutateOrgScans) return;
-    const ok = await confirm({
-      title: 'Remove scan from organization?',
-      message:
-        'The scan will remain in the system but will no longer be part of this organization.',
-      confirmLabel: 'Remove',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    await removeScanFromOrg(id, scanId).catch(() => {});
-    toast.success('Scan removed from organization');
-    loadOrgScans();
-  }
-
   async function saveVulnerabilityViewSettings() {
     if (!org || !canManageOrgSettings) return;
     setVulnerabilityViewSaving(true);
@@ -580,13 +531,23 @@ export default function OrgDetailPage() {
           <OrgOverviewTab riskScore={riskScore} trend={trend} orgScans={orgScans} />
         )}
         {activeTab === 'policies' && (
-          <OrgAutomationTab
-            org={org}
-            canManageOrgSettings={canManageOrgSettings}
-            onCreatePolicy={openCreatePolicy}
-            onEditPolicy={openEditPolicy}
-            onDeletePolicy={(policyId) => void handleDeletePolicy(policyId)}
-          />
+          <div className="space-y-6">
+            <OrgAutomationTab
+              org={org}
+              canManageOrgSettings={canManageOrgSettings}
+              onCreatePolicy={openCreatePolicy}
+              onEditPolicy={openEditPolicy}
+              onDeletePolicy={(policyId) => void handleDeletePolicy(policyId)}
+            />
+            <OrgVulnerabilityDefaults
+              inputClassName={inputCls}
+              canManageOrgSettings={canManageOrgSettings}
+              settings={vulnerabilityViewSettings}
+              saving={vulnerabilityViewSaving}
+              onChange={setVulnerabilityViewSettings}
+              onSave={() => void saveVulnerabilityViewSettings()}
+            />
+          </div>
         )}
         {activeTab === 'access' && (
           <div className="space-y-6">
@@ -601,7 +562,9 @@ export default function OrgDetailPage() {
               members={members}
               membersLoading={membersLoading}
               onCopyInviteLink={(invite) => void copyInviteLink(invite)}
-              onMemberRoleChange={(member, nextRole) => void handleMemberRoleChange(member, nextRole)}
+              onMemberRoleChange={(member, nextRole) =>
+                void handleMemberRoleChange(member, nextRole)
+              }
               onOpenInviteModal={openInviteModal}
               onRemoveMember={(member) => void handleRemoveMember(member)}
               onRevokeInvite={(invite) => void handleRevokeInvite(invite)}
@@ -635,29 +598,8 @@ export default function OrgDetailPage() {
             canManage={canManageOrgSettings}
           />
         )}
-        {activeTab === 'scans' && (
-          <div className="space-y-6">
-            <OrgScansTab
-              canManageScans={canMutateOrgScans}
-              onOpenAssignModal={() => void openAssignModal()}
-              onRemoveScan={(scanId) => void handleRemoveScan(scanId)}
-              orgScans={orgScans}
-            />
-            <OrgVulnerabilityDefaults
-              inputClassName={inputCls}
-              canManageOrgSettings={canManageOrgSettings}
-              settings={vulnerabilityViewSettings}
-              saving={vulnerabilityViewSaving}
-              onChange={setVulnerabilityViewSettings}
-              onSave={() => void saveVulnerabilityViewSettings()}
-            />
-          </div>
-        )}
         {activeTab === 'integrations' && activeSection === 'ci-cd' && (
-          <OrgCICDTab
-            org={org}
-            canManageTokens={isSystemAdmin || canManageOrg(currentOrgRole)}
-          />
+          <OrgCICDTab org={org} canManageTokens={isSystemAdmin || canManageOrg(currentOrgRole)} />
         )}
       </div>
 
@@ -895,58 +837,6 @@ export default function OrgDetailPage() {
                   {editingPolicy ? 'Save Changes' : 'Create Policy'}
                 </Button>
               </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-
-      {/* Assign scan modal */}
-      <Modal state={assignModal}>
-        <Modal.Backdrop isDismissable>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
-                  Assign Scan
-                </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
-              </Modal.Header>
-              <Modal.Body className="px-6 py-5 max-h-[60vh] overflow-y-auto">
-                {assignLoading ? (
-                  <div className="flex justify-center py-8">
-                    <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
-                  </div>
-                ) : allScans.length === 0 ? (
-                  <p className="text-sm text-zinc-500 text-center py-6">
-                    No unassigned scans available.
-                  </p>
-                ) : (
-                  <div className="space-y-1">
-                    {allScans.map((scan) => (
-                      <button
-                        key={scan.id}
-                        onClick={() => handleAssign(scan.id)}
-                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-colors text-left group"
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.background = 'var(--row-hover)')
-                        }
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <div>
-                          <p className="font-mono text-sm text-zinc-700 dark:text-zinc-300 group-hover:text-accent dark:group-hover:text-accent transition-colors">
-                            {scan.image_name}:{scan.image_tag}
-                          </p>
-                          <p className="text-xs text-zinc-500 mt-0.5">{timeAgo(scan.created_at)}</p>
-                        </div>
-                        <StatusBadge status={scan.status} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </Modal.Body>
             </Modal.Dialog>
           </Modal.Container>
         </Modal.Backdrop>

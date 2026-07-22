@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"justscan-backend/functions/blockedpolicy"
-	collectionhandlers "justscan-backend/handlers/collections"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -23,7 +22,7 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		scan, userID, isAdmin, ok := LoadAuthorizedScan(c, db, scanID)
+		scan, _, _, ok := LoadAuthorizedScan(c, db, scanID)
 		if !ok {
 			return
 		}
@@ -43,14 +42,6 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 			Where("st.scan_id = ?", scanID).
 			Scan(c.Request.Context(), &tags) //nolint:errcheck
 		scan.Tags = tags
-		attached := []models.Scan{*scan}
-		if err := collectionhandlers.AttachCollectionsToScans(c.Request.Context(), db, attached, userID, isAdmin, c.Query("scope")); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan collections"})
-			return
-		}
-		if len(attached) == 1 {
-			scan.Collections = attached[0].Collections
-		}
 
 		var stepLogs []models.ScanStepLog
 		stepLogsQuery := db.NewSelect().
@@ -102,11 +93,10 @@ func DeleteScan(db *bun.DB) gin.HandlerFunc {
 		ctx := c.Request.Context()
 
 		// Cascade delete related data
-		db.NewDelete().TableExpr("comments").Where("scan_id = ?", scanID).Exec(ctx)                    //nolint:errcheck
-		db.NewDelete().TableExpr("vulnerabilities").Where("scan_id = ?", scanID).Exec(ctx)             //nolint:errcheck
-		db.NewDelete().TableExpr("sbom_components").Where("scan_id = ?", scanID).Exec(ctx)             //nolint:errcheck
-		db.NewDelete().TableExpr("scan_tags").Where("scan_id = ?", scanID).Exec(ctx)                   //nolint:errcheck
-		db.NewDelete().TableExpr("scan_collection_memberships").Where("scan_id = ?", scanID).Exec(ctx) //nolint:errcheck
+		db.NewDelete().TableExpr("comments").Where("scan_id = ?", scanID).Exec(ctx)        //nolint:errcheck
+		db.NewDelete().TableExpr("vulnerabilities").Where("scan_id = ?", scanID).Exec(ctx) //nolint:errcheck
+		db.NewDelete().TableExpr("sbom_components").Where("scan_id = ?", scanID).Exec(ctx) //nolint:errcheck
+		db.NewDelete().TableExpr("scan_tags").Where("scan_id = ?", scanID).Exec(ctx)       //nolint:errcheck
 
 		if _, err := db.NewDelete().Model((*models.Scan)(nil)).Where("id = ?", scanID).Exec(ctx); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete scan"})

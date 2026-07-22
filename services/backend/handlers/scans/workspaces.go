@@ -204,14 +204,7 @@ WHERE st.tag_id = t.id
 `, bun.In(scanIDs), models.OwnerTypeSystem, userID).Exec(ctx); err != nil {
 			return err
 		}
-		_, err := tx.NewRaw(`
-DELETE FROM scan_collection_memberships AS scm
-USING scan_collections AS c
-WHERE scm.collection_id = c.id
-  AND scm.scan_id IN (?)
-  AND c.owner_user_id IS DISTINCT FROM ?
-`, bun.In(scanIDs), userID).Exec(ctx)
-		return err
+		return nil
 	}
 
 	if _, err := tx.NewRaw(`
@@ -227,12 +220,5 @@ WHERE st.tag_id = t.id
 `, bun.In(scanIDs), models.OwnerTypeSystem, *targetOrgID, *targetOrgID).Exec(ctx); err != nil {
 		return err
 	}
-	_, err := tx.NewRaw(`
-DELETE FROM scan_collection_memberships AS scm
-USING scan_collections AS c
-WHERE scm.collection_id = c.id
-  AND scm.scan_id IN (?)
-  AND c.owner_org_id IS DISTINCT FROM ?
-`, bun.In(scanIDs), *targetOrgID).Exec(ctx)
-	return err
+	return nil
 }

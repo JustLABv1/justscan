@@ -1,7 +1,6 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
-import { CollectionBadgeList } from '@/components/scans/collection-badge-list';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -17,13 +16,11 @@ import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
-  Collection,
   createWatchlistItem,
   deleteWatchlistItem,
   getDefaultScannerCapabilities,
   getTokenType,
   getWorkScope,
-  listCollections,
   listRegistriesWithCapabilities,
   listWatchlist,
   listWatchlistShares,
@@ -256,7 +253,6 @@ export default function WatchlistPage() {
   const { orgs, orgNamesById } = useOrgDirectory();
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
-  const [availableCollections, setAvailableCollections] = useState<Collection[]>([]);
   const [capabilities, setCapabilities] = useState<ScannerCapabilities>(() =>
     getDefaultScannerCapabilities()
   );
@@ -270,7 +266,6 @@ export default function WatchlistPage() {
   const [hourCycle, setHourCycle] = useState<HourCyclePreference>('locale');
   const [enabled, setEnabled] = useState(true);
   const [registryId, setRegistryId] = useState('');
-  const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [triggering, setTriggering] = useState('');
@@ -315,9 +310,6 @@ export default function WatchlistPage() {
   useEffect(() => {
     return deferEffect(() => {
       void load();
-      void listCollections()
-        .then(setAvailableCollections)
-        .catch(() => {});
       void listRegistriesWithCapabilities()
         .then((response) => {
           setRegistries(response.data);
@@ -350,7 +342,6 @@ export default function WatchlistPage() {
     setTimezone(getBrowserTimezone());
     setEnabled(true);
     setRegistryId(defaultRegistryId);
-    setSelectedCollectionIds([]);
     setFormError('');
     modal.open();
   }
@@ -363,7 +354,6 @@ export default function WatchlistPage() {
     setEnabled(item.enabled);
     setTimezone(item.timezone || getBrowserTimezone());
     setRegistryId(item.registry_id ?? '');
-    setSelectedCollectionIds(item.collection_ids ?? []);
     setFormError('');
     modal.open();
   }
@@ -385,7 +375,6 @@ export default function WatchlistPage() {
         timezone,
         enabled,
         registry_id: registryId || null,
-        collection_ids: selectedCollectionIds,
         ...(currentScope.kind === 'org' ? { org_id: currentScope.orgId } : {}),
       };
       if (editing) {
@@ -514,8 +503,7 @@ export default function WatchlistPage() {
       orgs.find((org) => org.id === transferOrgId)?.name ?? 'the selected organization';
     const ok = await confirm({
       title: `Transfer watchlist ownership to ${destination}?`,
-      message:
-        'The current owner will retain shared access. Collection assignments will be removed because collections are organization-scoped.',
+      message: 'The current owner will retain shared access.',
       confirmLabel: 'Transfer',
       variant: 'danger',
     });
@@ -875,10 +863,6 @@ export default function WatchlistPage() {
                               ownerOrgId={item.owner_org_id}
                               orgNamesById={orgNamesById}
                             />
-                            <CollectionBadgeList
-                              collections={item.collections ?? []}
-                              emptyLabel="No collections"
-                            />
                           </div>
                         </Table.Cell>
                         <Table.Cell>
@@ -1058,52 +1042,6 @@ export default function WatchlistPage() {
                       )}
                     </div>
                   )}
-                  <div className="space-y-2">
-                    <div>
-                      <Label className="text-sm font-medium">Collections</Label>
-                      <p className="mt-1 text-xs text-zinc-500">
-                        New scans created from this watchlist item will inherit these collections.
-                      </p>
-                    </div>
-                    {availableCollections.length === 0 ? (
-                      <p className="text-sm text-zinc-500">
-                        No collections available in this workspace yet.
-                      </p>
-                    ) : (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {availableCollections.map((collection) => {
-                          const isSelected = selectedCollectionIds.includes(collection.id);
-                          return (
-                            <label
-                              key={collection.id}
-                              className="flex items-center gap-3 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-2"
-                            >
-                              <Checkbox
-                                aria-label={`Assign ${collection.name}`}
-                                isSelected={isSelected}
-                                onChange={(selected) =>
-                                  setSelectedCollectionIds((previous) =>
-                                    selected
-                                      ? [...previous, collection.id]
-                                      : previous.filter((id) => id !== collection.id)
-                                  )
-                                }
-                              >
-                                <Checkbox.Content>
-                                  <Checkbox.Control>
-                                    <Checkbox.Indicator />
-                                  </Checkbox.Control>
-                                </Checkbox.Content>
-                              </Checkbox>
-                              <span className="text-sm text-zinc-800 dark:text-zinc-200">
-                                {collection.name}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
                   <Switch isSelected={enabled} onChange={setEnabled}>
                     <Switch.Content>
                       <Switch.Control>
@@ -1270,7 +1208,7 @@ export default function WatchlistPage() {
                   onSelectedOrgIdChange={setTransferOrgId}
                   onTransfer={() => void handleTransferOwnership()}
                   isSaving={shareSaving}
-                  warning="Collection assignments will be removed during transfer."
+                  warning="The current owner will retain shared access after transfer."
                 />
               </Modal.Body>
               <Modal.Footer

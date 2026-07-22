@@ -174,7 +174,6 @@ export default function ImageScansPage() {
           query || undefined,
           status || undefined,
           critical,
-          undefined,
           policy,
           imageName,
           bounds?.from,

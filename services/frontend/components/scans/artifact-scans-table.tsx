@@ -1,6 +1,5 @@
 'use client';
 
-import { CollectionBadgeList } from '@/components/scans/collection-badge-list';
 import { ScanTagBadgeList } from '@/components/scans/scan-tag-badge-list';
 import { SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -167,7 +166,6 @@ function useArtifactHistory(imageName: string, imageTag: string, refreshToken: n
           imageName,
           undefined,
           true,
-          undefined,
           undefined,
           undefined,
           undefined,
@@ -367,9 +365,6 @@ function ArtifactHistoryRows({
             <Table.Cell>
               <ScanTagBadgeList tags={scan.tags} />
             </Table.Cell>
-            <Table.Cell>
-              <CollectionBadgeList collections={scan.collections} emptyLabel="No collections" />
-            </Table.Cell>
             <Table.Cell onClick={(event) => event.stopPropagation()}>
               <div className="flex justify-end">
                 <RowActionsMenu
@@ -512,7 +507,6 @@ export function ArtifactScansTable({
             undefined,
             undefined,
             undefined,
-            undefined,
             artifact.image_tag
           );
           total = response.total;
@@ -581,21 +575,20 @@ export function ArtifactScansTable({
             <Table.Column>Latest scan</Table.Column>
             <Table.Column>Findings</Table.Column>
             <Table.Column>Labels</Table.Column>
-            <Table.Column>Collections</Table.Column>
             <Table.Column>Actions</Table.Column>
           </Table.Header>
           <Table.Body>
             {loading ? (
               Array.from({ length: 5 }, (_, index) => (
                 <Table.Row id={`loading-${index}`} key={`loading-${index}`}>
-                  <Table.Cell colSpan={8}>
+                  <Table.Cell colSpan={7}>
                     <div className="h-16 animate-pulse rounded-md" />
                   </Table.Cell>
                 </Table.Row>
               ))
             ) : artifacts.length === 0 ? (
               <Table.Row id="empty">
-                <Table.Cell colSpan={8}>
+                <Table.Cell colSpan={7}>
                   <div className="py-5">
                     <EmptyState
                       icon={<Shield01Icon size={28} />}
@@ -710,18 +703,6 @@ export function ArtifactScansTable({
                           href={`/scans/details/${artifact.latest_scan_id}`}
                         >
                           <ScanTagBadgeList tags={artifact.tags} />
-                        </Link>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Link
-                          aria-label={`Open latest scan for ${artifact.image_name}:${artifact.image_tag}`}
-                          className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                          href={`/scans/details/${artifact.latest_scan_id}`}
-                        >
-                          <CollectionBadgeList
-                            collections={artifact.collections}
-                            emptyLabel="No collections"
-                          />
                         </Link>
                       </Table.Cell>
                       <Table.Cell onClick={(event) => event.stopPropagation()}>

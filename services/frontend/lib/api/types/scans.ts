@@ -1,5 +1,4 @@
 import type { OwnerType } from './common';
-import type { Collection } from './collections';
 import type { ResourceShare } from './orgs';
 import type { ScanProvider, XrayMode } from './registries';
 
@@ -149,7 +148,6 @@ export interface Scan {
   owner_org_id?: string | null;
   registry_id?: string;
   tags?: Tag[];
-  collections?: Collection[];
   architecture?: string;
   os_family?: string;
   os_name?: string;
@@ -269,7 +267,6 @@ export interface ImageSummary {
   low_count: number;
   has_unassigned_scans?: boolean;
   compliance_summary?: ScanComplianceSummary | null;
-  collections?: Collection[];
   pipeline_initiator?: PipelineInitiator | null;
 }
 
@@ -322,13 +319,11 @@ export interface ArtifactSummary {
   medium_count: number;
   low_count: number;
   compliance_summary?: ScanComplianceSummary | null;
-  collections?: Collection[];
   tags?: Tag[];
 }
 
 export interface ArtifactFilterOptions {
   statuses: string[];
-  collection_ids: string[];
   has_critical: boolean;
   has_policy_fail: boolean;
 }

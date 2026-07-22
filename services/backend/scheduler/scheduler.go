@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	collectionhandlers "justscan-backend/handlers/collections"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -100,9 +99,6 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 		}
 		if err := db.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
 			if _, err := tx.NewInsert().Model(scan).Exec(ctx); err != nil {
-				return err
-			}
-			if err := collectionhandlers.AddScanCollectionMemberships(ctx, tx, scan.ID, currentItem.CollectionIDs); err != nil {
 				return err
 			}
 			if scan.OwnerOrgID != nil {

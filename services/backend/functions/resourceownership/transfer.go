@@ -27,7 +27,6 @@ type TransferParams struct {
 	LinkResourceColumn string
 	ResourceName       string
 	HasUpdatedAt       bool
-	ClearCollections   bool
 }
 
 type TransferResult struct {
@@ -86,9 +85,6 @@ func TransferOrgOwnedResource(c *gin.Context, db *bun.DB, params TransferParams)
 
 		setClauses := []string{"owner_type = ?", "owner_user_id = NULL", "owner_org_id = ?"}
 		args := []any{models.OwnerTypeOrg, targetOrgID}
-		if params.ClearCollections {
-			setClauses = append(setClauses, "collection_ids = '[]'::jsonb")
-		}
 		if params.HasUpdatedAt {
 			setClauses = append(setClauses, "updated_at = ?")
 			args = append(args, time.Now())

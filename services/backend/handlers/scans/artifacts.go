@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"justscan-backend/functions/authz"
-	collectionhandlers "justscan-backend/handlers/collections"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -37,7 +36,6 @@ type ArtifactSummary struct {
 	MediumCount          int                           `json:"medium_count"`
 	LowCount             int                           `json:"low_count"`
 	ComplianceSummary    *models.ScanComplianceSummary `json:"compliance_summary,omitempty"`
-	Collections          []models.ScanCollection       `json:"collections,omitempty"`
 	Tags                 []models.Tag                  `json:"tags,omitempty"`
 }
 
@@ -45,20 +43,8 @@ type ArtifactSummary struct {
 // visible image tag in the current scope and search result.
 type ArtifactFilterOptions struct {
 	Statuses      []string `json:"statuses"`
-	CollectionIDs []string `json:"collection_ids"`
 	HasCritical   bool     `json:"has_critical"`
 	HasPolicyFail bool     `json:"has_policy_fail"`
-}
-
-func artifactCollectionWhere(raw string) (string, []interface{}) {
-	collectionID := strings.TrimSpace(raw)
-	if collectionID == "" {
-		return "1=1", nil
-	}
-	if collectionID == "__none__" {
-		return "NOT EXISTS (SELECT 1 FROM scan_collection_memberships scm WHERE scm.scan_id::text = l.latest_scan_id)", nil
-	}
-	return "EXISTS (SELECT 1 FROM scan_collection_memberships scm WHERE scm.scan_id::text = l.latest_scan_id AND scm.collection_id = ?)", []interface{}{collectionID}
 }
 
 func artifactPolicyWhere(raw string, orgID uuid.UUID, scoped bool) (string, []interface{}) {
@@ -77,7 +63,7 @@ func loadArtifactFilterOptions(
 	orgID uuid.UUID,
 	orgScoped bool,
 ) (ArtifactFilterOptions, error) {
-	options := ArtifactFilterOptions{Statuses: []string{}, CollectionIDs: []string{}}
+	options := ArtifactFilterOptions{Statuses: []string{}}
 
 	rows, err := db.QueryContext(ctx, baseQuery+`
 SELECT l.latest_status, l.latest_external_status, l.critical_count
@@ -109,26 +95,6 @@ FROM latest l`, baseArgs...)
 		options.Statuses = append(options.Statuses, status)
 	}
 	sort.Strings(options.Statuses)
-
-	collectionRows, err := db.QueryContext(ctx, baseQuery+`
-SELECT DISTINCT scm.collection_id::text
-FROM latest l
-JOIN scan_collection_memberships scm ON scm.scan_id::text = l.latest_scan_id`, baseArgs...)
-	if err != nil {
-		return options, err
-	}
-	defer collectionRows.Close()
-	for collectionRows.Next() {
-		var collectionID string
-		if err := collectionRows.Scan(&collectionID); err != nil {
-			return options, err
-		}
-		options.CollectionIDs = append(options.CollectionIDs, collectionID)
-	}
-	if err := collectionRows.Err(); err != nil {
-		return options, err
-	}
-	sort.Strings(options.CollectionIDs)
 
 	if !orgScoped {
 		return options, nil
@@ -205,7 +171,6 @@ func ListScanArtifacts(db *bun.DB) gin.HandlerFunc {
 		case "no":
 			criticalWhere = "l.critical_count = 0"
 		}
-		collectionWhere, collectionArgs := artifactCollectionWhere(c.Query("collection"))
 		scopedOrgID, orgScoped := scopedOrgIDFromRequest(c)
 		policyWhere, policyArgs := artifactPolicyWhere(c.Query("policy"), scopedOrgID, orgScoped)
 
@@ -249,10 +214,9 @@ WITH ranked AS (
 		countQuery := baseQuery + `
 SELECT COUNT(*)
 FROM latest l
-WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + collectionWhere + ` AND ` + policyWhere
+WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + policyWhere
 		countArgs := append([]interface{}{}, baseArgs...)
 		countArgs = append(countArgs, latestStatusArgs...)
-		countArgs = append(countArgs, collectionArgs...)
 		countArgs = append(countArgs, policyArgs...)
 
 		var total int
@@ -279,12 +243,11 @@ SELECT
     l.medium_count,
     l.low_count
 FROM latest l
-WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + collectionWhere + ` AND ` + policyWhere + `
+WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + policyWhere + `
 ORDER BY l.latest_scan_at DESC, l.latest_scan_id DESC
 LIMIT ? OFFSET ?`
 		dataArgs := append([]interface{}{}, baseArgs...)
 		dataArgs = append(dataArgs, latestStatusArgs...)
-		dataArgs = append(dataArgs, collectionArgs...)
 		dataArgs = append(dataArgs, policyArgs...)
 		dataArgs = append(dataArgs, limit, offset)
 
@@ -337,35 +300,6 @@ LIMIT ? OFFSET ?`
 				artifactIndexByScanID[scanID] = index
 			}
 
-			var memberships []models.ScanCollectionMembership
-			if err := db.NewSelect().Model(&memberships).Where("scan_id IN (?)", bun.In(scanIDs)).Scan(c.Request.Context()); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load artifact collections"})
-				return
-			}
-			collectionIDs := membershipCollectionIDs(memberships)
-			collections, err := collectionhandlers.LoadCollectionsByIDs(c.Request.Context(), db, collectionIDs, userID, isAdmin, c.Query("scope"))
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load artifact collections"})
-				return
-			}
-			collectionsByID := make(map[uuid.UUID]models.ScanCollection, len(collections))
-			for _, collection := range collections {
-				collectionsByID[collection.ID] = collection
-			}
-			for _, membership := range memberships {
-				index, ok := artifactIndexByScanID[membership.ScanID]
-				if !ok {
-					continue
-				}
-				collection, ok := collectionsByID[membership.CollectionID]
-				if ok {
-					artifacts[index].Collections = append(artifacts[index].Collections, collection)
-				}
-			}
-			for index := range artifacts {
-				collectionhandlers.SortCollectionsForDisplay(artifacts[index].Collections)
-			}
-
 			var scanTags []models.ScanTag
 			if err := db.NewSelect().
 				Model(&scanTags).
@@ -405,17 +339,4 @@ LIMIT ? OFFSET ?`
 
 		c.JSON(http.StatusOK, gin.H{"data": artifacts, "total": total, "page": page, "limit": limit, "filters": filterOptions})
 	}
-}
-
-func membershipCollectionIDs(memberships []models.ScanCollectionMembership) []uuid.UUID {
-	ids := make([]uuid.UUID, 0, len(memberships))
-	seen := make(map[uuid.UUID]struct{}, len(memberships))
-	for _, membership := range memberships {
-		if _, ok := seen[membership.CollectionID]; ok {
-			continue
-		}
-		seen[membership.CollectionID] = struct{}{}
-		ids = append(ids, membership.CollectionID)
-	}
-	return ids
 }

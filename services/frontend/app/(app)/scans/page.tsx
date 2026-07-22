@@ -116,7 +116,6 @@ function ScansPageContent() {
           PAGE_SIZE,
           query || undefined,
           status || undefined,
-          undefined,
           critical,
           policy,
           bounds?.from,

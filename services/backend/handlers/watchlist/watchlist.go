@@ -10,7 +10,6 @@ import (
 
 	"justscan-backend/functions/authz"
 	"justscan-backend/functions/resourceownership"
-	collectionhandlers "justscan-backend/handlers/collections"
 	scanhandlers "justscan-backend/handlers/scans"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
@@ -42,10 +41,6 @@ func ListWatchlist(db *bun.DB) gin.HandlerFunc {
 		}
 		if err := attachWatchlistPosture(c.Request.Context(), db, items, isAdmin, accessibleOrgIDs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load watchlist scan posture"})
-			return
-		}
-		if err := attachWatchlistCollections(c.Request.Context(), db, items, userID, isAdmin, c.Query("scope")); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load watchlist collections"})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"data": items})
@@ -205,14 +200,13 @@ func sortedSetValues(values map[string]struct{}) []string {
 func CreateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body struct {
-			ImageName     string      `json:"image_name" binding:"required"`
-			ImageTag      string      `json:"image_tag" binding:"required"`
-			Schedule      string      `json:"schedule" binding:"required"`
-			Timezone      string      `json:"timezone"`
-			Enabled       bool        `json:"enabled"`
-			OrgID         string      `json:"org_id"`
-			RegistryID    *uuid.UUID  `json:"registry_id"`
-			CollectionIDs []uuid.UUID `json:"collection_ids"`
+			ImageName  string     `json:"image_name" binding:"required"`
+			ImageTag   string     `json:"image_tag" binding:"required"`
+			Schedule   string     `json:"schedule" binding:"required"`
+			Timezone   string     `json:"timezone"`
+			Enabled    bool       `json:"enabled"`
+			OrgID      string     `json:"org_id"`
+			RegistryID *uuid.UUID `json:"registry_id"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -247,27 +241,18 @@ func CreateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 				return
 			}
 		}
-		collectionScope := "personal"
-		if ownerOrgID != nil {
-			collectionScope = ownerOrgID.String()
-		}
-		if _, err := collectionhandlers.ValidateManageableCollectionsForScope(c.Request.Context(), db, body.CollectionIDs, userID, false, collectionScope); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid collection_ids"})
-			return
-		}
 		item := &models.WatchlistItem{
-			ImageName:     body.ImageName,
-			ImageTag:      body.ImageTag,
-			Schedule:      body.Schedule,
-			Timezone:      timezone,
-			Enabled:       body.Enabled,
-			RegistryID:    body.RegistryID,
-			CollectionIDs: body.CollectionIDs,
-			UserID:        userID,
-			OwnerType:     models.OwnerTypeUser,
-			OwnerUserID:   &userID,
-			CreatedAt:     time.Now(),
-			UpdatedAt:     time.Now(),
+			ImageName:   body.ImageName,
+			ImageTag:    body.ImageTag,
+			Schedule:    body.Schedule,
+			Timezone:    timezone,
+			Enabled:     body.Enabled,
+			RegistryID:  body.RegistryID,
+			UserID:      userID,
+			OwnerType:   models.OwnerTypeUser,
+			OwnerUserID: &userID,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
 		}
 		if ownerOrgID != nil {
 			item.OwnerType = models.OwnerTypeOrg
@@ -310,13 +295,12 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		var body struct {
-			ImageName     *string          `json:"image_name"`
-			ImageTag      *string          `json:"image_tag"`
-			Schedule      *string          `json:"schedule"`
-			Timezone      *string          `json:"timezone"`
-			Enabled       *bool            `json:"enabled"`
-			RegistryID    *json.RawMessage `json:"registry_id"`
-			CollectionIDs *[]uuid.UUID     `json:"collection_ids"`
+			ImageName  *string          `json:"image_name"`
+			ImageTag   *string          `json:"image_tag"`
+			Schedule   *string          `json:"schedule"`
+			Timezone   *string          `json:"timezone"`
+			Enabled    *bool            `json:"enabled"`
+			RegistryID *json.RawMessage `json:"registry_id"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -355,24 +339,13 @@ func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 				item.RegistryID = &registryID
 			}
 		}
-		if body.CollectionIDs != nil {
-			scope := "personal"
-			if item.OwnerOrgID != nil {
-				scope = item.OwnerOrgID.String()
-			}
-			if _, err := collectionhandlers.ValidateManageableCollectionsForScope(c.Request.Context(), db, *body.CollectionIDs, userID, isAdmin, scope); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid collection_ids"})
-				return
-			}
-			item.CollectionIDs = *body.CollectionIDs
-		}
 		if err := scheduler.ValidateSchedule(item.Schedule, item.Timezone); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		item.UpdatedAt = time.Now()
 		if _, err := db.NewUpdate().Model(item).
-			Column("image_name", "image_tag", "schedule", "timezone", "enabled", "registry_id", "collection_ids", "updated_at").
+			Column("image_name", "image_tag", "schedule", "timezone", "enabled", "registry_id", "updated_at").
 			Where("id = ?", itemID).
 			Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update watchlist item"})
@@ -467,10 +440,6 @@ func TriggerScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create scan"})
 			return
 		}
-		if err := collectionhandlers.AddScanCollectionMemberships(c.Request.Context(), db, scan.ID, item.CollectionIDs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign scan collections"})
-			return
-		}
 		if item.OwnerOrgID != nil {
 			if err := scanhandlers.EnsureOrgScanLink(c.Request.Context(), db, *item.OwnerOrgID, scan.ID); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to scope scan"})
@@ -492,32 +461,6 @@ func TriggerScan(db *bun.DB) gin.HandlerFunc {
 		db.NewUpdate().Model(item).Column("last_scanned_at", "last_scan_id").Where("id = ?", itemID).Exec(c.Request.Context()) //nolint:errcheck
 		c.JSON(http.StatusCreated, scan)
 	}
-}
-
-func attachWatchlistCollections(ctx context.Context, db *bun.DB, items []models.WatchlistItem, userID uuid.UUID, isAdmin bool, scope string) error {
-	collectionIDs := make([]uuid.UUID, 0)
-	for _, item := range items {
-		collectionIDs = append(collectionIDs, item.CollectionIDs...)
-	}
-	collections, err := collectionhandlers.LoadCollectionsByIDs(ctx, db, collectionIDs, userID, isAdmin, scope)
-	if err != nil {
-		return err
-	}
-	collectionsByID := make(map[uuid.UUID]models.ScanCollection, len(collections))
-	for _, collection := range collections {
-		collectionsByID[collection.ID] = collection
-	}
-	for index := range items {
-		itemCollections := make([]models.ScanCollection, 0, len(items[index].CollectionIDs))
-		for _, collectionID := range items[index].CollectionIDs {
-			collection, ok := collectionsByID[collectionID]
-			if ok {
-				itemCollections = append(itemCollections, collection)
-			}
-		}
-		items[index].Collections = itemCollections
-	}
-	return nil
 }
 
 func canWriteWatchlistItem(ctx context.Context, db *bun.DB, item *models.WatchlistItem, userID uuid.UUID, isAdmin bool) bool {
@@ -659,7 +602,7 @@ func TransferWatchlistItemOwnership(db *bun.DB) gin.HandlerFunc {
 		result, ok := resourceownership.TransferOrgOwnedResource(c, db, resourceownership.TransferParams{
 			ResourceID: item.ID, OwnerType: item.OwnerType, OwnerOrgID: item.OwnerOrgID,
 			ResourceTable: "watchlist_items", LinkTable: "org_watchlist_items", LinkResourceColumn: "watchlist_item_id",
-			ResourceName: "watchlist", HasUpdatedAt: true, ClearCollections: true,
+			ResourceName: "watchlist", HasUpdatedAt: true,
 		})
 		if !ok {
 			return
@@ -667,7 +610,6 @@ func TransferWatchlistItemOwnership(db *bun.DB) gin.HandlerFunc {
 		item.OwnerType = models.OwnerTypeOrg
 		item.OwnerUserID = nil
 		item.OwnerOrgID = &result.TargetOrgID
-		item.CollectionIDs = []uuid.UUID{}
 		scheduler.SyncWatchlistItem(db, *item)
 		c.JSON(http.StatusOK, gin.H{"result": "ownership transferred"})
 	}

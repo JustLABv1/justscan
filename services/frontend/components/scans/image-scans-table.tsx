@@ -1,6 +1,5 @@
 'use client';
 
-import { CollectionBadgeList } from '@/components/scans/collection-badge-list';
 import { SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
@@ -44,7 +43,6 @@ interface SharedChildProps {
 
 interface ImageScansTableProps extends SharedChildProps {
   allowMutationActions?: boolean;
-  collectionFilter?: string;
   emptyState?: { description: string; title: string };
   expanded: Set<string>;
   expansionScope?: string;
@@ -63,7 +61,6 @@ interface ImageScansTableProps extends SharedChildProps {
 
 interface ImageScansStackedChildrenProps extends SharedChildProps {
   allowMutationActions: boolean;
-  collectionFilter?: string;
   isImageSelected?: boolean;
   imageName: string;
   onVisibleScanIdsChange?: (imageName: string, scanIds: string[]) => void;
@@ -342,7 +339,7 @@ function ScanLink({
   );
 }
 
-function useImageScanChildren(imageName: string, refreshToken: number, collectionFilter?: string) {
+function useImageScanChildren(imageName: string, refreshToken: number) {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const [scans, setScans] = useState<Scan[]>([]);
@@ -361,8 +358,7 @@ function useImageScanChildren(imageName: string, refreshToken: number, collectio
           undefined,
           true,
           undefined,
-          undefined,
-          collectionFilter
+          undefined
         );
         setScans(res.data ?? []);
         setTotal(res.total);
@@ -370,7 +366,7 @@ function useImageScanChildren(imageName: string, refreshToken: number, collectio
         setLoading(false);
       }
     },
-    [collectionFilter, imageName]
+    [imageName]
   );
 
   useEffect(() => {
@@ -408,7 +404,6 @@ function ImageScansTreeChildrenRows({
   imageName,
   isImageSelected = false,
   childRefreshKey,
-  collectionFilter,
   onCancel,
   onDelete,
   onSelectScan,
@@ -420,8 +415,7 @@ function ImageScansTreeChildrenRows({
   const refreshToken = childRefreshKey[imageName] ?? 0;
   const { loading, page, scans, setPage, totalPages } = useImageScanChildren(
     imageName,
-    refreshToken,
-    collectionFilter
+    refreshToken
   );
   const onVisibleScanIdsChangeRef = useRef(onVisibleScanIdsChange);
 
@@ -576,9 +570,6 @@ function ImageScansTreeChildrenRows({
                 <StatusBadge status={scan.status} externalStatus={scan.external_status} />
                 <PolicyFailureIndicator summary={scan.compliance_summary} />
               </div>
-              <div className="mt-1.5">
-                <CollectionBadgeList collections={scan.collections} />
-              </div>
             </Table.Cell>
             <Table.Cell onClick={openScan}>
               <TriggeredByAvatar
@@ -685,7 +676,6 @@ export function ImageScansTable({
   hasActiveFilters,
   images,
   loading,
-  collectionFilter,
   emptyState,
   onCancel,
   onDelete,
@@ -990,12 +980,6 @@ export function ImageScansTable({
                             {img.scan_count} scan{img.scan_count !== 1 ? 's' : ''}
                           </div>
                         </div>
-                        <div className="mt-2">
-                          <CollectionBadgeList
-                            collections={img.collections}
-                            emptyLabel="No collections"
-                          />
-                        </div>
                       </Table.Cell>
                       <Table.Cell
                         onClick={(event) => {
@@ -1066,7 +1050,6 @@ export function ImageScansTable({
                       <ImageScansTreeChildrenRows
                         allowMutationActions={allowMutationActions}
                         childRefreshKey={childRefreshKey}
-                        collectionFilter={collectionFilter}
                         imageName={img.image_name}
                         isImageSelected={isParentSelected}
                         onCancel={onCancel}

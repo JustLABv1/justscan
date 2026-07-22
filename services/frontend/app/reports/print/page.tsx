@@ -1,5 +1,5 @@
 'use client';
-import { Button, Label, NumberField, SearchField, Switch } from '@heroui/react';
+import { Button, Drawer, Label, NumberField, SearchField, Switch, useOverlayState } from '@heroui/react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from 'react';
@@ -74,6 +74,16 @@ interface Filters {
   showCompleted: boolean;
   showTrivyVersion: boolean;
   showPolicyDetails: boolean;
+  deduplicateCves: boolean;
+  hideRegistryData: boolean;
+}
+
+interface ReportFinding {
+  vulnerability: Vulnerability;
+  packages: Array<{ name: string; installedVersion: string; fixedVersion: string }>;
+  affectedImages: string[];
+  xrayPolicyLabels: string[];
+  orgPolicyLabels: string[];
 }
 
 interface PaginatedResponse<T> {
@@ -131,6 +141,13 @@ const FILTER_TOGGLE_GROUPS: Array<{ label: string; rows: Array<[keyof Filters, s
       ['showStarted', 'Started'],
       ['showCompleted', 'Completed'],
       ['showTrivyVersion', 'Scanner versions'],
+    ],
+  },
+  {
+    label: 'Report display',
+    rows: [
+      ['deduplicateCves', 'Deduplicate CVEs'],
+      ['hideRegistryData', 'Hide registry data'],
     ],
   },
 ];
@@ -259,6 +276,89 @@ function filterVulns(vulns: Vulnerability[], f: Filters, policyFailures: Map<str
   });
 }
 
+function severityRank(severity: string): number {
+  const rank = SEVS.indexOf(severity.toUpperCase());
+  return rank === -1 ? SEVS.length : rank;
+}
+
+function selectRepresentativeFinding(current: Vulnerability, candidate: Vulnerability): Vulnerability {
+  const currentRank = severityRank(current.severity);
+  const candidateRank = severityRank(candidate.severity);
+  if (candidateRank !== currentRank) return candidateRank < currentRank ? candidate : current;
+  if (candidate.cvss_score !== current.cvss_score) return candidate.cvss_score > current.cvss_score ? candidate : current;
+  return candidate.id.localeCompare(current.id) < 0 ? candidate : current;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function buildReportFindings(data: ScanData[], filters: Filters): ReportFinding[] {
+  const sourceFindings = data.flatMap(({ scan, vulns, compliance }) => {
+    const policyFailures = orgPolicyFailureMap(compliance);
+    return filterVulns(vulns, filters, policyFailures)
+      .filter((vulnerability) => !vulnerability.suppression)
+      .map((vulnerability) => ({
+        vulnerability,
+        image: `${scan.image_name}:${scan.image_tag}`,
+        xrayPolicyLabels: xrayPolicyLabels(vulnerability),
+        orgPolicyLabels: policyFailures.get(normalizeVulnId(vulnerability.vuln_id)) ?? [],
+      }));
+  });
+
+  if (!filters.deduplicateCves) {
+    return sourceFindings.map(({ vulnerability, image, xrayPolicyLabels, orgPolicyLabels }) => ({
+      vulnerability,
+      packages: [{
+        name: vulnerability.pkg_name,
+        installedVersion: vulnerability.installed_version,
+        fixedVersion: vulnerability.fixed_version,
+      }],
+      affectedImages: [image],
+      xrayPolicyLabels,
+      orgPolicyLabels,
+    }));
+  }
+
+  const grouped = new Map<string, ReportFinding>();
+  for (const source of sourceFindings) {
+    const normalizedId = normalizeVulnId(source.vulnerability.vuln_id);
+    const key = normalizedId.startsWith('CVE-') ? normalizedId : `finding:${source.vulnerability.id}`;
+    const existing = grouped.get(key);
+    const packageEntry = {
+      name: source.vulnerability.pkg_name,
+      installedVersion: source.vulnerability.installed_version,
+      fixedVersion: source.vulnerability.fixed_version,
+    };
+    if (!existing) {
+      grouped.set(key, {
+        vulnerability: source.vulnerability,
+        packages: [packageEntry],
+        affectedImages: [source.image],
+        xrayPolicyLabels: source.xrayPolicyLabels,
+        orgPolicyLabels: source.orgPolicyLabels,
+      });
+      continue;
+    }
+
+    const representative = selectRepresentativeFinding(existing.vulnerability, source.vulnerability);
+    const comments = [...(existing.vulnerability.comments ?? []), ...(source.vulnerability.comments ?? [])];
+    existing.vulnerability = {
+      ...representative,
+      references: uniqueStrings([...(existing.vulnerability.references ?? []), ...(source.vulnerability.references ?? [])]),
+      comments: comments.filter((comment, index) => comments.findIndex((candidate) => candidate.id === comment.id) === index),
+    };
+    if (!existing.packages.some((item) => item.name === packageEntry.name && item.installedVersion === packageEntry.installedVersion && item.fixedVersion === packageEntry.fixedVersion)) {
+      existing.packages.push(packageEntry);
+    }
+    existing.affectedImages = uniqueStrings([...existing.affectedImages, source.image]);
+    existing.xrayPolicyLabels = uniqueStrings([...existing.xrayPolicyLabels, ...source.xrayPolicyLabels]);
+    existing.orgPolicyLabels = uniqueStrings([...existing.orgPolicyLabels, ...source.orgPolicyLabels]);
+  }
+
+  return Array.from(grouped.values());
+}
+
 async function fetchPaginatedCollection<T>(
   fetchPage: (page: number) => Promise<PaginatedResponse<T>>,
   defaultPageSize: number,
@@ -344,18 +444,17 @@ async function fetchRunScans(api: string, headers: HeadersInit, helmRun: string)
   return (detail.items ?? []).map((item) => item.latest_scan);
 }
 
-function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => void }) {
+function ReportFilterControls({ f, onChange, showHeading = true }: { f: Filters; onChange: (f: Filters) => void; showHeading?: boolean }) {
   function toggle(sev: string) {
     const sevs = f.severities.includes(sev) ? f.severities.filter(s => s !== sev) : [...f.severities, sev];
     onChange({ ...f, severities: sevs });
   }
   return (
-    <aside
-      className="print:hidden fixed right-4 top-4 z-10 max-h-[calc(100vh-2rem)] w-80 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-900 shadow-lg"
-      style={{ colorScheme: 'light' }}
-    >
-      <p className="mb-1 font-semibold text-zinc-900">Report filters</p>
-      <p className="mb-4 text-xs text-zinc-500">Changes apply immediately to the printable report.</p>
+    <div className="text-sm text-zinc-900" style={{ colorScheme: 'light' }}>
+      {showHeading && <>
+        <p className="mb-1 font-semibold text-zinc-900">Report filters</p>
+        <p className="mb-4 text-xs text-zinc-500">Changes apply immediately to the printable report.</p>
+      </>}
 
       <SearchField className="mb-3" value={f.search} onChange={(search) => onChange({ ...f, search })}>
         <Label className="text-xs font-semibold text-zinc-700">CVE, package, or title</Label>
@@ -403,19 +502,19 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
             {group.rows.map(([key, label]) => (
               <Switch
                 key={key}
-                className="flex w-full items-center justify-between gap-3"
+                className="flex w-full flex-row items-center justify-start gap-3"
                 isSelected={f[key] as boolean}
                 onChange={(value) => onChange({ ...f, [key]: value })}
               >
                 {({ isSelected }) => (
                   <>
-                    <Switch.Content className="min-w-0 flex-1">
-                      <Switch.Control
-                        className={`shrink-0 ${isSelected ? 'bg-blue-600' : 'bg-zinc-200'}`}
-                      >
-                        <Switch.Thumb className="bg-white" />
-                      </Switch.Control>
-                      <span className="block text-xs leading-4 text-zinc-800">{label}</span>
+                    <Switch.Control
+                      className={`shrink-0 ${isSelected ? 'bg-blue-600' : 'bg-zinc-200'}`}
+                    >
+                      <Switch.Thumb className="bg-white" />
+                    </Switch.Control>
+                    <Switch.Content className="min-w-0">
+                      <Label className="block text-xs leading-4 text-zinc-800">{label}</Label>
                     </Switch.Content>
                   </>
                 )}
@@ -428,7 +527,135 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
       <Button className="mt-5 w-full bg-blue-600 text-white hover:bg-blue-700" variant="primary" onPress={() => window.print()}>
         Save as PDF
       </Button>
-    </aside>
+    </div>
+  );
+}
+
+function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => void }) {
+  const drawer = useOverlayState();
+
+  return (
+    <>
+      <aside className="report-filter-panel print:hidden rounded-xl border border-zinc-200 bg-white p-4 shadow-lg">
+        <ReportFilterControls f={f} onChange={onChange} />
+      </aside>
+
+      <div className="report-filter-trigger print:hidden">
+        <Button className="shadow-lg" variant="primary" onPress={drawer.open}>Filters</Button>
+      </div>
+
+      <Drawer.Backdrop
+        className="report-filter-drawer print:hidden"
+        isOpen={drawer.isOpen}
+        onOpenChange={drawer.setOpen}
+        variant="blur"
+      >
+        <Drawer.Content placement="right">
+          <Drawer.Dialog aria-label="Report filters" className="flex h-full w-[min(92vw,22rem)] flex-col bg-white">
+            <Drawer.Header className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
+              <div>
+                <Drawer.Heading className="font-semibold text-zinc-900">Report filters</Drawer.Heading>
+                <p className="mt-1 text-xs text-zinc-500">Changes apply immediately to the printable report.</p>
+              </div>
+              <Drawer.CloseTrigger className="text-zinc-500 hover:text-zinc-700" />
+            </Drawer.Header>
+            <Drawer.Body className="flex-1 px-5 py-4">
+              <ReportFilterControls f={f} onChange={onChange} showHeading={false} />
+            </Drawer.Body>
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    </>
+  );
+}
+
+function ReportVulnerabilitySection({ findings, filters }: { findings: ReportFinding[]; filters: Filters }) {
+  return (
+    <section style={{ marginBottom: 32 }}>
+      <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--accent)', paddingBottom: 6, display: 'inline-block' }}>
+        Vulnerabilities ({findings.length})
+      </p>
+
+      {findings.length === 0 ? (
+        <p style={{ fontSize: 13, color: '#6b7280', fontStyle: 'italic', margin: '8px 0 20px' }}>No vulnerabilities match current filters.</p>
+      ) : (
+        <table className="report-findings-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 12, marginBottom: 24 }}>
+          <colgroup>
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '27%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '9%' }} />
+          </colgroup>
+          <thead>
+            <tr style={{ background: '#f9fafb' }}>
+              {['CVE ID', 'Package', 'Installed', 'Fixed In', 'Severity', 'CVSS'].map(h => (
+                <th key={h} style={{ padding: '7px 10px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {findings.map((finding, index) => {
+              const vulnerability = finding.vulnerability;
+              const rowBackground = index % 2 === 0 ? '#fff' : '#fafafa';
+              const detailBackground = index % 2 === 0 ? '#fafafa' : '#f5f5f5';
+              return (
+                <Fragment key={vulnerability.id}>
+                  <tr style={{ background: rowBackground }}>
+                    <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: 'var(--accent)', fontWeight: 600, overflowWrap: 'anywhere' }}>{vulnerability.vuln_id || '-'}</td>
+                    <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, overflowWrap: 'anywhere' }}>
+                      {finding.packages.map((item) => <div key={`${item.name}-${item.installedVersion}-${item.fixedVersion}`}>{item.name || '-'}</div>)}
+                    </td>
+                    <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#6b7280', overflowWrap: 'anywhere' }}>
+                      {finding.packages.map((item) => <div key={`${item.name}-${item.installedVersion}`}>{item.installedVersion || '-'}</div>)}
+                    </td>
+                    <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#15803d', fontWeight: finding.packages.some((item) => item.fixedVersion) ? 600 : 400, overflowWrap: 'anywhere' }}>
+                      {finding.packages.map((item) => <div key={`${item.name}-${item.fixedVersion}`}>{item.fixedVersion || '-'}</div>)}
+                    </td>
+                    <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb' }}><SevBadge s={vulnerability.severity} /></td>
+                    <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, textAlign: 'right', fontWeight: vulnerability.cvss_score >= 7 ? 700 : 400, color: vulnerability.cvss_score >= 9 ? '#dc2626' : vulnerability.cvss_score >= 7 ? '#ea580c' : '#374151' }}>
+                      {vulnerability.cvss_score ? vulnerability.cvss_score.toFixed(1) : '-'}
+                    </td>
+                  </tr>
+                  {(filters.showDescription || filters.showReferences || filters.showComments || filters.showPolicyDetails || finding.affectedImages.length > 0) && (
+                    <tr style={{ background: detailBackground }}>
+                      <td colSpan={6} className="report-detail-cell">
+                        <div style={{ marginBottom: 5 }}><strong style={{ color: '#111827' }}>Affected images:</strong> {finding.affectedImages.join(' · ')}</div>
+                        {filters.showDescription && vulnerability.title && <strong style={{ color: '#111827' }}>{vulnerability.title} - </strong>}
+                        {filters.showDescription && vulnerability.description && (vulnerability.description.length > 400 ? vulnerability.description.slice(0, 400) + '…' : vulnerability.description)}
+                        {filters.showReferences && vulnerability.references?.length > 0 && (
+                          <span style={{ color: 'var(--accent)', marginLeft: 8, fontSize: 12, overflowWrap: 'anywhere', wordBreak: 'break-all' }}>{vulnerability.references.slice(0, 2).join(' · ')}</span>
+                        )}
+                        {filters.showPolicyDetails && (finding.xrayPolicyLabels.length > 0 || finding.orgPolicyLabels.length > 0) && (
+                          <div style={{ marginTop: 5, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {finding.xrayPolicyLabels.map(label => <span key={`xray-${label}`} style={{ padding: '2px 5px', borderRadius: 3, background: '#fff7ed', color: '#9a3412', border: '1px solid #fed7aa' }}>Xray: {label}</span>)}
+                            {finding.orgPolicyLabels.map(label => <span key={`org-${label}`} style={{ padding: '2px 5px', borderRadius: 3, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>Org: {label}</span>)}
+                          </div>
+                        )}
+                        {filters.showComments && vulnerability.comments && vulnerability.comments.length > 0 && (
+                          <div style={{ marginTop: '6px' }}>
+                            {vulnerability.comments.map(comment => (
+                              <div key={comment.id} style={{ marginTop: '4px', background: '#fffbeb', border: '1px solid #fde68a', borderLeft: '3px solid #f59e0b', borderRadius: '3px', padding: '6px 8px' }}>
+                                <p style={{ margin: '0 0 2px', fontSize: '12px', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                  Analyst Note
+                                  {comment.username && <span style={{ fontWeight: 400, marginLeft: '5px', textTransform: 'none', letterSpacing: 0 }}>- {comment.username}</span>}
+                                </p>
+                                <p style={{ margin: 0, fontSize: '12px', color: '#78350f', lineHeight: 1.5 }}>{comment.content}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }
 
@@ -436,7 +663,6 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
   const { scan, vulns, compliance } = data;
   const policyFailures = orgPolicyFailureMap(compliance);
   const filteredVulns = filterVulns(vulns, filters, policyFailures);
-  const activeVulns = filteredVulns.filter(v => !v.suppression);
   const suppressedVulns = filteredVulns.filter(v => v.suppression);
   const ws = worstSeverity(scan);
   const accentColor = SEV_COLORS[ws]?.bg ?? 'var(--accent)';
@@ -528,7 +754,7 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
             ...(scan.helm_source_path ? [['Helm Source', scan.helm_source_path, false] as [string, string, boolean]] : []),
             ...(scan.os_family ? [['OS', `${scan.os_family} ${scan.os_name}`.trim(), false] as [string, string, boolean]] : []),
             ...(scan.architecture ? [['Architecture', scan.architecture, false] as [string, string, boolean]] : []),
-            ...([['Provider / Source', `${scan.scan_provider === 'artifactory_xray' ? 'Artifactory Xray' : 'Trivy'} / ${scan.scan_source === 'uploaded_archive' ? 'Uploaded archive' : 'Registry'}`, false] as [string, string, boolean]]),
+            ...([['Provider / Source', [scan.scan_provider === 'artifactory_xray' ? 'Artifactory Xray' : 'Trivy', scan.scan_source === 'uploaded_archive' ? 'Uploaded archive' : filters.hideRegistryData ? '' : 'Registry'].filter(Boolean).join(' / '), false] as [string, string, boolean]]),
             ...(scan.tags && scan.tags.length > 0 ? [['Tags', scan.tags.map(t => t.name).join(', '), false] as [string, string, boolean]] : []),
             ...(scan.collections && scan.collections.length > 0 ? [['Collections', scan.collections.map(collection => collection.name).join(', '), false] as [string, string, boolean]] : []),
             ...customFields.map(f => [f.label, f.value, false] as [string, string, boolean]),
@@ -538,24 +764,25 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
               <td style={{ padding: '5px 12px', color: '#111827', fontFamily: mono ? 'monospace' : 'inherit', fontSize: mono ? 10 : 12, wordBreak: 'break-all', borderBottom: '1px solid #e5e7eb' }}>{value}</td>
             </tr>
           ))}
-          {/* Registry / Location - editable, hidden on print if empty */}
-          <tr>
-            <td style={{ padding: '5px 12px', fontWeight: 600, color: '#374151', background: '#f9fafb', width: 140, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>Registry / Location</td>
-            <td style={{ padding: '3px 8px', borderBottom: '1px solid #e5e7eb' }}>
-              <span className="print:hidden">
-                <input
-                  type="text"
-                  value={imageLocation}
-                  onChange={e => setImageLocation(e.target.value)}
-                  onBlur={() => patchImageLocation(imageLocation)}
-                  placeholder="e.g. registry.example.com/myapp"
-                  style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 4, padding: '3px 6px', fontSize: 12, boxSizing: 'border-box', color: '#374151' }}
-                />
-                {savingLocation && <span style={{ fontSize: 12, color: '#9ca3af', marginLeft: 4 }}>Saving…</span>}
-              </span>
-              {imageLocation && <span className="hidden print:inline" style={{ fontSize: 12, color: '#111827' }}>{imageLocation}</span>}
-            </td>
-          </tr>
+          {!filters.hideRegistryData && (
+            <tr>
+              <td style={{ padding: '5px 12px', fontWeight: 600, color: '#374151', background: '#f9fafb', width: 140, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>Registry / Location</td>
+              <td style={{ padding: '3px 8px', borderBottom: '1px solid #e5e7eb' }}>
+                <span className="print:hidden">
+                  <input
+                    type="text"
+                    value={imageLocation}
+                    onChange={e => setImageLocation(e.target.value)}
+                    onBlur={() => patchImageLocation(imageLocation)}
+                    placeholder="e.g. registry.example.com/myapp"
+                    style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 4, padding: '3px 6px', fontSize: 12, boxSizing: 'border-box', color: '#374151' }}
+                  />
+                  {savingLocation && <span style={{ fontSize: 12, color: '#9ca3af', marginLeft: 4 }}>Saving…</span>}
+                </span>
+                {imageLocation && <span className="hidden print:inline" style={{ fontSize: 12, color: '#111827' }}>{imageLocation}</span>}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
 
@@ -615,79 +842,6 @@ function ScanSection({ data, filters, isFirst }: { data: ScanData; filters: Filt
           </button>
         </div>
       </div>
-
-      {/* Vulnerabilities */}
-      <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--accent)', paddingBottom: 6, display: 'inline-block' }}>
-        Vulnerabilities ({activeVulns.length})
-      </p>
-
-      {activeVulns.length === 0 ? (
-        <p style={{ fontSize: 13, color: '#6b7280', fontStyle: 'italic', margin: '8px 0 20px' }}>No vulnerabilities match current filters.</p>
-      ) : (
-        <table className="report-findings-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 12, marginBottom: 24 }}>
-          <colgroup>
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '27%' }} />
-            <col style={{ width: '18%' }} />
-            <col style={{ width: '18%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '9%' }} />
-          </colgroup>
-          <thead>
-            <tr style={{ background: '#f9fafb' }}>
-              {['CVE ID', 'Package', 'Installed', 'Fixed In', 'Severity', 'CVSS'].map(h => (
-                <th key={h} style={{ padding: '7px 10px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {activeVulns.map((v, vi) => (
-              <Fragment key={v.id}>
-                <tr key={v.id} style={{ background: vi % 2 === 0 ? '#fff' : '#fafafa' }}>
-                  <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: 'var(--accent)', fontWeight: 600, overflowWrap: 'anywhere' }}>{v.vuln_id || '-'}</td>
-                  <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, overflowWrap: 'anywhere' }}>{v.pkg_name}</td>
-                  <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#6b7280', overflowWrap: 'anywhere' }}>{v.installed_version}</td>
-                  <td style={{ padding: '6px 8px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#15803d', fontWeight: v.fixed_version ? 600 : 400, overflowWrap: 'anywhere' }}>{v.fixed_version || '-'}</td>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb' }}><SevBadge s={v.severity} /></td>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, textAlign: 'right', fontWeight: v.cvss_score >= 7 ? 700 : 400, color: v.cvss_score >= 9 ? '#dc2626' : v.cvss_score >= 7 ? '#ea580c' : '#374151' }}>
-                    {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
-                  </td>
-                </tr>
-                {(filters.showDescription || filters.showReferences || filters.showComments || filters.showPolicyDetails) && (
-                  <tr key={`${v.id}-desc`} style={{ background: vi % 2 === 0 ? '#fafafa' : '#f5f5f5' }}>
-                    <td colSpan={6} className="report-detail-cell">
-                      {filters.showDescription && v.title && <strong style={{ color: '#111827' }}>{v.title} - </strong>}
-                      {filters.showDescription && v.description && (v.description.length > 400 ? v.description.slice(0, 400) + '…' : v.description)}
-                      {filters.showReferences && v.references?.length > 0 && (
-                        <span style={{ color: 'var(--accent)', marginLeft: 8, fontSize: 12, overflowWrap: 'anywhere', wordBreak: 'break-all' }}>{v.references.slice(0, 2).join(' · ')}</span>
-                      )}
-                      {filters.showPolicyDetails && (vulnerabilityHasXrayPolicy(v) || policyFailures.has(normalizeVulnId(v.vuln_id))) && (
-                        <div style={{ marginTop: 5, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                          {xrayPolicyLabels(v).map(label => <span key={`xray-${label}`} style={{ padding: '2px 5px', borderRadius: 3, background: '#fff7ed', color: '#9a3412', border: '1px solid #fed7aa' }}>Xray: {label}</span>)}
-                          {(policyFailures.get(normalizeVulnId(v.vuln_id)) ?? []).map(label => <span key={`org-${label}`} style={{ padding: '2px 5px', borderRadius: 3, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>Org: {label}</span>)}
-                        </div>
-                      )}
-                      {filters.showComments && v.comments && v.comments.length > 0 && (
-                        <div style={{ marginTop: '6px' }}>
-                          {v.comments.map(c => (
-                            <div key={c.id} style={{ marginTop: '4px', background: '#fffbeb', border: '1px solid #fde68a', borderLeft: '3px solid #f59e0b', borderRadius: '3px', padding: '6px 8px' }}>
-                              <p style={{ margin: '0 0 2px', fontSize: '12px', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                Analyst Note
-                                {c.username && <span style={{ fontWeight: 400, marginLeft: '5px', textTransform: 'none', letterSpacing: 0 }}>- {c.username}</span>}
-                              </p>
-                              <p style={{ margin: 0, fontSize: '12px', color: '#78350f', lineHeight: 1.5 }}>{c.content}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      )}
 
       {/* Manual Findings */}
       {manualFindings.length > 0 && (
@@ -854,6 +1008,8 @@ function PrintReport() {
     showCompleted: true,
     showTrivyVersion: true,
     showPolicyDetails: true,
+    deduplicateCves: false,
+    hideRegistryData: false,
   });
 
   useEffect(() => {
@@ -905,14 +1061,13 @@ function PrintReport() {
     </div>
   );
 
-  const totalActive = data.reduce((sum, d) => sum + filterVulns(d.vulns.filter(v => !v.suppression), filters, orgPolicyFailureMap(d.compliance)).length, 0);
+  const reportFindings = buildReportFindings(data, filters);
+  const totalActive = reportFindings.length;
   const resolvedHelmChart = helmChart || data.find(({ scan }) => scan.helm_chart)?.scan.helm_chart || '';
   const reportTitle = resolvedHelmChart ? 'Helm Chart Security Report' : 'Security Vulnerability Report';
 
   return (
     <>
-      <FilterPanel f={filters} onChange={setFilters} />
-
       <style>{`
         @media print {
           @page { size: A4; margin: 1.5cm; }
@@ -931,10 +1086,25 @@ function PrintReport() {
         body { font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); }
         .report-brand-mark { align-items: center; display: inline-flex; flex-shrink: 0; justify-content: center; overflow: hidden; }
         .report-detail-cell { padding: 5px 10px 8px; border: 1px solid #e5e7eb; border-top: none; color: #4b5563; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word; }
+        .report-workspace { margin: 0 auto; max-width: 178mm; padding: 24px 16px 32px; }
+        .report-document { width: 100%; }
+        .report-filter-panel { display: none; }
+        .report-filter-trigger { position: fixed; right: 16px; bottom: 16px; z-index: 20; }
+        @media (min-width: 1280px) {
+          .report-workspace { align-items: start; display: grid; gap: 24px; grid-template-columns: minmax(0, 178mm) 20rem; justify-content: center; max-width: calc(178mm + 23.5rem); }
+          .report-filter-panel { display: block; max-height: calc(100vh - 32px); overflow-y: auto; position: sticky; top: 16px; width: 20rem; }
+          .report-filter-trigger, .report-filter-drawer { display: none !important; }
+        }
+        @media print {
+          .report-workspace { display: block; max-width: none; padding: 0; }
+          .report-document { max-width: none; }
+          .report-filter-panel, .report-filter-trigger, .report-filter-drawer { display: none !important; }
+        }
       `}</style>
 
       <div style={{ minHeight: '100vh', width: '100%', background: '#fff', color: '#111827' }}>
-        <div style={{ width: '100%', maxWidth: '178mm', margin: '0 auto', padding: '24px 0 32px' }}>
+        <div className="report-workspace">
+        <div className="report-document">
 
         {/* Report header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: 20, marginBottom: 28 }}>
@@ -943,7 +1113,7 @@ function PrintReport() {
               <BrandMark />
               <div>
                 <p style={{ margin: 0, color: '#111827', fontSize: 16, fontWeight: 800, letterSpacing: '-0.02em' }}>JustScan</p>
-                <p style={{ margin: '1px 0 0', color: '#6b7280', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Security Intelligence</p>
+                <a href="https://justlab.app/en/justscan" style={{ display: 'block', marginTop: 1, color: '#6b7280', fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', textDecoration: 'none' }}>justlab.app/en/justscan</a>
               </div>
             </div>
             <div style={{ borderLeft: '5px solid var(--accent)', paddingLeft: 16 }}>
@@ -1015,6 +1185,8 @@ function PrintReport() {
           </div>
         )}
 
+        <ReportVulnerabilitySection findings={reportFindings} filters={filters} />
+
         {/* Per-scan sections */}
         {data.map((d, i) => <ScanSection key={d.scan.id} data={d} filters={filters} isFirst={i === 0} />)}
 
@@ -1022,10 +1194,12 @@ function PrintReport() {
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12, marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9ca3af' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#6b7280', fontWeight: 600 }}>
             <BrandMark size={18} />
-            JustScan Security Report
+            JustScan Security Report · https://justlab.app/en/justscan
           </span>
           <span style={{ maxWidth: '65%', textAlign: 'right', overflowWrap: 'anywhere' }}>{data.map(d => `${d.scan.image_name}:${d.scan.image_tag}`).join(', ')}</span>
         </div>
+        </div>
+        <FilterPanel f={filters} onChange={setFilters} />
         </div>
       </div>
     </>

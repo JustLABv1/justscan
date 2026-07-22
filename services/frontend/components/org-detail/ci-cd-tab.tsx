@@ -10,10 +10,18 @@ import {
 } from '@/lib/api';
 import { getApiBase } from '@/lib/api/base';
 import { deferEffect } from '@/lib/defer-effect';
-import { Alert, Button, Card, Chip } from '@heroui/react';
+import { Alert, Button, Card, Chip, Label, ListBox, Select } from '@heroui/react';
 import { Copy01Icon, Key01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+
+const CLI_TOKEN_LIFETIMES = [
+  { label: '30 days', value: 30 * 24 * 60 * 60 },
+  { label: '90 days', value: 90 * 24 * 60 * 60 },
+  { label: '180 days', value: 180 * 24 * 60 * 60 },
+  { label: '1 year', value: 365 * 24 * 60 * 60 },
+  { label: '5 years', value: 5 * 365 * 24 * 60 * 60 },
+];
 
 function defaultPublicURL() {
   if (typeof window === 'undefined') return '';
@@ -93,6 +101,7 @@ export function OrgCICDTab({ org, canManageTokens }: OrgCICDTabProps) {
   const [token, setToken] = useState('');
   const [creatingToken, setCreatingToken] = useState(false);
   const [tokenError, setTokenError] = useState('');
+  const [tokenLifetime, setTokenLifetime] = useState(String(CLI_TOKEN_LIFETIMES[1].value));
   const [history, setHistory] = useState<PipelineScanHistoryItem[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
 
@@ -117,7 +126,7 @@ export function OrgCICDTab({ org, canManageTokens }: OrgCICDTabProps) {
       const created = await createOrgToken(
         org.id,
         'JustScan CLI',
-        90 * 24 * 60 * 60,
+        Number(tokenLifetime),
         'pipeline_scan'
       );
       setToken(created.key);
@@ -129,7 +138,15 @@ export function OrgCICDTab({ org, canManageTokens }: OrgCICDTabProps) {
     }
   }
 
-  const terminalSetup = `justscan config set my-organization \\
+  const personalTerminalSetup = `justscan config set my-organization \\
+  --server "${publicURL || 'https://justscan.example.com'}" \\
+  --org "${org.id}"
+
+justscan login
+justscan scan "registry.example.com/my-app:1.2.3" \\
+  --source justscan_cli`;
+
+  const pipelineTerminalSetup = `justscan config set my-organization \\
   --server "${publicURL || 'https://justscan.example.com'}" \\
   --org "${org.id}"
 
@@ -143,8 +160,8 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
         <Card.Header>
           <Card.Title>Set up the JustScan CLI</Card.Title>
           <Card.Description>
-            Copy the instance details, create a least-privilege token, then run your first remote
-            scan. JustScan does the scanning; the CLI only talks to this instance.
+            Sign in with your JustScan account for local work, or create a least-privilege token
+            for CI/CD. JustScan does the scanning; the CLI only talks to this instance.
           </Card.Description>
         </Card.Header>
         <Card.Content className="space-y-5">
@@ -153,28 +170,56 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
             <CopyValue label="Organization ID" value={org.id} />
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-divider bg-surface-tertiary p-4">
+          <div className="flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-divider bg-surface-tertiary p-4">
             <div>
               <p className="text-sm font-medium">Create a pipeline token</p>
               <p className="mt-1 text-xs text-muted">
                 It can create and read scans for {org.name} only. It cannot administer the
                 organization.
               </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                render={(props: any) => (
-                  <Link {...props} href={`/orgs/${org.id}?tab=access&section=tokens`} />
-                )}
+              <Link
+                href={`/orgs/${org.id}?tab=access&section=tokens`}
+                className="mt-2 inline-flex text-xs font-medium text-accent hover:underline"
               >
-                Manage CLI tokens
-              </Button>
+                Manage existing CLI tokens
+              </Link>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
               {canManageTokens ? (
-                <Button isDisabled={creatingToken} onPress={() => void createCredential()}>
-                  <Key01Icon size={15} />
-                  {creatingToken ? 'Creating…' : 'Create CLI token'}
-                </Button>
+                <>
+                  <Select
+                    aria-label="CLI token lifetime"
+                    value={tokenLifetime}
+                    onChange={(value) =>
+                      setTokenLifetime(String(value ?? CLI_TOKEN_LIFETIMES[1].value))
+                    }
+                    variant="primary"
+                    className="min-w-36"
+                  >
+                    <Label>Token lifetime</Label>
+                    <Select.Trigger className="border border-divider bg-surface-secondary shadow-sm">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover className="border border-divider bg-surface shadow-lg">
+                      <ListBox>
+                        {CLI_TOKEN_LIFETIMES.map((option) => (
+                          <ListBox.Item
+                            key={option.value}
+                            id={String(option.value)}
+                            textValue={option.label}
+                          >
+                            {option.label}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                  <Button isDisabled={creatingToken} onPress={() => void createCredential()}>
+                    <Key01Icon size={15} />
+                    {creatingToken ? 'Creating…' : 'Create CLI token'}
+                  </Button>
+                </>
               ) : null}
             </div>
           </div>
@@ -196,7 +241,27 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
             </>
           ) : null}
 
-          <CodeBlock label="Terminal setup" value={terminalSetup} />
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium">For local development</p>
+              <p className="mt-1 text-xs text-muted">
+                Sign in with your own JustScan account. The CLI stores the session securely in
+                your operating system’s keychain.
+              </p>
+            </div>
+            <CodeBlock label="Personal terminal setup" value={personalTerminalSetup} />
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium">For CI/CD</p>
+              <p className="mt-1 text-xs text-muted">
+                Create a pipeline token above and save it as a secret in your CI provider. Do not
+                use this token for interactive work.
+              </p>
+            </div>
+            <CodeBlock label="CI/CD terminal setup" value={pipelineTerminalSetup} />
+          </div>
         </Card.Content>
       </Card>
 

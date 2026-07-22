@@ -51,6 +51,7 @@ func Orgs(router *gin.RouterGroup, db *bun.DB) {
 		r.GET("/:id/tokens", orgs.ListOrgTokens(db))
 		r.POST("/:id/tokens", orgs.CreateOrgToken(db))
 		r.DELETE("/:id/tokens/:tokenId", orgs.RevokeOrgToken(db))
+		r.DELETE("/:id/tokens/:tokenId/purge", orgs.DeleteRevokedOrgToken(db))
 
 		r.GET("/:id/audit", orgs.ListOrgAuditLog(db))
 

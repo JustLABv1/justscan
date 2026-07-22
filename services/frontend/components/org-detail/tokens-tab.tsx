@@ -2,7 +2,14 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
-import { APIToken, createOrgToken, listOrgTokens, OrgTokenScope, revokeOrgToken } from '@/lib/api';
+import {
+  APIToken,
+  createOrgToken,
+  deleteRevokedOrgToken,
+  listOrgTokens,
+  OrgTokenScope,
+  revokeOrgToken,
+} from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo, timeUntil } from '@/lib/time';
 import {
@@ -17,6 +24,7 @@ import {
   type SortDescriptor,
 } from '@heroui/react';
 import {
+  Cancel01Icon,
   Copy01Icon,
   Delete01Icon,
   Key01Icon,
@@ -30,7 +38,7 @@ const EXPIRY_OPTIONS = [
   { label: '90 days', value: 90 * 24 * 60 * 60 },
   { label: '180 days', value: 180 * 24 * 60 * 60 },
   { label: '1 year', value: 365 * 24 * 60 * 60 },
-  { label: 'No expiry', value: 0 },
+  { label: '5 years', value: 5 * 365 * 24 * 60 * 60 },
 ];
 
 function getTokenStatus(token: APIToken): 'active' | 'expired' | 'revoked' {
@@ -40,8 +48,7 @@ function getTokenStatus(token: APIToken): 'active' | 'expired' | 'revoked' {
 
   const now = new Date();
   const expiresAt = new Date(token.expires_at);
-  const isNoExpiry = expiresAt.getFullYear() - now.getFullYear() >= 4;
-  if (!isNoExpiry && expiresAt < now) {
+  if (expiresAt < now) {
     return 'expired';
   }
 
@@ -51,8 +58,6 @@ function getTokenStatus(token: APIToken): 'active' | 'expired' | 'revoked' {
 function OrgTokenStatusBadge({ token }: { token: APIToken }) {
   const now = new Date();
   const expiresAt = new Date(token.expires_at);
-  const isNoExpiry = expiresAt.getFullYear() - now.getFullYear() >= 4;
-
   if (token.disabled) {
     return (
       <span
@@ -67,7 +72,7 @@ function OrgTokenStatusBadge({ token }: { token: APIToken }) {
       </span>
     );
   }
-  if (!isNoExpiry && expiresAt < now) {
+  if (expiresAt < now) {
     return (
       <span
         className="text-xs px-2 py-0.5 rounded-md font-medium"
@@ -98,8 +103,6 @@ function OrgTokenStatusBadge({ token }: { token: APIToken }) {
 function OrgTokenExpiry({ token }: { token: APIToken }) {
   const expiresAt = new Date(token.expires_at);
   const now = new Date();
-  const isNoExpiry = expiresAt.getFullYear() - now.getFullYear() >= 4;
-  if (isNoExpiry) return <span className="text-zinc-500 text-sm">Never</span>;
   return (
     <span className="text-sm text-zinc-500" title={fullDate(token.expires_at)}>
       {expiresAt < now ? (
@@ -413,6 +416,23 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
     }
   }
 
+  async function handleDelete(token: APIToken) {
+    const ok = await confirm({
+      title: `Delete "${token.description}" permanently?`,
+      message: 'This removes the revoked token record and its audit reference cannot be restored.',
+      confirmLabel: 'Delete permanently',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await deleteRevokedOrgToken(orgId, token.id);
+      toast.success('Revoked token deleted');
+      void load();
+    } catch {
+      toast.error('Failed to delete revoked token');
+    }
+  }
+
   return (
     <Card>
       {confirmDialog}
@@ -536,13 +556,24 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
                           {canManage ? (
                             <Table.Cell>
                               <div className="flex justify-end">
-                                {!token.disabled && (
+                                {!token.disabled ? (
                                   <Button
-                                    variant="danger-soft"
-                                    isIconOnly
-                                    onClick={() => void handleRevoke(token)}
+                                    size="sm"
+                                    variant="outline"
+                                    onPress={() => void handleRevoke(token)}
+                                  >
+                                    <Cancel01Icon size={15} />
+                                    Revoke
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="danger"
+                                    aria-label={`Delete revoked token ${token.description} permanently`}
+                                    onPress={() => void handleDelete(token)}
                                   >
                                     <Delete01Icon size={15} />
+                                    Delete
                                   </Button>
                                 )}
                               </div>

@@ -19,6 +19,9 @@ export const createOrgToken = (
 export const revokeOrgToken = (orgId: string, tokenId: string) =>
   req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/tokens/${tokenId}`);
 
+export const deleteRevokedOrgToken = (orgId: string, tokenId: string) =>
+  req<{ result: string }>('DELETE', `/api/v1/orgs/${orgId}/tokens/${tokenId}/purge`);
+
 export const listUserTokens = () =>
   req<{ data: PersonalToken[]; total: number }>('GET', '/api/v1/user/tokens');
 

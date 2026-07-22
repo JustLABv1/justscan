@@ -18,6 +18,11 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const (
+	defaultOrgTokenLifetime = 90 * 24 * time.Hour
+	maximumOrgTokenLifetime = 5 * 365 * 24 * time.Hour
+)
+
 func ListOrgTokens(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		orgID, err := uuid.Parse(c.Param("id"))
@@ -82,7 +87,7 @@ func CreateOrgToken(db *bun.DB) gin.HandlerFunc {
 
 		var body struct {
 			Description string `json:"description" binding:"required"`
-			ExpiresIn   int    `json:"expires_in"` // seconds, 0 = 90 days default
+			ExpiresIn   *int   `json:"expires_in"` // seconds; omitted defaults to 90 days
 			Scope       string `json:"scope"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
@@ -90,9 +95,10 @@ func CreateOrgToken(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		expiry := 90 * 24 * time.Hour
-		if body.ExpiresIn > 0 {
-			expiry = time.Duration(body.ExpiresIn) * time.Second
+		expiry, err := resolveOrgTokenLifetime(body.ExpiresIn)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 		expiresAt := time.Now().Add(expiry)
 		scope, validScope := normalizeOrgTokenScope(body.Scope)
@@ -138,6 +144,22 @@ func CreateOrgToken(db *bun.DB) gin.HandlerFunc {
 			"scope":       token.Scope,
 		})
 	}
+}
+
+func resolveOrgTokenLifetime(expiresIn *int) (time.Duration, error) {
+	if expiresIn == nil {
+		return defaultOrgTokenLifetime, nil
+	}
+
+	if *expiresIn == 0 {
+		return maximumOrgTokenLifetime, nil
+	}
+
+	lifetime := time.Duration(*expiresIn) * time.Second
+	if lifetime < time.Hour || lifetime > maximumOrgTokenLifetime {
+		return 0, fmt.Errorf("token lifetime must be between 1 hour and 5 years")
+	}
+	return lifetime, nil
 }
 
 func normalizeOrgTokenScope(raw string) (string, bool) {
@@ -190,5 +212,45 @@ func RevokeOrgToken(db *bun.DB) gin.HandlerFunc {
 			fmt.Sprintf("Revoked org token %s", tokenID))
 
 		c.JSON(http.StatusOK, gin.H{"result": "revoked"})
+	}
+}
+
+// DeleteRevokedOrgToken permanently removes an already-revoked token record.
+// Active tokens must be revoked first so access loss remains an intentional action.
+func DeleteRevokedOrgToken(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		orgID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
+			return
+		}
+		_, _, userID, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
+		if !ok {
+			return
+		}
+
+		tokenID, err := uuid.Parse(c.Param("tokenId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token ID"})
+			return
+		}
+
+		result, err := db.NewDelete().Model((*models.Tokens)(nil)).
+			Where("id = ? AND org_id = ? AND disabled = true", tokenID, orgID).
+			Exec(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete token"})
+			return
+		}
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "revoked token not found"})
+			return
+		}
+
+		go audit.WriteOrgAction(context.Background(), db, userID.String(), orgID, "org.token.delete",
+			fmt.Sprintf("Deleted revoked org token %s", tokenID))
+
+		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
 	}
 }

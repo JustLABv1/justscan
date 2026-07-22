@@ -27,6 +27,8 @@ func pipelineTokenRouteAllowed(method, route string) bool {
 		return true
 	case method == "GET" && route == "/api/v1/orgs/:id/pipeline-scans/:scanId":
 		return true
+	case method == "POST" && route == "/api/v1/scans/upload":
+		return true
 	default:
 		return false
 	}

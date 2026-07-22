@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -62,6 +63,14 @@ type AcceptedScan struct {
 	ScanStatus string `json:"scan_status"`
 	StatusURL  string `json:"status_url"`
 	ScanURL    string `json:"scan_url,omitempty"`
+}
+
+type UploadedArchiveScan struct {
+	ID          string `json:"id"`
+	ImageName   string `json:"image_name"`
+	ImageTag    string `json:"image_tag"`
+	Status      string `json:"status"`
+	CurrentStep string `json:"current_step"`
 }
 
 type ScanResult struct {
@@ -151,6 +160,77 @@ func (c *Client) CreateScan(orgID string, request ScanRequest) (AcceptedScan, er
 	return accepted, nil
 }
 
+func (c *Client) UploadArchive(orgID string, archive io.Reader, filename string, size int64, imageName, imageTag, platform string) (UploadedArchiveScan, error) {
+	pipeReader, pipeWriter := io.Pipe()
+	form := multipart.NewWriter(pipeWriter)
+	errCh := make(chan error, 1)
+	go func() {
+		defer pipeWriter.Close()
+		defer close(errCh)
+		if err := form.WriteField("org_id", orgID); err != nil {
+			errCh <- err
+			return
+		}
+		if err := form.WriteField("image_name", imageName); err != nil {
+			errCh <- err
+			return
+		}
+		if err := form.WriteField("image_tag", imageTag); err != nil {
+			errCh <- err
+			return
+		}
+		if platform != "" {
+			if err := form.WriteField("platform", platform); err != nil {
+				errCh <- err
+				return
+			}
+		}
+		part, err := form.CreateFormFile("archive", filename)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		if _, err := io.Copy(part, io.LimitReader(archive, maxArchiveBytes+1)); err != nil {
+			errCh <- err
+			return
+		}
+		errCh <- form.Close()
+	}()
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/scans/upload", pipeReader)
+	if err != nil {
+		return UploadedArchiveScan{}, fmt.Errorf("create upload request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	if size > maxArchiveBytes {
+		return UploadedArchiveScan{}, errors.New("archive exceeds the 5 GB upload limit")
+	}
+	uploadHTTP := *c.http
+	uploadHTTP.Timeout = 2 * time.Hour
+	response, err := uploadHTTP.Do(req)
+	if err != nil {
+		return UploadedArchiveScan{}, fmt.Errorf("upload archive to JustScan: %w", err)
+	}
+	defer response.Body.Close()
+	payload, readErr := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if readErr != nil {
+		return UploadedArchiveScan{}, fmt.Errorf("read JustScan API response: %w", readErr)
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return UploadedArchiveScan{}, apiErrorFromResponse(response, payload)
+	}
+	if err := <-errCh; err != nil {
+		return UploadedArchiveScan{}, fmt.Errorf("encode archive upload: %w", err)
+	}
+	var result UploadedArchiveScan
+	if err := json.Unmarshal(payload, &result); err != nil {
+		return UploadedArchiveScan{}, fmt.Errorf("parse JustScan API response: %w", err)
+	}
+	return result, nil
+}
+
 func (c *Client) Login(email, password string) (LoginResponse, error) {
 	var result LoginResponse
 	if err := c.doPublicJSON(http.MethodPost, "/auth/login", map[string]any{"email": email, "password": password, "remember_me": true}, &result); err != nil {
@@ -215,22 +295,26 @@ func (c *Client) doJSONWithAuth(method, path string, input, output any, includeA
 		return errors.New("JustScan API response exceeds 2 MiB limit")
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		message := strings.TrimSpace(string(payload))
-		var apiBody struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(payload, &apiBody) == nil && apiBody.Error != "" {
-			message = apiBody.Error
-		}
-		if message == "" {
-			message = response.Status
-		}
-		return &APIError{StatusCode: response.StatusCode, Message: message, RetryAfter: retryAfter(response.Header.Get("Retry-After"))}
+		return apiErrorFromResponse(response, payload)
 	}
 	if err := json.Unmarshal(payload, output); err != nil {
 		return fmt.Errorf("parse JustScan API response: %w", err)
 	}
 	return nil
+}
+
+func apiErrorFromResponse(response *http.Response, payload []byte) error {
+	message := strings.TrimSpace(string(payload))
+	var apiBody struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(payload, &apiBody) == nil && apiBody.Error != "" {
+		message = apiBody.Error
+	}
+	if message == "" {
+		message = response.Status
+	}
+	return &APIError{StatusCode: response.StatusCode, Message: message, RetryAfter: retryAfter(response.Header.Get("Retry-After"))}
 }
 
 func retryAfter(value string) time.Duration {

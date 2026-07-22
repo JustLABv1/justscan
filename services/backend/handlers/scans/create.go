@@ -334,11 +334,6 @@ func CreateUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		userID, _, ok := authz.RequireRequestUser(c, db)
-		if !ok {
-			return
-		}
-
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadedArchiveBytes+1024)
 		if err := c.Request.ParseMultipartForm(uploadFormMemoryBytes); err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "request body too large") {
@@ -361,6 +356,7 @@ func CreateUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
 
 		reqOrgID := strings.TrimSpace(c.PostForm("org_id"))
 		var requestedOrgID *uuid.UUID
+		var userID uuid.UUID
 		if reqOrgID != "" {
 			parsedOrgID, parseErr := uuid.Parse(reqOrgID)
 			if parseErr != nil {
@@ -375,6 +371,18 @@ func CreateUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
 				return
 			}
 			requestedOrgID = &parsedOrgID
+		}
+		if tokenOrgID, isOrgToken := authz.GetOrgTokenOrgID(c); isOrgToken {
+			if requestedOrgID == nil || *requestedOrgID != tokenOrgID {
+				c.JSON(http.StatusForbidden, gin.H{"error": "organization token can only upload archives to its own organization"})
+				return
+			}
+		} else {
+			var ok bool
+			userID, _, ok = authz.RequireRequestUser(c, db)
+			if !ok {
+				return
+			}
 		}
 
 		imageName := strings.TrimSpace(c.PostForm("image_name"))
@@ -412,10 +420,12 @@ func CreateUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
 			ImageLocation: archivePath,
 			CurrentStep:   models.ScanStepQueued,
 			Status:        models.ScanStatusPending,
-			UserID:        &userID,
 			OwnerType:     models.OwnerTypeUser,
-			OwnerUserID:   &userID,
 			CreatedAt:     time.Now(),
+		}
+		if userID != uuid.Nil {
+			scan.UserID = &userID
+			scan.OwnerUserID = &userID
 		}
 		if requestedOrgID != nil {
 			scan.OwnerType = models.OwnerTypeOrg
@@ -455,7 +465,13 @@ func CreateUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 
-		go audit.Write(context.Background(), db, userID.String(), "scan.create.upload",
+		actorID := userID.String()
+		if userID == uuid.Nil {
+			if tokenID, ok := authz.GetOrgTokenID(c); ok {
+				actorID = "org-token:" + tokenID.String()
+			}
+		}
+		go audit.Write(context.Background(), db, actorID, "scan.create.upload",
 			fmt.Sprintf("Uploaded archive scan created for %s:%s (id=%s,size=%d)", scan.ImageName, scan.ImageTag, scan.ID, fileHeader.Size))
 
 		c.JSON(http.StatusCreated, scan)

@@ -70,7 +70,7 @@ func newRoot(version, commit, date string) *cobra.Command {
 	root.PersistentFlags().BoolVar(&opt.allowInsecureHTTP, "allow-insecure-http", false, "allow HTTP to non-loopback hosts")
 	root.PersistentFlags().BoolVar(&opt.tokenStdin, "token-stdin", false, "read bearer token from stdin")
 	root.PersistentFlags().StringVarP(&opt.output, "output", "o", "human", "output format: human or json")
-	root.AddCommand(newLoginCommand(opt), newLogoutCommand(opt), newScanCommand(opt), newStatusCommand(opt), newConfigCommand(opt), newVersionCommand(opt), newCompletionCommand(root))
+	root.AddCommand(newLoginCommand(opt), newLogoutCommand(opt), newScanCommand(opt), newArchiveScanCommand(opt), newLocalImageScanCommand(opt), newStatusCommand(opt), newConfigCommand(opt), newVersionCommand(opt), newCompletionCommand(root))
 	return root
 }
 

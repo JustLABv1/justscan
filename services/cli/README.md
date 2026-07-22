@@ -1,0 +1,42 @@
+# JustScan CLI
+
+`justscan` is the command-line client for a running JustScan instance. It submits remote
+pipeline scans and evaluates the verdict produced by that instance; it does not run a scanner
+locally.
+
+## Build locally
+
+```sh
+cd services/cli
+go build ./cmd/justscan
+```
+
+## CI usage
+
+Create an organization token with the `pipeline_scan` scope, then provide it only through the
+environment:
+
+```sh
+export JUSTSCAN_URL="https://justscan.example.com"
+export JUSTSCAN_ORG_ID="00000000-0000-0000-0000-000000000000"
+export JUSTSCAN_TOKEN="<pipeline-token>"
+
+justscan scan registry.example.com/my-app:1.2.3 --fail-on high
+```
+
+The command waits for a final verdict by default. Exit code `0` is a pass, `1` is a policy
+failure, and `2` indicates an operational or scan-execution error.
+
+## Profiles
+
+Profiles hold only the instance URL, organization ID, and optional CA certificate path. They
+never store access tokens.
+
+```sh
+justscan config set staging \
+  --server https://justscan.staging.example.com \
+  --org 00000000-0000-0000-0000-000000000000
+justscan config use staging
+export JUSTSCAN_TOKEN="<pipeline-token>"
+justscan scan registry.example.com/my-app:1.2.3
+```

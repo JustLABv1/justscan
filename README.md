@@ -15,6 +15,7 @@ JustScan is a self-hosted container image vulnerability scanner powered by [Triv
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
+- [CLI](#cli)
 - [Quick Start](#quick-start)
 - [Configuration Reference](#configuration-reference)
 - [OIDC Configuration](#oidc-configuration)
@@ -50,6 +51,31 @@ JustScan helps teams scan container images for vulnerabilities before deployment
 | Backend  | Go (Gin)       | `8080`       |
 | Frontend | Next.js        | `3000`       |
 | Database | PostgreSQL 15+ | `5432`       |
+
+## CLI
+
+The `justscan` CLI submits remote pipeline scans to a running JustScan instance and returns
+CI-friendly verdict exit codes. It does not include a local scanner. Release archives are
+attached to each JustScan GitHub Release; build it locally with:
+
+```bash
+cd services/cli
+go build ./cmd/justscan
+```
+
+Configure a non-secret profile and provide the pipeline-scoped organization token through the
+environment:
+
+```bash
+justscan config set production \
+  --server https://justscan.example.com \
+  --org 00000000-0000-0000-0000-000000000000
+export JUSTSCAN_TOKEN="<pipeline-scoped-org-token>"
+justscan scan registry.example.com/my-app:1.2.3 --fail-on high
+```
+
+See [the CLI guide](services/cli/README.md) and [the CI/CD API guide](docs/ci-cd-pipeline-api.md)
+for options and provider examples.
 
 ## Quick Start
 

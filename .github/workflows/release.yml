@@ -154,6 +154,35 @@ jobs:
           cache-from: type=gha,scope=combined
           cache-to: type=gha,scope=combined,mode=max
 
+  build-cli:
+    name: Build CLI archives
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: services/cli/go.mod
+          cache-dependency-path: services/cli/go.sum
+
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean --skip=publish
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-binaries
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+          if-no-files-found: error
+
   release-helm-chart:
     name: Package & Push Helm Chart
     runs-on: ubuntu-latest
@@ -229,7 +258,7 @@ jobs:
     name: Create GitHub Release
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, build-combined, release-helm-chart]
+    needs: [build-backend, build-frontend, build-combined, build-cli, release-helm-chart]
     permissions:
       contents: write
     steps:
@@ -240,6 +269,11 @@ jobs:
           name: helm-chart
           path: dist
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli-binaries
+          path: dist
+
       - uses: ncipollo/release-action@v1
         with:
           name: Release ${{ github.ref_name }}
@@ -247,5 +281,5 @@ jobs:
           skipIfReleaseExists: true
           generateReleaseNotes: true
           prerelease: ${{ needs.release-helm-chart.outputs.is_beta == 'true' }}
-          artifacts: dist/*.tgz
+          artifacts: dist/*
           artifactErrorsFailBuild: true

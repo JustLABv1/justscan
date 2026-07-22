@@ -37,6 +37,15 @@ type Client struct {
 	http    *http.Client
 }
 
+type LoginResponse struct {
+	Token     string `json:"token"`
+	ExpiresAt int64  `json:"expires_at"`
+	User      struct {
+		Username string `json:"username"`
+		Email    string `json:"email"`
+	} `json:"user"`
+}
+
 type ScanRequest struct {
 	Image          string   `json:"image"`
 	Platform       string   `json:"platform,omitempty"`
@@ -142,6 +151,17 @@ func (c *Client) CreateScan(orgID string, request ScanRequest) (AcceptedScan, er
 	return accepted, nil
 }
 
+func (c *Client) Login(email, password string) (LoginResponse, error) {
+	var result LoginResponse
+	if err := c.doPublicJSON(http.MethodPost, "/auth/login", map[string]any{"email": email, "password": password, "remember_me": true}, &result); err != nil {
+		return LoginResponse{}, err
+	}
+	if strings.TrimSpace(result.Token) == "" {
+		return LoginResponse{}, errors.New("JustScan API did not return a login token")
+	}
+	return result, nil
+}
+
 func (c *Client) GetScan(orgID, scanID string) (ScanResult, error) {
 	var result ScanResult
 	err := c.doJSON(http.MethodGet, "/orgs/"+orgID+"/pipeline-scans/"+scanID, nil, &result)
@@ -155,6 +175,14 @@ func (c *Client) GetScan(orgID, scanID string) (ScanResult, error) {
 }
 
 func (c *Client) doJSON(method, path string, input, output any) error {
+	return c.doJSONWithAuth(method, path, input, output, true)
+}
+
+func (c *Client) doPublicJSON(method, path string, input, output any) error {
+	return c.doJSONWithAuth(method, path, input, output, false)
+}
+
+func (c *Client) doJSONWithAuth(method, path string, input, output any, includeAuth bool) error {
 	var body io.Reader
 	if input != nil {
 		encoded, err := json.Marshal(input)
@@ -167,7 +195,9 @@ func (c *Client) doJSON(method, path string, input, output any) error {
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	if includeAuth {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 	req.Header.Set("Accept", "application/json")
 	if input != nil {
 		req.Header.Set("Content-Type", "application/json")

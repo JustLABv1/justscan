@@ -30,6 +30,21 @@ token label that initiated them in the scan list and scan details.
 The command waits for a final verdict by default. Exit code `0` is a pass, `1` is a policy
 failure, and `2` indicates an operational or scan-execution error.
 
+## Interactive login
+
+For a person running scans locally, create or select a profile and sign in once:
+
+```sh
+justscan config set production \
+  --server https://justscan.example.com \
+  --org 00000000-0000-0000-0000-000000000000
+justscan login --profile production --email you@example.com
+```
+
+The password is hidden while typing. The resulting user credential is stored in the operating
+system keychain, never in the profile file or shell history. Use `justscan logout` to remove it.
+`JUSTSCAN_TOKEN` remains the recommended authentication method for CI/CD.
+
 ## Profiles
 
 Profiles hold only the instance URL, organization ID, and optional CA certificate path. They

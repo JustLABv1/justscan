@@ -74,6 +74,10 @@ export JUSTSCAN_TOKEN="<pipeline-scoped-org-token>"
 justscan scan registry.example.com/my-app:1.2.3
 ```
 
+For an interactive user session, run `justscan login --profile production --email you@example.com`.
+The CLI prompts for the password and stores the credential in the system keychain; use
+`JUSTSCAN_TOKEN` only for CI/CD or other unattended automation.
+
 See [the CLI guide](services/cli/README.md) and [the CI/CD API guide](docs/ci-cd-pipeline-api.md)
 for options and provider examples.
 

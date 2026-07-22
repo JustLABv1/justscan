@@ -3,6 +3,7 @@ package scans
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -38,21 +39,16 @@ type createPipelineScanRequest struct {
 
 func CreatePipelineScan(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		orgID, org, ok := requirePipelineOrgToken(c, db)
+		orgID, org, userID, ok := requirePipelineOrgAccess(c, db, models.OrgRoleEditor)
 		if !ok {
 			return
 		}
 		if !authz.EnsureOrgActionAllowed(c, org, "image_scan") {
 			return
 		}
-		tokenID, ok := authz.GetOrgTokenID(c)
-		if !ok {
-			c.JSON(http.StatusForbidden, gin.H{"error": "org token required"})
-			return
-		}
-		token := &models.Tokens{}
-		if err := db.NewSelect().Model(token).Column("description").Where("id = ?", tokenID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": "org token required"})
+		initiatorTokenID, initiatorDescription, err := resolvePipelineInitiator(c, db, userID)
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "unable to resolve scan initiator"})
 			return
 		}
 
@@ -137,8 +133,8 @@ func CreatePipelineScan(db *bun.DB) gin.HandlerFunc {
 			return pipelines.CreateScanRequest(ctx, tx, scan.ID.String(), orgID.String(), pipelines.ScanCreateConfig{
 				Source:                    source,
 				ExternalRef:               req.ExternalRef,
-				InitiatorTokenID:          &tokenID,
-				InitiatorTokenDescription: token.Description,
+				InitiatorTokenID:          initiatorTokenID,
+				InitiatorTokenDescription: initiatorDescription,
 				Callback: pipelines.CallbackConfig{
 					URL:    req.Callback.URL,
 					Secret: req.Callback.Secret,
@@ -174,7 +170,7 @@ func CreatePipelineScan(db *bun.DB) gin.HandlerFunc {
 
 func GetPipelineScan(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		orgID, _, ok := requirePipelineOrgToken(c, db)
+		orgID, _, _, ok := requirePipelineOrgAccess(c, db, models.OrgRoleViewer)
 		if !ok {
 			return
 		}
@@ -350,24 +346,54 @@ func parsePipelinePagination(c *gin.Context) (int, int) {
 	return page, limit
 }
 
-func requirePipelineOrgToken(c *gin.Context, db *bun.DB) (uuid.UUID, *models.Org, bool) {
+func requirePipelineOrgAccess(c *gin.Context, db *bun.DB, minRole string) (uuid.UUID, *models.Org, uuid.UUID, bool) {
 	orgID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
-		return uuid.Nil, nil, false
+		return uuid.Nil, nil, uuid.Nil, false
 	}
 
-	tokenOrgID, ok := authz.GetOrgTokenOrgID(c)
-	if !ok || tokenOrgID != orgID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "org token required"})
-		return uuid.Nil, nil, false
+	if tokenOrgID, isOrgToken := authz.GetOrgTokenOrgID(c); isOrgToken {
+		if tokenOrgID != orgID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient organization permissions"})
+			return uuid.Nil, nil, uuid.Nil, false
+		}
+		org, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, minRole)
+		if !ok {
+			return uuid.Nil, nil, uuid.Nil, false
+		}
+		return orgID, org, uuid.Nil, true
 	}
 
-	org, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, models.OrgRoleAdmin)
+	org, _, userID, _, ok := authz.RequireOrgRole(c, db, orgID, minRole)
 	if !ok {
-		return uuid.Nil, nil, false
+		return uuid.Nil, nil, uuid.Nil, false
 	}
-	return orgID, org, true
+	return orgID, org, userID, true
+}
+
+func resolvePipelineInitiator(c *gin.Context, db *bun.DB, userID uuid.UUID) (*uuid.UUID, string, error) {
+	ctx := c.Request.Context()
+	if userID != uuid.Nil {
+		user := &models.Users{}
+		if err := db.NewSelect().Model(user).Column("username", "email").Where("id = ?", userID).Scan(ctx); err != nil {
+			return nil, "", err
+		}
+		if label := strings.TrimSpace(user.Username); label != "" {
+			return nil, label, nil
+		}
+		return nil, strings.TrimSpace(user.Email), nil
+	}
+
+	tokenID, ok := authz.GetOrgTokenID(c)
+	if !ok {
+		return nil, "", errors.New("pipeline actor is missing")
+	}
+	token := &models.Tokens{}
+	if err := db.NewSelect().Model(token).Column("description").Where("id = ?", tokenID).Scan(ctx); err != nil {
+		return nil, "", err
+	}
+	return &tokenID, token.Description, nil
 }
 
 func resolvePipelineRegistry(ctx context.Context, db *bun.DB, orgID uuid.UUID, imageName, registryID string) (*models.Registry, []string, error) {

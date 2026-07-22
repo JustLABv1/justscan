@@ -70,7 +70,7 @@ func newRoot(version, commit, date string) *cobra.Command {
 	root.PersistentFlags().BoolVar(&opt.allowInsecureHTTP, "allow-insecure-http", false, "allow HTTP to non-loopback hosts")
 	root.PersistentFlags().BoolVar(&opt.tokenStdin, "token-stdin", false, "read bearer token from stdin")
 	root.PersistentFlags().StringVarP(&opt.output, "output", "o", "human", "output format: human or json")
-	root.AddCommand(newScanCommand(opt), newStatusCommand(opt), newConfigCommand(opt), newVersionCommand(opt), newCompletionCommand(root))
+	root.AddCommand(newLoginCommand(opt), newLogoutCommand(opt), newScanCommand(opt), newStatusCommand(opt), newConfigCommand(opt), newVersionCommand(opt), newCompletionCommand(root))
 	return root
 }
 
@@ -107,7 +107,7 @@ func resolveClient(cmd *cobra.Command, opt *options) (*Client, string, error) {
 	if _, err := uuid.Parse(orgID); err != nil {
 		return nil, "", fmt.Errorf("organization must be a UUID: %w", err)
 	}
-	token, err := resolveToken(opt)
+	token, err := resolveToken(opt, profileName, server)
 	if err != nil {
 		return nil, "", err
 	}
@@ -148,7 +148,7 @@ func strconvParseBool(value string) (bool, error) {
 	}
 }
 
-func resolveToken(opt *options) (string, error) {
+func resolveToken(opt *options, profileName, server string) (string, error) {
 	if opt.tokenStdin {
 		reader := bufio.NewReader(io.LimitReader(os.Stdin, 8193))
 		value, err := reader.ReadString('\n')
@@ -166,7 +166,12 @@ func resolveToken(opt *options) (string, error) {
 	if token := strings.TrimSpace(os.Getenv("JUSTSCAN_TOKEN")); token != "" {
 		return token, nil
 	}
-	return "", errors.New("authentication token is required; set JUSTSCAN_TOKEN or use --token-stdin")
+	if token, err := loadStoredToken(profileName, server); err != nil {
+		return "", err
+	} else if token != "" {
+		return token, nil
+	}
+	return "", errors.New("authentication required; run 'justscan login' or set JUSTSCAN_TOKEN for CI")
 }
 
 func newScanCommand(opt *options) *cobra.Command {

@@ -273,6 +273,37 @@ export interface ImageSummary {
   pipeline_initiator?: PipelineInitiator | null;
 }
 
+export interface ImageOverview {
+  image_name: string;
+  scan_count: number;
+  tag_count: number;
+  latest_scan_id: string;
+  latest_tag: string;
+  latest_status: string;
+  latest_external_status?: string;
+  latest_scan_at: string;
+  health_scan_id: string;
+  health_tag: string;
+  health_status: string;
+  health_external_status?: string;
+  health_critical_count: number;
+  health_high_count: number;
+  health_medium_count: number;
+  health_low_count: number;
+  health_policy_failed: boolean;
+}
+
+export interface ImageStats {
+  total_scans: number;
+  completed_scans: number;
+  failed_scans: number;
+  policy_available: boolean;
+  policy_passed_scans: number;
+  policy_failed_scans: number;
+  policy_evaluated_scans: number;
+  average_duration_ms: number;
+}
+
 /** The latest visible scan for one concrete image name and tag pair. */
 export interface ArtifactSummary {
   image_name: string;

@@ -20,7 +20,7 @@ interface FilterDisclosureTriggerProps {
 }
 
 export const filterDisclosureBodyClassName =
-  'mt-3 grid gap-3 rounded-xl border border-divider bg-surface-secondary/60 p-3';
+  'mt-2 flex flex-wrap items-center gap-2 border-t border-divider pt-2';
 
 export function FilterDisclosureTrigger({
   activeCount = 0,
@@ -28,7 +28,7 @@ export function FilterDisclosureTrigger({
 }: FilterDisclosureTriggerProps) {
   return (
     <Disclosure.Heading>
-      <Disclosure.Trigger className="inline-flex h-10 items-center gap-2 rounded-xl border border-divider bg-surface px-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+      <Disclosure.Trigger className="inline-flex h-10 items-center gap-2 rounded-xl border border-transparent bg-surface-secondary px-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
         <FilterIcon size={15} aria-hidden />
         {label}
         {activeCount > 0 ? (
@@ -52,14 +52,23 @@ export function FilterToolbar({
   return (
     <Toolbar
       aria-label="Filters"
-      className={cn('flex w-full flex-col gap-2 xl:flex-row xl:items-center xl:justify-between', className)}
+      className={cn(
+        'flex w-full flex-col gap-2 xl:flex-row xl:items-center xl:justify-between',
+        className
+      )}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-2 md:flex-row md:items-center">
         {search ? <div className="min-w-0 flex-1">{search}</div> : null}
-        {filters ? <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">{filters}</div> : null}
+        {filters ? (
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">{filters}</div>
+        ) : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2 xl:justify-end">{actions}</div> : null}
-      {activeFilters ? <div className="flex flex-wrap items-center gap-2">{activeFilters}</div> : null}
+      {actions ? (
+        <div className="flex flex-wrap items-center gap-2 xl:justify-end">{actions}</div>
+      ) : null}
+      {activeFilters ? (
+        <div className="flex flex-wrap items-center gap-2">{activeFilters}</div>
+      ) : null}
     </Toolbar>
   );
 }

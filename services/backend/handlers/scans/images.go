@@ -59,7 +59,10 @@ func latestImageStatusWhereClause(raw string) (string, []interface{}) {
 }
 
 // ListScanImages returns one summary row per distinct image name, ordered by most-recent scan.
-func ListScanImages(db *bun.DB) gin.HandlerFunc {
+// ListScanImagesLegacy is retained temporarily for reference while the image-first
+// overview lives in image_overview.go. Keeping this implementation separate avoids
+// changing the older response semantics used by historical integrations.
+func ListScanImagesLegacy(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
 		if !ok {

@@ -169,6 +169,13 @@ func ListScanArtifacts(db *bun.DB) gin.HandlerFunc {
 		scopeWhere, scopeArgs := scanScopeWhere(c, userID, "s")
 		searchWhere := "1=1"
 		var searchArgs []interface{}
+		imageWhere := "1=1"
+		var imageArgs []interface{}
+		if imageName := strings.TrimSpace(c.Query("image")); imageName != "" {
+			imageWhere = "s.image_name = ?"
+			imageArgs = append(imageArgs, imageName)
+		}
+		timeWhere, timeArgs := parseImageOverviewTime(c)
 		if query := strings.TrimSpace(c.Query("q")); query != "" {
 			pattern := "%" + query + "%"
 			searchWhere = `(
@@ -187,7 +194,9 @@ func ListScanArtifacts(db *bun.DB) gin.HandlerFunc {
 
 		baseArgs := append([]interface{}{}, userArgs...)
 		baseArgs = append(baseArgs, scopeArgs...)
+		baseArgs = append(baseArgs, imageArgs...)
 		baseArgs = append(baseArgs, searchArgs...)
+		baseArgs = append(baseArgs, timeArgs...)
 		latestStatusWhere, latestStatusArgs := latestImageStatusWhereClause(c.Query("status"))
 		criticalWhere := "1=1"
 		switch strings.TrimSpace(c.Query("critical")) {
@@ -223,7 +232,7 @@ WITH ranked AS (
             ORDER BY s.created_at DESC, s.id DESC
         ) AS row_number
     FROM scans s
-    WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + searchWhere + `
+    WHERE ` + userWhere + ` AND ` + scopeWhere + ` AND ` + imageWhere + ` AND ` + searchWhere + ` AND ` + timeWhere + `
 ), latest AS (
     SELECT * FROM ranked WHERE row_number = 1
 )

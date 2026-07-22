@@ -25,12 +25,6 @@ type pipelineCallbackRequest struct {
 	Secret string `json:"secret"`
 }
 
-type pipelineVerdictRequest struct {
-	FailOnSeverity  string `json:"fail_on_severity"`
-	FailOnScanError *bool  `json:"fail_on_scan_error"`
-	FailOnXrayBlock *bool  `json:"fail_on_xray_block"`
-}
-
 type createPipelineScanRequest struct {
 	Image          string                  `json:"image" binding:"required"`
 	Platform       string                  `json:"platform"`
@@ -40,7 +34,6 @@ type createPipelineScanRequest struct {
 	Source         string                  `json:"source"`
 	ExternalRef    string                  `json:"external_ref"`
 	Callback       pipelineCallbackRequest `json:"callback"`
-	Verdict        pipelineVerdictRequest  `json:"verdict"`
 }
 
 func CreatePipelineScan(db *bun.DB) gin.HandlerFunc {
@@ -50,6 +43,16 @@ func CreatePipelineScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		if !authz.EnsureOrgActionAllowed(c, org, "image_scan") {
+			return
+		}
+		tokenID, ok := authz.GetOrgTokenID(c)
+		if !ok {
+			c.JSON(http.StatusForbidden, gin.H{"error": "org token required"})
+			return
+		}
+		token := &models.Tokens{}
+		if err := db.NewSelect().Model(token).Column("description").Where("id = ?", tokenID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "org token required"})
 			return
 		}
 
@@ -92,7 +95,6 @@ func CreatePipelineScan(db *bun.DB) gin.HandlerFunc {
 		}
 		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTargetWithXrayRepository(imageName, imageTag, registry, req.XrayRepository)
 
-		verdictConfig := normalizePipelineVerdictRequest(req.Verdict)
 		now := time.Now().UTC()
 		scan := &models.Scan{
 			ImageName:    normalizedImageName,
@@ -133,13 +135,14 @@ func CreatePipelineScan(db *bun.DB) gin.HandlerFunc {
 				}
 			}
 			return pipelines.CreateScanRequest(ctx, tx, scan.ID.String(), orgID.String(), pipelines.ScanCreateConfig{
-				Source:      source,
-				ExternalRef: req.ExternalRef,
+				Source:                    source,
+				ExternalRef:               req.ExternalRef,
+				InitiatorTokenID:          &tokenID,
+				InitiatorTokenDescription: token.Description,
 				Callback: pipelines.CallbackConfig{
 					URL:    req.Callback.URL,
 					Secret: req.Callback.Secret,
 				},
-				VerdictConfig: verdictConfig,
 			})
 		})
 		if err != nil {
@@ -199,7 +202,13 @@ func GetPipelineScan(db *bun.DB) gin.HandlerFunc {
 		}
 
 		statusURL := buildPipelineStatusURL(c, orgID, scanID)
-		c.JSON(http.StatusOK, pipelines.BuildScanResult(req, scan, statusURL))
+		result, err := pipelines.BuildScanResult(c.Request.Context(), db, req, scan, statusURL)
+		if err != nil {
+			log.Errorf("GetPipelineScan verdict failed for %s: %v", scanID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to calculate pipeline verdict"})
+			return
+		}
+		c.JSON(http.StatusOK, result)
 	}
 }
 
@@ -218,7 +227,7 @@ func ListPipelineScans(db *bun.DB) gin.HandlerFunc {
 		}
 
 		page, limit := parsePipelinePagination(c)
-		total, err := db.NewSelect().Model((*models.PipelineScanRequest)(nil)).
+		total, err := db.NewSelect().TableExpr("pipeline_scan_requests").
 			Where("org_id = ?", orgID).
 			Count(c.Request.Context())
 		if err != nil {
@@ -226,13 +235,67 @@ func ListPipelineScans(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Keep the activity feed available during a rolling deployment: the
+		// attribution columns are optional until migration 78 has run.
+		hasInitiatorColumns, err := db.NewSelect().
+			TableExpr("information_schema.columns").
+			Where("table_schema = current_schema() AND table_name = ? AND column_name = ?", "pipeline_scan_requests", "initiator_token_description").
+			Exists(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to inspect pipeline scan schema"})
+			return
+		}
+
 		type pipelineScanRow struct {
-			models.PipelineScanRequest
-			Scan models.Scan `bun:"rel:belongs-to,join:scan_id=id" json:"scan"`
+			ID                        uuid.UUID  `bun:"id"`
+			ScanID                    uuid.UUID  `bun:"scan_id"`
+			Source                    string     `bun:"source"`
+			InitiatorTokenID          *uuid.UUID `bun:"initiator_token_id"`
+			InitiatorTokenDescription string     `bun:"initiator_token_description"`
+			ExternalRef               string     `bun:"external_ref"`
+			DeliveryStatus            string     `bun:"delivery_status"`
+			DeliveryAttemptCount      int        `bun:"delivery_attempt_count"`
+			LastDeliveryError         string     `bun:"last_delivery_error"`
+			LastAttemptAt             *time.Time `bun:"last_attempt_at"`
+			DeliveredAt               *time.Time `bun:"delivered_at"`
+			CreatedAt                 time.Time  `bun:"created_at"`
+			ScanIDValue               uuid.UUID  `bun:"scan__id"`
+			ScanImageName             string     `bun:"scan__image_name"`
+			ScanImageTag              string     `bun:"scan__image_tag"`
+			ScanStatus                string     `bun:"scan__status"`
+			ScanCurrentStep           string     `bun:"scan__current_step"`
+			ScanCriticalCount         int        `bun:"scan__critical_count"`
+			ScanHighCount             int        `bun:"scan__high_count"`
+			ScanCompletedAt           *time.Time `bun:"scan__completed_at"`
 		}
 		var rows []pipelineScanRow
-		if err := db.NewSelect().Model(&rows).
-			Relation("Scan").
+		query := db.NewSelect().
+			TableExpr("pipeline_scan_requests AS pipeline_scan_request").
+			Join("JOIN scans AS scan ON scan.id = pipeline_scan_request.scan_id").
+			ColumnExpr("pipeline_scan_request.id").
+			ColumnExpr("pipeline_scan_request.scan_id").
+			ColumnExpr("pipeline_scan_request.source").
+			ColumnExpr("pipeline_scan_request.external_ref").
+			ColumnExpr("pipeline_scan_request.delivery_status").
+			ColumnExpr("pipeline_scan_request.delivery_attempt_count").
+			ColumnExpr("pipeline_scan_request.last_delivery_error").
+			ColumnExpr("pipeline_scan_request.last_attempt_at").
+			ColumnExpr("pipeline_scan_request.delivered_at").
+			ColumnExpr("pipeline_scan_request.created_at").
+			ColumnExpr("scan.id AS scan__id").
+			ColumnExpr("scan.image_name AS scan__image_name").
+			ColumnExpr("scan.image_tag AS scan__image_tag").
+			ColumnExpr("scan.status AS scan__status").
+			ColumnExpr("scan.current_step AS scan__current_step").
+			ColumnExpr("scan.critical_count AS scan__critical_count").
+			ColumnExpr("scan.high_count AS scan__high_count").
+			ColumnExpr("scan.completed_at AS scan__completed_at")
+		if hasInitiatorColumns {
+			query = query.
+				ColumnExpr("pipeline_scan_request.initiator_token_id").
+				ColumnExpr("pipeline_scan_request.initiator_token_description")
+		}
+		if err := query.
 			Where("pipeline_scan_request.org_id = ?", orgID).
 			OrderExpr("pipeline_scan_request.created_at DESC").
 			Limit(limit).
@@ -245,9 +308,14 @@ func ListPipelineScans(db *bun.DB) gin.HandlerFunc {
 		data := make([]gin.H, 0, len(rows))
 		for _, row := range rows {
 			data = append(data, gin.H{
-				"id":                     row.ID,
-				"scan_id":                row.ScanID,
-				"source":                 row.Source,
+				"id":      row.ID,
+				"scan_id": row.ScanID,
+				"source":  row.Source,
+				"initiator": gin.H{
+					"source":            row.Source,
+					"token_id":          row.InitiatorTokenID,
+					"token_description": row.InitiatorTokenDescription,
+				},
 				"external_ref":           row.ExternalRef,
 				"delivery_status":        row.DeliveryStatus,
 				"delivery_attempt_count": row.DeliveryAttemptCount,
@@ -256,14 +324,14 @@ func ListPipelineScans(db *bun.DB) gin.HandlerFunc {
 				"delivered_at":           row.DeliveredAt,
 				"created_at":             row.CreatedAt,
 				"scan": gin.H{
-					"id":             row.Scan.ID,
-					"image_name":     row.Scan.ImageName,
-					"image_tag":      row.Scan.ImageTag,
-					"status":         row.Scan.Status,
-					"current_step":   row.Scan.CurrentStep,
-					"critical_count": row.Scan.CriticalCount,
-					"high_count":     row.Scan.HighCount,
-					"completed_at":   row.Scan.CompletedAt,
+					"id":             row.ScanIDValue,
+					"image_name":     row.ScanImageName,
+					"image_tag":      row.ScanImageTag,
+					"status":         row.ScanStatus,
+					"current_step":   row.ScanCurrentStep,
+					"critical_count": row.ScanCriticalCount,
+					"high_count":     row.ScanHighCount,
+					"completed_at":   row.ScanCompletedAt,
 				},
 			})
 		}
@@ -346,26 +414,6 @@ func resolvePipelineRegistry(ctx context.Context, db *bun.DB, orgID uuid.UUID, i
 	}
 
 	return nil, nil, nil
-}
-
-func normalizePipelineVerdictRequest(req pipelineVerdictRequest) models.PipelineVerdictConfig {
-	failOnScanError := true
-	if req.FailOnScanError != nil {
-		failOnScanError = *req.FailOnScanError
-	}
-	failOnXrayBlock := true
-	if req.FailOnXrayBlock != nil {
-		failOnXrayBlock = *req.FailOnXrayBlock
-	}
-	severity := strings.TrimSpace(strings.ToLower(req.FailOnSeverity))
-	if severity == "" {
-		severity = "high"
-	}
-	return models.PipelineVerdictConfig{
-		FailOnSeverity:  severity,
-		FailOnScanError: failOnScanError,
-		FailOnXrayBlock: failOnXrayBlock,
-	}
 }
 
 func buildPipelineStatusURL(c *gin.Context, orgID, scanID uuid.UUID) string {

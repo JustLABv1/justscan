@@ -170,9 +170,9 @@ func resolveToken(opt *options) (string, error) {
 }
 
 func newScanCommand(opt *options) *cobra.Command {
-	var registryID, platform, xrayRepository, source, externalRef, severity string
+	var registryID, platform, xrayRepository, source, externalRef string
 	var tagIDs []string
-	var failOnScanError, failOnXrayBlock, noWait bool
+	var noWait bool
 	var timeout, pollInterval time.Duration
 	cmd := &cobra.Command{
 		Use:   "scan IMAGE",
@@ -182,14 +182,14 @@ func newScanCommand(opt *options) *cobra.Command {
 			if err := validateOutput(opt.output); err != nil {
 				return &exitError{code: 2, err: err}
 			}
-			if err := validateScanOptions(registryID, tagIDs, source, severity, timeout, pollInterval, noWait); err != nil {
+			if err := validateScanOptions(registryID, tagIDs, source, timeout, pollInterval, noWait); err != nil {
 				return &exitError{code: 2, err: err}
 			}
 			client, orgID, err := resolveClient(cmd, opt)
 			if err != nil {
 				return &exitError{code: 2, err: err}
 			}
-			accepted, err := client.CreateScan(orgID, ScanRequest{Image: args[0], Platform: platform, RegistryID: registryID, XrayRepository: xrayRepository, TagIDs: tagIDs, Source: source, ExternalRef: externalRef, Verdict: Verdict{FailOnSeverity: severity, FailOnScanError: failOnScanError, FailOnXrayBlock: failOnXrayBlock}})
+			accepted, err := client.CreateScan(orgID, ScanRequest{Image: args[0], Platform: platform, RegistryID: registryID, XrayRepository: xrayRepository, TagIDs: tagIDs, Source: source, ExternalRef: externalRef})
 			if err != nil {
 				return &exitError{code: 2, err: err}
 			}
@@ -210,11 +210,8 @@ func newScanCommand(opt *options) *cobra.Command {
 	cmd.Flags().StringVar(&platform, "platform", "", "target platform")
 	cmd.Flags().StringVar(&xrayRepository, "xray-repository", "", "Artifactory Xray repository")
 	cmd.Flags().StringSliceVar(&tagIDs, "tag-id", nil, "scan tag UUID (repeatable)")
-	cmd.Flags().StringVar(&source, "source", "generic", "pipeline source")
+	cmd.Flags().StringVar(&source, "source", "justscan_cli", "pipeline source")
 	cmd.Flags().StringVar(&externalRef, "external-ref", "", "external build or pipeline reference")
-	cmd.Flags().StringVar(&severity, "fail-on", "high", "minimum severity that fails the verdict")
-	cmd.Flags().BoolVar(&failOnScanError, "fail-on-scan-error", true, "fail when scan execution errors")
-	cmd.Flags().BoolVar(&failOnXrayBlock, "fail-on-xray-block", true, "fail when Xray blocks the image")
 	cmd.Flags().DurationVar(&timeout, "timeout", 30*time.Minute, "maximum wait duration")
 	cmd.Flags().DurationVar(&pollInterval, "poll-interval", 5*time.Second, "scan status polling interval")
 	cmd.Flags().BoolVar(&noWait, "no-wait", false, "return after scan acceptance")
@@ -263,7 +260,7 @@ func newStatusCommand(opt *options) *cobra.Command {
 	return cmd
 }
 
-func validateScanOptions(registryID string, tagIDs []string, source, severity string, timeout, interval time.Duration, noWait bool) error {
+func validateScanOptions(registryID string, tagIDs []string, source string, timeout, interval time.Duration, noWait bool) error {
 	if registryID != "" {
 		if _, err := uuid.Parse(registryID); err != nil {
 			return fmt.Errorf("registry ID must be a UUID: %w", err)
@@ -274,11 +271,8 @@ func validateScanOptions(registryID string, tagIDs []string, source, severity st
 			return fmt.Errorf("tag ID must be a UUID: %w", err)
 		}
 	}
-	if !contains([]string{"generic", "github_actions", "gitlab_ci", "n8n"}, source) {
-		return errors.New("source must be generic, github_actions, gitlab_ci, or n8n")
-	}
-	if !contains([]string{"none", "low", "medium", "high", "critical"}, severity) {
-		return errors.New("fail-on must be none, low, medium, high, or critical")
+	if !contains([]string{"generic", "justscan_cli", "github_actions", "gitlab_ci", "n8n"}, source) {
+		return errors.New("source must be justscan_cli, generic, github_actions, gitlab_ci, or n8n")
 	}
 	if !noWait && (timeout <= 0 || interval <= 0) {
 		return errors.New("timeout and poll interval must be positive")

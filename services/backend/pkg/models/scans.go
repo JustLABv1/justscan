@@ -59,6 +59,7 @@ type Scan struct {
 	HelmSourcePath          string                 `bun:"helm_source_path,type:text,default:''" json:"helm_source_path,omitempty"`
 	BlockedPolicyDetails    *BlockedPolicyDetails  `bun:"-" json:"blocked_policy_details,omitempty"`
 	ComplianceSummary       *ScanComplianceSummary `bun:"-" json:"compliance_summary,omitempty"`
+	PipelineInitiator       *PipelineInitiator     `bun:"-" json:"pipeline_initiator,omitempty"`
 
 	// Relations (not stored in DB, populated on join)
 	Tags            []Tag            `bun:"m2m:scan_tags,join:Scan=Tag" json:"tags,omitempty"`

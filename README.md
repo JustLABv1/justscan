@@ -71,7 +71,7 @@ justscan config set production \
   --server https://justscan.example.com \
   --org 00000000-0000-0000-0000-000000000000
 export JUSTSCAN_TOKEN="<pipeline-scoped-org-token>"
-justscan scan registry.example.com/my-app:1.2.3 --fail-on high
+justscan scan registry.example.com/my-app:1.2.3
 ```
 
 See [the CLI guide](services/cli/README.md) and [the CI/CD API guide](docs/ci-cd-pipeline-api.md)

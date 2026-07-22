@@ -44,7 +44,7 @@ func TestClientCreatesAndReadsPipelineScan(t *testing.T) {
 		t.Fatal(err)
 	}
 	orgID := "c7a11e8d-82a2-43fc-a978-a0319b1c7130"
-	accepted, err := client.CreateScan(orgID, ScanRequest{Image: "example/app:latest", Verdict: Verdict{FailOnSeverity: "high", FailOnScanError: true, FailOnXrayBlock: true}})
+	accepted, err := client.CreateScan(orgID, ScanRequest{Image: "example/app:latest"})
 	if err != nil || accepted.ScanID != orgID {
 		t.Fatalf("CreateScan() = %#v, %v", accepted, err)
 	}

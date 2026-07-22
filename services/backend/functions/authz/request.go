@@ -87,6 +87,16 @@ func GetOrgTokenOrgID(c *gin.Context) (uuid.UUID, bool) {
 	return orgID, ok
 }
 
+// GetOrgTokenID returns the ID of the org-scoped token that authenticated the request.
+func GetOrgTokenID(c *gin.Context) (uuid.UUID, bool) {
+	val, ok := c.Get(middlewares.AuthContextOrgTokenIDKey)
+	if !ok {
+		return uuid.Nil, false
+	}
+	tokenID, ok := val.(uuid.UUID)
+	return tokenID, ok
+}
+
 func RequireOrgRole(c *gin.Context, db *bun.DB, orgID uuid.UUID, minRole string) (*models.Org, *models.OrgMember, uuid.UUID, bool, bool) {
 	// Org token service-account path: grant access when the token is scoped to the requested org.
 	if tokenOrgID, isOrgToken := GetOrgTokenOrgID(c); isOrgToken {

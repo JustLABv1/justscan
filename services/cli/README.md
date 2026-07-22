@@ -21,8 +21,11 @@ export JUSTSCAN_URL="https://justscan.example.com"
 export JUSTSCAN_ORG_ID="00000000-0000-0000-0000-000000000000"
 export JUSTSCAN_TOKEN="<pipeline-token>"
 
-justscan scan registry.example.com/my-app:1.2.3 --fail-on high
+justscan scan registry.example.com/my-app:1.2.3
 ```
+
+CLI-submitted scans are recorded in the organization’s **Recent pipeline runs** and display the
+token label that initiated them in the scan list and scan details.
 
 The command waits for a final verdict by default. Exit code `0` is a pass, `1` is a policy
 failure, and `2` indicates an operational or scan-execution error.

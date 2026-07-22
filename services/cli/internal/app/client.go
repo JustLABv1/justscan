@@ -45,13 +45,6 @@ type ScanRequest struct {
 	TagIDs         []string `json:"tag_ids,omitempty"`
 	Source         string   `json:"source,omitempty"`
 	ExternalRef    string   `json:"external_ref,omitempty"`
-	Verdict        Verdict  `json:"verdict"`
-}
-
-type Verdict struct {
-	FailOnSeverity  string `json:"fail_on_severity"`
-	FailOnScanError bool   `json:"fail_on_scan_error"`
-	FailOnXrayBlock bool   `json:"fail_on_xray_block"`
 }
 
 type AcceptedScan struct {

@@ -38,10 +38,11 @@ type CallbackConfig struct {
 }
 
 type ScanCreateConfig struct {
-	Source        string
-	ExternalRef   string
-	Callback      CallbackConfig
-	VerdictConfig models.PipelineVerdictConfig
+	Source                    string
+	ExternalRef               string
+	InitiatorTokenID          *uuid.UUID
+	InitiatorTokenDescription string
+	Callback                  CallbackConfig
 }
 
 type CallbackStatus struct {
@@ -103,6 +104,8 @@ func NormalizeSource(raw string) string {
 	switch strings.TrimSpace(strings.ToLower(raw)) {
 	case "", models.PipelineSourceGeneric:
 		return models.PipelineSourceGeneric
+	case models.PipelineSourceJustScanCLI:
+		return models.PipelineSourceJustScanCLI
 	case models.PipelineSourceGitHubActions:
 		return models.PipelineSourceGitHubActions
 	case models.PipelineSourceGitLabCI:
@@ -111,18 +114,6 @@ func NormalizeSource(raw string) string {
 		return models.PipelineSourceN8N
 	default:
 		return ""
-	}
-}
-
-func NormalizeVerdictConfig(cfg models.PipelineVerdictConfig) models.PipelineVerdictConfig {
-	severity := normalizeSeverity(strings.TrimSpace(cfg.FailOnSeverity))
-	if severity == "" {
-		severity = "high"
-	}
-	return models.PipelineVerdictConfig{
-		FailOnSeverity:  severity,
-		FailOnScanError: cfg.FailOnScanError,
-		FailOnXrayBlock: cfg.FailOnXrayBlock,
 	}
 }
 
@@ -161,16 +152,17 @@ func CreateScanRequest(ctx context.Context, db bun.IDB, scanID, orgID string, cf
 
 	now := time.Now().UTC()
 	req := &models.PipelineScanRequest{
-		ScanID:                  *parsedScanID,
-		OrgID:                   *parsedOrgID,
-		Source:                  NormalizeSource(cfg.Source),
-		ExternalRef:             strings.TrimSpace(cfg.ExternalRef),
-		CallbackURL:             strings.TrimSpace(cfg.Callback.URL),
-		EncryptedCallbackSecret: encryptedSecret,
-		VerdictConfig:           NormalizeVerdictConfig(cfg.VerdictConfig),
-		DeliveryStatus:          deliveryStatus,
-		CreatedAt:               now,
-		UpdatedAt:               now,
+		ScanID:                    *parsedScanID,
+		OrgID:                     *parsedOrgID,
+		Source:                    NormalizeSource(cfg.Source),
+		InitiatorTokenID:          cfg.InitiatorTokenID,
+		InitiatorTokenDescription: strings.TrimSpace(cfg.InitiatorTokenDescription),
+		ExternalRef:               strings.TrimSpace(cfg.ExternalRef),
+		CallbackURL:               strings.TrimSpace(cfg.Callback.URL),
+		EncryptedCallbackSecret:   encryptedSecret,
+		DeliveryStatus:            deliveryStatus,
+		CreatedAt:                 now,
+		UpdatedAt:                 now,
 	}
 	if req.Source == "" {
 		req.Source = models.PipelineSourceGeneric
@@ -221,10 +213,14 @@ func QueueCallbackForScan(ctx context.Context, db bun.IDB, scanID string) error 
 	return err
 }
 
-func BuildScanResult(req *models.PipelineScanRequest, scan *models.Scan, statusURL string) ScanResult {
+func BuildScanResult(ctx context.Context, db bun.IDB, req *models.PipelineScanRequest, scan *models.Scan, statusURL string) (ScanResult, error) {
 	verdict := models.PipelineVerdictPending
 	if req != nil && scan != nil {
-		verdict = ComputeVerdict(req.VerdictConfig, scan)
+		policyCount, policyResults, err := loadPolicyResults(ctx, db, req.OrgID, scan.ID)
+		if err != nil {
+			return ScanResult{}, err
+		}
+		verdict = ComputeVerdict(scan, policyCount, policyResults)
 	}
 
 	result := ScanResult{
@@ -260,10 +256,12 @@ func BuildScanResult(req *models.PipelineScanRequest, scan *models.Scan, statusU
 			DeliveredAt:   req.DeliveredAt,
 		}
 	}
-	return result
+	return result, nil
 }
 
-func ComputeVerdict(cfg models.PipelineVerdictConfig, scan *models.Scan) string {
+// ComputeVerdict turns the completed scan and its organization policy results
+// into the verdict exposed to CI. Policy rules are the only security gate.
+func ComputeVerdict(scan *models.Scan, policyCount int, policyResults []models.ComplianceResult) string {
 	if scan == nil {
 		return models.PipelineVerdictError
 	}
@@ -271,22 +269,36 @@ func ComputeVerdict(cfg models.PipelineVerdictConfig, scan *models.Scan) string 
 		return models.PipelineVerdictPending
 	}
 
-	cfg = NormalizeVerdictConfig(cfg)
-
-	if scan.Status == models.ScanStatusFailed {
-		if scan.ExternalStatus == models.ScanExternalStatusBlockedByXrayPolicy && cfg.FailOnXrayBlock {
+	if len(policyResults) < policyCount {
+		return models.PipelineVerdictPending
+	}
+	for _, result := range policyResults {
+		if result.Status == "fail" {
 			return models.PipelineVerdictFail
 		}
-		if cfg.FailOnScanError && scan.ExternalStatus != models.ScanExternalStatusBlockedByXrayPolicy {
-			return models.PipelineVerdictError
-		}
 	}
-
-	if exceedsSeverityThreshold(cfg.FailOnSeverity, scan) {
-		return models.PipelineVerdictFail
+	if scan.Status == models.ScanStatusFailed {
+		return models.PipelineVerdictError
 	}
-
 	return models.PipelineVerdictPass
+}
+
+func loadPolicyResults(ctx context.Context, db bun.IDB, orgID, scanID uuid.UUID) (int, []models.ComplianceResult, error) {
+	policyCount, err := db.NewSelect().Model((*models.OrgPolicy)(nil)).Where("org_id = ?", orgID).Count(ctx)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	var results []models.ComplianceResult
+	if err := db.NewSelect().
+		Model(&results).
+		Join("JOIN org_policies AS policy ON policy.id = compliance_result.policy_id").
+		Where("compliance_result.scan_id = ?", scanID).
+		Where("compliance_result.org_id = ?", orgID).
+		Scan(ctx); err != nil {
+		return 0, nil, err
+	}
+	return policyCount, results, nil
 }
 
 func runCallbackWorker(ctx context.Context, db *bun.DB) {
@@ -343,7 +355,13 @@ func deliverCallback(ctx context.Context, db *bun.DB, req *models.PipelineScanRe
 		return nil
 	}
 
-	result := BuildScanResult(req, scan, buildPipelineStatusURL(req.OrgID.String(), req.ScanID.String()))
+	result, err := BuildScanResult(ctx, db, req, scan, buildPipelineStatusURL(req.OrgID.String(), req.ScanID.String()))
+	if err != nil {
+		return markCallbackFailure(ctx, db, req, err, true)
+	}
+	if result.Verdict == models.PipelineVerdictPending {
+		return nil
+	}
 	body, err := json.Marshal(result)
 	if err != nil {
 		return markCallbackFailure(ctx, db, req, err, true)
@@ -500,38 +518,4 @@ func parseUUID(value string) *uuid.UUID {
 		return nil
 	}
 	return &parsed
-}
-
-func normalizeSeverity(raw string) string {
-	switch strings.TrimSpace(strings.ToLower(raw)) {
-	case "", "none":
-		return "none"
-	case models.SeverityCritical:
-		return models.SeverityCritical
-	case models.SeverityHigh:
-		return models.SeverityHigh
-	case models.SeverityMedium:
-		return models.SeverityMedium
-	case models.SeverityLow:
-		return models.SeverityLow
-	default:
-		return ""
-	}
-}
-
-func exceedsSeverityThreshold(threshold string, scan *models.Scan) bool {
-	switch normalizeSeverity(threshold) {
-	case "none":
-		return false
-	case models.SeverityCritical:
-		return scan.CriticalCount > 0
-	case models.SeverityHigh:
-		return scan.CriticalCount > 0 || scan.HighCount > 0
-	case models.SeverityMedium:
-		return scan.CriticalCount > 0 || scan.HighCount > 0 || scan.MediumCount > 0
-	case models.SeverityLow:
-		return scan.CriticalCount > 0 || scan.HighCount > 0 || scan.MediumCount > 0 || scan.LowCount > 0
-	default:
-		return scan.CriticalCount > 0 || scan.HighCount > 0
-	}
 }

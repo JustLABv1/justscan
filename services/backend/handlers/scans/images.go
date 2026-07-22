@@ -34,6 +34,7 @@ type ImageSummary struct {
 	HasUnassignedScans   bool                          `json:"has_unassigned_scans"`
 	ComplianceSummary    *models.ScanComplianceSummary `json:"compliance_summary,omitempty"`
 	Collections          []models.ScanCollection       `json:"collections,omitempty"`
+	PipelineInitiator    *models.PipelineInitiator     `json:"pipeline_initiator,omitempty"`
 }
 
 func latestImageStatusWhereClause(raw string) (string, []interface{}) {
@@ -317,6 +318,27 @@ WHERE ` + imageCollectionsUserWhere + ` AND ` + imageCollectionsScopeWhere + ` A
 					continue
 				}
 				images[index].ComplianceSummary = summary
+			}
+		}
+
+		latestScanIDs := make([]uuid.UUID, 0, len(images))
+		imageIndexByScanID := make(map[uuid.UUID]int, len(images))
+		for index, image := range images {
+			scanID, parseErr := uuid.Parse(strings.TrimSpace(image.LatestScanID))
+			if parseErr != nil {
+				continue
+			}
+			latestScanIDs = append(latestScanIDs, scanID)
+			imageIndexByScanID[scanID] = index
+		}
+		initiators, initiatorErr := loadPipelineInitiators(c.Request.Context(), db, latestScanIDs)
+		if initiatorErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan initiators"})
+			return
+		}
+		for scanID, initiator := range initiators {
+			if index, found := imageIndexByScanID[scanID]; found {
+				images[index].PipelineInitiator = initiator
 			}
 		}
 

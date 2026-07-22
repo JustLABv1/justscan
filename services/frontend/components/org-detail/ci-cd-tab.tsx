@@ -10,7 +10,7 @@ import {
 } from '@/lib/api';
 import { getApiBase } from '@/lib/api/base';
 import { deferEffect } from '@/lib/defer-effect';
-import { Alert, Button, Card, Chip, Label, ListBox, Select } from '@heroui/react';
+import { Alert, Button, ButtonGroup, Card, Chip, Label, ListBox, Select } from '@heroui/react';
 import { Copy01Icon, Download01Icon, Key01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -28,7 +28,15 @@ function defaultPublicURL() {
   return getApiBase() || window.location.origin;
 }
 
-function CodeBlock({ label, value }: { label: string; value: string }) {
+function CodeBlock({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -42,7 +50,9 @@ function CodeBlock({ label, value }: { label: string; value: string }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-divider bg-surface-secondary">
+    <div
+      className={`flex flex-col overflow-hidden rounded-2xl border border-divider bg-surface-secondary ${className ?? ''}`}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-divider px-4 py-2.5">
         <span className="text-xs font-medium text-muted">{label}</span>
         <Button size="sm" variant="secondary" onPress={() => void copy()}>
@@ -50,7 +60,7 @@ function CodeBlock({ label, value }: { label: string; value: string }) {
           {copied ? 'Copied' : 'Copy'}
         </Button>
       </div>
-      <pre className="overflow-auto p-4 text-xs leading-relaxed">
+      <pre className="flex-1 overflow-auto p-4 text-xs leading-relaxed">
         <code>{value}</code>
       </pre>
     </div>
@@ -164,22 +174,21 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
             for CI/CD. JustScan does the scanning; the CLI only talks to this instance.
           </Card.Description>
         </Card.Header>
-        <Card.Content className="space-y-5">
-          <div className="grid gap-3 lg:grid-cols-2">
-            <CopyValue label="JustScan instance URL" value={publicURL} />
-            <CopyValue label="Organization ID" value={org.id} />
-          </div>
-
-          <Card variant="secondary">
-            <Card.Header>
-              <Card.Title>Get the JustScan CLI</Card.Title>
-              <Card.Description>
-                Download the latest release for your platform. Use{' '}
-                <code>justscan version --check</code> anytime to see whether a newer version is
-                available.
-              </Card.Description>
-            </Card.Header>
-            <Card.Content className="flex flex-wrap gap-2">
+        <Card.Content className="space-y-8">
+          <section className="flex flex-wrap items-center justify-between gap-4 border-b border-divider pb-6">
+            <div className="flex items-start gap-3">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">
+                1
+              </span>
+              <div>
+                <p className="text-sm font-medium">Install the CLI</p>
+                <p className="mt-1 text-xs text-muted">
+                  Download the latest release. Run <code>justscan version --check</code> later to
+                  check for updates.
+                </p>
+              </div>
+            </div>
+            <ButtonGroup size="sm">
               <Button
                 variant="primary"
                 render={(props: any) => (
@@ -192,10 +201,10 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                 )}
               >
                 <Download01Icon size={15} />
-                Download latest CLI
+                Download CLI
               </Button>
               <Button
-                variant="outline"
+                variant="secondary"
                 render={(props: any) => (
                   <a
                     {...props}
@@ -205,103 +214,131 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                   />
                 )}
               >
-                View CLI guide
+                CLI guide
               </Button>
-            </Card.Content>
-          </Card>
+            </ButtonGroup>
+          </section>
 
-          <div className="flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-divider bg-surface-tertiary p-4">
-            <div>
-              <p className="text-sm font-medium">Create a pipeline token</p>
-              <p className="mt-1 text-xs text-muted">
-                It can create and read scans for {org.name} only. It cannot administer the
-                organization.
-              </p>
-              <Link
-                href={`/orgs/${org.id}?tab=access&section=tokens`}
-                className="mt-2 inline-flex text-xs font-medium text-accent hover:underline"
-              >
-                Manage existing CLI tokens
-              </Link>
+          <section className="space-y-3 border-b border-divider pb-6">
+            <div className="flex items-start gap-3">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-tertiary text-xs font-semibold text-muted">
+                2
+              </span>
+              <div>
+                <p className="text-sm font-medium">Connect to this organization</p>
+                <p className="mt-1 text-xs text-muted">Copy these values into your CLI profile.</p>
+              </div>
             </div>
-            <div className="flex flex-wrap items-end gap-2">
-              {canManageTokens ? (
-                <>
-                  <Select
-                    aria-label="CLI token lifetime"
-                    value={tokenLifetime}
-                    onChange={(value) =>
-                      setTokenLifetime(String(value ?? CLI_TOKEN_LIFETIMES[1].value))
-                    }
-                    variant="primary"
-                    className="min-w-36"
-                  >
-                    <Label>Token lifetime</Label>
-                    <Select.Trigger className="border border-divider bg-surface-secondary shadow-sm">
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover className="border border-divider bg-surface shadow-lg">
-                      <ListBox>
-                        {CLI_TOKEN_LIFETIMES.map((option) => (
-                          <ListBox.Item
-                            key={option.value}
-                            id={String(option.value)}
-                            textValue={option.label}
-                          >
-                            {option.label}
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                  <Button isDisabled={creatingToken} onPress={() => void createCredential()}>
-                    <Key01Icon size={15} />
-                    {creatingToken ? 'Creating…' : 'Create CLI token'}
-                  </Button>
-                </>
-              ) : null}
+            <div className="grid gap-3 lg:grid-cols-2">
+              <CopyValue label="JustScan instance URL" value={publicURL} />
+              <CopyValue label="Organization ID" value={org.id} />
             </div>
-          </div>
+          </section>
 
-          {tokenError ? <FormAlert description={tokenError} title="Token creation failed" /> : null}
-          {token ? (
-            <>
-              <Alert status="warning" className="border-warning/40 bg-warning/15">
-                <Alert.Indicator />
-                <Alert.Content>
-                  <Alert.Title>Copy this token now</Alert.Title>
-                  <Alert.Description>
-                    It is shown only once. Store it in a secret manager or CI secret, never in a
-                    profile or source file.
-                  </Alert.Description>
-                </Alert.Content>
-              </Alert>
-              <CodeBlock label="Pipeline token" value={token} />
-            </>
-          ) : null}
-
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm font-medium">For local development</p>
-              <p className="mt-1 text-xs text-muted">
-                Sign in with your own JustScan account. The CLI stores the session securely in
-                your operating system’s keychain.
-              </p>
+          <section className="space-y-5">
+            <div className="flex items-start gap-3">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-tertiary text-xs font-semibold text-muted">
+                3
+              </span>
+              <div>
+                <p className="text-sm font-medium">Choose how you will use the CLI</p>
+                <p className="mt-1 text-xs text-muted">
+                  Sign in for interactive work, or create a dedicated token for CI/CD.
+                </p>
+              </div>
             </div>
-            <CodeBlock label="Personal terminal setup" value={personalTerminalSetup} />
-          </div>
 
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm font-medium">For CI/CD</p>
-              <p className="mt-1 text-xs text-muted">
-                Create a pipeline token above and save it as a secret in your CI provider. Do not
-                use this token for interactive work.
-              </p>
+            <div className="grid items-stretch gap-8 xl:grid-cols-2">
+              <div className="flex h-full flex-col gap-3">
+                <div>
+                  <p className="text-sm font-medium">Personal terminal</p>
+                  <p className="mt-1 text-xs text-muted">
+                    Sign in with your own JustScan account; the CLI stores the session in your
+                    operating system’s keychain.
+                  </p>
+                </div>
+                <CodeBlock
+                  label="Personal setup"
+                  value={personalTerminalSetup}
+                  className="flex-1"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium">CI/CD pipeline</p>
+                  <p className="mt-1 text-xs text-muted">
+                    Create a least-privilege token, then store it as a secret in your CI provider.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-divider bg-surface-secondary p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium">Pipeline token</p>
+                    <Link
+                      href={`/orgs/${org.id}?tab=access&section=tokens`}
+                      className="text-xs font-medium text-accent hover:underline"
+                    >
+                      Manage tokens
+                    </Link>
+                  </div>
+                  {canManageTokens ? (
+                    <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+                      <Select
+                        aria-label="CLI token lifetime"
+                        value={tokenLifetime}
+                        onChange={(value) =>
+                          setTokenLifetime(String(value ?? CLI_TOKEN_LIFETIMES[1].value))
+                        }
+                        variant="primary"
+                        className="min-w-36 flex-1"
+                      >
+                        <Label>Token lifetime</Label>
+                        <Select.Trigger className="border border-divider bg-surface shadow-sm">
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover className="border border-divider bg-surface shadow-lg">
+                          <ListBox>
+                            {CLI_TOKEN_LIFETIMES.map((option) => (
+                              <ListBox.Item
+                                key={option.value}
+                                id={String(option.value)}
+                                textValue={option.label}
+                              >
+                                {option.label}
+                              </ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                      <Button isDisabled={creatingToken} onPress={() => void createCredential()}>
+                        <Key01Icon size={15} />
+                        {creatingToken ? 'Creating…' : 'Create token'}
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+
+                {tokenError ? <FormAlert description={tokenError} title="Token creation failed" /> : null}
+                {token ? (
+                  <>
+                    <Alert status="warning" className="border-warning/40 bg-warning/15">
+                      <Alert.Indicator />
+                      <Alert.Content>
+                        <Alert.Title>Copy this token now</Alert.Title>
+                        <Alert.Description>
+                          It is shown only once. Store it in a secret manager or CI secret, never
+                          in a profile or source file.
+                        </Alert.Description>
+                      </Alert.Content>
+                    </Alert>
+                    <CodeBlock label="Pipeline token" value={token} />
+                  </>
+                ) : null}
+                <CodeBlock label="CI/CD setup" value={pipelineTerminalSetup} />
+              </div>
             </div>
-            <CodeBlock label="CI/CD terminal setup" value={pipelineTerminalSetup} />
-          </div>
+          </section>
         </Card.Content>
       </Card>
 

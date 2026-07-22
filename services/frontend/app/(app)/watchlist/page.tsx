@@ -60,7 +60,6 @@ import {
   Spinner,
   Switch,
   Table,
-  Tabs,
   useOverlayState,
 } from '@heroui/react';
 import {
@@ -666,45 +665,15 @@ export default function WatchlistPage() {
           action={canMutateActiveScope ? { label: 'Add Image', onClick: openCreate } : undefined}
         />
       ) : (
-        <Card className="overflow-hidden">
-          <Card.Content className="gap-4 border-b border-divider py-4">
-            <Tabs
-              variant="secondary"
-              selectedKey={focusFilter}
-              onSelectionChange={(key) => setFocusFilter(String(key) as WatchlistFocus)}
-            >
-              <Tabs.ListContainer className="overflow-x-auto">
-                <Tabs.List aria-label="Watchlist focus" className="min-w-max gap-1">
-                  {[
-                    { id: 'all' as const, label: 'All' },
-                    { id: 'attention' as const, label: 'Attention' },
-                    { id: 'stale' as const, label: 'Stale' },
-                    { id: 'never_scanned' as const, label: 'Never scanned' },
-                    { id: 'healthy' as const, label: 'Healthy' },
-                  ].map((option) => (
-                    <Tabs.Tab key={option.id} className="whitespace-nowrap" id={option.id}>
-                      {option.label}
-                      <Chip size="sm" variant="soft" className="ml-1 font-mono">
-                        {focusCounts[option.id]}
-                      </Chip>
-                      <Tabs.Indicator />
-                    </Tabs.Tab>
-                  ))}
-                </Tabs.List>
-              </Tabs.ListContainer>
-            </Tabs>
-
+        <>
+          <Card className="p-3">
             <Disclosure
               isExpanded={showFilters}
               onExpandedChange={setShowFilters}
               className="contents"
             >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <SearchField
-                  name="watchlist-search"
-                  variant="secondary"
-                  className="w-full sm:max-w-sm"
-                >
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+                <SearchField name="watchlist-search" variant="secondary" className="min-w-0 flex-1">
                   <SearchField.Group>
                     <SearchField.SearchIcon />
                     <SearchField.Input
@@ -715,7 +684,34 @@ export default function WatchlistPage() {
                     <SearchField.ClearButton />
                   </SearchField.Group>
                 </SearchField>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select
+                    aria-label="Watchlist focus"
+                    value={focusFilter}
+                    onChange={(value) => setFocusFilter(String(value ?? 'all') as WatchlistFocus)}
+                    variant="secondary"
+                    className="min-w-[180px]"
+                  >
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {[
+                          { id: 'all', label: 'All' },
+                          { id: 'attention', label: 'Attention' },
+                          { id: 'stale', label: 'Stale' },
+                          { id: 'never_scanned', label: 'Never scanned' },
+                          { id: 'healthy', label: 'Healthy' },
+                        ].map((option) => (
+                          <ListBox.Item key={option.id} id={option.id}>
+                            {option.label} ({focusCounts[option.id as WatchlistFocus]})
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
                   <FilterDisclosureTrigger activeCount={statusFilter === 'all' ? 0 : 1} />
                   {hasFilters ? (
                     <Button
@@ -732,7 +728,7 @@ export default function WatchlistPage() {
                 </div>
               </div>
               <Disclosure.Content>
-                <Disclosure.Body className={`${filterDisclosureBodyClassName} sm:max-w-xs`}>
+                <Disclosure.Body className="mt-2 grid grid-cols-1 gap-2 border-t border-divider pt-2 sm:grid-cols-[minmax(0,14rem)]">
                   <Select
                     aria-label="Watchlist status"
                     value={statusFilter}
@@ -758,160 +754,168 @@ export default function WatchlistPage() {
                 </Disclosure.Body>
               </Disclosure.Content>
             </Disclosure>
-          </Card.Content>
+          </Card>
 
-          <Table variant="secondary">
-            <Table.ScrollContainer>
-              <Table.Content aria-label="Watchlist images" className="min-w-[900px]">
-                <Table.Header>
-                  <Table.Column isRowHeader>Image</Table.Column>
-                  <Table.Column>Schedule</Table.Column>
-                  <Table.Column>Latest scan</Table.Column>
-                  <Table.Column>Coverage</Table.Column>
-                  <Table.Column className="flex justify-end">Actions</Table.Column>
-                </Table.Header>
-                <Table.Body
-                  items={loading ? [] : filteredItems}
-                  renderEmptyState={() =>
-                    loading ? (
-                      <div className="flex min-h-48 items-center justify-center">
-                        <Spinner color="accent" size="sm" />
-                      </div>
-                    ) : (
-                      <EmptyState
-                        icon={<EyeIcon size={24} />}
-                        title="No watchlist items match your filters"
-                        description="Try a different search or clear the current filters."
-                        action={{
-                          label: 'Clear filters',
-                          onClick: () => {
-                            setSearchQuery('');
-                            setStatusFilter('all');
-                            setFocusFilter('all');
-                          },
-                        }}
-                      />
-                    )
-                  }
-                >
-                  {(item) => {
-                    const reg = registries.find((r) => r.id === item.registry_id);
-                    const posture = getWatchlistPosture(item);
-                    const canMutate = canMutateItem(item);
-                    const canManageItemAccess = canManageAccess(item);
-                    const actions = [
-                      ...(canMutate
-                        ? [
-                            {
-                              id: 'scan-now',
-                              label: triggering === item.id ? 'Scanning…' : 'Scan now',
-                              icon:
-                                triggering === item.id ? (
-                                  <Spinner color="accent" size="sm" />
-                                ) : (
-                                  <PlayIcon size={15} />
-                                ),
-                              disabled: triggering === item.id,
-                              onAction: () => {
-                                void handleTrigger(item.id);
+          <Card className="overflow-hidden">
+            <Table variant="secondary">
+              <Table.ScrollContainer>
+                <Table.Content aria-label="Watchlist images" className="min-w-[900px]">
+                  <Table.Header>
+                    <Table.Column isRowHeader>Image</Table.Column>
+                    <Table.Column>Schedule</Table.Column>
+                    <Table.Column>Latest scan</Table.Column>
+                    <Table.Column>Coverage</Table.Column>
+                    <Table.Column className="flex justify-end">Actions</Table.Column>
+                  </Table.Header>
+                  <Table.Body
+                    items={loading ? [] : filteredItems}
+                    renderEmptyState={() =>
+                      loading ? (
+                        <div className="flex min-h-48 items-center justify-center">
+                          <Spinner color="accent" size="sm" />
+                        </div>
+                      ) : (
+                        <EmptyState
+                          icon={<EyeIcon size={24} />}
+                          title="No watchlist items match your filters"
+                          description="Try a different search or clear the current filters."
+                          action={{
+                            label: 'Clear filters',
+                            onClick: () => {
+                              setSearchQuery('');
+                              setStatusFilter('all');
+                              setFocusFilter('all');
+                            },
+                          }}
+                        />
+                      )
+                    }
+                  >
+                    {(item) => {
+                      const reg = registries.find((r) => r.id === item.registry_id);
+                      const posture = getWatchlistPosture(item);
+                      const canMutate = canMutateItem(item);
+                      const canManageItemAccess = canManageAccess(item);
+                      const actions = [
+                        ...(canMutate
+                          ? [
+                              {
+                                id: 'scan-now',
+                                label: triggering === item.id ? 'Scanning…' : 'Scan now',
+                                icon:
+                                  triggering === item.id ? (
+                                    <Spinner color="accent" size="sm" />
+                                  ) : (
+                                    <PlayIcon size={15} />
+                                  ),
+                                disabled: triggering === item.id,
+                                onAction: () => {
+                                  void handleTrigger(item.id);
+                                },
                               },
-                            },
-                            {
-                              id: 'edit',
-                              label: 'Edit watchlist item',
-                              icon: <PencilEdit01Icon size={15} />,
-                              onAction: () => openEdit(item),
-                            },
-                          ]
-                        : []),
-                      ...(canManageItemAccess
-                        ? [
-                            {
-                              id: 'share',
-                              label: 'Manage access',
-                              icon: <BiometricAccessIcon size={15} />,
-                              onAction: () => openShareModal(item),
-                            },
-                          ]
-                        : []),
-                      ...(canMutate
-                        ? [
-                            {
-                              id: 'delete',
-                              label: 'Delete watchlist item',
-                              icon: <Delete01Icon size={15} />,
-                              variant: 'danger' as const,
-                              onAction: () => {
-                                void handleDelete(item.id);
+                              {
+                                id: 'edit',
+                                label: 'Edit watchlist item',
+                                icon: <PencilEdit01Icon size={15} />,
+                                onAction: () => openEdit(item),
                               },
-                            },
-                          ]
-                        : []),
-                    ];
-                    return (
-                      <Table.Row key={item.id} id={item.id} className="hover:bg-[var(--row-hover)]">
-                        <Table.Cell>
-                          <div className="space-y-1.5">
-                            <p className="font-mono text-xs text-zinc-700 dark:text-zinc-200">
-                              {item.image_name}:{item.image_tag}
-                            </p>
-                            <p className="text-xs text-muted">
-                              {reg?.name ?? 'Direct image source'}
-                            </p>
-                            <OwnershipBadge
-                              ownerType={item.owner_type}
-                              ownerOrgId={item.owner_org_id}
-                              orgNamesById={orgNamesById}
-                            />
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="space-y-1.5" title={item.schedule}>
-                            <div className="flex items-center gap-1.5 text-xs text-accent">
-                              <Clock01Icon size={12} className="shrink-0" />
-                              {cronToHuman(item.schedule ?? '', {
-                                timezone: item.timezone,
-                                hourCycle,
-                              })}
-                            </div>
-                            <p className="font-mono text-xs text-muted">{item.timezone || 'UTC'}</p>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <LastScanState item={item} hourCycle={hourCycle} />
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="space-y-2">
-                            <Chip
-                              color={item.enabled ? 'success' : 'default'}
-                              size="sm"
-                              variant="soft"
-                            >
-                              {item.enabled ? 'Scheduled' : 'Paused'}
-                            </Chip>
-                            <PolicyPostureCell posture={posture} item={item} />
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex justify-end">
-                            {actions.length > 0 ? (
-                              <RowActionsMenu
-                                label={`Open actions menu for ${item.image_name}:${item.image_tag}`}
-                                items={actions}
+                            ]
+                          : []),
+                        ...(canManageItemAccess
+                          ? [
+                              {
+                                id: 'share',
+                                label: 'Manage access',
+                                icon: <BiometricAccessIcon size={15} />,
+                                onAction: () => openShareModal(item),
+                              },
+                            ]
+                          : []),
+                        ...(canMutate
+                          ? [
+                              {
+                                id: 'delete',
+                                label: 'Delete watchlist item',
+                                icon: <Delete01Icon size={15} />,
+                                variant: 'danger' as const,
+                                onAction: () => {
+                                  void handleDelete(item.id);
+                                },
+                              },
+                            ]
+                          : []),
+                      ];
+                      return (
+                        <Table.Row
+                          key={item.id}
+                          id={item.id}
+                          className="hover:bg-[var(--row-hover)]"
+                        >
+                          <Table.Cell>
+                            <div className="space-y-1.5">
+                              <p className="font-mono text-xs text-zinc-700 dark:text-zinc-200">
+                                {item.image_name}:{item.image_tag}
+                              </p>
+                              <p className="text-xs text-muted">
+                                {reg?.name ?? 'Direct image source'}
+                              </p>
+                              <OwnershipBadge
+                                ownerType={item.owner_type}
+                                ownerOrgId={item.owner_org_id}
+                                orgNamesById={orgNamesById}
                               />
-                            ) : (
-                              <span className="text-xs text-zinc-400">No actions</span>
-                            )}
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    );
-                  }}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
-        </Card>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="space-y-1.5" title={item.schedule}>
+                              <div className="flex items-center gap-1.5 text-xs text-accent">
+                                <Clock01Icon size={12} className="shrink-0" />
+                                {cronToHuman(item.schedule ?? '', {
+                                  timezone: item.timezone,
+                                  hourCycle,
+                                })}
+                              </div>
+                              <p className="font-mono text-xs text-muted">
+                                {item.timezone || 'UTC'}
+                              </p>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <LastScanState item={item} hourCycle={hourCycle} />
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="space-y-2">
+                              <Chip
+                                color={item.enabled ? 'success' : 'default'}
+                                size="sm"
+                                variant="soft"
+                              >
+                                {item.enabled ? 'Scheduled' : 'Paused'}
+                              </Chip>
+                              <PolicyPostureCell posture={posture} item={item} />
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="flex justify-end">
+                              {actions.length > 0 ? (
+                                <RowActionsMenu
+                                  label={`Open actions menu for ${item.image_name}:${item.image_tag}`}
+                                  items={actions}
+                                />
+                              ) : (
+                                <span className="text-xs text-zinc-400">No actions</span>
+                              )}
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      );
+                    }}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </Card>
+        </>
       )}
 
       <Modal state={modal}>

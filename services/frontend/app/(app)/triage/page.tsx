@@ -24,7 +24,6 @@ import {
   Select,
   Spinner,
   Table,
-  Tabs,
 } from '@heroui/react';
 import { ArrowRight01Icon, PackageIcon, Shield01Icon, ShieldKeyIcon } from 'hugeicons-react';
 import Link from 'next/link';
@@ -396,42 +395,15 @@ export default function TriagePage() {
         <StatusAlert status="danger" title="Triage failed to load" description={error} />
       ) : null}
 
-      <Card className="overflow-hidden">
-        <Card.Content className="gap-4 border-b border-divider py-4">
-          <Tabs
-            variant="secondary"
-            selectedKey={queueView === 'custom' ? undefined : queueView}
-            onSelectionChange={(key) =>
-              applySavedView(String(key) as Exclude<TriageQueueView, 'custom'>)
-            }
-            className="min-w-0"
-          >
-            <Tabs.ListContainer className="overflow-x-auto">
-              <Tabs.List aria-label="Triage queue views" className="min-w-max gap-1">
-                {TRIAGE_VIEW_OPTIONS.map((option) => (
-                  <Tabs.Tab
-                    key={option.id}
-                    id={option.id}
-                    className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap px-3"
-                  >
-                    {option.label}
-                    <Chip size="sm" variant="soft" color={option.tone}>
-                      {countForQueueView(option.id, summary)}
-                    </Chip>
-                    <Tabs.Indicator />
-                  </Tabs.Tab>
-                ))}
-              </Tabs.List>
-            </Tabs.ListContainer>
-          </Tabs>
-
+      <Card className="p-3">
+        <div>
           <Disclosure
             isExpanded={showAdvancedFilters}
             onExpandedChange={setShowAdvancedFilters}
             className="contents"
           >
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <SearchField name="triage-search" variant="secondary" className="w-full xl:max-w-sm">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+              <SearchField name="triage-search" variant="secondary" className="min-w-0 flex-1">
                 <SearchField.Group>
                   <SearchField.SearchIcon />
                   <SearchField.Input
@@ -453,7 +425,30 @@ export default function TriagePage() {
                 </SearchField.Group>
               </SearchField>
 
-              <div className="flex flex-wrap gap-2 xl:justify-end">
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  aria-label="Triage queue view"
+                  value={queueView === 'custom' ? 'all' : queueView}
+                  variant="secondary"
+                  className="min-w-[190px]"
+                  onChange={(value) =>
+                    applySavedView(String(value ?? 'all') as Exclude<TriageQueueView, 'custom'>)
+                  }
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {TRIAGE_VIEW_OPTIONS.map((option) => (
+                        <ListBox.Item key={option.id} id={option.id}>
+                          {option.label} ({countForQueueView(option.id, summary)})
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
                 <FilterDisclosureTrigger
                   activeCount={Number(kindFilter !== 'all') + Number(priorityFilter !== 'all')}
                 />
@@ -478,17 +473,18 @@ export default function TriagePage() {
             </div>
 
             <Disclosure.Content>
-              <Disclosure.Body className={`${filterDisclosureBodyClassName} md:grid-cols-2`}>
+              <Disclosure.Body className="mt-2 grid grid-cols-1 gap-3 border-t border-divider pt-2 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-muted">Type</Label>
                   <Select
                     value={kindFilter}
+                    variant="secondary"
                     onChange={(value) => {
                       setPage(1);
                       setKindFilter(String(value) as TriageItemKind | 'all');
                     }}
                   >
-                    <Select.Trigger className="bg-surface-secondary">
+                    <Select.Trigger>
                       <Select.Value />
                       <Select.Indicator />
                     </Select.Trigger>
@@ -508,12 +504,13 @@ export default function TriagePage() {
                   <Label className="text-sm font-medium text-muted">Priority</Label>
                   <Select
                     value={priorityFilter}
+                    variant="secondary"
                     onChange={(value) => {
                       setPage(1);
                       setPriorityFilter(String(value) as TriagePriority | 'all');
                     }}
                   >
-                    <Select.Trigger className="bg-surface-secondary">
+                    <Select.Trigger>
                       <Select.Value />
                       <Select.Indicator />
                     </Select.Trigger>
@@ -535,8 +532,10 @@ export default function TriagePage() {
           {hasManualFilters ? (
             <p className="text-xs text-muted">Advanced filters are overriding the saved view.</p>
           ) : null}
-        </Card.Content>
+        </div>
+      </Card>
 
+      <Card className="overflow-hidden">
         <Table variant="secondary">
           <Table.ScrollContainer>
             <Table.Content aria-label="Triage queue" className="min-w-[860px]">

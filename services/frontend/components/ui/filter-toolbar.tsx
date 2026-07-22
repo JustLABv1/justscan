@@ -24,7 +24,7 @@ export const filterDisclosureBodyClassName =
 
 export function FilterDisclosureTrigger({
   activeCount = 0,
-  label = 'Filters',
+  label = 'More filters',
 }: FilterDisclosureTriggerProps) {
   return (
     <Disclosure.Heading>
@@ -53,7 +53,7 @@ export function FilterToolbar({
     <Toolbar
       aria-label="Filters"
       className={cn(
-        'flex w-full flex-col gap-2 xl:flex-row xl:items-center xl:justify-between',
+        'flex w-full flex-col justify-start gap-2 xl:flex-row xl:items-center',
         className
       )}
     >

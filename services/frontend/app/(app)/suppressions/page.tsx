@@ -317,255 +317,263 @@ export default function SuppressionsPage() {
 
       {error && <FormAlert description={error} title="Suppressions loading failed" />}
 
-      <Card className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <SearchField
-            name="suppressions-search"
-            variant="secondary"
-            className="w-full sm:max-w-sm"
-          >
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                placeholder="Search CVE ID..."
-                value={searchQuery}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSearchQuery(v);
-                  if (debounceRef.current) clearTimeout(debounceRef.current);
-                  debounceRef.current = setTimeout(() => {
-                    setPage(1);
-                    load(1, statusFilter, v);
-                  }, 300);
-                }}
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-          <Select
-            value={statusFilter || '__all__'}
-            onChange={(value) => {
-              const v = String(value === '__all__' ? '' : (value ?? ''));
-              setStatusFilter(v);
-              setPage(1);
-              load(1, v, searchQuery);
-            }}
-            className="w-full sm:w-44"
-            variant="secondary"
-          >
-            <Select.Trigger className={selectTriggerCls}>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="__all__">All Statuses</ListBox.Item>
-                <ListBox.Item id="accepted">Accepted Risk</ListBox.Item>
-                <ListBox.Item id="wont_fix">Won&apos;t Fix</ListBox.Item>
-                <ListBox.Item id="false_positive">False Positive</ListBox.Item>
-                <ListBox.Item id="xray_ignore">Xray Ignore</ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
-        </div>
-
-        <Table variant="secondary">
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Suppressions" className="min-w-[840px]">
-              <Table.Header>
-                <Table.Column isRowHeader>Vulnerability</Table.Column>
-                <Table.Column>Status</Table.Column>
-                <Table.Column>Reason</Table.Column>
-                <Table.Column>Ownership</Table.Column>
-                <Table.Column className="flex justify-end">Actions</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {loading ? (
-                  <Table.Row key="loading-row" id="loading">
-                    <Table.Cell colSpan={5}>
-                      <div className="flex justify-center py-16">
-                        <Spinner color="accent" size="sm" />
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                ) : suppressions.length === 0 ? (
-                  <Table.Row key="empty-row" id="empty">
-                    <Table.Cell colSpan={5}>
-                      <div className="flex flex-col items-center gap-3 py-16 text-center">
-                        <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
-                        <p className="text-sm text-zinc-500">
-                          {searchQuery || statusFilter
-                            ? 'No suppressions match your filters.'
-                            : 'No suppressions found.'}
-                        </p>
-                        {!searchQuery && !statusFilter && (
-                          <p className="text-xs text-zinc-400">
-                            Suppressions allow you to acknowledge known vulnerabilities in a scan.
-                          </p>
-                        )}
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                ) : (
-                  suppressions.map((s) => (
-                    <Table.Row id={s.id} key={s.id} className="hover:bg-[var(--row-hover)]">
-                      <Table.Cell>
-                        <div className="space-y-1.5">
-                          <a
-                            href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-mono text-xs text-accent hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {s.vuln_id}
-                          </a>
-                          <p className="font-mono text-xs text-muted" title={s.image_digest}>
-                            {s.image_digest.length > 28
-                              ? `${s.image_digest.slice(0, 28)}…`
-                              : s.image_digest}
-                          </p>
-                          <Button
-                            variant="tertiary"
-                            onPress={() => openAppliesImagesModal(s)}
-                            size="sm"
-                          >
-                            {(s.applies_image_count ?? 0).toLocaleString()} matching image
-                            {(s.applies_image_count ?? 0) === 1 ? '' : 's'}
-                          </Button>
+      <>
+        <Card className="p-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <SearchField
+              name="suppressions-search"
+              variant="secondary"
+              className="w-full sm:max-w-sm"
+            >
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
+                  placeholder="Search CVE ID..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSearchQuery(v);
+                    if (debounceRef.current) clearTimeout(debounceRef.current);
+                    debounceRef.current = setTimeout(() => {
+                      setPage(1);
+                      load(1, statusFilter, v);
+                    }, 300);
+                  }}
+                />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
+            <Select
+              value={statusFilter || '__all__'}
+              onChange={(value) => {
+                const v = String(value === '__all__' ? '' : (value ?? ''));
+                setStatusFilter(v);
+                setPage(1);
+                load(1, v, searchQuery);
+              }}
+              className="w-full sm:w-44"
+              variant="secondary"
+            >
+              <Select.Trigger className={selectTriggerCls}>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="__all__">All Statuses</ListBox.Item>
+                  <ListBox.Item id="accepted">Accepted Risk</ListBox.Item>
+                  <ListBox.Item id="wont_fix">Won&apos;t Fix</ListBox.Item>
+                  <ListBox.Item id="false_positive">False Positive</ListBox.Item>
+                  <ListBox.Item id="xray_ignore">Xray Ignore</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+        </Card>
+        <Card className="overflow-hidden">
+          <Table variant="secondary">
+            <Table.ScrollContainer>
+              <Table.Content aria-label="Suppressions" className="min-w-[840px]">
+                <Table.Header>
+                  <Table.Column isRowHeader>Vulnerability</Table.Column>
+                  <Table.Column>Status</Table.Column>
+                  <Table.Column>Reason</Table.Column>
+                  <Table.Column>Ownership</Table.Column>
+                  <Table.Column className="flex justify-end">Actions</Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {loading ? (
+                    <Table.Row key="loading-row" id="loading">
+                      <Table.Cell colSpan={5}>
+                        <div className="flex justify-center py-16">
+                          <Spinner color="accent" size="sm" />
                         </div>
                       </Table.Cell>
-                      <Table.Cell>
-                        <div className="space-y-1.5">
-                          <StatusBadge status={s.status} />
-                          <SuppressionSourceBadge source={s.source} />
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="text-xs text-zinc-500 max-w-xs">
-                          <span className="line-clamp-2">{s.justification || '—'}</span>
-                          {(s.xray_policy_name || s.xray_watch_name) && (
-                            <p className="mt-1 text-[11px] text-zinc-400">
-                              {[s.xray_policy_name, s.xray_watch_name].filter(Boolean).join(' · ')}
+                    </Table.Row>
+                  ) : suppressions.length === 0 ? (
+                    <Table.Row key="empty-row" id="empty">
+                      <Table.Cell colSpan={5}>
+                        <div className="flex flex-col items-center gap-3 py-16 text-center">
+                          <SecurityLockIcon
+                            size={32}
+                            className="text-zinc-400 dark:text-zinc-600"
+                          />
+                          <p className="text-sm text-zinc-500">
+                            {searchQuery || statusFilter
+                              ? 'No suppressions match your filters.'
+                              : 'No suppressions found.'}
+                          </p>
+                          {!searchQuery && !statusFilter && (
+                            <p className="text-xs text-zinc-400">
+                              Suppressions allow you to acknowledge known vulnerabilities in a scan.
                             </p>
                           )}
                         </div>
                       </Table.Cell>
-                      <Table.Cell>
-                        <div className="space-y-1">
-                          <p className="text-xs text-zinc-500">{s.username || '—'}</p>
-                          <OwnershipBadge
-                            ownerType={s.owner_type}
-                            ownerOrgId={s.owner_org_id}
-                            orgNamesById={orgNamesById}
-                          />
-                          <p className="text-xs text-muted" title={fullDate(s.created_at)}>
-                            Created {timeAgo(s.created_at)}
-                          </p>
-                          {s.expires_at ? (
-                            <span
-                              className={
-                                new Date(s.expires_at) < new Date()
-                                  ? 'text-red-400'
-                                  : 'text-zinc-500'
-                              }
-                              title={fullDate(s.expires_at)}
-                            >
-                              {new Date(s.expires_at).toLocaleDateString()}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted">Never expires</span>
-                          )}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {canManageAccess(s) || canMutateSuppression(s) ? (
-                          <div className="flex items-center justify-end">
-                            <RowActionsMenu
-                              label={`Actions for ${s.vuln_id}`}
-                              items={[
-                                ...(canManageAccess(s)
-                                  ? [
-                                      {
-                                        id: 'manage-access',
-                                        label: 'Manage access',
-                                        icon: <Shield01Icon size={14} />,
-                                        onAction: () => openShareModal(s),
-                                      },
-                                    ]
-                                  : []),
-                                ...(canMutateSuppression(s)
-                                  ? [
-                                      {
-                                        id: 'remove',
-                                        label: 'Remove suppression',
-                                        icon: <Delete01Icon size={14} />,
-                                        variant: 'danger' as const,
-                                        onAction: () => {
-                                          void handleDelete(s);
-                                        },
-                                      },
-                                    ]
-                                  : []),
-                              ]}
-                            />
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-zinc-400">Read only</span>
-                        )}
-                      </Table.Cell>
                     </Table.Row>
-                  ))
-                )}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-          {totalPages > 1 ? (
-            <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-              <span className="text-xs text-zinc-500 whitespace-nowrap">
-                Showing {total === 0 ? 0 : (page - 1) * LIMIT + 1}-{Math.min(page * LIMIT, total)}{' '}
-                of {total}
-              </span>
-              <Pagination size="sm" className="justify-self-center">
-                <Pagination.Content>
-                  <Pagination.Item>
-                    <Pagination.Previous
-                      isDisabled={page === 1}
-                      onPress={() => setPage((previous) => Math.max(1, previous - 1))}
-                    >
-                      <Pagination.PreviousIcon />
-                      <span>Previous</span>
-                    </Pagination.Previous>
-                  </Pagination.Item>
-                  {paginationItems.map((item, index) =>
-                    item === 'ellipsis' ? (
-                      <Pagination.Item key={`suppressions-ellipsis-${index}`}>
-                        <Pagination.Ellipsis />
-                      </Pagination.Item>
-                    ) : (
-                      <Pagination.Item key={`suppressions-page-${item}`}>
-                        <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
-                          {item}
-                        </Pagination.Link>
-                      </Pagination.Item>
-                    )
+                  ) : (
+                    suppressions.map((s) => (
+                      <Table.Row id={s.id} key={s.id} className="hover:bg-[var(--row-hover)]">
+                        <Table.Cell>
+                          <div className="space-y-1.5">
+                            <a
+                              href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-mono text-xs text-accent hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {s.vuln_id}
+                            </a>
+                            <p className="font-mono text-xs text-muted" title={s.image_digest}>
+                              {s.image_digest.length > 28
+                                ? `${s.image_digest.slice(0, 28)}…`
+                                : s.image_digest}
+                            </p>
+                            <Button
+                              variant="tertiary"
+                              onPress={() => openAppliesImagesModal(s)}
+                              size="sm"
+                            >
+                              {(s.applies_image_count ?? 0).toLocaleString()} matching image
+                              {(s.applies_image_count ?? 0) === 1 ? '' : 's'}
+                            </Button>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="space-y-1.5">
+                            <StatusBadge status={s.status} />
+                            <SuppressionSourceBadge source={s.source} />
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="text-xs text-zinc-500 max-w-xs">
+                            <span className="line-clamp-2">{s.justification || '—'}</span>
+                            {(s.xray_policy_name || s.xray_watch_name) && (
+                              <p className="mt-1 text-[11px] text-zinc-400">
+                                {[s.xray_policy_name, s.xray_watch_name]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </p>
+                            )}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="space-y-1">
+                            <p className="text-xs text-zinc-500">{s.username || '—'}</p>
+                            <OwnershipBadge
+                              ownerType={s.owner_type}
+                              ownerOrgId={s.owner_org_id}
+                              orgNamesById={orgNamesById}
+                            />
+                            <p className="text-xs text-muted" title={fullDate(s.created_at)}>
+                              Created {timeAgo(s.created_at)}
+                            </p>
+                            {s.expires_at ? (
+                              <span
+                                className={
+                                  new Date(s.expires_at) < new Date()
+                                    ? 'text-red-400'
+                                    : 'text-zinc-500'
+                                }
+                                title={fullDate(s.expires_at)}
+                              >
+                                {new Date(s.expires_at).toLocaleDateString()}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted">Never expires</span>
+                            )}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          {canManageAccess(s) || canMutateSuppression(s) ? (
+                            <div className="flex items-center justify-end">
+                              <RowActionsMenu
+                                label={`Actions for ${s.vuln_id}`}
+                                items={[
+                                  ...(canManageAccess(s)
+                                    ? [
+                                        {
+                                          id: 'manage-access',
+                                          label: 'Manage access',
+                                          icon: <Shield01Icon size={14} />,
+                                          onAction: () => openShareModal(s),
+                                        },
+                                      ]
+                                    : []),
+                                  ...(canMutateSuppression(s)
+                                    ? [
+                                        {
+                                          id: 'remove',
+                                          label: 'Remove suppression',
+                                          icon: <Delete01Icon size={14} />,
+                                          variant: 'danger' as const,
+                                          onAction: () => {
+                                            void handleDelete(s);
+                                          },
+                                        },
+                                      ]
+                                    : []),
+                                ]}
+                              />
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-zinc-400">Read only</span>
+                          )}
+                        </Table.Cell>
+                      </Table.Row>
+                    ))
                   )}
-                  <Pagination.Item>
-                    <Pagination.Next
-                      isDisabled={page === totalPages}
-                      onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-                    >
-                      <span>Next</span>
-                      <Pagination.NextIcon />
-                    </Pagination.Next>
-                  </Pagination.Item>
-                </Pagination.Content>
-              </Pagination>
-              <div />
-            </Table.Footer>
-          ) : null}
-        </Table>
-      </Card>
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+            {totalPages > 1 ? (
+              <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
+                <span className="text-xs text-zinc-500 whitespace-nowrap">
+                  Showing {total === 0 ? 0 : (page - 1) * LIMIT + 1}-{Math.min(page * LIMIT, total)}{' '}
+                  of {total}
+                </span>
+                <Pagination size="sm" className="justify-self-center">
+                  <Pagination.Content>
+                    <Pagination.Item>
+                      <Pagination.Previous
+                        isDisabled={page === 1}
+                        onPress={() => setPage((previous) => Math.max(1, previous - 1))}
+                      >
+                        <Pagination.PreviousIcon />
+                        <span>Previous</span>
+                      </Pagination.Previous>
+                    </Pagination.Item>
+                    {paginationItems.map((item, index) =>
+                      item === 'ellipsis' ? (
+                        <Pagination.Item key={`suppressions-ellipsis-${index}`}>
+                          <Pagination.Ellipsis />
+                        </Pagination.Item>
+                      ) : (
+                        <Pagination.Item key={`suppressions-page-${item}`}>
+                          <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
+                            {item}
+                          </Pagination.Link>
+                        </Pagination.Item>
+                      )
+                    )}
+                    <Pagination.Item>
+                      <Pagination.Next
+                        isDisabled={page === totalPages}
+                        onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
+                      >
+                        <span>Next</span>
+                        <Pagination.NextIcon />
+                      </Pagination.Next>
+                    </Pagination.Item>
+                  </Pagination.Content>
+                </Pagination>
+                <div />
+              </Table.Footer>
+            ) : null}
+          </Table>
+        </Card>
+      </>
 
       <ManageSuppressionAccessModal
         state={shareModal}

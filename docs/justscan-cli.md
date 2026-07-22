@@ -19,7 +19,36 @@ must use HTTPS. Use a direct or presigned download URL rather than a browser sha
 
 ## Install
 
-Use a release binary when one is available for your platform, or build from source:
+### Download a release (recommended)
+
+Download the archive for your operating system and CPU architecture from the [latest JustScan CLI
+release](https://github.com/JustLABv1/justscan/releases/latest). The **CI/CD & CLI** tab in a
+JustScan organization also links there. Choose `Darwin_arm64` for Apple Silicon Macs and
+`Darwin_x86_64` for Intel Macs, then unpack the archive and put `justscan` on your `PATH`.
+
+For example, after downloading a macOS archive:
+
+~~~sh
+tar -xzf justscan_*_Darwin_arm64.tar.gz
+sudo install -m 0755 justscan_*/justscan /usr/local/bin/justscan
+justscan version
+~~~
+
+### macOS Gatekeeper
+
+Current CLI releases are not yet Apple-notarized, so macOS may block the first launch with a
+Gatekeeper warning. After verifying that you downloaded the archive from the official release
+page, remove the quarantine attribute from the installed binary:
+
+~~~sh
+xattr -d com.apple.quarantine "$(command -v justscan)"
+justscan version
+~~~
+
+Do not use this command for binaries from untrusted sources. Apple-signing and notarization are
+planned for future releases.
+
+### Build from source
 
 ~~~sh
 cd services/cli

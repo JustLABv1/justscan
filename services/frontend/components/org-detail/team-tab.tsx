@@ -99,6 +99,12 @@ export function OrgTeamTab({
     });
   }, [filteredMembers, sortDescriptor]);
 
+  const filteredInvites = useMemo(() => {
+    const query = memberSearch.trim().toLowerCase();
+    if (!query) return invites;
+    return invites.filter((invite) => [invite.email, invite.role].some((value) => value.toLowerCase().includes(query)));
+  }, [invites, memberSearch]);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -129,8 +135,8 @@ export function OrgTeamTab({
             <div className="flex justify-center py-8">
               <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
             </div>
-          ) : members.length === 0 ? (
-            <div className="px-6 py-8 text-sm text-zinc-500 text-center">No members found.</div>
+          ) : members.length === 0 && invites.length === 0 ? (
+            <div className="px-6 py-8 text-sm text-zinc-500 text-center">No members or pending invites.</div>
           ) : (
             <div className="space-y-3">
               <SearchField name="org-members-search" variant="secondary">
@@ -163,20 +169,22 @@ export function OrgTeamTab({
                       <Table.Column id="joined" allowsSorting>
                         Joined
                       </Table.Column>
+                      <Table.Column>Status</Table.Column>
                       <Table.Column className="text-right">Actions</Table.Column>
                     </Table.Header>
                     <Table.Body>
-                      {sortedMembers.length === 0 ? (
+                      {sortedMembers.length === 0 && filteredInvites.length === 0 ? (
                         <Table.Row id="empty">
-                          <Table.Cell colSpan={4}>
+                          <Table.Cell colSpan={5}>
                             <div className="px-4 py-8 text-center text-sm text-zinc-500">
                               No members match this search.
                             </div>
                           </Table.Cell>
                         </Table.Row>
                       ) : (
-                        sortedMembers.map((member) => (
-                          <Table.Row
+                        <>
+                          {sortedMembers.map((member) => (
+                            <Table.Row
                             key={member.user_id}
                             id={member.user_id}
                             className="transition-colors hover:bg-[var(--row-hover)]"
@@ -232,6 +240,9 @@ export function OrgTeamTab({
                               {timeAgo(member.joined_at)}
                             </Table.Cell>
                             <Table.Cell>
+                              <span className="text-xs text-success">Active</span>
+                            </Table.Cell>
+                            <Table.Cell>
                               <div className="flex items-center justify-end gap-2">
                                 {canTransferOwnership && member.role !== 'owner' && (
                                   <Button
@@ -252,8 +263,35 @@ export function OrgTeamTab({
                                 )}
                               </div>
                             </Table.Cell>
-                          </Table.Row>
-                        ))
+                            </Table.Row>
+                          ))}
+                          {filteredInvites.map((invite) => (
+                            <Table.Row key={invite.id} id={`invite-${invite.id}`} className="bg-surface-secondary/40">
+                              <Table.Cell>
+                                <div className="flex items-center gap-3">
+                                  <Avatar color="warning" size="sm" variant="soft">
+                                    <Avatar.Fallback>{invite.email.charAt(0).toUpperCase()}</Avatar.Fallback>
+                                  </Avatar>
+                                  <div>
+                                    <p className="font-medium text-zinc-800 dark:text-zinc-200">{invite.email}</p>
+                                    <p className="mt-0.5 text-xs text-muted">Invitation pending</p>
+                                  </div>
+                                </div>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <span className="inline-flex rounded-full border border-warning/20 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">{invite.role}</span>
+                              </Table.Cell>
+                              <Table.Cell className="text-xs text-muted">—</Table.Cell>
+                              <Table.Cell><span className="text-xs text-warning">Expires {timeUntil(invite.expires_at)}</span></Table.Cell>
+                              <Table.Cell>
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button onPress={() => void onCopyInviteLink(invite)} size="sm" variant="secondary">Copy link</Button>
+                                  {canManageMembers ? <Button onPress={() => void onRevokeInvite(invite)} size="sm" variant="danger">Revoke</Button> : null}
+                                </div>
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </>
                       )}
                     </Table.Body>
                   </Table.Content>
@@ -264,44 +302,6 @@ export function OrgTeamTab({
         </div>
       </Card>
 
-      <Card>
-        <div>
-          <h3 className="text-base font-semibold">Pending Invites</h3>
-          <p className="text-xs text-zinc-500 mt-0.5">Active invite links for this organization.</p>
-        </div>
-        {invites.length === 0 ? (
-          <p className="text-sm text-zinc-500">No active invites.</p>
-        ) : (
-          <div className="space-y-2">
-            {invites.map((invite) => (
-              <Card key={invite.id} className="bg-surface-secondary">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{invite.email}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      {invite.role} · expires {timeUntil(invite.expires_at)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button onClick={() => void onCopyInviteLink(invite)} variant="secondary">
-                      Copy link
-                    </Button>
-                    {canManageMembers && (
-                      <Button
-                        onClick={() => void onRevokeInvite(invite)}
-                        isIconOnly
-                        variant="danger-soft"
-                      >
-                        <Delete01Icon size={15} />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </Card>
     </div>
   );
 }

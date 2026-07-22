@@ -656,7 +656,7 @@ export default function RegistriesPage() {
         <Modal.Backdrop isDismissable>
           <Modal.Container className="px-3 sm:px-6" size="lg" placement="center" scroll="inside">
             <Modal.Dialog className="max-w-3xl">
-              <Modal.Header className="border-b border-surface-border px-6 py-5 sm:px-8">
+              <Modal.Header className="border-b border-surface-border px-5 py-4 sm:px-6">
                 <div className="min-w-0">
                   <Modal.Heading>{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
                   <p className="mt-1 text-sm text-muted">
@@ -665,47 +665,43 @@ export default function RegistriesPage() {
                 </div>
                 <Modal.CloseTrigger />
               </Modal.Header>
-              <Modal.Body className="px-6 py-6 sm:px-8">
+              <Modal.Body className="px-5 py-5 sm:px-6">
                 <form id="registry-form" onSubmit={handleSubmit} className="space-y-6">
                   {formError ? (
                     <FormAlert description={formError} title="Registry save failed" />
                   ) : null}
-                  <Card variant="secondary" className="gap-0 overflow-hidden">
-                    <Card.Header className="border-b border-surface-border px-5 py-4">
-                      <Card.Title>Registry connection</Card.Title>
-                      <Card.Description>
-                        The endpoint JustScan uses to resolve and pull images.
-                      </Card.Description>
-                    </Card.Header>
-                    <Card.Content className="grid gap-4 p-5 md:grid-cols-2">
+                  <section className="space-y-4 border-b border-surface-border pb-5">
+                    <div>
+                      <h3 className="text-sm font-semibold">Registry connection</h3>
+                      <p className="mt-1 text-sm text-muted">The endpoint JustScan uses to resolve and pull images.</p>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
                       <FormField
                         label="Name"
                         onChange={(e) => setName(e.target.value)}
                         placeholder="My Registry"
                         required
                         value={name}
-                        className="bg-surface-primary"
-                        variant="primary"
+                        variant="secondary"
                       />
                       <FormField
-                        className="bg-surface-primary"
                         label="URL"
                         onChange={(e) => setUrl(e.target.value)}
                         placeholder="https://registry.example.com"
                         required
                         value={url}
-                        variant="primary"
+                        variant="secondary"
                       />
                       <div className="space-y-1.5 md:col-span-2">
                         <label className="text-sm font-medium">Scan Provider</label>
                         <Select
-                          variant="primary"
+                          variant="secondary"
                           value={scanProvider}
                           onChange={(value) =>
                             setScanProvider(value as 'trivy' | 'artifactory_xray')
                           }
                         >
-                          <Select.Trigger className={selectTriggerCls + ' bg-surface-primary'}>
+                          <Select.Trigger className={selectTriggerCls}>
                             <div className="flex min-w-0 flex-1 items-center gap-2">
                               <span className="shrink-0 text-zinc-400">
                                 <ServerStack01Icon size={15} />
@@ -732,44 +728,39 @@ export default function RegistriesPage() {
                           </p>
                         )}
                       </div>
-                    </Card.Content>
-                  </Card>
+                    </div>
+                  </section>
                   {scanProvider === 'artifactory_xray' && (
-                    <Card variant="secondary" className="gap-0 overflow-hidden">
-                      <Card.Header className="border-b border-surface-border px-5 py-4">
-                        <Card.Title>Xray scan behavior</Card.Title>
-                        <Card.Description>
-                          Map images to Artifactory and choose whether this credential can request a
-                          fresh Xray scan.
-                        </Card.Description>
-                      </Card.Header>
-                      <Card.Content className="grid gap-4 p-5 md:grid-cols-2">
+                    <section className="space-y-4 border-b border-surface-border pb-5">
+                      <div>
+                        <h3 className="text-sm font-semibold">Xray scan behavior</h3>
+                        <p className="mt-1 text-sm text-muted">Map images to Artifactory and choose whether this credential can request a fresh Xray scan.</p>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
                         <FormField
-                          className="bg-surface-primary md:col-span-2"
+                          className="md:col-span-2"
                           description="Leave empty to reuse the registry URL. Set this only when the Docker host differs from the JFrog platform host."
                           label="Xray Base URL"
                           onChange={(e) => setXrayUrl(e.target.value)}
                           placeholder="https://jfrog.example.com"
                           value={xrayUrl}
-                          variant="primary"
+                          variant="secondary"
                         />
                         <FormField
-                          className="bg-surface-primary"
                           description="Usually default. Prefixes artifact paths sent to Xray."
                           label="Artifactory ID"
                           onChange={(e) => setXrayArtifactoryId(e.target.value)}
                           placeholder="default"
                           value={xrayArtifactoryId}
-                          variant="primary"
+                          variant="secondary"
                         />
                         <FormField
-                          className="bg-surface-primary"
                           description="Optional repo prefix, for example docker-remote."
                           label="Default Artifactory Repo"
                           onChange={(e) => setXrayRepository(e.target.value)}
                           placeholder="docker-remote"
                           value={xrayRepository}
-                          variant="primary"
+                          variant="secondary"
                         />
                         <div className="md:col-span-2">
                           <XrayModeSelector value={xrayMode} onChange={setXrayMode} />
@@ -783,27 +774,25 @@ export default function RegistriesPage() {
                             </Alert.Description>
                           </Alert.Content>
                         </Alert>
-                      </Card.Content>
-                    </Card>
+                      </div>
+                    </section>
                   )}
-                  <Card variant="secondary" className="gap-0 overflow-hidden">
-                    <Card.Header className="border-b border-surface-border px-5 py-4">
-                      <Card.Title>Credentials</Card.Title>
-                      <Card.Description>
-                        Stored encrypted and reused for image pulls and Xray requests.
-                      </Card.Description>
-                    </Card.Header>
-                    <Card.Content className="grid gap-4 p-5 md:grid-cols-2">
+                  <section className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-semibold">Credentials</h3>
+                      <p className="mt-1 text-sm text-muted">Stored encrypted and reused for image pulls and Xray requests.</p>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-1.5">
                         <label className="text-sm font-medium">Auth Type</label>
                         <Select
-                          variant="primary"
+                          variant="secondary"
                           value={authType}
                           onChange={(value) =>
                             setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')
                           }
                         >
-                          <Select.Trigger className={selectTriggerCls + ' bg-surface-primary'}>
+                          <Select.Trigger className={selectTriggerCls}>
                             <div className="flex min-w-0 flex-1 items-center gap-2">
                               <span className="shrink-0 text-zinc-400">
                                 <Shield01Icon size={15} />
@@ -823,16 +812,15 @@ export default function RegistriesPage() {
                         </Select>
                       </div>
                       <FormField
-                        className="bg-surface-primary"
                         label="Username"
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder="Optional"
                         value={username}
-                        variant="primary"
+                        variant="secondary"
                       />
                       <FormField
                         autoComplete="off"
-                        className="bg-surface-primary md:col-span-2"
+                        className="md:col-span-2"
                         description={
                           editing
                             ? 'Leave blank to keep the stored password unchanged.'
@@ -844,13 +832,13 @@ export default function RegistriesPage() {
                         placeholder={editing ? '••••••••' : 'Optional'}
                         type="password"
                         value={password}
-                        variant="primary"
+                        variant="secondary"
                       />
-                    </Card.Content>
-                  </Card>
+                    </div>
+                  </section>
                 </form>
               </Modal.Body>
-              <Modal.Footer className="border-t border-surface-border px-6 py-4 sm:px-8">
+              <Modal.Footer className="border-t border-surface-border px-5 py-4 sm:px-6">
                 <Button onPress={modal.close} type="button" variant="secondary">
                   Cancel
                 </Button>

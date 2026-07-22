@@ -85,7 +85,7 @@ function ArtifactReference({
     <div className="min-w-0" title={reference}>
       <p className="break-all font-mono text-sm font-medium leading-5 text-zinc-800 dark:text-zinc-100">
         {hideImageName ? (
-          <span className="text-accent">{imageTag}</span>
+          <span>{imageTag}</span>
         ) : (
           <>
             {repositoryPath}

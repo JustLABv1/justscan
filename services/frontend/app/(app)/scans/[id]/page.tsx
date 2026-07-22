@@ -15,7 +15,7 @@ import {
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageTitle } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
@@ -106,6 +106,7 @@ import {
   ArrowLeft01Icon,
   ArrowDown01Icon,
   Cancel01Icon,
+  CheckmarkCircle02Icon,
   Comment01Icon,
   Delete01Icon,
   Delete02Icon,
@@ -119,7 +120,7 @@ import {
 } from 'hugeicons-react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
 
 const EvilRadarChart = dynamic(
@@ -481,6 +482,40 @@ function buildPaginationItems(currentPage: number, totalPages: number): Array<nu
   }
   items.push(totalPages);
   return items;
+}
+
+function scanImageHref(imageName: string) {
+  return `/scans/images/${imageName.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+function ScanOverviewMetric({
+  label,
+  value,
+  icon,
+  tone = 'default',
+}: {
+  label: string;
+  value: number;
+  icon: ReactNode;
+  tone?: 'default' | 'danger' | 'success';
+}) {
+  const toneClassName = {
+    default: 'border-transparent text-muted',
+    success: 'border-success/35 text-success',
+    danger: 'border-danger/40 text-danger',
+  }[tone];
+
+  return (
+    <Card className={`min-w-0 px-3 py-2.5 ${toneClassName}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs font-medium">{label}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</p>
+        </div>
+        <div className="shrink-0">{icon}</div>
+      </div>
+    </Card>
+  );
 }
 
 export default function ScanDetailPage() {
@@ -1934,6 +1969,7 @@ export default function ScanDetailPage() {
     (scan.unknown_count ?? 0);
   const scanCriticalAndHigh = (scan.critical_count ?? 0) + (scan.high_count ?? 0);
   const policyBlockerCount = complianceViolationRows.length + xrayPolicyMatches;
+  const imageHref = scanImageHref(scan.image_name);
   const focusLead =
     scan.external_status === 'blocked_by_xray_policy'
       ? 'Xray blocked this artifact before the normal scan completion path.'
@@ -1945,9 +1981,9 @@ export default function ScanDetailPage() {
 
   const headerActions = (
     <div className="relative flex flex-wrap items-center justify-end gap-2">
-      <Button className="btn-secondary" onPress={() => router.back()} variant="secondary">
+      <Button className="btn-secondary" onPress={() => router.push(imageHref)} variant="secondary">
         <ArrowLeft01Icon size={15} />
-        Back to scans
+        Back to image
       </Button>
       {isScanInProgress && (
         <Button
@@ -2090,10 +2126,16 @@ export default function ScanDetailPage() {
   );
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-4 p-6">
-      <PageHeader
-        title={`${scan.image_name}:${scan.image_tag}`}
-        titleCom={<StatusBadge status={scan.status} externalStatus={scan.external_status} />}
+    <div className="mx-auto max-w-[1440px] space-y-5 px-4 py-6 md:px-6 xl:py-7">
+      <PageTitle
+        breadcrumbs={[
+          { label: 'Scans', href: '/scans' },
+          { label: scan.image_name, href: imageHref },
+          { label: scan.image_tag },
+        ]}
+        icon={<Shield01Icon size={18} />}
+        status={<StatusBadge status={scan.status} externalStatus={scan.external_status} />}
+        title={scan.image_tag}
         description={
           scan.image_digest ||
           'Inspect vulnerability results, runtime signals, and sharing controls for this scan.'
@@ -2246,34 +2288,37 @@ export default function ScanDetailPage() {
       </Modal>
 
       {scan.status !== 'pending' && scan.status !== 'running' && (
-        <Card>
-          <Card.Content className="gap-4">
-            <div className="space-y-1">
-              <h2 className="text-sm font-semibold text-foreground">Scan overview</h2>
-              <p className="max-w-3xl text-sm leading-6 text-muted">{focusLead}</p>
-              {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
-                <p className="text-xs leading-5 text-warning">{blockedPolicyDetails.summary}</p>
-              ) : null}
-            </div>
-            <dl className="grid grid-cols-2 gap-y-4 lg:grid-cols-4 lg:divide-x lg:divide-surface-border">
-              {[
-                { label: 'Vulnerabilities', value: scanVulnerabilityTotal },
-                { label: 'Critical + high', value: scanCriticalAndHigh },
-                { label: 'Fixable', value: vulnerabilitiesWithFix },
-                { label: 'Policy blockers', value: policyBlockerCount },
-              ].map((metric) => (
-                <div key={metric.label} className="min-w-0 lg:px-5 lg:first:pl-0">
-                  <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-                    {metric.label}
-                  </dt>
-                  <dd className="mt-1 text-xl font-semibold tabular-nums text-foreground">
-                    {metric.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </Card.Content>
-        </Card>
+        <div className="space-y-2">
+          <p className="text-sm leading-6 text-muted">{focusLead}</p>
+          {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
+            <p className="text-xs leading-5 text-warning">{blockedPolicyDetails.summary}</p>
+          ) : null}
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <ScanOverviewMetric
+              label="Vulnerabilities"
+              value={scanVulnerabilityTotal}
+              icon={<Shield01Icon size={17} />}
+            />
+            <ScanOverviewMetric
+              label="Critical + high"
+              value={scanCriticalAndHigh}
+              icon={<Shield01Icon size={17} />}
+              tone="danger"
+            />
+            <ScanOverviewMetric
+              label="Fixable"
+              value={vulnerabilitiesWithFix}
+              icon={<CheckmarkCircle02Icon size={17} />}
+              tone="success"
+            />
+            <ScanOverviewMetric
+              label="Policy blockers"
+              value={policyBlockerCount}
+              icon={<ShieldKeyIcon size={17} />}
+              tone="danger"
+            />
+          </div>
+        </div>
       )}
 
       {/* Scanner info moved to Details tab */}

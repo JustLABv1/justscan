@@ -273,6 +273,55 @@ justscan scan --local my-app:"$CI_COMMIT_SHA"
 Use a pipeline token for both examples. Both commands wait for the organization-policy verdict by
 default; pass `--no-wait` when the job should only submit the scan.
 
+### GitHub Actions: block a registry push until JustScan passes
+
+Build the image into the runner's Docker daemon, scan that exact local image, and only then run
+`docker push`. This repository uses that sequence for its backend, frontend, minimal backend, and
+combined release images through `.github/actions/justscan-local-image-gate`.
+
+Add these repository or environment secrets in GitHub before enabling the workflow:
+
+| Secret | Value |
+| --- | --- |
+| `JUSTSCAN_URL` | HTTPS URL of the JustScan instance. |
+| `JUSTSCAN_ORG_ID` | Organization UUID that owns the CI policy. |
+| `JUSTSCAN_TOKEN` | A least-privilege organization pipeline token. |
+
+The gate runs `justscan scan --local IMAGE` in the CLI container and waits for the organization's
+policy verdict. A failed policy, upload error, or missing secret fails the job before any tag is
+pushed to GHCR. Keep the pipeline token in GitHub Secrets only; never write it into workflow YAML
+or an image build argument.
+
+### CLI container image
+
+The release workflow also publishes a small CLI image at
+`ghcr.io/justlabv1/justscan-cli`. It contains the JustScan CLI, CA certificates, and the Docker
+client—enough to scan a local image through a mounted Docker socket, but no scanner or JustScan
+server.
+
+For a registry image, no Docker socket is required:
+
+~~~sh
+docker run --rm \
+  -e JUSTSCAN_URL -e JUSTSCAN_ORG_ID -e JUSTSCAN_TOKEN \
+  ghcr.io/justlabv1/justscan-cli:latest \
+  scan registry.example.com/team/app:1.2.3
+~~~
+
+For an image already built in the host Docker daemon, mount its socket:
+
+~~~sh
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e JUSTSCAN_URL -e JUSTSCAN_ORG_ID -e JUSTSCAN_TOKEN \
+  ghcr.io/justlabv1/justscan-cli:latest \
+  scan --local my-app:ci
+~~~
+
+Mounting the Docker socket gives the container control of that Docker daemon. Use this only in an
+isolated CI runner you trust, and pin a released CLI version (for example `:1.2.3`) in external
+workflows rather than `:latest`.
+
 ## Global options and environment variables
 
 | Option / variable | Purpose |

@@ -16,6 +16,20 @@ Check for a newer published release with:
 justscan version --check
 ```
 
+## Container image
+
+For CI systems that prefer containers, use `ghcr.io/justlabv1/justscan-cli:<version>`. It contains
+the CLI and Docker client, so a local-image scan only needs the host Docker socket mounted:
+
+```sh
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+  -e JUSTSCAN_URL -e JUSTSCAN_ORG_ID -e JUSTSCAN_TOKEN \
+  ghcr.io/justlabv1/justscan-cli:latest scan --local my-app:ci
+```
+
+Pin a release version outside this repository. A Docker socket grants broad access to the host
+daemon; use it only in a trusted, isolated CI runner.
+
 ## Build locally
 
 ```sh

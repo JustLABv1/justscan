@@ -27,6 +27,10 @@ func pipelineTokenRouteAllowed(method, route string) bool {
 		return true
 	case method == "GET" && route == "/api/v1/orgs/:id/pipeline-scans/:scanId":
 		return true
+	case method == "POST" && route == "/api/v1/scans/upload":
+		return true
+	case method == "POST" && route == "/api/v1/orgs/:id/archive-scans":
+		return true
 	default:
 		return false
 	}
@@ -63,7 +67,7 @@ func Auth(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if tokenType == "user" || tokenType == "personal" {
+		if tokenType == "user" || tokenType == "personal" || tokenType == "cli_session" {
 			userId, err := auth.GetUserIDFromToken(tokenString)
 			if err != nil {
 				httperror.InternalServerError(context, "Error receiving userID from token", err)

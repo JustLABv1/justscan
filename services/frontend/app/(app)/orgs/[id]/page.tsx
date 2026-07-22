@@ -116,8 +116,8 @@ const ORG_TABS = [
   },
   {
     id: 'integrations',
-    label: 'Integrations',
-    description: 'Configure notifications and connect automated CI/CD scanning.',
+    label: 'CI/CD & CLI',
+    description: 'Set up the JustScan CLI, automated CI/CD scanning, and notifications.',
   },
 ] as const;
 
@@ -249,7 +249,7 @@ export default function OrgDetailPage() {
   const requestedSection = searchParams.get('section');
   const activeSection =
     activeTab === 'access'
-      ? requestedSection === 'tokens' ? 'tokens' : 'members'
+      ? 'members'
       : activeTab === 'integrations'
         ? requestedSection === 'notifications' ? 'notifications' : 'ci-cd'
         : null;
@@ -588,31 +588,44 @@ export default function OrgDetailPage() {
             onDeletePolicy={(policyId) => void handleDeletePolicy(policyId)}
           />
         )}
-        {activeTab === 'access' && activeSection === 'members' && (
-          <OrgTeamTab
-            canEditRoles={canEditRoles}
-            canManageMembers={canManageMembers}
-            canTransferOwnership={canEditRoles}
-            currentOrgRole={currentOrgRole}
-            inputClassName={inputCls}
-            invites={invites}
-            isSystemAdmin={isSystemAdmin}
-            members={members}
-            membersLoading={membersLoading}
-            onCopyInviteLink={(invite) => void copyInviteLink(invite)}
-            onMemberRoleChange={(member, nextRole) => void handleMemberRoleChange(member, nextRole)}
-            onOpenInviteModal={openInviteModal}
-            onRemoveMember={(member) => void handleRemoveMember(member)}
-            onRevokeInvite={(invite) => void handleRevokeInvite(invite)}
-            onTransferOwnership={(member) => void handleTransferOwnership(member)}
-            featureDisabledReason={
-              !org?.is_active
-                ? 'Organization is suspended. Invites are disabled.'
-                : !org?.allow_member_invites
-                  ? 'Member invites are disabled by organization policy.'
-                  : undefined
-            }
-          />
+        {activeTab === 'access' && (
+          <div className="space-y-6">
+            <OrgTeamTab
+              canEditRoles={canEditRoles}
+              canManageMembers={canManageMembers}
+              canTransferOwnership={canEditRoles}
+              currentOrgRole={currentOrgRole}
+              inputClassName={inputCls}
+              invites={invites}
+              isSystemAdmin={isSystemAdmin}
+              members={members}
+              membersLoading={membersLoading}
+              onCopyInviteLink={(invite) => void copyInviteLink(invite)}
+              onMemberRoleChange={(member, nextRole) => void handleMemberRoleChange(member, nextRole)}
+              onOpenInviteModal={openInviteModal}
+              onRemoveMember={(member) => void handleRemoveMember(member)}
+              onRevokeInvite={(invite) => void handleRevokeInvite(invite)}
+              onTransferOwnership={(member) => void handleTransferOwnership(member)}
+              featureDisabledReason={
+                !org?.is_active
+                  ? 'Organization is suspended. Invites are disabled.'
+                  : !org?.allow_member_invites
+                    ? 'Member invites are disabled by organization policy.'
+                    : undefined
+              }
+            />
+            <OrgTokensTab
+              orgId={id}
+              canManage={isSystemAdmin || canManageOrg(currentOrgRole)}
+              featureDisabledReason={
+                !org?.is_active
+                  ? 'Organization is suspended. Token creation is disabled.'
+                  : !org?.allow_org_tokens
+                    ? 'Organization tokens are disabled by organization policy.'
+                    : undefined
+              }
+            />
+          </div>
         )}
         {activeTab === 'integrations' && activeSection === 'notifications' && (
           <NotificationManager
@@ -639,19 +652,6 @@ export default function OrgDetailPage() {
               onSave={() => void saveVulnerabilityViewSettings()}
             />
           </div>
-        )}
-        {activeTab === 'access' && activeSection === 'tokens' && (
-          <OrgTokensTab
-            orgId={id}
-            canManage={isSystemAdmin || canManageOrg(currentOrgRole)}
-            featureDisabledReason={
-              !org?.is_active
-                ? 'Organization is suspended. Token creation is disabled.'
-                : !org?.allow_org_tokens
-                  ? 'Organization tokens are disabled by organization policy.'
-                  : undefined
-            }
-          />
         )}
         {activeTab === 'integrations' && activeSection === 'ci-cd' && (
           <OrgCICDTab

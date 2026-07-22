@@ -13,6 +13,7 @@ import {
   Alert,
   Button,
   Card,
+  Chip,
   EmptyState,
   Label,
   Modal,
@@ -468,9 +469,8 @@ export default function TokensPage() {
                 <div>
                   <Card.Title>Tokens</Card.Title>
                   <Card.Description>
-                    Overview of your personal API tokens. Use them for user-scoped scripts and local
-                    automation. For shared CI/CD pipelines, prefer organization tokens so the
-                    pipeline is not tied to one user account.
+                    Personal API tokens and JustScan CLI sessions. Revoke a CLI session here if a
+                    device is lost. For shared CI/CD pipelines, prefer organization tokens.
                   </Card.Description>
                 </div>
 
@@ -490,6 +490,7 @@ export default function TokensPage() {
                 <Table.Content aria-label="Personal API tokens" className="min-w-[820px]">
                   <Table.Header>
                     <Table.Column isRowHeader>Name</Table.Column>
+                    <Table.Column>Type</Table.Column>
                     <Table.Column>Created</Table.Column>
                     <Table.Column>Expiry</Table.Column>
                     <Table.Column>Status</Table.Column>
@@ -509,6 +510,11 @@ export default function TokensPage() {
                         id={token.id}
                         className="hover:bg-[var(--row-hover)]"
                       >
+                        <Table.Cell>
+                          <Chip size="sm" variant="soft" color={token.type === 'cli_session' ? 'accent' : 'default'}>
+                            {token.type === 'cli_session' ? 'CLI session' : 'Personal token'}
+                          </Chip>
+                        </Table.Cell>
                         <Table.Cell>
                           <div className="min-w-0">
                             <p className="font-medium text-zinc-900 dark:text-white break-words">

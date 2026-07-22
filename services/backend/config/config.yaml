@@ -16,6 +16,9 @@ jwt:
 
 security:
   allow_insecure_defaults: true
+  # Pipeline callbacks must target public HTTPS addresses unless explicitly allowlisted.
+  callback_allowed_hosts: []
+  callback_allowed_cidrs: []
 
 allow_origins:
   - "http://localhost:3000"

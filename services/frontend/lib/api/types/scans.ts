@@ -164,7 +164,14 @@ export interface Scan {
   helm_source_path?: string;
   blocked_policy_details?: BlockedPolicyDetails | null;
   compliance_summary?: ScanComplianceSummary | null;
+  pipeline_initiator?: PipelineInitiator | null;
   step_logs?: ScanStepLog[];
+}
+
+export interface PipelineInitiator {
+  source: string;
+  token_id?: string | null;
+  token_description?: string;
 }
 
 export interface AdminScan extends Omit<Scan, 'tags'> {
@@ -263,6 +270,7 @@ export interface ImageSummary {
   has_unassigned_scans?: boolean;
   compliance_summary?: ScanComplianceSummary | null;
   collections?: Collection[];
+  pipeline_initiator?: PipelineInitiator | null;
 }
 
 /** The latest visible scan for one concrete image name and tag pair. */

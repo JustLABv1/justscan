@@ -2,6 +2,27 @@
 
 JustScan can now accept container image scan requests from CI/CD systems by using an organization token and the org-scoped pipeline endpoint.
 
+## JustScan CLI (recommended)
+
+Use the `justscan` CLI in CI when possible. It submits the pipeline request, waits for the
+server-computed verdict, prints a concise summary, and returns a reliable exit code without
+requiring `curl` or `jq`.
+
+```sh
+export JUSTSCAN_URL="https://justscan.example.com"
+export JUSTSCAN_ORG_ID="00000000-0000-0000-0000-000000000000"
+export JUSTSCAN_TOKEN="<pipeline-scoped-org-token>"
+
+justscan scan registry.example.com/my-app:1.2.3 \
+  --source github_actions \
+  --external-ref "$GITHUB_RUN_ID"
+```
+
+The command waits for completion by default. It exits `0` for a pass, `1` for a policy failure,
+and `2` for authentication, network, timeout, or scan-execution errors. Use `--no-wait` when a
+pipeline only needs to submit a scan asynchronously, or `--output json` for machine-readable
+results.
+
 ## Recommended auth model
 
 Use a pipeline-scoped org token from the target organization:
@@ -36,11 +57,6 @@ Request body:
     "url": "https://automation.example.com/justscan/callback",
     "secret": "replace-me"
   },
-  "verdict": {
-    "fail_on_severity": "high",
-    "fail_on_scan_error": true,
-    "fail_on_xray_block": true
-  }
 }
 ```
 
@@ -132,6 +148,7 @@ Delivery behavior:
 ## Supported source values
 
 - `generic`
+- `justscan_cli` (used automatically by the JustScan CLI)
 - `github_actions`
 - `gitlab_ci`
 - `n8n`
@@ -168,8 +185,7 @@ jobs:
             -d '{
               "image": "'"${IMAGE_REF}"'",
               "source": "github_actions",
-              "external_ref": "'"${GITHUB_RUN_ID}"'",
-              "verdict": {"fail_on_severity": "high", "fail_on_scan_error": true, "fail_on_xray_block": true}
+              "external_ref": "'"${GITHUB_RUN_ID}"'"
             }')"
           status_url="$(printf '%s' "$response" | jq -r '.status_url')"
           deadline=$(( $(date +%s) + 1800 ))
@@ -200,8 +216,7 @@ justscan:
         -d "{
           \"image\": \"${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHA}\",
           \"source\": \"gitlab_ci\",
-          \"external_ref\": \"${CI_PIPELINE_ID}\",
-          \"verdict\": {\"fail_on_severity\": \"high\", \"fail_on_scan_error\": true, \"fail_on_xray_block\": true}
+          \"external_ref\": \"${CI_PIPELINE_ID}\"
         }")"
       status_url="$(printf '%s' "$response" | jq -r '.status_url')"
       deadline=$(( $(date +%s) + 1800 ))

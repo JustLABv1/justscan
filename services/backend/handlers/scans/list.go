@@ -128,6 +128,10 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan collections"})
 			return
 		}
+		if err := attachPipelineInitiators(c.Request.Context(), db, scans); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan initiators"})
+			return
+		}
 
 		if scopedOrgID, scoped := scopedOrgIDFromRequest(c); scoped {
 			scanIDs := make([]uuid.UUID, 0, len(scans))

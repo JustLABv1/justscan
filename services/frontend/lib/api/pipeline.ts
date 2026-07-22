@@ -1,13 +1,7 @@
 import { getApiBase } from './base';
 
-export type PipelineSource = 'generic' | 'github_actions' | 'gitlab_ci' | 'n8n';
+export type PipelineSource = 'generic' | 'justscan_cli' | 'github_actions' | 'gitlab_ci' | 'n8n';
 export type PipelineVerdict = 'pending' | 'pass' | 'fail' | 'error';
-
-export interface PipelineVerdictConfig {
-  fail_on_severity: 'none' | 'low' | 'medium' | 'high' | 'critical';
-  fail_on_scan_error: boolean;
-  fail_on_xray_block: boolean;
-}
 
 export interface PipelineScanCreateRequest {
   image: string;
@@ -17,7 +11,6 @@ export interface PipelineScanCreateRequest {
     url?: string;
     secret?: string;
   };
-  verdict: PipelineVerdictConfig;
 }
 
 export interface PipelineScanAccepted {

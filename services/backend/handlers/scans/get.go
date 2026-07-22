@@ -78,6 +78,10 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load blocked policy details"})
 			return
 		}
+		if err := attachPipelineInitiator(c.Request.Context(), db, scan); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan initiator"})
+			return
+		}
 
 		c.JSON(http.StatusOK, scan)
 	}

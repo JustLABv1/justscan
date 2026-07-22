@@ -148,11 +148,31 @@ function scanUserInitials(displayName: string | undefined, ownerUserId: string |
 function TriggeredByAvatar({
   ownerUserId,
   scanUsersById,
+  pipelineInitiator,
 }: {
   ownerUserId?: string | null;
   scanUsersById?: Record<string, { displayName: string }>;
+  pipelineInitiator?: Scan['pipeline_initiator'] | ImageSummary['pipeline_initiator'];
 }) {
   const [isOpen, setIsOpen] = useState(false);
+
+  if (pipelineInitiator) {
+    const source = pipelineInitiator.source === 'justscan_cli' ? 'JustScan CLI' : 'Pipeline API';
+    const token = pipelineInitiator.token_description?.trim();
+    const label = token ? `${source} · ${token}` : source;
+    return (
+      <Tooltip delay={0}>
+        <Tooltip.Trigger className="inline-flex">
+          <Chip color="accent" size="sm" variant="soft">
+            {source}
+          </Chip>
+        </Tooltip.Trigger>
+        <Tooltip.Content placement="top" showArrow>
+          {label}
+        </Tooltip.Content>
+      </Tooltip>
+    );
+  }
 
   if (!ownerUserId) {
     return <span className="text-xs text-zinc-500">—</span>;
@@ -561,7 +581,11 @@ function ImageScansTreeChildrenRows({
               </div>
             </Table.Cell>
             <Table.Cell onClick={openScan}>
-              <TriggeredByAvatar ownerUserId={scan.owner_user_id} scanUsersById={scanUsersById} />
+              <TriggeredByAvatar
+                ownerUserId={scan.owner_user_id}
+                pipelineInitiator={scan.pipeline_initiator}
+                scanUsersById={scanUsersById}
+              />
             </Table.Cell>
             <Table.Cell onClick={openScan}>
               <div className="min-w-0">
@@ -981,6 +1005,7 @@ export function ImageScansTable({
                       >
                         <TriggeredByAvatar
                           ownerUserId={img.owner_user_id}
+                          pipelineInitiator={img.pipeline_initiator}
                           scanUsersById={scanUsersById}
                         />
                       </Table.Cell>

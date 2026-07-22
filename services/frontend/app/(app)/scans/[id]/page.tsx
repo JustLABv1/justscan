@@ -3715,9 +3715,21 @@ export default function ScanDetailPage() {
                   >
                     {scan.helm_chart
                       ? `Helm ${scan.helm_chart}${scan.helm_source_path ? ` · ${scan.helm_source_path}` : ''}`
-                      : 'Direct image scan'}
+                      : scan.pipeline_initiator?.source === 'justscan_cli'
+                        ? 'JustScan CLI'
+                        : scan.pipeline_initiator
+                          ? 'Pipeline API'
+                          : 'Direct image scan'}
                   </dd>
                 </div>
+                {scan.pipeline_initiator ? (
+                  <div>
+                    <dt className="text-xs text-muted">Initiated by</dt>
+                    <dd className="mt-1 text-sm text-foreground">
+                      {scan.pipeline_initiator.token_description || 'Organization pipeline token'}
+                    </dd>
+                  </div>
+                ) : null}
               </dl>
             </Card.Content>
           </Card>

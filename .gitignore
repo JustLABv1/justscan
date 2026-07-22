@@ -66,6 +66,10 @@ services/backend/alertflow-backend
 
 services/backend/config.yaml
 
+# JustScan CLI build output
+services/cli/justscan
+services/cli/justscan.exe
+
 csv-files/
 
 .agents/

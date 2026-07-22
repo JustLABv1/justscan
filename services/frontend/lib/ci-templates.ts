@@ -1,4 +1,4 @@
-import type { PipelineSource, PipelineVerdictConfig } from './api/pipeline';
+import type { PipelineSource } from './api/pipeline';
 
 export type CIProvider = 'github_actions' | 'gitlab_ci' | 'generic' | 'n8n';
 
@@ -7,7 +7,6 @@ export interface CITemplateConfig {
   publicURL: string;
   orgId: string;
   timeoutMinutes: number;
-  verdict: PipelineVerdictConfig;
   callbackURL?: string;
   callbackSecretVariable?: string;
 }
@@ -29,12 +28,7 @@ function requestJSON(config: CITemplateConfig, imageExpression: string, external
   '{
     image: $image,
     source: "${sourceForProvider(config.provider)}",
-    external_ref: $external_ref,
-    verdict: {
-      fail_on_severity: "${config.verdict.fail_on_severity}",
-      fail_on_scan_error: ${config.verdict.fail_on_scan_error},
-      fail_on_xray_block: ${config.verdict.fail_on_xray_block}
-    }${callback}
+    external_ref: $external_ref${callback}
   }'`;
 }
 
@@ -139,7 +133,6 @@ ${shellBody(config, '${IMAGE_REF}', '${CI_BUILD_ID:-manual}', '${JUSTSCAN_ORG_TO
               image: '{{$json.image}}',
               source: 'n8n',
               external_ref: '{{$execution.id}}',
-              verdict: config.verdict,
               ...(config.callbackURL
                 ? {
                     callback: {

@@ -30,7 +30,7 @@ func ListUserTokens(c *gin.Context, db *bun.DB) {
 	var tokens []models.Tokens
 	q := db.NewSelect().Model(&tokens).
 		Column("id", "description", "type", "disabled", "disabled_reason", "created_at", "expires_at").
-		Where("user_id = ? AND type = 'personal'", userID).
+		Where("user_id = ? AND type IN (?)", userID, bun.In([]string{"personal", "cli_session"})).
 		OrderExpr("created_at DESC").
 		Limit(limit).
 		Offset(offset)

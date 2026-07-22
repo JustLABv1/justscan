@@ -19,6 +19,9 @@ func Token(router *gin.RouterGroup, db *bun.DB) {
 		})
 
 		protected := token.Group("").Use(middlewares.Auth(db))
+		protected.DELETE("/current", func(c *gin.Context) {
+			tokens.RevokeCurrentToken(c, db)
+		})
 		protected.PUT("/:id", func(c *gin.Context) {
 			tokens.UpdateToken(c, db)
 		})

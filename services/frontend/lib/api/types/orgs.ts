@@ -202,6 +202,11 @@ export interface PipelineScanHistoryItem {
   last_attempt_at?: string | null;
   delivered_at?: string | null;
   created_at: string;
+  initiator?: {
+    source: string;
+    token_id?: string | null;
+    token_description?: string;
+  };
   scan: {
     id: string;
     image_name: string;

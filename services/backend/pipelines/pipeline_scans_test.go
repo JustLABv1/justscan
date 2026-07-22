@@ -8,47 +8,29 @@ import (
 
 func TestComputeVerdictReturnsPendingForActiveScan(t *testing.T) {
 	scan := &models.Scan{Status: models.ScanStatusRunning}
-	cfg := models.PipelineVerdictConfig{FailOnSeverity: "high", FailOnScanError: true, FailOnXrayBlock: true}
-
-	if verdict := ComputeVerdict(cfg, scan); verdict != models.PipelineVerdictPending {
+	if verdict := ComputeVerdict(scan, 0, nil); verdict != models.PipelineVerdictPending {
 		t.Fatalf("ComputeVerdict() = %q, want %q", verdict, models.PipelineVerdictPending)
 	}
 }
 
-func TestComputeVerdictFailsOnSeverityThreshold(t *testing.T) {
-	scan := &models.Scan{
-		Status:        models.ScanStatusCompleted,
-		CriticalCount: 0,
-		HighCount:     2,
-	}
-	cfg := models.PipelineVerdictConfig{FailOnSeverity: "high", FailOnScanError: true, FailOnXrayBlock: true}
-
-	if verdict := ComputeVerdict(cfg, scan); verdict != models.PipelineVerdictFail {
+func TestComputeVerdictFailsOnOrganizationPolicy(t *testing.T) {
+	scan := &models.Scan{Status: models.ScanStatusCompleted, HighCount: 2}
+	results := []models.ComplianceResult{{Status: "fail"}}
+	if verdict := ComputeVerdict(scan, 1, results); verdict != models.PipelineVerdictFail {
 		t.Fatalf("ComputeVerdict() = %q, want %q", verdict, models.PipelineVerdictFail)
 	}
 }
 
 func TestComputeVerdictReturnsErrorForScanFailure(t *testing.T) {
-	scan := &models.Scan{
-		Status:       models.ScanStatusFailed,
-		CurrentStep:  models.ScanStepFailed,
-		ErrorMessage: "worker crashed",
-	}
-	cfg := models.PipelineVerdictConfig{FailOnSeverity: "high", FailOnScanError: true, FailOnXrayBlock: true}
-
-	if verdict := ComputeVerdict(cfg, scan); verdict != models.PipelineVerdictError {
+	scan := &models.Scan{Status: models.ScanStatusFailed, CurrentStep: models.ScanStepFailed}
+	if verdict := ComputeVerdict(scan, 0, nil); verdict != models.PipelineVerdictError {
 		t.Fatalf("ComputeVerdict() = %q, want %q", verdict, models.PipelineVerdictError)
 	}
 }
 
-func TestComputeVerdictFailsOnBlockedXrayPolicy(t *testing.T) {
-	scan := &models.Scan{
-		Status:         models.ScanStatusFailed,
-		ExternalStatus: models.ScanExternalStatusBlockedByXrayPolicy,
-	}
-	cfg := models.PipelineVerdictConfig{FailOnSeverity: "none", FailOnScanError: true, FailOnXrayBlock: true}
-
-	if verdict := ComputeVerdict(cfg, scan); verdict != models.PipelineVerdictFail {
-		t.Fatalf("ComputeVerdict() = %q, want %q", verdict, models.PipelineVerdictFail)
+func TestComputeVerdictWaitsForOrganizationPolicies(t *testing.T) {
+	scan := &models.Scan{Status: models.ScanStatusCompleted}
+	if verdict := ComputeVerdict(scan, 1, nil); verdict != models.PipelineVerdictPending {
+		t.Fatalf("ComputeVerdict() = %q, want %q", verdict, models.PipelineVerdictPending)
 	}
 }

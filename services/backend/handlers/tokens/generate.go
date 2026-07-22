@@ -19,6 +19,7 @@ type TokenRequest struct {
 	Email      string `json:"email"`
 	Password   string `json:"password"`
 	RememberMe bool   `json:"remember_me"`
+	Client     string `json:"client"`
 }
 
 func GenerateTokenUser(db *bun.DB, context *gin.Context) {
@@ -68,11 +69,17 @@ func GenerateTokenUser(db *bun.DB, context *gin.Context) {
 	}
 
 	// write token in tokens table
+	tokenType := "user"
+	description := "User token"
+	if request.Client == "justscan_cli" {
+		tokenType = "cli_session"
+		description = "JustScan CLI session"
+	}
 	token := models.Tokens{
 		UserID:      user.ID.String(),
 		Key:         tokenString,
-		Description: "User token",
-		Type:        "user",
+		Description: description,
+		Type:        tokenType,
 		ExpiresAt:   time.Unix(ExpiresAt, 0),
 		CreatedAt:   time.Now(),
 	}

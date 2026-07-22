@@ -46,3 +46,21 @@ jobs:
       - name: Build
         working-directory: services/backend
         run: go build ./...
+
+  cli-test:
+    name: CLI — Test & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: services/cli/go.mod
+          cache-dependency-path: services/cli/go.sum
+
+      - name: Test
+        working-directory: services/cli
+        run: |
+          go vet ./...
+          go test ./...
+          go build ./cmd/justscan

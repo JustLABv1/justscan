@@ -79,9 +79,7 @@ type DisplayMessage = {
 };
 
 type AssistantActionResult =
-  | { kind: 'ignored' }
-  | { kind: 'executed' }
-  | { kind: 'follow-up'; prompt: LocalAssistantPrompt };
+  { kind: 'ignored' } | { kind: 'executed' } | { kind: 'follow-up'; prompt: LocalAssistantPrompt };
 
 type ScanIntent = {
   images: string[];
@@ -143,7 +141,15 @@ function MessageAvatar({ role }: { role: 'user' | 'assistant' }) {
   );
 }
 
-export function AssistantExperience({ forcedScopeType, forcedScopeRef, embedded = false }: { forcedScopeType?: string; forcedScopeRef?: string; embedded?: boolean }) {
+export function AssistantExperience({
+  forcedScopeType,
+  forcedScopeRef,
+  embedded = false,
+}: {
+  forcedScopeType?: string;
+  forcedScopeRef?: string;
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
@@ -366,7 +372,7 @@ export function AssistantExperience({ forcedScopeType, forcedScopeRef, embedded 
     try {
       const nextScan = await reScan(scopeContext.rescanId);
       toast.success('Re-scan queued');
-      router.push(`/scans/${nextScan.id}`);
+      router.push(`/scans/details/${nextScan.id}`);
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to queue re-scan');
     } finally {
@@ -901,14 +907,14 @@ async function buildScopeContext(
       title: vulnerability.vuln_id || 'Vulnerability scope',
       description: `${vulnerability.severity} finding in ${scan.image_name}:${scan.image_tag}`,
       context: summaryLines.join('\n'),
-      openHref: `/scans/${scanId}`,
+      openHref: `/scans/details/${scanId}`,
       sources: [
         {
           resourceType: 'scan',
           resourceId: scan.id,
           title: `${scan.image_name}:${scan.image_tag}`,
           snippet: `Status ${scan.status}. ${scan.critical_count} critical, ${scan.high_count} high.`,
-          url: `/scans/${scan.id}`,
+          url: `/scans/details/${scan.id}`,
         },
         {
           resourceType: 'vulnerability',
@@ -983,7 +989,7 @@ function buildScanContext(scan: Scan, vulnerabilities: Vulnerability[]): ScopeCo
     title: `${scan.image_name}:${scan.image_tag}`,
     description: `Scan ${scan.status} with ${scan.critical_count + scan.high_count + scan.medium_count + scan.low_count + scan.unknown_count} recorded findings.`,
     context: lines.join('\n'),
-    openHref: `/scans/${scan.id}`,
+    openHref: `/scans/details/${scan.id}`,
     rescanId: scan.id,
     sources: [
       {
@@ -991,7 +997,7 @@ function buildScanContext(scan: Scan, vulnerabilities: Vulnerability[]): ScopeCo
         resourceId: scan.id,
         title: `${scan.image_name}:${scan.image_tag}`,
         snippet: `Status ${scan.status}. Critical ${scan.critical_count}, High ${scan.high_count}, Medium ${scan.medium_count}.`,
-        url: `/scans/${scan.id}`,
+        url: `/scans/details/${scan.id}`,
       },
       ...vulnerabilities.slice(0, 3).map((vulnerability) => ({
         resourceType: 'vulnerability',
@@ -1261,7 +1267,7 @@ function resolveAssistantRoute(message: string, scopeContext: ScopeContext | nul
     /^(?:\/open|open|go to|navigate to)\s+scan\s+([0-9a-f-]{36})$/i
   );
   if (scanMatch?.[1]) {
-    return `/scans/${scanMatch[1]}`;
+    return `/scans/details/${scanMatch[1]}`;
   }
 
   return '';
@@ -1348,14 +1354,16 @@ async function executeAssistantToolCall(
       throw new Error('No scans were queued');
     }
     context.onQueuedScans(createdScans.length);
-    context.router.push(createdScans.length === 1 ? `/scans/${createdScans[0].id}` : '/scans');
+    context.router.push(
+      createdScans.length === 1 ? `/scans/details/${createdScans[0].id}` : '/scans'
+    );
     return { kind: 'executed' };
   }
 
   if (toolCall.name === 'rescan_scope' && context.scopeContext?.rescanId) {
     const nextScan = await reScan(context.scopeContext.rescanId);
     context.onQueuedRescan();
-    context.router.push(`/scans/${nextScan.id}`);
+    context.router.push(`/scans/details/${nextScan.id}`);
     return { kind: 'executed' };
   }
 
@@ -1420,20 +1428,18 @@ async function resolveAssistantScanRegistry(input: {
     prompt: buildAssistantPrompt(
       `Local Trivy scanning is unavailable here, so I need an Artifactory Xray registry for ${describeImages(input.images)}. Which registry should I use?`,
       [
-        ...xrayRegistries.slice(0, 6).map(
-          (registry): AIToolCall => ({
-            name: 'start_scan',
-            status: 'pending',
-            arguments: {
-              images: input.images,
-              registryId: registry.id,
-              registryLabel: registry.name,
-              wantsXray: true,
-              xrayRepository: registry.xray_repository,
-            },
-            confirmationRequired: false,
-          })
-        ),
+        ...xrayRegistries.slice(0, 6).map((registry): AIToolCall => ({
+          name: 'start_scan',
+          status: 'pending',
+          arguments: {
+            images: input.images,
+            registryId: registry.id,
+            registryLabel: registry.name,
+            wantsXray: true,
+            xrayRepository: registry.xray_repository,
+          },
+          confirmationRequired: false,
+        })),
         {
           name: 'open_route',
           status: 'pending',
@@ -1461,20 +1467,18 @@ async function resolveAssistantXrayRepository(
       prompt: buildAssistantPrompt(
         `${registry.name} does not have a default Artifactory repo for ${describeImages(images)}. Which repo should I use?`,
         [
-          ...repositories.slice(0, 6).map(
-            (repository): AIToolCall => ({
-              name: 'start_scan',
-              status: 'pending',
-              arguments: {
-                images,
-                registryId: registry.id,
-                registryLabel: registry.name,
-                wantsXray: true,
-                xrayRepository: repository.key,
-              },
-              confirmationRequired: false,
-            })
-          ),
+          ...repositories.slice(0, 6).map((repository): AIToolCall => ({
+            name: 'start_scan',
+            status: 'pending',
+            arguments: {
+              images,
+              registryId: registry.id,
+              registryLabel: registry.name,
+              wantsXray: true,
+              xrayRepository: repository.key,
+            },
+            confirmationRequired: false,
+          })),
           {
             name: 'open_route',
             status: 'pending',

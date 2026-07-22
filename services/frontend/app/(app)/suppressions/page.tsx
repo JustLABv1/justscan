@@ -684,7 +684,7 @@ export default function SuppressionsPage() {
                               onPress={() => {
                                 if (!image.latest_scan_id) return;
                                 imagesModal.close();
-                                router.push(`/scans/${image.latest_scan_id}`);
+                                router.push(`/scans/details/${image.latest_scan_id}`);
                               }}
                             >
                               Open Scan

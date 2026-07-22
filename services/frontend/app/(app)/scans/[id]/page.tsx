@@ -1,7 +1,6 @@
 'use client';
 import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
 import { useConfirmDialog } from '@/components/confirm-dialog';
-import { EvilRadarChart } from '@/components/evilcharts/charts/radar-chart';
 import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
 import { ManageSuppressionAccessModal } from '@/components/suppressions/manage-suppression-access-modal';
 import { useToast } from '@/components/toast';
@@ -119,8 +118,15 @@ import {
   ShieldKeyIcon,
 } from 'hugeicons-react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
+
+const EvilRadarChart = dynamic(
+  () =>
+    import('@/components/evilcharts/charts/radar-chart').then((module) => module.EvilRadarChart),
+  { ssr: false }
+);
 
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -528,6 +534,7 @@ export default function ScanDetailPage() {
     return savedPreference === null ? true : savedPreference === '1';
   });
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
+
   const [error, setError] = useState('');
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [tagLoading, setTagLoading] = useState('');
@@ -1371,7 +1378,7 @@ export default function ScanDetailPage() {
     try {
       const newScan = await reScan(id);
       toast.success('Re-scan queued');
-      router.push(`/scans/${newScan.id}`);
+      router.push(`/scans/details/${newScan.id}`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to queue re-scan');
     } finally {
@@ -1686,7 +1693,8 @@ export default function ScanDetailPage() {
       'the selected organization';
     const ok = await confirm({
       title: `Transfer suppression ownership to ${destination}?`,
-      message: 'The current owner will retain shared access and existing organization grants will remain.',
+      message:
+        'The current owner will retain shared access and existing organization grants will remain.',
       confirmLabel: 'Transfer',
       variant: 'danger',
     });
@@ -1699,7 +1707,9 @@ export default function ScanDetailPage() {
       suppressionAccessModal.close();
       await loadScan();
     } catch (err: unknown) {
-      setSuppressionAccessError(err instanceof Error ? err.message : 'Failed to transfer ownership');
+      setSuppressionAccessError(
+        err instanceof Error ? err.message : 'Failed to transfer ownership'
+      );
     } finally {
       setSuppressionAccessSaving(false);
     }

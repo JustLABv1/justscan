@@ -809,7 +809,7 @@ function StatusItemHistoryModal({
     (fetchedSelectedScan.scanId === selectedScanId ? fetchedSelectedScan.scan : null);
   const displayedScan = selectedScan ?? item;
   const scanDetailsHref =
-    scanAccess === 'allowed' && selectedScanId ? `/scans/${selectedScanId}` : '';
+    scanAccess === 'allowed' && selectedScanId ? `/scans/details/${selectedScanId}` : '';
   const totalFindings = displayedScan
     ? displayedScan.critical_count +
       displayedScan.high_count +
@@ -949,7 +949,11 @@ function StatusItemHistoryModal({
 
               <div className="space-y-4">
                 {historyError ? (
-                  <StatusAlert status="danger" title="Scan history failed to load" description={historyError} />
+                  <StatusAlert
+                    status="danger"
+                    title="Scan history failed to load"
+                    description={historyError}
+                  />
                 ) : null}
 
                 <ScanTimeline
@@ -1219,9 +1223,7 @@ export default function PublicStatusPage() {
         const hasPolicyFailure = item.compliance_status === 'fail';
         acc.total += 1;
         acc.attention +=
-          operationalStatus === 'healthy' &&
-          !hasPolicyFailure &&
-          !isExposedStatus(exposureStatus)
+          operationalStatus === 'healthy' && !hasPolicyFailure && !isExposedStatus(exposureStatus)
             ? 0
             : 1;
         acc.issues += hasOperationalIssue || hasPolicyFailure ? 1 : 0;

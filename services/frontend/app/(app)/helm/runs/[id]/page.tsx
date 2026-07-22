@@ -491,7 +491,7 @@ export default function HelmRunDetailPage() {
                     <Table.Row key={item.key} id={item.key} className="hover:bg-[var(--row-hover)]">
                       <Table.Cell>
                         <Link
-                          href={`/scans/${scan.id}`}
+                          href={`/scans/details/${scan.id}`}
                           className="block truncate font-mono text-sm"
                           title={scan.image_name}
                         >
@@ -541,7 +541,7 @@ export default function HelmRunDetailPage() {
                             type="button"
                             size="sm"
                             variant="secondary"
-                            onPress={() => router.push(`/scans/${scan.id}`)}
+                            onPress={() => router.push(`/scans/details/${scan.id}`)}
                           >
                             View
                           </Button>

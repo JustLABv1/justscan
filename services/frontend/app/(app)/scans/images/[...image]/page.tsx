@@ -40,6 +40,8 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
+type MetricTone = 'default' | 'danger' | 'success';
+
 const STATUS_OPTIONS = [
   { id: '', label: 'Any state' },
   { id: 'failed', label: 'Failed' },
@@ -73,23 +75,35 @@ function Metric({
   value,
   description,
   icon,
+  tone = 'default',
 }: {
   label: string;
   value: string | number;
   description?: string;
   icon: ReactNode;
+  tone?: MetricTone;
 }) {
+  const toneClassName = {
+    default: 'border-transparent',
+    success: 'border-success/35',
+    danger: 'border-danger/40',
+  }[tone];
+  const labelClassName =
+    tone === 'default' ? 'text-muted' : tone === 'success' ? 'text-success' : 'text-danger';
+  const iconClassName =
+    tone === 'default' ? 'text-muted' : tone === 'success' ? 'text-success' : 'text-danger';
+
   return (
-    <Card className="min-w-0 px-3 py-2.5">
+    <Card className={`min-w-0 px-3 py-2.5 ${toneClassName}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-muted">{label}</p>
+          <p className={`text-xs font-medium ${labelClassName}`}>{label}</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
           {description ? (
             <p className="mt-0.5 truncate text-[11px] leading-4 text-muted">{description}</p>
           ) : null}
         </div>
-        <div className="shrink-0 text-muted">{icon}</div>
+        <div className={`shrink-0 ${iconClassName}`}>{icon}</div>
       </div>
     </Card>
   );
@@ -223,12 +237,14 @@ export default function ImageScansPage() {
             value={stats.completed_scans}
             description="Scanner completed successfully"
             icon={<CheckmarkCircle02Icon size={17} />}
+            tone="success"
           />
           <Metric
             label="Execution failed"
             value={stats.failed_scans}
             description="Scanner run failed"
             icon={<UnhappyIcon size={17} />}
+            tone="danger"
           />
           {stats.policy_available ? (
             <>
@@ -237,12 +253,14 @@ export default function ImageScansPage() {
                 value={stats.policy_passed_scans}
                 description={`${stats.policy_evaluated_scans} evaluated`}
                 icon={<CheckmarkCircle02Icon size={17} />}
+                tone="success"
               />
               <Metric
                 label="Policy failed"
                 value={stats.policy_failed_scans}
                 description={`${stats.policy_evaluated_scans} evaluated`}
                 icon={<Shield01Icon size={17} />}
+                tone="danger"
               />
             </>
           ) : null}
@@ -416,6 +434,7 @@ export default function ImageScansPage() {
           childRefreshKey={{}}
           expanded={expanded}
           hasActiveFilters={hasFilters}
+          hideImageName
           loading={loading}
           onCancel={() => {}}
           onDelete={() => {}}

@@ -53,6 +53,7 @@ type ArtifactScansTableProps = {
   onShareToWorkspace: (scanIds: string[]) => void;
   onTransferToWorkspace: (scanIds: string[]) => void;
   selectedScans: Set<string>;
+  hideImageName?: boolean;
 };
 
 function artifactKey(imageName: string, imageTag: string) {
@@ -75,18 +76,25 @@ function ArtifactReference({
   image_name: imageName,
   image_tag: imageTag,
   scan_count: scanCount,
-}: ArtifactSummary) {
+  hideImageName = false,
+}: ArtifactSummary & { hideImageName?: boolean }) {
   const { registryHost, repositoryPath } = splitImageReference(imageName);
   const reference = `${imageName}:${imageTag}`;
 
   return (
     <div className="min-w-0" title={reference}>
       <p className="break-all font-mono text-sm font-medium leading-5 text-zinc-800 dark:text-zinc-100">
-        {repositoryPath}
-        <span className="text-accent">:{imageTag}</span>
+        {hideImageName ? (
+          <span className="text-accent">{imageTag}</span>
+        ) : (
+          <>
+            {repositoryPath}
+            <span className="text-accent">:{imageTag}</span>
+          </>
+        )}
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-        {registryHost ? (
+        {!hideImageName && registryHost ? (
           <span className="break-all font-mono text-[11px] text-zinc-500">{registryHost}</span>
         ) : null}
         <Chip className="text-[10px] font-semibold" color="accent" size="sm" variant="soft">
@@ -310,7 +318,7 @@ function ArtifactHistoryRows({
 
         const scan = row.scan;
         if (!scan) return null;
-        const openScan = () => router.push(`/scans/${scan.id}`);
+        const openScan = () => router.push(`/scans/details/${scan.id}`);
         return (
           <Table.Row
             id={scan.id}
@@ -329,7 +337,7 @@ function ArtifactHistoryRows({
             <Table.Cell>
               <Link
                 className="font-mono text-xs text-zinc-500 hover:text-accent"
-                href={`/scans/${scan.id}`}
+                href={`/scans/details/${scan.id}`}
                 onClick={(event) => event.stopPropagation()}
               >
                 {scan.id.slice(0, 8)}…
@@ -378,7 +386,7 @@ function ArtifactHistoryRows({
                       label: 'Open in new tab',
                       icon: <LinkSquare02Icon size={14} aria-hidden />,
                       onAction: () =>
-                        window.open(`/scans/${scan.id}`, '_blank', 'noopener,noreferrer'),
+                        window.open(`/scans/details/${scan.id}`, '_blank', 'noopener,noreferrer'),
                     },
                     ...(allowMutationActions &&
                     (scan.status === 'pending' || scan.status === 'running')
@@ -451,6 +459,7 @@ export function ArtifactScansTable({
   onShareToWorkspace,
   onTransferToWorkspace,
   selectedScans,
+  hideImageName = false,
 }: ArtifactScansTableProps) {
   const router = useRouter();
   const toast = useToast();
@@ -568,7 +577,7 @@ export function ArtifactScansTable({
               />
             </Table.Column>
             <Table.Column id="expander" className="w-9" />
-            <Table.Column isRowHeader>Image &amp; tag</Table.Column>
+            <Table.Column isRowHeader>{hideImageName ? 'Tag' : 'Image & tag'}</Table.Column>
             <Table.Column>Latest scan</Table.Column>
             <Table.Column>Findings</Table.Column>
             <Table.Column>Labels</Table.Column>
@@ -608,7 +617,8 @@ export function ArtifactScansTable({
               <Table.Collection items={artifacts} dependencies={[selectedScans]}>
                 {(artifact) => {
                   const key = artifactKey(artifact.image_name, artifact.image_tag);
-                  const openLatestScan = () => router.push(`/scans/${artifact.latest_scan_id}`);
+                  const openLatestScan = () =>
+                    router.push(`/scans/details/${artifact.latest_scan_id}`);
                   return (
                     <Table.Row
                       id={key}
@@ -652,16 +662,16 @@ export function ArtifactScansTable({
                         <Link
                           aria-label={`Open latest scan for ${artifact.image_name}:${artifact.image_tag}`}
                           className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                          href={`/scans/${artifact.latest_scan_id}`}
+                          href={`/scans/details/${artifact.latest_scan_id}`}
                         >
-                          <ArtifactReference {...artifact} />
+                          <ArtifactReference {...artifact} hideImageName={hideImageName} />
                         </Link>
                       </Table.Cell>
                       <Table.Cell>
                         <Link
                           aria-label={`Open latest scan ${artifact.latest_scan_id}`}
                           className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                          href={`/scans/${artifact.latest_scan_id}`}
+                          href={`/scans/details/${artifact.latest_scan_id}`}
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <StatusBadge
@@ -683,7 +693,7 @@ export function ArtifactScansTable({
                         <Link
                           aria-label={`Open findings for ${artifact.image_name}:${artifact.image_tag}`}
                           className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                          href={`/scans/${artifact.latest_scan_id}`}
+                          href={`/scans/details/${artifact.latest_scan_id}`}
                         >
                           <div className="flex items-center gap-1.5">
                             <SevCount count={artifact.critical_count} level="critical" />
@@ -697,7 +707,7 @@ export function ArtifactScansTable({
                         <Link
                           aria-label={`Open latest scan labels for ${artifact.image_name}:${artifact.image_tag}`}
                           className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                          href={`/scans/${artifact.latest_scan_id}`}
+                          href={`/scans/details/${artifact.latest_scan_id}`}
                         >
                           <ScanTagBadgeList tags={artifact.tags} />
                         </Link>
@@ -706,7 +716,7 @@ export function ArtifactScansTable({
                         <Link
                           aria-label={`Open latest scan for ${artifact.image_name}:${artifact.image_tag}`}
                           className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                          href={`/scans/${artifact.latest_scan_id}`}
+                          href={`/scans/details/${artifact.latest_scan_id}`}
                         >
                           <CollectionBadgeList
                             collections={artifact.collections}
@@ -731,7 +741,7 @@ export function ArtifactScansTable({
                                 icon: <LinkSquare02Icon size={14} aria-hidden />,
                                 onAction: () =>
                                   window.open(
-                                    `/scans/${artifact.latest_scan_id}`,
+                                    `/scans/details/${artifact.latest_scan_id}`,
                                     '_blank',
                                     'noopener,noreferrer'
                                   ),

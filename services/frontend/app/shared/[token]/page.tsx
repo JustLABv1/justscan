@@ -325,17 +325,7 @@ export default function SharedScanPage() {
             const end = start + LIMIT;
             return { data: prioritized.slice(start, end), total: prioritized.length };
           })()
-        : listSharedVulnerabilities(
-            token,
-            page,
-            LIMIT,
-            severity,
-            pkg,
-            fix,
-            cvss,
-            sortBy,
-            sortDir
-          );
+        : listSharedVulnerabilities(token, page, LIMIT, severity, pkg, fix, cvss, sortBy, sortDir);
 
       request
         .then((res) => {
@@ -369,7 +359,7 @@ export default function SharedScanPage() {
     try {
       const result = await rescanShared(token);
       if (result.type === 'authenticated') {
-        router.push(`/scans/${result.scan_id}`);
+        router.push(`/scans/details/${result.scan_id}`);
       } else {
         router.push(`/public/scan/${result.scan_id}`);
       }

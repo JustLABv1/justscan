@@ -196,7 +196,7 @@ function LastScanState({
     item.last_scanned_at ?? item.last_scan?.completed_at ?? item.last_scan?.created_at;
   return (
     <Link
-      href={`/scans/${item.last_scan_id}`}
+      href={`/scans/details/${item.last_scan_id}`}
       className="inline-flex max-w-fit flex-col gap-1.5 px-2 py-1 transition-colors hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 dark:hover:bg-zinc-800/60"
       title={fullDate(timestamp, {
         hourCycle,

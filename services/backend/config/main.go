@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -39,6 +40,10 @@ type RestfulConf struct {
 
 type SecurityConf struct {
 	AllowInsecureDefaults bool `mapstructure:"allow_insecure_defaults"`
+	// Callback allowlists are opt-in escapes for self-hosted deployments that
+	// intentionally deliver pipeline callbacks to private networks.
+	CallbackAllowedHosts []string `mapstructure:"callback_allowed_hosts"`
+	CallbackAllowedCIDRs []string `mapstructure:"callback_allowed_cidrs"`
 }
 
 type AIConf struct {
@@ -140,6 +145,8 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"encryption.master_secret":             "BACKEND_ENCRYPTION_MASTER_SECRET",
 		"jwt.secret":                           "BACKEND_JWT_SECRET",
 		"security.allow_insecure_defaults":     "BACKEND_SECURITY_ALLOW_INSECURE_DEFAULTS",
+		"security.callback_allowed_hosts":      "BACKEND_SECURITY_CALLBACK_ALLOWED_HOSTS",
+		"security.callback_allowed_cidrs":      "BACKEND_SECURITY_CALLBACK_ALLOWED_CIDRS",
 		"runner.shared_runner_secret":          "BACKEND_RUNNER_SHARED_RUNNER_SECRET",
 		"local_auth.enabled":                   "BACKEND_LOCAL_AUTH_ENABLED",
 	}
@@ -165,6 +172,12 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 	if err := cm.viper.Unmarshal(&config); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
+	if raw, ok := os.LookupEnv("BACKEND_SECURITY_CALLBACK_ALLOWED_HOSTS"); ok {
+		config.Security.CallbackAllowedHosts = splitConfigList(raw)
+	}
+	if raw, ok := os.LookupEnv("BACKEND_SECURITY_CALLBACK_ALLOWED_CIDRS"); ok {
+		config.Security.CallbackAllowedCIDRs = splitConfigList(raw)
+	}
 	if err := cm.validate(&config); err != nil {
 		return err
 	}
@@ -181,6 +194,17 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 	}).Debug("Configuration loaded successfully")
 
 	return nil
+}
+
+func splitConfigList(raw string) []string {
+	values := strings.Split(raw, ",")
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 func (cm *ConfigurationManager) setDefaults(config *RestfulConf) {

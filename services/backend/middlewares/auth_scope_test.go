@@ -15,6 +15,7 @@ func TestPipelineTokenRouteAllowed(t *testing.T) {
 		{"create pipeline scan", http.MethodPost, "/api/v1/orgs/:id/pipeline-scans", true},
 		{"read pipeline scan", http.MethodGet, "/api/v1/orgs/:id/pipeline-scans/:scanId", true},
 		{"upload archive", http.MethodPost, "/api/v1/scans/upload", true},
+		{"upload archive to organization", http.MethodPost, "/api/v1/orgs/:id/archive-scans", true},
 		{"list org tokens", http.MethodGet, "/api/v1/orgs/:id/tokens", false},
 		{"create org token", http.MethodPost, "/api/v1/orgs/:id/tokens", false},
 		{"wrong method", http.MethodDelete, "/api/v1/orgs/:id/pipeline-scans/:scanId", false},

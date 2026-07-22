@@ -139,6 +139,11 @@ func CreateScanRequest(ctx context.Context, db bun.IDB, scanID, orgID string, cf
 	if parsedScanID == nil || parsedOrgID == nil {
 		return fmt.Errorf("invalid scan or org id")
 	}
+	if strings.TrimSpace(cfg.Callback.URL) != "" {
+		if _, err := ValidateCallbackURL(ctx, cfg.Callback.URL); err != nil {
+			return err
+		}
+	}
 
 	encryptedSecret, err := EncryptCallbackSecret(cfg.Callback.Secret)
 	if err != nil {
@@ -367,7 +372,11 @@ func deliverCallback(ctx context.Context, db *bun.DB, req *models.PipelineScanRe
 		return markCallbackFailure(ctx, db, req, err, true)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, req.CallbackURL, strings.NewReader(string(body)))
+	callbackURL, err := ValidateCallbackURL(ctx, req.CallbackURL)
+	if err != nil {
+		return markCallbackFailure(ctx, db, req, err, true)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, callbackURL.String(), strings.NewReader(string(body)))
 	if err != nil {
 		return markCallbackFailure(ctx, db, req, err, true)
 	}
@@ -380,7 +389,7 @@ func deliverCallback(ctx context.Context, db *bun.DB, req *models.PipelineScanRe
 		return markCallbackFailure(ctx, db, req, err, true)
 	}
 
-	client := &http.Client{Timeout: callbackHTTPTimeout}
+	client := newCallbackHTTPClient()
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return markCallbackFailure(ctx, db, req, err, false)

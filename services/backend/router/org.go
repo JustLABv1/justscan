@@ -41,6 +41,7 @@ func Orgs(router *gin.RouterGroup, db *bun.DB) {
 		r.POST("/:id/scans/:scanId", orgs.AssignScan(db))
 		r.DELETE("/:id/scans/:scanId", orgs.RemoveScan(db))
 		r.POST("/:id/pipeline-scans", scans.CreatePipelineScan(db))
+		r.POST("/:id/archive-scans", scans.CreateOrgUploadedArchiveScan(db))
 		r.GET("/:id/pipeline-scans", scans.ListPipelineScans(db))
 		r.GET("/:id/pipeline-scans/:scanId", scans.GetPipelineScan(db))
 

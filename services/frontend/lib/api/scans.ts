@@ -152,9 +152,11 @@ export const createUploadedArchiveScan = (input: {
   if (input.imageName) formData.append('image_name', input.imageName);
   if (input.imageTag) formData.append('image_tag', input.imageTag);
   if (input.platform) formData.append('platform', input.platform);
-  if (input.orgId) formData.append('org_id', input.orgId);
   if (input.tagIds && input.tagIds.length > 0) formData.append('tag_ids', input.tagIds.join(','));
-  return reqForm<Scan>('POST', '/api/v1/scans/upload', formData);
+  const path = input.orgId
+    ? `/api/v1/orgs/${input.orgId}/archive-scans`
+    : '/api/v1/scans/upload';
+  return reqForm<Scan>('POST', path, formData);
 };
 
 export const deleteScan = (id: string) => req<{ result: string }>('DELETE', `/api/v1/scans/${id}`);

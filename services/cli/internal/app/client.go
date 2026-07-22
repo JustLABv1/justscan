@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -160,57 +161,68 @@ func (c *Client) CreateScan(orgID string, request ScanRequest) (AcceptedScan, er
 	return accepted, nil
 }
 
-func (c *Client) UploadArchive(orgID string, archive io.Reader, filename string, size int64, imageName, imageTag, platform string) (UploadedArchiveScan, error) {
+func (c *Client) UploadArchive(ctx context.Context, orgID string, archive io.Reader, filename string, size int64, imageName, imageTag, platform string) (UploadedArchiveScan, error) {
+	if size > maxArchiveBytes {
+		return UploadedArchiveScan{}, errors.New("archive exceeds the 5 GB upload limit")
+	}
 	pipeReader, pipeWriter := io.Pipe()
 	form := multipart.NewWriter(pipeWriter)
 	errCh := make(chan error, 1)
 	go func() {
-		defer pipeWriter.Close()
 		defer close(errCh)
-		if err := form.WriteField("org_id", orgID); err != nil {
+		fail := func(err error) {
+			_ = pipeWriter.CloseWithError(err)
 			errCh <- err
-			return
 		}
 		if err := form.WriteField("image_name", imageName); err != nil {
-			errCh <- err
+			fail(err)
 			return
 		}
 		if err := form.WriteField("image_tag", imageTag); err != nil {
-			errCh <- err
+			fail(err)
 			return
 		}
 		if platform != "" {
 			if err := form.WriteField("platform", platform); err != nil {
-				errCh <- err
+				fail(err)
 				return
 			}
 		}
 		part, err := form.CreateFormFile("archive", filename)
 		if err != nil {
-			errCh <- err
+			fail(err)
 			return
 		}
-		if _, err := io.Copy(part, io.LimitReader(archive, maxArchiveBytes+1)); err != nil {
-			errCh <- err
+		written, err := io.Copy(part, io.LimitReader(archive, maxArchiveBytes+1))
+		if err != nil {
+			fail(err)
 			return
 		}
-		errCh <- form.Close()
+		if written > maxArchiveBytes {
+			fail(errors.New("archive exceeds the 5 GB upload limit"))
+			return
+		}
+		if err := form.Close(); err != nil {
+			fail(err)
+			return
+		}
+		errCh <- nil
+		_ = pipeWriter.Close()
 	}()
 
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/scans/upload", pipeReader)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/orgs/"+orgID+"/archive-scans", pipeReader)
 	if err != nil {
+		_ = pipeReader.Close()
 		return UploadedArchiveScan{}, fmt.Errorf("create upload request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", form.FormDataContentType())
-	if size > maxArchiveBytes {
-		return UploadedArchiveScan{}, errors.New("archive exceeds the 5 GB upload limit")
-	}
 	uploadHTTP := *c.http
 	uploadHTTP.Timeout = 2 * time.Hour
 	response, err := uploadHTTP.Do(req)
 	if err != nil {
+		_ = pipeReader.Close()
 		return UploadedArchiveScan{}, fmt.Errorf("upload archive to JustScan: %w", err)
 	}
 	defer response.Body.Close()
@@ -233,13 +245,20 @@ func (c *Client) UploadArchive(orgID string, archive io.Reader, filename string,
 
 func (c *Client) Login(email, password string) (LoginResponse, error) {
 	var result LoginResponse
-	if err := c.doPublicJSON(http.MethodPost, "/auth/login", map[string]any{"email": email, "password": password, "remember_me": true}, &result); err != nil {
+	if err := c.doPublicJSON(http.MethodPost, "/auth/login", map[string]any{"email": email, "password": password, "remember_me": true, "client": "justscan_cli"}, &result); err != nil {
 		return LoginResponse{}, err
 	}
 	if strings.TrimSpace(result.Token) == "" {
 		return LoginResponse{}, errors.New("JustScan API did not return a login token")
 	}
 	return result, nil
+}
+
+func (c *Client) RevokeCurrentToken() error {
+	var result struct {
+		Result string `json:"result"`
+	}
+	return c.doJSON(http.MethodDelete, "/token/current", nil, &result)
 }
 
 func (c *Client) GetScan(orgID, scanID string) (ScanResult, error) {

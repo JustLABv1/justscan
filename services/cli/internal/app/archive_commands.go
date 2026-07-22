@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -55,7 +57,7 @@ func newLocalImageScanCommand(opt *options) *cobra.Command {
 				imageTag = localImageTag(args[0])
 			}
 			filename := strings.NewReplacer("/", "_", ":", "_").Replace(args[0]) + ".tar"
-			accepted, uploadErr := client.UploadArchive(orgID, stdout, filename, -1, imageName, imageTag, platform)
+			accepted, uploadErr := client.UploadArchive(cmd.Context(), orgID, stdout, filename, -1, imageName, imageTag, platform)
 			if uploadErr != nil && imageExport.Process != nil {
 				_ = imageExport.Process.Kill()
 			}
@@ -94,7 +96,7 @@ func newArchiveScanCommand(opt *options) *cobra.Command {
 			if err != nil {
 				return &exitError{code: 2, err: err}
 			}
-			source, err := openArchiveSource(args[0])
+			source, err := openArchiveSource(cmd.Context(), args[0])
 			if err != nil {
 				return &exitError{code: 2, err: err}
 			}
@@ -109,7 +111,7 @@ func newArchiveScanCommand(opt *options) *cobra.Command {
 			if imageTag == "" {
 				imageTag = "local"
 			}
-			accepted, err := client.UploadArchive(orgID, source.reader, source.filename, source.size, imageName, imageTag, platform)
+			accepted, err := client.UploadArchive(cmd.Context(), orgID, source.reader, source.filename, source.size, imageName, imageTag, platform)
 			if err != nil {
 				return &exitError{code: 2, err: err}
 			}
@@ -123,7 +125,7 @@ func newArchiveScanCommand(opt *options) *cobra.Command {
 	return cmd
 }
 
-func openArchiveSource(raw string) (archiveSource, error) {
+func openArchiveSource(ctx context.Context, raw string) (archiveSource, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return archiveSource{}, errors.New("archive source is required")
@@ -132,7 +134,20 @@ func openArchiveSource(raw string) (archiveSource, error) {
 		if parsed.Scheme != "https" {
 			return archiveSource{}, errors.New("remote archive URLs must use HTTPS")
 		}
-		response, err := http.Get(parsed.String()) // #nosec G107 -- URL is explicitly supplied by the CLI user.
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+		if err != nil {
+			return archiveSource{}, fmt.Errorf("create archive download request: %w", err)
+		}
+		client := &http.Client{
+			Timeout: 2 * time.Hour,
+			CheckRedirect: func(next *http.Request, _ []*http.Request) error {
+				if next.URL.Scheme != "https" {
+					return errors.New("remote archive URL redirected to a non-HTTPS location")
+				}
+				return nil
+			},
+		}
+		response, err := client.Do(request) // #nosec G107 -- URL is explicitly supplied by the CLI user.
 		if err != nil {
 			return archiveSource{}, fmt.Errorf("download archive: %w", err)
 		}
@@ -148,7 +163,7 @@ func openArchiveSource(raw string) (archiveSource, error) {
 			response.Body.Close()
 			return archiveSource{}, errors.New("archive exceeds the 5 GB upload limit")
 		}
-		filename := path.Base(parsed.Path)
+		filename := path.Base(response.Request.URL.Path)
 		if filename == "." || filename == "/" || filename == "" {
 			filename = "image.tar"
 		}

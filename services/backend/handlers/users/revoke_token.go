@@ -32,8 +32,8 @@ func RevokeUserToken(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	if token.Type != "personal" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "only personal tokens can be revoked via this endpoint"})
+	if token.Type != "personal" && token.Type != "cli_session" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "only personal tokens and CLI sessions can be revoked via this endpoint"})
 		return
 	}
 

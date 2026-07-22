@@ -65,8 +65,8 @@ func CreatePipelineScan(db *bun.DB) gin.HandlerFunc {
 		}
 
 		if callbackURL := strings.TrimSpace(req.Callback.URL); callbackURL != "" {
-			if !strings.HasPrefix(strings.ToLower(callbackURL), "https://") {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "callback.url must use https"})
+			if _, err := pipelines.ValidateCallbackURL(c.Request.Context(), callbackURL); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
 		}

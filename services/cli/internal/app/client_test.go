@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -23,14 +24,11 @@ func TestNormalizeAPIURL(t *testing.T) {
 
 func TestClientUploadsArchive(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/scans/upload" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/orgs/c7a11e8d-82a2-43fc-a978-a0319b1c7130/archive-scans" {
 			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
 		}
 		if err := r.ParseMultipartForm(1024 * 1024); err != nil {
 			t.Fatal(err)
-		}
-		if got := r.FormValue("org_id"); got != "c7a11e8d-82a2-43fc-a978-a0319b1c7130" {
-			t.Fatalf("org_id = %q", got)
 		}
 		if got := r.FormValue("image_name"); got != "local-app" {
 			t.Fatalf("image_name = %q", got)
@@ -54,7 +52,7 @@ func TestClientUploadsArchive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := client.UploadArchive("c7a11e8d-82a2-43fc-a978-a0319b1c7130", strings.NewReader("archive bytes"), "local-app.tar", 13, "local-app", "local", "")
+	result, err := client.UploadArchive(context.Background(), "c7a11e8d-82a2-43fc-a978-a0319b1c7130", strings.NewReader("archive bytes"), "local-app.tar", 13, "local-app", "local", "")
 	if err != nil {
 		t.Fatal(err)
 	}

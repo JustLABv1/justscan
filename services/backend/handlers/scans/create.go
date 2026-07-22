@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"justscan-backend/functions/audit"
@@ -26,6 +27,21 @@ const (
 	maxUploadedArchiveBytes int64 = 5 * 1024 * 1024 * 1024
 	uploadFormMemoryBytes   int64 = 32 * 1024 * 1024
 )
+
+const maxConcurrentArchiveUploadsPerOrg = 2
+
+var archiveUploadGuards = struct {
+	sync.Mutex
+	byOrg map[uuid.UUID]chan struct{}
+}{byOrg: make(map[uuid.UUID]chan struct{})}
+
+type uploadedArchiveScanResponse struct {
+	ID          uuid.UUID `json:"id"`
+	ImageName   string    `json:"image_name"`
+	ImageTag    string    `json:"image_tag"`
+	Status      string    `json:"status"`
+	CurrentStep string    `json:"current_step"`
+}
 
 type CreateScanRequest struct {
 	Image          string   `json:"image" binding:"required"`
@@ -328,10 +344,46 @@ func CreateScans(db *bun.DB) gin.HandlerFunc {
 }
 
 func CreateUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
+	return createUploadedArchiveScan(db, false)
+}
+
+// CreateOrgUploadedArchiveScan receives the organization in the URL so the
+// authorization check happens before the multipart body is accepted.
+func CreateOrgUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
+	return createUploadedArchiveScan(db, true)
+}
+
+func createUploadedArchiveScan(db *bun.DB, orgInPath bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !scanner.TrivyEnabled() {
 			c.JSON(http.StatusForbidden, gin.H{"error": "archive upload scanning is unavailable because local Trivy scanning is disabled"})
 			return
+		}
+
+		var requestedOrgID *uuid.UUID
+		var userID uuid.UUID
+		if orgInPath {
+			parsedOrgID, parseErr := uuid.Parse(c.Param("id"))
+			if parseErr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
+				return
+			}
+			org, _, resolvedUserID, _, ok := authz.RequireOrgRole(c, db, parsedOrgID, models.OrgRoleEditor)
+			if !ok || !authz.EnsureOrgActionAllowed(c, org, "image_scan") {
+				return
+			}
+			if tokenOrgID, isOrgToken := authz.GetOrgTokenOrgID(c); isOrgToken && tokenOrgID != parsedOrgID {
+				c.JSON(http.StatusForbidden, gin.H{"error": "organization token can only upload archives to its own organization"})
+				return
+			}
+			requestedOrgID = &parsedOrgID
+			userID = resolvedUserID
+		} else if _, isOrgToken := authz.GetOrgTokenOrgID(c); !isOrgToken {
+			var ok bool
+			userID, _, ok = authz.RequireRequestUser(c, db)
+			if !ok {
+				return
+			}
 		}
 
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadedArchiveBytes+1024)
@@ -355,9 +407,11 @@ func CreateUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
 		}
 
 		reqOrgID := strings.TrimSpace(c.PostForm("org_id"))
-		var requestedOrgID *uuid.UUID
-		var userID uuid.UUID
-		if reqOrgID != "" {
+		if requestedOrgID != nil && reqOrgID != "" && reqOrgID != requestedOrgID.String() {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "org_id must match the organization in the URL"})
+			return
+		}
+		if requestedOrgID == nil && reqOrgID != "" {
 			parsedOrgID, parseErr := uuid.Parse(reqOrgID)
 			if parseErr != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
@@ -377,12 +431,20 @@ func CreateUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
 				c.JSON(http.StatusForbidden, gin.H{"error": "organization token can only upload archives to its own organization"})
 				return
 			}
-		} else {
+		} else if requestedOrgID == nil {
 			var ok bool
 			userID, _, ok = authz.RequireRequestUser(c, db)
 			if !ok {
 				return
 			}
+		}
+		if requestedOrgID != nil {
+			if !acquireArchiveUpload(*requestedOrgID) {
+				c.Header("Retry-After", "60")
+				c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many archive uploads are already running for this organization"})
+				return
+			}
+			defer releaseArchiveUpload(*requestedOrgID)
 		}
 
 		imageName := strings.TrimSpace(c.PostForm("image_name"))
@@ -396,10 +458,19 @@ func CreateUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
 		platform := strings.TrimSpace(c.PostForm("platform"))
 
 		tagIDs := parseTagIDList(c.PostForm("tag_ids"))
+		if requestedOrgID != nil {
+			if err := validateArchiveTags(c.Request.Context(), db, *requestedOrgID, tagIDs); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+		} else if err := validatePersonalArchiveTags(c.Request.Context(), db, userID, tagIDs); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		scanID := uuid.New()
 		archivePath := filepath.Join(os.TempDir(), "justscan", "uploads", scanID.String(), sanitizeArchiveFilename(fileHeader.Filename))
-		if err := os.MkdirAll(filepath.Dir(archivePath), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(archivePath), 0o700); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to initialize upload directory"})
 			return
 		}
@@ -474,7 +545,9 @@ func CreateUploadedArchiveScan(db *bun.DB) gin.HandlerFunc {
 		go audit.Write(context.Background(), db, actorID, "scan.create.upload",
 			fmt.Sprintf("Uploaded archive scan created for %s:%s (id=%s,size=%d)", scan.ImageName, scan.ImageTag, scan.ID, fileHeader.Size))
 
-		c.JSON(http.StatusCreated, scan)
+		c.JSON(http.StatusCreated, uploadedArchiveScanResponse{
+			ID: scan.ID, ImageName: scan.ImageName, ImageTag: scan.ImageTag, Status: scan.Status, CurrentStep: scan.CurrentStep,
+		})
 	}
 }
 
@@ -518,7 +591,7 @@ func saveUploadedArchive(fileHeader *multipart.FileHeader, destination string) e
 	}
 	defer src.Close()
 
-	dst, err := os.Create(destination)
+	dst, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
@@ -526,6 +599,72 @@ func saveUploadedArchive(fileHeader *multipart.FileHeader, destination string) e
 
 	_, err = io.Copy(dst, src)
 	return err
+}
+
+func acquireArchiveUpload(orgID uuid.UUID) bool {
+	archiveUploadGuards.Lock()
+	guard := archiveUploadGuards.byOrg[orgID]
+	if guard == nil {
+		guard = make(chan struct{}, maxConcurrentArchiveUploadsPerOrg)
+		archiveUploadGuards.byOrg[orgID] = guard
+	}
+	archiveUploadGuards.Unlock()
+	select {
+	case guard <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func releaseArchiveUpload(orgID uuid.UUID) {
+	archiveUploadGuards.Lock()
+	guard := archiveUploadGuards.byOrg[orgID]
+	archiveUploadGuards.Unlock()
+	if guard != nil {
+		<-guard
+	}
+}
+
+func validateArchiveTags(ctx context.Context, db *bun.DB, orgID uuid.UUID, tagIDs []uuid.UUID) error {
+	if len(tagIDs) == 0 {
+		return nil
+	}
+	count, err := db.NewSelect().TableExpr("tags AS tag").
+		Where("tag.id IN (?)", bun.In(tagIDs)).
+		WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
+			return q.Where("tag.owner_type = ?", models.OwnerTypeSystem).
+				WhereOr("tag.owner_org_id = ?", orgID).
+				WhereOr("EXISTS (SELECT 1 FROM org_tags AS org_tag WHERE org_tag.tag_id = tag.id AND org_tag.org_id = ?)", orgID)
+		}).
+		Count(ctx)
+	if err != nil {
+		return fmt.Errorf("validate archive tags: %w", err)
+	}
+	if count != len(tagIDs) {
+		return fmt.Errorf("one or more tags are not available to this organization")
+	}
+	return nil
+}
+
+func validatePersonalArchiveTags(ctx context.Context, db *bun.DB, userID uuid.UUID, tagIDs []uuid.UUID) error {
+	if len(tagIDs) == 0 {
+		return nil
+	}
+	count, err := db.NewSelect().TableExpr("tags AS tag").
+		Where("tag.id IN (?)", bun.In(tagIDs)).
+		WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
+			return q.Where("tag.owner_type = ?", models.OwnerTypeSystem).
+				WhereOr("tag.owner_user_id = ?", userID)
+		}).
+		Count(ctx)
+	if err != nil {
+		return fmt.Errorf("validate personal archive tags: %w", err)
+	}
+	if count != len(tagIDs) {
+		return fmt.Errorf("one or more tags are not available to this user")
+	}
+	return nil
 }
 
 func sanitizeArchiveFilename(filename string) string {

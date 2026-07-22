@@ -255,6 +255,16 @@ Or with environment variable:
 
 `BACKEND_SECURITY_ALLOW_INSECURE_DEFAULTS=true`
 
+Pipeline callbacks are restricted to public HTTPS destinations and do not follow redirects. For a self-hosted callback receiver on a private network, explicitly allowlist the exact host or CIDR in the backend configuration:
+
+```yaml
+security:
+  callback_allowed_hosts:
+    - ci.internal.example
+  callback_allowed_cidrs:
+    - 10.20.0.0/16
+```
+
 ## OIDC Configuration
 
 JustScan supports OpenID Connect providers such as Keycloak, Authentik, Okta, Azure AD, and Google Workspace.
@@ -336,6 +346,8 @@ All config values can be overridden via environment variables using the `BACKEND
 | `database.password`                | `BACKEND_DATABASE_PASSWORD`                |
 | `encryption.key`                   | `BACKEND_ENCRYPTION_KEY`                   |
 | `security.allow_insecure_defaults` | `BACKEND_SECURITY_ALLOW_INSECURE_DEFAULTS` |
+| `security.callback_allowed_hosts`   | `BACKEND_SECURITY_CALLBACK_ALLOWED_HOSTS`   |
+| `security.callback_allowed_cidrs`   | `BACKEND_SECURITY_CALLBACK_ALLOWED_CIDRS`   |
 | `oidc.enabled`                     | `BACKEND_OIDC_ENABLED`                     |
 | `oidc.issuer_url`                  | `BACKEND_OIDC_ISSUER_URL`                  |
 | `oidc.client_id`                   | `BACKEND_OIDC_CLIENT_ID`                   |
@@ -574,7 +586,7 @@ You can scan an image in GitLab CI before pushing it to any registry by:
 
 1. Building the image in CI
 2. Exporting it as an archive (`docker save`)
-3. Uploading it to JustScan via `POST /api/v1/scans/upload`
+3. Uploading it to JustScan via `POST /api/v1/orgs/<org-uuid>/archive-scans`
 4. Polling scan status until completion
 
 ### Required CI variables
@@ -583,6 +595,7 @@ Set these in your GitLab project/group CI/CD variables:
 
 - `JUSTSCAN_API_URL` (example: `https://scan.example.com`)
 - `JUSTSCAN_API_TOKEN` (JustScan personal or org token)
+- `JUSTSCAN_ORG_ID` (the organization UUID to receive the scan)
 
 ### Example `.gitlab-ci.yml` job
 
@@ -606,7 +619,7 @@ justscan_prepush_scan:
     - docker build -t "$IMAGE_REF" .
     - docker save "$IMAGE_REF" -o "$ARCHIVE_PATH"
     - |
-      CREATE_RESPONSE="$(curl -sS -X POST "$JUSTSCAN_API_URL/api/v1/scans/upload" \
+      CREATE_RESPONSE="$(curl -sS -X POST "$JUSTSCAN_API_URL/api/v1/orgs/$JUSTSCAN_ORG_ID/archive-scans" \
         -H "Authorization: Bearer $JUSTSCAN_API_TOKEN" \
         -F "archive=@$ARCHIVE_PATH" \
         -F "image_name=$CI_PROJECT_PATH" \
@@ -645,10 +658,10 @@ justscan_prepush_scan:
 
 ### Notes
 
-- Upload endpoint is authenticated-only (`/api/v1/scans/upload`).
+- The organization upload endpoint is authenticated and authorizes the organization before accepting the archive body (`/api/v1/orgs/<org-uuid>/archive-scans`).
 - Archive size limit is `5 GB` by default for uploaded archive scans.
 - Uploaded archives are deleted by JustScan after scan processing.
-- For org-scoped scans, include `-F "org_id=<org-uuid>"` in the upload request.
+- Use a pipeline token scoped to the target organization for CI/CD uploads.
 
 ## Common Issues
 

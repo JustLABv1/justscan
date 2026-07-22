@@ -77,14 +77,30 @@ func newLoginCommand(opt *options) *cobra.Command {
 }
 
 func newLogoutCommand(opt *options) *cobra.Command {
-	return &cobra.Command{
+	var localOnly bool
+	cmd := &cobra.Command{
 		Use:   "logout",
 		Short: "Remove the stored user credential",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			profileName, server, _, err := resolveLoginTarget(opt)
+			profileName, server, caCert, err := resolveLoginTarget(opt)
 			if err != nil {
 				return &exitError{code: 2, err: err}
+			}
+			if !localOnly {
+				token, loadErr := loadStoredToken(profileName, server)
+				if loadErr != nil {
+					return &exitError{code: 2, err: loadErr}
+				}
+				if token != "" {
+					client, clientErr := newClient(server, token, caCert, opt.insecureTLS, opt.allowInsecureHTTP)
+					if clientErr != nil {
+						return &exitError{code: 2, err: clientErr}
+					}
+					if revokeErr := client.RevokeCurrentToken(); revokeErr != nil {
+						return &exitError{code: 2, err: fmt.Errorf("revoke server session (use --local-only if the instance is unavailable): %w", revokeErr)}
+					}
+				}
 			}
 			if err := deleteStoredToken(profileName, server); err != nil {
 				return &exitError{code: 2, err: err}
@@ -93,6 +109,8 @@ func newLogoutCommand(opt *options) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&localOnly, "local-only", false, "remove the local credential without revoking the server session")
+	return cmd
 }
 
 func resolveLoginTarget(opt *options) (string, string, string, error) {

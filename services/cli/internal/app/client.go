@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -72,6 +71,12 @@ type UploadedArchiveScan struct {
 	ImageTag    string `json:"image_tag"`
 	Status      string `json:"status"`
 	CurrentStep string `json:"current_step"`
+}
+
+type archiveUploadSession struct {
+	ID           string `json:"id"`
+	UploadOffset int64  `json:"upload_offset"`
+	ChunkSize    int64  `json:"chunk_size"`
 }
 
 type ScanResult struct {
@@ -165,82 +170,77 @@ func (c *Client) UploadArchive(ctx context.Context, orgID string, archive io.Rea
 	if size > maxArchiveBytes {
 		return UploadedArchiveScan{}, errors.New("archive exceeds the 5 GB upload limit")
 	}
-	pipeReader, pipeWriter := io.Pipe()
-	form := multipart.NewWriter(pipeWriter)
-	errCh := make(chan error, 1)
-	go func() {
-		defer close(errCh)
-		fail := func(err error) {
-			_ = pipeWriter.CloseWithError(err)
-			errCh <- err
-		}
-		if err := form.WriteField("image_name", imageName); err != nil {
-			fail(err)
-			return
-		}
-		if err := form.WriteField("image_tag", imageTag); err != nil {
-			fail(err)
-			return
-		}
-		if platform != "" {
-			if err := form.WriteField("platform", platform); err != nil {
-				fail(err)
-				return
-			}
-		}
-		part, err := form.CreateFormFile("archive", filename)
-		if err != nil {
-			fail(err)
-			return
-		}
-		written, err := io.Copy(part, io.LimitReader(archive, maxArchiveBytes+1))
-		if err != nil {
-			fail(err)
-			return
-		}
-		if written > maxArchiveBytes {
-			fail(errors.New("archive exceeds the 5 GB upload limit"))
-			return
-		}
-		if err := form.Close(); err != nil {
-			fail(err)
-			return
-		}
-		errCh <- nil
-		_ = pipeWriter.Close()
-	}()
+	expectedSize := size
+	if expectedSize < 0 {
+		expectedSize = 0
+	}
+	var session archiveUploadSession
+	if err := c.doJSON(http.MethodPost, "/orgs/"+orgID+"/archive-upload-sessions", map[string]any{
+		"filename": filename, "image_name": imageName, "image_tag": imageTag, "platform": platform, "expected_size": expectedSize,
+	}, &session); err != nil {
+		return UploadedArchiveScan{}, err
+	}
+	if session.ID == "" || session.ChunkSize <= 0 {
+		return UploadedArchiveScan{}, errors.New("JustScan API returned an invalid archive upload session")
+	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/orgs/"+orgID+"/archive-scans", pipeReader)
-	if err != nil {
-		_ = pipeReader.Close()
-		return UploadedArchiveScan{}, fmt.Errorf("create upload request: %w", err)
+	buffer := make([]byte, session.ChunkSize)
+	offset := session.UploadOffset
+	for {
+		n, readErr := io.ReadFull(archive, buffer)
+		if n > 0 {
+			if offset+int64(n) > maxArchiveBytes {
+				return UploadedArchiveScan{}, errors.New("archive exceeds the 5 GB upload limit")
+			}
+			if err := c.uploadArchiveChunk(ctx, orgID, session.ID, offset, buffer[:n]); err != nil {
+				return UploadedArchiveScan{}, err
+			}
+			offset += int64(n)
+		}
+		if errors.Is(readErr, io.EOF) || errors.Is(readErr, io.ErrUnexpectedEOF) {
+			break
+		}
+		if readErr != nil {
+			return UploadedArchiveScan{}, fmt.Errorf("read archive: %w", readErr)
+		}
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", form.FormDataContentType())
-	uploadHTTP := *c.http
-	uploadHTTP.Timeout = 2 * time.Hour
-	response, err := uploadHTTP.Do(req)
-	if err != nil {
-		_ = pipeReader.Close()
-		return UploadedArchiveScan{}, fmt.Errorf("upload archive to JustScan: %w", err)
-	}
-	defer response.Body.Close()
-	payload, readErr := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if readErr != nil {
-		return UploadedArchiveScan{}, fmt.Errorf("read JustScan API response: %w", readErr)
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return UploadedArchiveScan{}, apiErrorFromResponse(response, payload)
-	}
-	if err := <-errCh; err != nil {
-		return UploadedArchiveScan{}, fmt.Errorf("encode archive upload: %w", err)
+	if offset == 0 {
+		return UploadedArchiveScan{}, errors.New("archive is empty")
 	}
 	var result UploadedArchiveScan
-	if err := json.Unmarshal(payload, &result); err != nil {
-		return UploadedArchiveScan{}, fmt.Errorf("parse JustScan API response: %w", err)
+	if err := c.doJSON(http.MethodPost, "/orgs/"+orgID+"/archive-upload-sessions/"+session.ID+"/complete", nil, &result); err != nil {
+		return UploadedArchiveScan{}, err
 	}
 	return result, nil
+}
+
+func (c *Client) uploadArchiveChunk(ctx context.Context, orgID, sessionID string, offset int64, chunk []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.baseURL+"/orgs/"+orgID+"/archive-upload-sessions/"+sessionID, bytes.NewReader(chunk))
+	if err != nil {
+		return fmt.Errorf("create archive upload chunk: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/offset+octet-stream")
+	req.Header.Set("Upload-Offset", strconv.FormatInt(offset, 10))
+	uploadHTTP := *c.http
+	uploadHTTP.Timeout = 10 * time.Minute
+	response, err := uploadHTTP.Do(req)
+	if err != nil {
+		return fmt.Errorf("upload archive chunk at offset %d: %w", offset, err)
+	}
+	defer response.Body.Close()
+	payload, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil {
+		return fmt.Errorf("read archive upload response: %w", err)
+	}
+	if response.StatusCode != http.StatusNoContent {
+		return apiErrorFromResponse(response, payload)
+	}
+	nextOffset, err := strconv.ParseInt(response.Header.Get("Upload-Offset"), 10, 64)
+	if err != nil || nextOffset != offset+int64(len(chunk)) {
+		return errors.New("JustScan API returned an invalid archive upload offset")
+	}
+	return nil
 }
 
 func (c *Client) Login(email, password string) (LoginResponse, error) {

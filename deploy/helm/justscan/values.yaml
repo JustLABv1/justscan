@@ -175,6 +175,12 @@ ingress:
   annotations: {}
   #   kubernetes.io/ingress.class: nginx
   #   cert-manager.io/cluster-issuer: letsencrypt-prod
+  #   # Required for archive uploads when using ingress-nginx.
+  #   # 6g allows multipart framing above the backend's 5 GiB archive limit.
+  #   nginx.ingress.kubernetes.io/proxy-body-size: 6g
+  #   nginx.ingress.kubernetes.io/proxy-read-timeout: "7200"
+  #   nginx.ingress.kubernetes.io/proxy-send-timeout: "7200"
+  #   nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
 
   hosts:
     - host: justscan.example.com

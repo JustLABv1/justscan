@@ -63,15 +63,18 @@ Upload a Docker or OCI archive and let the JustScan instance perform the scan. T
 the archive only; it does not run a scanner locally.
 
 ```sh
-justscan scan local my-app:local
+justscan scan --local my-app:local
 ```
 
 This asks Docker to stream the local image archive directly to JustScan—there is no temporary
 archive file and no local vulnerability scan. Use `--engine podman` for Podman. You can still
 upload an archive you already have:
 
+The image must already be present in the selected local engine. Use `podman pull IMAGE` or
+`docker pull IMAGE` first; omit `local` when JustScan should pull the image from a registry.
+
 ```sh
-justscan scan archive ./my-app.tar --name my-app --tag local
+justscan scan --archive ./my-app.tar --name my-app --tag local
 ```
 
 An HTTPS archive URL is streamed by the CLI to JustScan. This works with S3 presigned download
@@ -79,13 +82,13 @@ URLs, Google Drive direct-download URLs, and other HTTPS file hosts; cloud crede
 the developer or CI machine, never on the JustScan server.
 
 ```sh
-justscan scan archive "https://example.com/download/my-app.tar.gz" --name my-app --tag 1.2.3
+justscan scan --archive "https://example.com/download/my-app.tar.gz" --name my-app --tag 1.2.3
 ```
 
 For URLs whose path does not include an archive filename (common with Google Drive), provide one:
 
 ```sh
-justscan scan archive "https://drive.google.com/uc?export=download&id=..." \\
+justscan scan --archive "https://drive.google.com/uc?export=download&id=..." \\
   --filename my-app.tar --name my-app --tag 1.2.3
 ```
 

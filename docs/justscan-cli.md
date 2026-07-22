@@ -10,9 +10,9 @@ archive. The JustScan instance performs analysis and applies the organization's 
 | Image location | Command | Who transfers the image |
 | --- | --- | --- |
 | Container registry | justscan scan IMAGE | JustScan pulls from the registry. |
-| Local Docker or Podman daemon | justscan scan local IMAGE | The CLI streams image-save output to JustScan. |
-| Archive already on disk | justscan scan archive FILE | The CLI uploads the archive to JustScan. |
-| S3, Google Drive, or another file host | justscan scan archive HTTPS_URL | The CLI downloads and forwards the archive. |
+| Local Docker or Podman daemon | justscan scan --local IMAGE | The CLI streams image-save output to JustScan. |
+| Archive already on disk | justscan scan --archive FILE | The CLI uploads the archive to JustScan. |
+| S3, Google Drive, or another file host | justscan scan --archive HTTPS_URL | The CLI downloads and forwards the archive. |
 
 Archive scans accept Docker/OCI archives ending in .tar, .tar.gz, or .tgz, up to 5 GB. Remote URLs
 must use HTTPS. Use a direct or presigned download URL rather than a browser share page.
@@ -182,14 +182,14 @@ threshold or fail-on setting.
 ## Scan a local Docker or Podman image
 
 ~~~sh
-justscan scan local my-app:latest
+justscan scan --local my-app:latest
 ~~~
 
 This streams docker image save output straight to JustScan. It does not create a temporary archive,
 and Docker/Podman does not scan the image.
 
 ~~~sh
-justscan scan local my-app:latest \
+justscan scan --local my-app:latest \
   --engine podman \
   --name my-app \
   --tag dev \
@@ -199,18 +199,27 @@ justscan scan local my-app:latest \
 Requirements:
 
 - Docker is available by default; use --engine podman for Podman.
-- The image exists in that local engine.
+- The image must already exist in that local engine. For example, run `podman pull
+  docker.io/appwrite/appwrite` first. To let JustScan pull an image from its registry instead, use
+  `justscan scan docker.io/appwrite/appwrite` (without `local`).
 - Archive upload scanning is enabled on the JustScan instance (Trivy-backed archive scans).
+- The CLI shows streamed-byte progress for local images. It rejects images whose reported local
+  size already exceeds the 5 GiB archive limit. Archive transfers use an upload session with
+  8 MiB chunks, so each request completes quickly and a lost response only affects one chunk.
+  Ensure any reverse proxy accepts 8 MiB request bodies and permits the final scan-creation
+  request. The bundled Compose Nginx configuration requires `docker compose restart nginx` after
+  an update.
 
-Local-image and archive commands return after JustScan accepts the upload. They create an
-organization-owned uploaded-archive scan; they are not pipeline-scan requests, so they do not
-currently support --source, --external-ref, --no-wait, or the policy-verdict exit behavior of
-justscan scan IMAGE. Open the resulting scan ID in JustScan to follow its progress.
+Local-image and archive commands create organization-owned JustScan CLI runs. They wait for the
+same server-computed policy verdict and use the same exit codes as `justscan scan IMAGE`. Add
+`--no-wait` to return after the upload is accepted; `justscan status SCAN_ID --wait` can continue
+the wait later. The older `justscan scan local IMAGE`, `justscan scan archive FILE`, `justscan
+local IMAGE`, and `justscan archive FILE` forms remain compatibility aliases.
 
 ## Scan an archive from disk
 
 ~~~sh
-justscan scan archive ./dist/my-app.tar --name my-app --tag 1.2.3
+justscan scan --archive ./dist/my-app.tar --name my-app --tag 1.2.3
 ~~~
 
 This is useful for an archive created by docker save, an OCI build tool, or a CI artifact.
@@ -219,7 +228,7 @@ The --name and --tag values control how the image is identified in JustScan.
 ## Scan an archive from an HTTPS URL
 
 ~~~sh
-justscan scan archive "https://storage.example.com/releases/my-app.tar.gz?signature=…" \
+justscan scan --archive "https://storage.example.com/releases/my-app.tar.gz?signature=…" \
   --name my-app \
   --tag 1.2.3
 ~~~
@@ -231,7 +240,7 @@ For S3, create a presigned download URL. For Google Drive, use a direct-download
 does not include an archive filename (common with Google Drive), supply one:
 
 ~~~sh
-justscan scan archive "https://drive.google.com/uc?export=download&id=FILE_ID" \
+justscan scan --archive "https://drive.google.com/uc?export=download&id=FILE_ID" \
   --filename my-app.tar \
   --name my-app \
   --tag 1.2.3
@@ -258,11 +267,11 @@ justscan scan "$IMAGE_REF" \
 
 ~~~sh
 docker build -t my-app:"$CI_COMMIT_SHA" .
-justscan scan local my-app:"$CI_COMMIT_SHA"
+justscan scan --local my-app:"$CI_COMMIT_SHA"
 ~~~
 
-Use a pipeline token for both examples. The registry command is the blocking, policy-verdict flow.
-The local-image command submits an uploaded archive and returns its scan ID for later inspection.
+Use a pipeline token for both examples. Both commands wait for the organization-policy verdict by
+default; pass `--no-wait` when the job should only submit the scan.
 
 ## Global options and environment variables
 
@@ -286,8 +295,8 @@ profile.
 | Command | Purpose |
 | --- | --- |
 | justscan scan IMAGE | Submit a registry image scan and wait for its policy verdict. |
-| justscan scan local IMAGE | Stream a Docker/Podman image archive to JustScan. |
-| justscan scan archive FILE_OR_HTTPS_URL | Upload a saved or remote archive. |
+| justscan scan --local IMAGE | Stream a Docker/Podman image archive to JustScan. |
+| justscan scan --archive FILE_OR_HTTPS_URL | Upload a saved or remote archive. |
 | justscan status SCAN_ID | Read a submitted pipeline scan; add --wait to poll. |
 | justscan login / logout | Manage the local keychain credential. |
 | justscan config set/use/show/list/delete | Manage non-secret profiles. |
@@ -295,6 +304,9 @@ profile.
 | justscan version | Print version and build metadata. |
 
 Run justscan --help or justscan COMMAND --help for exact flags in the installed version.
+`justscan scan local IMAGE`, `justscan scan archive FILE_OR_HTTPS_URL`, `justscan local IMAGE`,
+and `justscan archive FILE_OR_HTTPS_URL` remain supported as compatibility aliases. Prefer the
+flag-based `justscan scan --local` and `justscan scan --archive` forms for new scripts.
 
 ## Best practices
 

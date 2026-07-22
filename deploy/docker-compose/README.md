@@ -43,6 +43,20 @@ Edit `backend-config.yaml` and replace all `change-me-in-production` placeholder
 > uncomment the `build:` block, set `NEXT_PUBLIC_API_URL` in `.env`, and
 > run `docker compose up --build -d`.
 
+### Large local-image uploads
+
+The bundled Nginx configuration streams archive uploads to the backend, allows the multipart
+framing around JustScan's 5 GiB archive limit, and waits up to two hours for the backend response.
+After pulling a JustScan update that changes `nginx/nginx.conf`, apply it to the running proxy:
+
+```bash
+docker compose restart nginx
+```
+
+If a separate reverse proxy or Kubernetes ingress sits in front of JustScan, configure its request
+body limit to at least 6 GiB, disable request buffering where supported, and set read/send timeouts
+to at least two hours.
+
 ### 2a. Optional: configure OIDC
 
 JustScan supports OIDC providers such as Keycloak and Authentik.

@@ -950,7 +950,7 @@ function RecentProblemScansCard({
           {scans.map((scan) => (
             <Link
               key={scan.id}
-              href={`/scans/${scan.id}`}
+              href={`/scans/details/${scan.id}`}
               className="grid min-w-0 gap-2 rounded-xl border border-surface-border bg-surface-secondary px-3 py-2.5 transition-colors hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center 2xl:grid-cols-[minmax(150px,0.9fr)_auto_minmax(160px,1.2fr)_auto]"
             >
               <p

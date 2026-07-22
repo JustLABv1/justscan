@@ -347,7 +347,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
         item.description,
         'workspace',
         item.scope.kind,
-        item.scope.kind === 'org' ? item.scope.orgName ?? '' : 'personal',
+        item.scope.kind === 'org' ? (item.scope.orgName ?? '') : 'personal',
       ])
     );
   }, [activeOrgId, orgs, query, workScope.kind]);
@@ -420,7 +420,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
       } else if (item.kind === 'image') {
         router.push(`/scans?image=${encodeURIComponent(item.data.image_name)}`);
       } else if (item.kind === 'scan') {
-        router.push(`/scans/${item.data.id}`);
+        router.push(`/scans/details/${item.data.id}`);
       } else {
         router.push(`/vulnkb?q=${encodeURIComponent(item.data.vuln_id)}`);
       }
@@ -492,7 +492,13 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
         scans.length,
     };
     return starts;
-  }, [images.length, pageCommands.length, quickActions.length, scans.length, workspaceItems.length]);
+  }, [
+    images.length,
+    pageCommands.length,
+    quickActions.length,
+    scans.length,
+    workspaceItems.length,
+  ]);
 
   return (
     <Modal.Backdrop
@@ -510,7 +516,12 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           <Modal.CloseTrigger />
           <Modal.Body className="p-0">
             <div className="border-b border-divider px-4 py-4">
-              <SearchField name="global-command-search" variant="secondary" value={query} onChange={setQuery}>
+              <SearchField
+                name="global-command-search"
+                variant="secondary"
+                value={query}
+                onChange={setQuery}
+              >
                 <SearchField.Group className="h-12">
                   {loading ? <Spinner size="sm" /> : <SearchField.SearchIcon />}
                   <SearchField.Input
@@ -523,11 +534,14 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                     aria-controls="search-results"
                     aria-activedescendant={activeIdx >= 0 ? `search-item-${activeIdx}` : undefined}
                   />
-                  {query.length > 0 ? <SearchField.ClearButton onPress={() => setQuery('')} /> : null}
+                  {query.length > 0 ? (
+                    <SearchField.ClearButton onPress={() => setQuery('')} />
+                  ) : null}
                 </SearchField.Group>
               </SearchField>
               <p className="mt-2 text-xs text-muted">
-                Use this command surface for quick navigation, workspace switching, and scoped search.
+                Use this command surface for quick navigation, workspace switching, and scoped
+                search.
               </p>
             </div>
 
@@ -585,7 +599,9 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                   ) : null}
 
                   {workspaceItems.length > 0 ? (
-                    <div className={quickActions.length > 0 || pageCommands.length > 0 ? 'mt-1' : ''}>
+                    <div
+                      className={quickActions.length > 0 || pageCommands.length > 0 ? 'mt-1' : ''}
+                    >
                       <PaletteSectionLabel>Workspaces</PaletteSectionLabel>
                       {workspaceItems.map((workspace, index) => {
                         const globalIdx = sectionStarts.workspaces + index;
@@ -621,7 +637,9 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                   {images.length > 0 ? (
                     <div
                       className={
-                        quickActions.length > 0 || pageCommands.length > 0 || workspaceItems.length > 0
+                        quickActions.length > 0 ||
+                        pageCommands.length > 0 ||
+                        workspaceItems.length > 0
                           ? 'mt-1'
                           : ''
                       }

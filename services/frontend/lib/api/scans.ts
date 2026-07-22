@@ -9,7 +9,9 @@ import type {
   BulkDeleteScansResponse,
   ArtifactFilterOptions,
   ArtifactSummary,
+  ImageOverview,
   ImageSummary,
+  ImageStats,
   SBOMComponent,
   Scan,
   ScanComparison,
@@ -59,7 +61,10 @@ export const listScanArtifacts = (
   status?: string,
   critical?: '' | 'yes' | 'no',
   collection?: string,
-  policy?: '' | 'fail'
+  policy?: '' | 'fail',
+  image?: string,
+  from?: string,
+  to?: string
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (query) params.set('q', query);
@@ -67,6 +72,9 @@ export const listScanArtifacts = (
   if (critical) params.set('critical', critical);
   if (collection) params.set('collection', collection);
   if (policy) params.set('policy', policy);
+  if (image) params.set('image', image);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
   appendScope(params);
   return req<{ data: ArtifactSummary[]; total: number; filters: ArtifactFilterOptions }>(
     'GET',
@@ -77,16 +85,32 @@ export const listScanArtifacts = (
 export const listScanImages = (
   page = 1,
   limit = 30,
-  image?: string,
+  query?: string,
   status?: string,
-  collection?: string
+  collection?: string,
+  critical?: '' | 'yes' | 'no',
+  policy?: '' | 'fail',
+  from?: string,
+  to?: string,
+  sort?: string
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-  if (image) params.set('image', image);
+  if (query) params.set('q', query);
   if (status) params.set('status', status);
   if (collection) params.set('collection', collection);
+  if (critical) params.set('critical', critical);
+  if (policy) params.set('policy', policy);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  if (sort) params.set('sort', sort);
   appendScope(params);
-  return req<{ data: ImageSummary[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
+  return req<{ data: ImageOverview[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
+};
+
+export const getScanImageStats = (image: string) => {
+  const params = new URLSearchParams({ image });
+  appendScope(params);
+  return req<ImageStats>('GET', `/api/v1/scans/images/stats?${params}`);
 };
 
 export const getScanQueueSummary = () => {

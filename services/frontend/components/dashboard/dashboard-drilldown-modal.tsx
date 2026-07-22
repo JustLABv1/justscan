@@ -15,10 +15,7 @@ const drilldownHeaderMeta = {
   total: { Icon: Shield01Icon, className: 'bg-default text-foreground' },
   completed: { Icon: CheckmarkCircle02Icon, className: 'bg-success/10 text-success' },
   watchlist: { Icon: Clock01Icon, className: 'bg-warning/10 text-warning' },
-} satisfies Record<
-  DashboardDrilldownKey,
-  { Icon: typeof Shield01Icon; className: string }
->;
+} satisfies Record<DashboardDrilldownKey, { Icon: typeof Shield01Icon; className: string }>;
 
 function WatchlistModalRow({ item }: { item: WatchlistItem }) {
   const posture = getWatchlistPosture(item);
@@ -65,7 +62,7 @@ function WatchlistModalRow({ item }: { item: WatchlistItem }) {
               </Button>
             </HeroLink>
             {item.last_scan_id ? (
-              <HeroLink href={`/scans/${item.last_scan_id}`} className="no-underline">
+              <HeroLink href={`/scans/details/${item.last_scan_id}`} className="no-underline">
                 <Button size="sm" variant="primary" className="h-8 px-3 text-xs font-medium">
                   Open last scan
                 </Button>
@@ -239,7 +236,7 @@ function CompactScanRow({ scan, showActions = false }: { scan: Scan; showActions
         <div className="flex shrink-0 flex-col items-end gap-2">
           {showActions ? (
             <div className="flex items-center gap-2">
-              <HeroLink href={`/scans/${scan.id}`} className="no-underline">
+              <HeroLink href={`/scans/details/${scan.id}`} className="no-underline">
                 <Button size="sm" variant="primary" className="h-8 px-3 text-xs font-medium">
                   Open scan
                 </Button>

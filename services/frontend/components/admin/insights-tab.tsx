@@ -723,7 +723,7 @@ export function InsightsTab() {
                         <Table.Cell className="text-xs">
                           {log.scan_id ? (
                             <Link
-                              href={`/scans/${log.scan_id}`}
+                              href={`/scans/details/${log.scan_id}`}
                               className="font-mono text-accent hover:underline"
                             >
                               {log.scan_id.slice(0, 8)}…

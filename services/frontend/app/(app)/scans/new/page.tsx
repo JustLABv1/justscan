@@ -557,7 +557,7 @@ export default function NewScanPage() {
       const firstCreatedScanId = createdScans[0]?.id;
 
       if (firstCreatedScanId) {
-        router.push(`/scans/${firstCreatedScanId}`);
+        router.push(`/scans/details/${firstCreatedScanId}`);
         return;
       }
 
@@ -781,7 +781,9 @@ export default function NewScanPage() {
                       </ScanWizardField>
 
                       {selectedRegistry ? (
-                        <Alert status={selectedRegistry.xray_mode === 'full' ? 'accent' : 'warning'}>
+                        <Alert
+                          status={selectedRegistry.xray_mode === 'full' ? 'accent' : 'warning'}
+                        >
                           <Alert.Indicator />
                           <Alert.Content>
                             <Alert.Title>

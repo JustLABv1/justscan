@@ -332,7 +332,7 @@ function ScanLink({
   return (
     <Link
       aria-label={ariaLabel}
-      href={`/scans/${scanId}`}
+      href={`/scans/details/${scanId}`}
       className={className}
       title={title}
       onClick={(event) => event.stopPropagation()}
@@ -532,7 +532,7 @@ function ImageScansTreeChildrenRows({
           stopPropagation?: () => void;
         }) => {
           event?.stopPropagation?.();
-          const href = `/scans/${scan.id}`;
+          const href = `/scans/details/${scan.id}`;
 
           if (event?.ctrlKey || event?.metaKey) {
             window.open(href, '_blank', 'noopener,noreferrer');
@@ -630,7 +630,7 @@ function ImageScansTreeChildrenRows({
                       label: 'Open scan',
                       icon: <FileSearchIcon size={14} aria-hidden />,
                       onAction: () => {
-                        router.push(`/scans/${scan.id}`);
+                        router.push(`/scans/details/${scan.id}`);
                       },
                     },
                     {
@@ -638,7 +638,7 @@ function ImageScansTreeChildrenRows({
                       label: 'Open in new tab',
                       icon: <LinkSquare02Icon size={14} aria-hidden />,
                       onAction: () => {
-                        window.open(`/scans/${scan.id}`, '_blank', 'noopener,noreferrer');
+                        window.open(`/scans/details/${scan.id}`, '_blank', 'noopener,noreferrer');
                       },
                     },
                     ...(allowMutationActions &&
@@ -1012,7 +1012,7 @@ export function ImageScansTable({
 
                       <Table.Cell onClick={(event) => event.stopPropagation()}>
                         <Link
-                          href={`/scans/${img.latest_scan_id}`}
+                          href={`/scans/details/${img.latest_scan_id}`}
                           className="inline-block max-w-[96px] truncate font-mono text-xs text-zinc-500 transition-colors hover:text-accent"
                           title="Open latest scan"
                         >

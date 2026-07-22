@@ -179,7 +179,7 @@ export function RecentActivityRow({ scan }: { scan: Scan }) {
 
   return (
     <Link
-      href={`/scans/${scan.id}`}
+      href={`/scans/details/${scan.id}`}
       className="flex items-start justify-between gap-3 rounded-xl p-3 transition-colors duration-150 group"
       onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
       onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}

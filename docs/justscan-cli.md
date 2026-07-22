@@ -273,12 +273,11 @@ justscan scan --local my-app:"$CI_COMMIT_SHA"
 Use a pipeline token for both examples. Both commands wait for the organization-policy verdict by
 default; pass `--no-wait` when the job should only submit the scan.
 
-### GitHub Actions: validate images before merge
+### GitHub Actions: targeted local-image scan
 
-Build the image into the pull-request runner's Docker daemon and scan that exact local image. This
-repository does that for the backend, minimal backend, frontend, combined, and CLI images through
-`.github/actions/justscan-local-image-gate`. The release workflow then publishes the validated
-commit instead of discovering a policy failure at release time.
+For large images, avoid streaming every image archive on every pull request: it is costly in both
+runner time and network traffic. Use the CLI image for intentional scans, such as a nightly job,
+an image-changing pull request, or a manual workflow dispatch.
 
 Add these repository or environment secrets in GitHub before enabling the workflow:
 
@@ -288,12 +287,9 @@ Add these repository or environment secrets in GitHub before enabling the workfl
 | `JUSTSCAN_ORG_ID` | Organization UUID that owns the CI policy. |
 | `JUSTSCAN_TOKEN` | A least-privilege organization pipeline token. |
 
-The gate runs `justscan scan --local IMAGE` in the CLI container and waits for the organization's
-policy verdict. A failed policy, upload error, or missing secret fails the internal pull-request
-check. Keep the pipeline token in GitHub Secrets only; never write it into workflow YAML or an
-image build argument. Forked pull requests cannot receive repository secrets, so their image
-policy gate is intentionally skipped; never replace this with `pull_request_target`, which would
-run untrusted pull-request code with secrets.
+Keep the pipeline token in GitHub Secrets only; never write it into workflow YAML or an image
+build argument. Forked pull requests cannot receive repository secrets; never use
+`pull_request_target` to run untrusted pull-request code with this token.
 
 ### CLI container image
 

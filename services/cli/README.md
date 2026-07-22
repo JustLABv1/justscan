@@ -4,6 +4,9 @@
 pipeline scans and evaluates the verdict produced by that instance; it does not run a scanner
 locally.
 
+For installation, authentication, every scan source, CI/CD examples, best practices, command
+reference, and troubleshooting, see the [complete CLI guide](../../docs/justscan-cli.md).
+
 ## Build locally
 
 ```sh

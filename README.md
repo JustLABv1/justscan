@@ -54,9 +54,10 @@ JustScan helps teams scan container images for vulnerabilities before deployment
 
 ## CLI
 
-The `justscan` CLI submits remote pipeline scans to a running JustScan instance and returns
-CI-friendly verdict exit codes. It does not include a local scanner. Release archives are
-attached to each JustScan GitHub Release; build it locally with:
+The `justscan` CLI submits registry and archive scans to a running JustScan instance. Registry
+pipeline scans return CI-friendly policy verdict exit codes; local Docker/Podman and archive inputs
+are streamed to the instance for remote analysis. It does not include a local scanner. Release
+archives are attached to each JustScan GitHub Release; build it locally with:
 
 ```bash
 cd services/cli
@@ -78,7 +79,7 @@ For an interactive user session, run `justscan login --profile production --emai
 The CLI prompts for the password and stores the credential in the system keychain; use
 `JUSTSCAN_TOKEN` only for CI/CD or other unattended automation.
 
-See [the CLI guide](services/cli/README.md) and [the CI/CD API guide](docs/ci-cd-pipeline-api.md)
+See [the CLI guide](docs/justscan-cli.md) and [the CI/CD API guide](docs/ci-cd-pipeline-api.md)
 for options and provider examples.
 
 ## Quick Start

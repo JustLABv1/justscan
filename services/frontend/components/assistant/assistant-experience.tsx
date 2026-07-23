@@ -471,7 +471,7 @@ export function AssistantExperience({
       : [
           'How do I get started with scans in JustScan?',
           'What is the fastest way to inspect a recent finding?',
-          'Guide me to the main workflows for day-to-day triage.',
+          'Guide me to the main workflows for day-to-day watchlist monitoring.',
         ];
     const directPrompts = [
       scopeContext?.rescanId ? 'rescan this scan' : 'open scans',

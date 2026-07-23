@@ -676,7 +676,6 @@ export default function ScanDetailPage() {
     routeHideSuppressed !== null ||
     Boolean(routeSortBy) ||
     Boolean(routeSortDir);
-  const triageFocusActive = searchParams.get('triage_focus') === 'acknowledge';
   const hasTransientVulnerabilityFilters =
     pkgInput.trim().length > 0 ||
     pkgFilter.trim().length > 0 ||
@@ -1337,7 +1336,6 @@ export default function ScanDetailPage() {
     params.delete('severity');
     params.delete('has_fix');
     params.delete('suppressed');
-    params.delete('triage_focus');
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
@@ -2529,12 +2527,6 @@ export default function ScanDetailPage() {
                     ? `${vulnerabilityViewSourceLabel}: ${vulnerabilityViewSummary(currentVulnerabilityViewSettings)}`
                     : 'Loading default view...'}
                 </p>
-                {triageFocusActive && (
-                  <p className="mt-1 text-[11px] text-zinc-500">
-                    Triage focus is showing open critical and high vulnerabilities with fixes so you
-                    can acknowledge them quickly.
-                  </p>
-                )}
               </div>
               <Dropdown>
                 <Button variant="secondary">View settings</Button>

@@ -88,14 +88,6 @@ const QUICK_ACTIONS: CommandDescriptor[] = [
     keywords: ['create', 'scan', 'start', 'new'],
   },
   {
-    id: 'triage',
-    label: 'Open Triage',
-    description: 'Review items that need action now.',
-    href: '/triage',
-    Icon: ShieldKeyIcon,
-    keywords: ['queue', 'critical', 'review', 'triage'],
-  },
-  {
     id: 'compare-scans',
     label: 'Compare Scans',
     description: 'Open the diff view for two scan runs.',

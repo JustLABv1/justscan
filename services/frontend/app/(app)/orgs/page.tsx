@@ -205,7 +205,7 @@ export default function OrgsPage() {
       {inviteError ? <FormAlert description={inviteError} title="Invite action failed" /> : null}
 
       {pendingInvites.length > 0 && (
-        <Card className="space-y-4">
+        <Card className="p-3">
           <div className="flex items-center gap-3">
             <div
               className="size-10 rounded-xl flex items-center justify-center shrink-0"
@@ -323,196 +323,201 @@ export default function OrgsPage() {
           </Button>
         </Card>
       ) : (
-        <Card className="space-y-4">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <SearchField name="org-search" variant="secondary" className="w-full xl:max-w-md">
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  placeholder="Search organizations, descriptions, or members..."
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Select
-                aria-label="Sort organizations by"
-                className="w-full sm:w-[180px]"
-                value={sortByValue}
-                variant="secondary"
-                onChange={(value) =>
-                  setSortDescriptor((previous) => ({
-                    ...previous,
-                    column: String(value || 'name'),
-                  }))
-                }
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="name" textValue="Name">
-                      Name
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="policies" textValue="Policies">
-                      Policies
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="members" textValue="Members">
-                      Members
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="updated" textValue="Updated">
-                      Updated
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-              <Select
-                aria-label="Sort organizations direction"
-                className="w-full sm:w-[160px]"
-                value={sortDirectionValue}
-                variant="secondary"
-                onChange={(value) =>
-                  setSortDescriptor((previous) => ({
-                    ...previous,
-                    direction: value === 'desc' ? 'descending' : 'ascending',
-                  }))
-                }
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="asc" textValue="Ascending">
-                      Ascending
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="desc" textValue="Descending">
-                      Descending
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+        <>
+          <Card className="p-3">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+              <SearchField name="org-search" variant="secondary" className="min-w-0 flex-1">
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    placeholder="Search organizations, descriptions, or members..."
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                  />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  aria-label="Sort organizations by"
+                  className="w-full sm:w-[180px]"
+                  value={sortByValue}
+                  variant="secondary"
+                  onChange={(value) =>
+                    setSortDescriptor((previous) => ({
+                      ...previous,
+                      column: String(value || 'name'),
+                    }))
+                  }
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="name" textValue="Name">
+                        Name
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                      <ListBox.Item id="policies" textValue="Policies">
+                        Policies
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                      <ListBox.Item id="members" textValue="Members">
+                        Members
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                      <ListBox.Item id="updated" textValue="Updated">
+                        Updated
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                <Select
+                  aria-label="Sort organizations direction"
+                  className="w-full sm:w-[160px]"
+                  value={sortDirectionValue}
+                  variant="secondary"
+                  onChange={(value) =>
+                    setSortDescriptor((previous) => ({
+                      ...previous,
+                      direction: value === 'desc' ? 'descending' : 'ascending',
+                    }))
+                  }
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="asc" textValue="Ascending">
+                        Ascending
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                      <ListBox.Item id="desc" textValue="Descending">
+                        Descending
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </div>
             </div>
-          </div>
-
-          <Table variant="secondary">
-            <Table.ScrollContainer>
-              <Table.Content
-                aria-label="Organizations table"
-                className="min-w-[900px]"
-                sortDescriptor={sortDescriptor}
-                onSortChange={setSortDescriptor}
-              >
-                <Table.Header>
-                  <Table.Column id="name" allowsSorting isRowHeader>
-                    Organization
-                  </Table.Column>
-                  <Table.Column id="members" allowsSorting>
-                    Members
-                  </Table.Column>
-                  <Table.Column id="policies" allowsSorting>
-                    Policies
-                  </Table.Column>
-                  <Table.Column id="updated" allowsSorting>
-                    Updated
-                  </Table.Column>
-                  <Table.Column className="text-right">Actions</Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {sortedOrgs.length === 0 ? (
-                    <Table.Row id="empty">
-                      <Table.Cell colSpan={5}>
-                        <div className="px-4 py-10 text-center text-sm text-zinc-500">
-                          No organizations match this search.
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ) : (
-                    sortedOrgs.map((org) => (
-                      <Table.Row
-                        key={org.id}
-                        id={org.id}
-                        className="cursor-pointer transition-colors hover:bg-[var(--row-hover)]"
-                      >
-                        <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
-                          <div className="flex items-center gap-3">
-                            <Avatar
-                              className="shrink-0"
-                              color={workspaceColorFor('org', org.name)}
-                              size="sm"
-                              variant="soft"
-                            >
-                              <Avatar.Fallback>
-                                {org.name.trim().charAt(0).toUpperCase() || 'O'}
-                              </Avatar.Fallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="truncate font-medium text-zinc-900 dark:text-white">
-                                {org.name}
-                              </p>
-                              <p className="truncate text-xs text-zinc-500">
-                                {org.description || 'No description'}
-                              </p>
-                            </div>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
-                          <Chip variant="soft">
-                            {org.member_count ?? 0} {(org.member_count ?? 0) === 1 ? 'member' : 'members'}
-                          </Chip>
-                        </Table.Cell>
-                        <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
-                          <Chip variant="soft">
-                            {org.policy_count ?? 0} {org.policy_count === 1 ? 'policy' : 'policies'}
-                          </Chip>
-                        </Table.Cell>
-                        <Table.Cell
-                          className="text-xs text-zinc-500"
-                          onClick={() => router.push(`/orgs/${org.id}`)}
-                        >
-                          {new Date(org.updated_at).toLocaleDateString()}
-                        </Table.Cell>
-                        <Table.Cell onClick={(event) => event.stopPropagation()}>
-                          <div className="flex justify-end">
-                            {isSystemAdmin || org.current_user_role === 'owner' ? (
-                              <RowActionsMenu
-                                label={`Open actions menu for ${org.name}`}
-                                items={[
-                                  {
-                                    id: 'delete',
-                                    label: 'Delete organization',
-                                    icon: <Delete01Icon size={15} />,
-                                    variant: 'danger',
-                                    onAction: () => {
-                                      void handleDelete(org.id, org.name);
-                                    },
-                                  },
-                                ]}
-                              />
-                            ) : (
-                              <span className="text-xs text-zinc-500">—</span>
-                            )}
+          </Card>
+          <Card className="overflow-hidden">
+            <Table variant="secondary">
+              <Table.ScrollContainer>
+                <Table.Content
+                  aria-label="Organizations table"
+                  className="min-w-[900px]"
+                  sortDescriptor={sortDescriptor}
+                  onSortChange={setSortDescriptor}
+                >
+                  <Table.Header>
+                    <Table.Column id="name" allowsSorting isRowHeader>
+                      Organization
+                    </Table.Column>
+                    <Table.Column id="members" allowsSorting>
+                      Members
+                    </Table.Column>
+                    <Table.Column id="policies" allowsSorting>
+                      Policies
+                    </Table.Column>
+                    <Table.Column id="updated" allowsSorting>
+                      Updated
+                    </Table.Column>
+                    <Table.Column className="text-right">Actions</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {sortedOrgs.length === 0 ? (
+                      <Table.Row id="empty">
+                        <Table.Cell colSpan={5}>
+                          <div className="px-4 py-10 text-center text-sm text-zinc-500">
+                            No organizations match this search.
                           </div>
                         </Table.Cell>
                       </Table.Row>
-                    ))
-                  )}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
-        </Card>
+                    ) : (
+                      sortedOrgs.map((org) => (
+                        <Table.Row
+                          key={org.id}
+                          id={org.id}
+                          className="cursor-pointer transition-colors hover:bg-[var(--row-hover)]"
+                        >
+                          <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
+                            <div className="flex items-center gap-3">
+                              <Avatar
+                                className="shrink-0"
+                                color={workspaceColorFor('org', org.name)}
+                                size="sm"
+                                variant="soft"
+                              >
+                                <Avatar.Fallback>
+                                  {org.name.trim().charAt(0).toUpperCase() || 'O'}
+                                </Avatar.Fallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-zinc-900 dark:text-white">
+                                  {org.name}
+                                </p>
+                                <p className="truncate text-xs text-zinc-500">
+                                  {org.description || 'No description'}
+                                </p>
+                              </div>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
+                            <Chip variant="soft">
+                              {org.member_count ?? 0}{' '}
+                              {(org.member_count ?? 0) === 1 ? 'member' : 'members'}
+                            </Chip>
+                          </Table.Cell>
+                          <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
+                            <Chip variant="soft">
+                              {org.policy_count ?? 0}{' '}
+                              {org.policy_count === 1 ? 'policy' : 'policies'}
+                            </Chip>
+                          </Table.Cell>
+                          <Table.Cell
+                            className="text-xs text-zinc-500"
+                            onClick={() => router.push(`/orgs/${org.id}`)}
+                          >
+                            {new Date(org.updated_at).toLocaleDateString()}
+                          </Table.Cell>
+                          <Table.Cell onClick={(event) => event.stopPropagation()}>
+                            <div className="flex justify-end">
+                              {isSystemAdmin || org.current_user_role === 'owner' ? (
+                                <RowActionsMenu
+                                  label={`Open actions menu for ${org.name}`}
+                                  items={[
+                                    {
+                                      id: 'delete',
+                                      label: 'Delete organization',
+                                      icon: <Delete01Icon size={15} />,
+                                      variant: 'danger',
+                                      onAction: () => {
+                                        void handleDelete(org.id, org.name);
+                                      },
+                                    },
+                                  ]}
+                                />
+                              ) : (
+                                <span className="text-xs text-zinc-500">—</span>
+                              )}
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))
+                    )}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </Card>
+        </>
       )}
 
       <Modal state={modal}>

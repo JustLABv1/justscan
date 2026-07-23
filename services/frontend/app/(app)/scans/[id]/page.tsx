@@ -14,6 +14,10 @@ import {
 } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
+import {
+  filterDisclosureBodyClassName,
+  FilterDisclosureTrigger,
+} from '@/components/ui/filter-toolbar';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageTitle } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -2402,39 +2406,46 @@ export default function ScanDetailPage() {
       {/* SBOM tab */}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'sbom' && (
         <div className="space-y-3">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <FormField
-              hideLabel
-              label="Filter components by name"
-              type="text"
-              value={sbomNameInput}
-              onChange={(e: any) => setSbomNameInput(e.target.value)}
-              placeholder="Filter by name..."
-              className="min-w-0 md:flex-1"
-              containerClassName="min-w-0 md:flex-1"
-            />
-            <Select
-              value={sbomTypeFilter || '__all__'}
-              onChange={(value: any) => {
-                setSbomTypeFilter(String(value === '__all__' ? '' : (value ?? '')));
-                setSbomLoaded(false);
-              }}
-              className="min-w-0 md:w-56 md:flex-none"
-            >
-              <Select.Trigger className={selectTriggerCls}>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="__all__">All Types</ListBox.Item>
-                  <ListBox.Item id="library">Library</ListBox.Item>
-                  <ListBox.Item id="application">Application</ListBox.Item>
-                  <ListBox.Item id="operating-system">OS</ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
+          <Card className="p-3">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <SearchField
+                aria-label="Filter components by name"
+                className="min-w-0 md:flex-1"
+                value={sbomNameInput}
+                onChange={setSbomNameInput}
+                variant="secondary"
+              >
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder="Filter components by name…" />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+              <Select
+                aria-label="Component type"
+                value={sbomTypeFilter || '__all__'}
+                onChange={(value: any) => {
+                  setSbomTypeFilter(String(value === '__all__' ? '' : (value ?? '')));
+                  setSbomLoaded(false);
+                }}
+                variant="secondary"
+                className="min-w-0 md:w-56 md:flex-none"
+              >
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item id="__all__">All Types</ListBox.Item>
+                    <ListBox.Item id="library">Library</ListBox.Item>
+                    <ListBox.Item id="application">Application</ListBox.Item>
+                    <ListBox.Item id="operating-system">OS</ListBox.Item>
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </div>
+          </Card>
           <Card className="surface-panel rounded-2xl overflow-hidden">
             <Table variant="secondary">
               <Table.ScrollContainer>
@@ -2575,7 +2586,7 @@ export default function ScanDetailPage() {
               </Dropdown>
             </div>
 
-            <Card variant="secondary" className="flex flex-col gap-3 p-3">
+            <Card className="flex flex-col gap-3 p-3">
               <div className="w-full overflow-x-auto pb-1">
                 <SegmentedControl
                   ariaLabel="Severity filters"
@@ -2675,7 +2686,11 @@ export default function ScanDetailPage() {
                 onExpandedChange={setAdvancedFiltersExpanded}
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <SearchField name="scan-vuln-search" className="min-w-0 flex-1">
+                  <SearchField
+                    name="scan-vuln-search"
+                    className="min-w-0 flex-1"
+                    variant="secondary"
+                  >
                     <SearchField.Group>
                       <SearchField.SearchIcon />
                       <SearchField.Input
@@ -2686,19 +2701,10 @@ export default function ScanDetailPage() {
                       <SearchField.ClearButton />
                     </SearchField.Group>
                   </SearchField>
-                  <Disclosure.Heading>
-                    <Disclosure.Trigger className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
-                      Filters
-                      {advancedVulnerabilityFilterCount > 0 ? (
-                        <Chip color="accent" size="sm" variant="soft">
-                          {advancedVulnerabilityFilterCount}
-                        </Chip>
-                      ) : null}
-                      <Disclosure.Indicator className="text-muted">
-                        <ArrowDown01Icon aria-hidden size={15} />
-                      </Disclosure.Indicator>
-                    </Disclosure.Trigger>
-                  </Disclosure.Heading>
+                  <FilterDisclosureTrigger
+                    activeCount={advancedVulnerabilityFilterCount}
+                    label="More filters"
+                  />
                   {hasActiveVulnerabilityFilters ? (
                     <Button onPress={clearVulnerabilityFilters} variant="tertiary">
                       Clear filters
@@ -2706,9 +2712,13 @@ export default function ScanDetailPage() {
                   ) : null}
                 </div>
                 <Disclosure.Content>
-                  <Disclosure.Body className="pt-3">
+                  <Disclosure.Body className={filterDisclosureBodyClassName}>
                     <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
-                      <SearchField name="scan-vuln-cve-search" className="min-w-0 w-full">
+                      <SearchField
+                        name="scan-vuln-cve-search"
+                        className="min-w-0 w-full"
+                        variant="secondary"
+                      >
                         <SearchField.Group>
                           <SearchField.SearchIcon />
                           <SearchField.Input
@@ -2723,12 +2733,13 @@ export default function ScanDetailPage() {
                         aria-label="Sort vulnerabilities by"
                         value={sortBy}
                         className="w-full"
+                        variant="secondary"
                         onChange={(value: any) => {
                           setSortBy(value as VulnerabilityViewSettings['sort_by']);
                           setPage(1);
                         }}
                       >
-                        <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                        <Select.Trigger className="h-11">
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -2747,12 +2758,13 @@ export default function ScanDetailPage() {
                         aria-label="Sort direction"
                         value={sortDir}
                         className="w-full"
+                        variant="secondary"
                         onChange={(value: any) => {
                           setSortDir(value as VulnerabilityViewSettings['sort_dir']);
                           setPage(1);
                         }}
                       >
-                        <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                        <Select.Trigger className="h-11">
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -2777,7 +2789,7 @@ export default function ScanDetailPage() {
                           setMinCvss(!isNaN(val) ? val : 0);
                           setPage(1);
                         }}
-                        className="w-full h-11 bg-surface"
+                        className="h-11 w-full bg-surface-secondary"
                         containerClassName="w-full"
                       />
                       <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:col-span-4 xl:grid-cols-4">

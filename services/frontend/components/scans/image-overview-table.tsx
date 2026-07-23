@@ -15,13 +15,14 @@ function imageHref(imageName: string) {
 function ImageName({ imageName }: { imageName: string }) {
   const parts = imageName.split('/');
   const host = parts[0] ?? '';
-  const hasHost = parts.length > 1 && (host.includes('.') || host.includes(':') || host === 'localhost');
+  const hasHost =
+    parts.length > 1 && (host.includes('.') || host.includes(':') || host === 'localhost');
   const repository = hasHost ? parts.slice(1).join('/') : imageName;
 
   return (
-    <div className="min-w-0">
-      <p className="break-all font-mono text-sm font-medium text-foreground">{repository}</p>
-      {hasHost ? <p className="mt-0.5 break-all font-mono text-xs text-muted">{host}</p> : null}
+    <div className="min-w-0" title={imageName}>
+      <p className="truncate font-mono text-sm font-medium text-foreground">{repository}</p>
+      {hasHost ? <p className="mt-0.5 truncate font-mono text-xs text-muted">{host}</p> : null}
     </div>
   );
 }
@@ -38,20 +39,24 @@ export function ImageOverviewTable({
   return (
     <Table>
       <Table.ScrollContainer>
-        <Table.Content aria-label="Scanned images" className="min-w-[900px]">
+        <Table.Content aria-label="Scanned images" className="min-w-[1100px] table-fixed">
           <Table.Header>
-            <Table.Column isRowHeader>Image</Table.Column>
-            <Table.Column>Current health</Table.Column>
-            <Table.Column>Findings</Table.Column>
-            <Table.Column>Tags &amp; runs</Table.Column>
-            <Table.Column>Last scanned</Table.Column>
-            <Table.Column>Actions</Table.Column>
+            <Table.Column isRowHeader className="w-[240px]">
+              Image
+            </Table.Column>
+            <Table.Column className="w-[280px]">Current health</Table.Column>
+            <Table.Column className="w-[260px]">Findings</Table.Column>
+            <Table.Column className="w-[120px]">Tags &amp; runs</Table.Column>
+            <Table.Column className="w-[240px]">Last scanned</Table.Column>
+            <Table.Column className="w-16">Actions</Table.Column>
           </Table.Header>
           <Table.Body>
             {loading ? (
               Array.from({ length: 6 }, (_, index) => (
                 <Table.Row id={`loading-${index}`} key={`loading-${index}`}>
-                  <Table.Cell colSpan={6}><div className="h-14 animate-pulse rounded-lg bg-surface-secondary" /></Table.Cell>
+                  <Table.Cell colSpan={6}>
+                    <div className="h-14 animate-pulse rounded-lg bg-surface-secondary" />
+                  </Table.Cell>
                 </Table.Row>
               ))
             ) : images.length === 0 ? (
@@ -61,7 +66,11 @@ export function ImageOverviewTable({
                     <EmptyState
                       icon={<Shield01Icon size={28} />}
                       title={hasActiveFilters ? 'No images match your filters' : 'No scans yet'}
-                      description={hasActiveFilters ? 'Adjust or clear the filters to widen the results.' : 'Run a scan to start tracking image health.'}
+                      description={
+                        hasActiveFilters
+                          ? 'Adjust or clear the filters to widen the results.'
+                          : 'Run a scan to start tracking image health.'
+                      }
                     />
                   </div>
                 </Table.Cell>
@@ -73,21 +82,42 @@ export function ImageOverviewTable({
                   return (
                     <Table.Row id={image.image_name} className="group">
                       <Table.Cell>
-                        <Link href={href} className="block rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent">
+                        <Link
+                          href={href}
+                          className="block rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent"
+                        >
                           <ImageName imageName={image.image_name} />
                         </Link>
                       </Table.Cell>
                       <Table.Cell>
-                        <Link href={href} className="block rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary">
+                        <Link
+                          href={href}
+                          className="block min-w-0 rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary"
+                        >
                           <div className="flex flex-wrap items-center gap-2">
-                            <StatusBadge status={image.health_status} externalStatus={image.health_external_status} />
-                            {image.health_policy_failed ? <Chip color="danger" size="sm" variant="soft">Policy failed</Chip> : null}
+                            <StatusBadge
+                              status={image.health_status}
+                              externalStatus={image.health_external_status}
+                            />
+                            {image.health_policy_failed ? (
+                              <Chip color="danger" size="sm" variant="soft">
+                                Policy failed
+                              </Chip>
+                            ) : null}
                           </div>
-                          <p className="mt-1 font-mono text-xs text-muted">Tag: {image.health_tag}</p>
+                          <p
+                            className="mt-1 truncate font-mono text-xs text-muted"
+                            title={`Tag: ${image.health_tag}`}
+                          >
+                            Tag: {image.health_tag}
+                          </p>
                         </Link>
                       </Table.Cell>
                       <Table.Cell>
-                        <Link href={href} className="flex gap-1.5 rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary">
+                        <Link
+                          href={href}
+                          className="flex gap-1.5 rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary"
+                        >
                           <SevCount count={image.health_critical_count} level="critical" />
                           <SevCount count={image.health_high_count} level="high" />
                           <SevCount count={image.health_medium_count} level="medium" />
@@ -95,19 +125,39 @@ export function ImageOverviewTable({
                         </Link>
                       </Table.Cell>
                       <Table.Cell>
-                        <Link href={href} className="block rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary">
-                          <p className="text-sm font-medium">{image.tag_count} tag{image.tag_count === 1 ? '' : 's'}</p>
-                          <p className="mt-1 text-xs text-muted">{image.scan_count} run{image.scan_count === 1 ? '' : 's'}</p>
+                        <Link
+                          href={href}
+                          className="block rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary"
+                        >
+                          <p className="text-sm font-medium">
+                            {image.tag_count} tag{image.tag_count === 1 ? '' : 's'}
+                          </p>
+                          <p className="mt-1 text-xs text-muted">
+                            {image.scan_count} run{image.scan_count === 1 ? '' : 's'}
+                          </p>
                         </Link>
                       </Table.Cell>
                       <Table.Cell>
-                        <Link href={href} className="block rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary" title={fullDate(image.latest_scan_at)}>
+                        <Link
+                          href={href}
+                          className="block min-w-0 rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary"
+                          title={fullDate(image.latest_scan_at)}
+                        >
                           <p className="text-sm">{timeAgo(image.latest_scan_at)}</p>
-                          <p className="mt-1 font-mono text-xs text-muted">{image.latest_tag}</p>
+                          <p
+                            className="mt-1 truncate font-mono text-xs text-muted"
+                            title={image.latest_tag}
+                          >
+                            {image.latest_tag}
+                          </p>
                         </Link>
                       </Table.Cell>
                       <Table.Cell>
-                        <Link aria-label={`Open ${image.image_name}`} href={href} className="inline-flex rounded-lg p-2 text-muted transition-colors hover:bg-surface-secondary hover:text-accent">
+                        <Link
+                          aria-label={`Open ${image.image_name}`}
+                          href={href}
+                          className="inline-flex rounded-lg p-2 text-muted transition-colors hover:bg-surface-secondary hover:text-accent"
+                        >
                           <ArrowRight01Icon size={17} />
                         </Link>
                       </Table.Cell>

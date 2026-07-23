@@ -541,52 +541,54 @@ export default function StatusPagesPage() {
       ) : null}
 
       <div className="space-y-4">
-        <FilterToolbar
-          filters={
-            <Select
-              value={visibilityFilter}
-              onChange={(value) =>
-                setVisibilityFilter(
-                  value === 'private' || value === 'authenticated' || value === 'public'
-                    ? value
-                    : 'all'
-                )
-              }
-              className="w-full sm:w-[180px]"
-              variant="secondary"
-            >
-              <Select.Trigger className={selectTriggerCls}>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="all">All visibility</ListBox.Item>
-                  <ListBox.Item id="private">Private</ListBox.Item>
-                  <ListBox.Item id="authenticated">Authenticated</ListBox.Item>
-                  <ListBox.Item id="public">Public</ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          }
-          search={
-            <SearchField
-              name="status-pages-search"
-              variant="secondary"
-              className="w-full sm:max-w-sm"
-            >
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search name, slug, or description..."
-                />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-          }
-        />
+        <Card className="p-3">
+          <FilterToolbar
+            filters={
+              <Select
+                value={visibilityFilter}
+                onChange={(value) =>
+                  setVisibilityFilter(
+                    value === 'private' || value === 'authenticated' || value === 'public'
+                      ? value
+                      : 'all'
+                  )
+                }
+                className="w-full sm:w-[180px]"
+                variant="secondary"
+              >
+                <Select.Trigger className="h-10">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item id="all">All visibility</ListBox.Item>
+                    <ListBox.Item id="private">Private</ListBox.Item>
+                    <ListBox.Item id="authenticated">Authenticated</ListBox.Item>
+                    <ListBox.Item id="public">Public</ListBox.Item>
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            }
+            search={
+              <SearchField
+                name="status-pages-search"
+                variant="secondary"
+                className="w-full sm:max-w-sm"
+              >
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search name, slug, or description..."
+                  />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+            }
+          />
+        </Card>
 
         {loading ? (
           <div className="surface-card flex justify-center rounded-3xl border border-divider/70 py-16">
@@ -1342,7 +1344,9 @@ export default function StatusPagesPage() {
                         value={shareOrgId}
                         onChange={(value) => setShareOrgId(String(value))}
                       >
-                        <Select.Trigger className={`${heroFieldClassName} flex-1 bg-surface-secondary`}>
+                        <Select.Trigger
+                          className={`${heroFieldClassName} flex-1 bg-surface-secondary`}
+                        >
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>

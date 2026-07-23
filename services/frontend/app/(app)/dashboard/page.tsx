@@ -1340,7 +1340,6 @@ export default function DashboardPage() {
       undefined,
       undefined,
       undefined,
-      undefined,
       from,
       to
     ).then((result) => result.data ?? []);

@@ -8,7 +8,6 @@ import (
 	"justscan-backend/compliance"
 	"justscan-backend/functions/audit"
 	"justscan-backend/functions/blockedpolicy"
-	collectionhandlers "justscan-backend/handlers/collections"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
@@ -25,7 +24,7 @@ func RefreshXrayPolicyViolations(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		scan, userID, isAdmin, ok := LoadAuthorizedScanForWrite(c, db, scanID)
+		scan, userID, _, ok := LoadAuthorizedScanForWrite(c, db, scanID)
 		if !ok {
 			return
 		}
@@ -50,7 +49,7 @@ func RefreshXrayPolicyViolations(db *bun.DB) gin.HandlerFunc {
 
 		compliance.RunForScan(db, scan.ID)
 
-		refreshed, err := loadEnrichedScan(c, db, scan.ID, userID, isAdmin)
+		refreshed, err := loadEnrichedScan(c, db, scan.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -66,7 +65,7 @@ func RefreshXrayPolicyViolations(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
-func loadEnrichedScan(c *gin.Context, db *bun.DB, scanID uuid.UUID, userID uuid.UUID, isAdmin bool) (*models.Scan, error) {
+func loadEnrichedScan(c *gin.Context, db *bun.DB, scanID uuid.UUID) (*models.Scan, error) {
 	ctx := c.Request.Context()
 	scan := &models.Scan{}
 	if err := db.NewSelect().Model(scan).Where("id = ?", scanID).Scan(ctx); err != nil {
@@ -81,14 +80,6 @@ func loadEnrichedScan(c *gin.Context, db *bun.DB, scanID uuid.UUID, userID uuid.
 		Where("st.scan_id = ?", scanID).
 		Scan(ctx, &tags); err == nil {
 		scan.Tags = tags
-	}
-
-	attached := []models.Scan{*scan}
-	if err := collectionhandlers.AttachCollectionsToScans(ctx, db, attached, userID, isAdmin, c.Query("scope")); err != nil {
-		return nil, fmt.Errorf("failed to load scan collections")
-	}
-	if len(attached) == 1 {
-		scan.Collections = attached[0].Collections
 	}
 
 	var stepLogs []models.ScanStepLog

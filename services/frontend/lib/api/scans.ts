@@ -33,7 +33,6 @@ export const listScans = (
   exact?: boolean,
   helmOnly?: boolean,
   helmChart?: string,
-  collection?: string,
   from?: string,
   to?: string,
   imageTag?: string,
@@ -45,7 +44,6 @@ export const listScans = (
   if (exact) params.set('exact', 'true');
   if (helmOnly) params.set('helm_only', 'true');
   if (helmChart) params.set('helm_chart', helmChart);
-  if (collection) params.set('collection', collection);
   if (from) params.set('from', from);
   if (to) params.set('to', to);
   if (imageTag) params.set('image_tag', imageTag);
@@ -60,7 +58,6 @@ export const listScanArtifacts = (
   query?: string,
   status?: string,
   critical?: '' | 'yes' | 'no',
-  collection?: string,
   policy?: '' | 'fail',
   image?: string,
   from?: string,
@@ -70,7 +67,6 @@ export const listScanArtifacts = (
   if (query) params.set('q', query);
   if (status) params.set('status', status);
   if (critical) params.set('critical', critical);
-  if (collection) params.set('collection', collection);
   if (policy) params.set('policy', policy);
   if (image) params.set('image', image);
   if (from) params.set('from', from);
@@ -87,7 +83,6 @@ export const listScanImages = (
   limit = 30,
   query?: string,
   status?: string,
-  collection?: string,
   critical?: '' | 'yes' | 'no',
   policy?: '' | 'fail',
   from?: string,
@@ -97,7 +92,6 @@ export const listScanImages = (
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (query) params.set('q', query);
   if (status) params.set('status', status);
-  if (collection) params.set('collection', collection);
   if (critical) params.set('critical', critical);
   if (policy) params.set('policy', policy);
   if (from) params.set('from', from);
@@ -177,9 +171,7 @@ export const createUploadedArchiveScan = (input: {
   if (input.imageTag) formData.append('image_tag', input.imageTag);
   if (input.platform) formData.append('platform', input.platform);
   if (input.tagIds && input.tagIds.length > 0) formData.append('tag_ids', input.tagIds.join(','));
-  const path = input.orgId
-    ? `/api/v1/orgs/${input.orgId}/archive-scans`
-    : '/api/v1/scans/upload';
+  const path = input.orgId ? `/api/v1/orgs/${input.orgId}/archive-scans` : '/api/v1/scans/upload';
   return reqForm<Scan>('POST', path, formData);
 };
 
@@ -318,28 +310,6 @@ export const bulkTransferScansOwnership = (
     target_type: target.type,
     ...(target.type === 'org' ? { target_org_id: target.orgId } : {}),
   });
-
-export const bulkAddCollectionToScans = (collectionId: string, ids: string[]) => {
-  const params = new URLSearchParams();
-  appendScope(params);
-  const qs = params.toString();
-  return req<{ result: string }>(
-    'POST',
-    `/api/v1/scans/bulk/collections/${collectionId}${qs ? `?${qs}` : ''}`,
-    { ids }
-  );
-};
-
-export const bulkRemoveCollectionFromScans = (collectionId: string, ids: string[]) => {
-  const params = new URLSearchParams();
-  appendScope(params);
-  const qs = params.toString();
-  return req<{ result: string }>(
-    'DELETE',
-    `/api/v1/scans/bulk/collections/${collectionId}${qs ? `?${qs}` : ''}`,
-    { ids }
-  );
-};
 
 export const getScanSBOM = (scanId: string, name?: string, type?: string) => {
   const params = new URLSearchParams();

@@ -284,11 +284,11 @@ export default function VulnKBPage() {
         description="Enriched CVE data from NVD, GHSA, OSV, and other sources via Trivy."
       />
 
-      <Card className="space-y-4">
+      <Card className="space-y-4 p-3">
         <Disclosure isExpanded={showFilters} onExpandedChange={setShowFilters} className="contents">
-          <div className="space-y-3">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <SearchField name="cve-search" variant="secondary" className="w-full xl:max-w-md">
+          <div className="space-y-2">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+              <SearchField name="cve-search" variant="secondary" className="min-w-0 flex-1">
                 <SearchField.Group>
                   <SearchField.SearchIcon />
                   <SearchField.Input
@@ -304,11 +304,11 @@ export default function VulnKBPage() {
                 <Select
                   value={severity}
                   onChange={(value) => setSeverity(String(value ?? ''))}
-                  className="w-full sm:w-[180px]"
+                  className="min-w-[180px]"
                   placeholder="All Severities"
                   variant="secondary"
                 >
-                  <Select.Trigger className={selectTriggerCls}>
+                  <Select.Trigger className="h-10">
                     <Select.Value />
                     <Select.Indicator />
                   </Select.Trigger>
@@ -333,7 +333,7 @@ export default function VulnKBPage() {
             </div>
 
             <Disclosure.Content>
-              <Disclosure.Body className={`${filterDisclosureBodyClassName} md:grid-cols-3`}>
+              <Disclosure.Body className="mt-2 grid grid-cols-1 gap-2 border-t border-divider pt-2 md:grid-cols-3">
                 <Select
                   value={minCvss}
                   onChange={(value) => setMinCvss(String(value ?? '0'))}
@@ -396,15 +396,17 @@ export default function VulnKBPage() {
             )}
           </div>
         </Disclosure>
+      </Card>
 
-        {error ? (
-          <StatusAlert
-            status="danger"
-            title="Vulnerability knowledge base failed to load"
-            description={error}
-          />
-        ) : null}
+      {error ? (
+        <StatusAlert
+          status="danger"
+          title="Vulnerability knowledge base failed to load"
+          description={error}
+        />
+      ) : null}
 
+      <Card className="overflow-hidden">
         <div className="overflow-hidden">
           <Table variant="secondary">
             <Table.ScrollContainer>

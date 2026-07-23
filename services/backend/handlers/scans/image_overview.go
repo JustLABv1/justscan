@@ -190,17 +190,6 @@ WITH visible AS (
 		if c.Query("policy") == "fail" && orgScoped {
 			policyWhere = "health_policy_failed = true"
 		}
-		collectionWhere := "1=1"
-		collectionArgs := []interface{}{}
-		if collection := strings.TrimSpace(c.Query("collection")); collection != "" {
-			if collection == "__none__" {
-				collectionWhere = "NOT EXISTS (SELECT 1 FROM scan_collection_memberships scm WHERE scm.scan_id = health_scan_id)"
-			} else {
-				collectionWhere = "EXISTS (SELECT 1 FROM scan_collection_memberships scm WHERE scm.scan_id = health_scan_id AND scm.collection_id = ?)"
-				collectionArgs = append(collectionArgs, collection)
-			}
-		}
-
 		args := append([]interface{}{}, baseArgs...)
 		// policyExpression appears three times in the CTE whenever organization policy is enabled.
 		if orgScoped {
@@ -209,8 +198,7 @@ WITH visible AS (
 			args = append(args, policyArgs...)
 		}
 		args = append(args, statusArgs...)
-		args = append(args, collectionArgs...)
-		where := "health_row = 1 AND " + statusWhere + " AND " + criticalWhere + " AND " + policyWhere + " AND " + collectionWhere
+		where := "health_row = 1 AND " + statusWhere + " AND " + criticalWhere + " AND " + policyWhere
 
 		var total int
 		if err := db.QueryRowContext(c.Request.Context(), baseQuery+"SELECT COUNT(*) FROM overview WHERE "+where, args...).Scan(&total); err != nil {

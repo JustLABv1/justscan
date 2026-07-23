@@ -47,7 +47,6 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 		Comments(v1, db)
 		Suppressions(v1, db)
 		Tags(v1, db)
-		Collections(v1, db)
 		Registries(v1, db)
 		Watchlist(v1, db)
 		VulnKB(v1, db)

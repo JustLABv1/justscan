@@ -4,25 +4,26 @@ import (
 	"context"
 	"fmt"
 
-	"justscan-backend/pkg/models"
-
 	"github.com/uptrace/bun"
 )
 
 func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
-		tables := []interface{}{
-			(*models.ScanCollection)(nil),
-			(*models.ScanCollectionMembership)(nil),
-		}
-
-		for _, model := range tables {
-			if _, err := db.NewCreateTable().Model(model).IfNotExists().Exec(ctx); err != nil {
-				return fmt.Errorf("migration 72 create table: %w", err)
-			}
-		}
-
 		statements := []string{
+			`CREATE TABLE IF NOT EXISTS scan_collections (
+				id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+				name text NOT NULL,
+				owner_type text NOT NULL DEFAULT 'user',
+				owner_user_id uuid NULL,
+				owner_org_id uuid NULL,
+				created_at timestamptz DEFAULT now(),
+				updated_at timestamptz NOT NULL DEFAULT now()
+			)`,
+			`CREATE TABLE IF NOT EXISTS scan_collection_memberships (
+				scan_id uuid NOT NULL,
+				collection_id uuid NOT NULL,
+				PRIMARY KEY (scan_id, collection_id)
+			)`,
 			`ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS collection_ids jsonb NOT NULL DEFAULT '[]'::jsonb`,
 			`CREATE INDEX IF NOT EXISTS idx_scan_collections_owner_user_id ON scan_collections (owner_user_id)`,
 			`CREATE INDEX IF NOT EXISTS idx_scan_collections_owner_org_id ON scan_collections (owner_org_id)`,
@@ -60,13 +61,11 @@ func init() {
 			}
 		}
 
-		tables := []interface{}{
-			(*models.ScanCollectionMembership)(nil),
-			(*models.ScanCollection)(nil),
-		}
-
-		for _, model := range tables {
-			if _, err := db.NewDropTable().Model(model).IfExists().Cascade().Exec(ctx); err != nil {
+		for _, statement := range []string{
+			`DROP TABLE IF EXISTS scan_collection_memberships CASCADE`,
+			`DROP TABLE IF EXISTS scan_collections CASCADE`,
+		} {
+			if _, err := db.NewRaw(statement).Exec(ctx); err != nil {
 				return fmt.Errorf("migration 72 drop table: %w", err)
 			}
 		}

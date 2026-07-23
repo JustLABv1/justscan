@@ -389,7 +389,9 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
             ? 'Extract images from a chart, review them, then configure and queue the run.'
             : 'Review chart scan runs, investigate results, and return to the exact set of images that was queued.'
         }
-        breadcrumbs={mode === 'new' ? [{ label: 'Helm', href: '/helm' }, { label: 'New scan' }] : undefined}
+        breadcrumbs={
+          mode === 'new' ? [{ label: 'Helm', href: '/helm' }, { label: 'New scan' }] : undefined
+        }
         actions={
           mode === 'new' ? (
             <Link className={buttonVariants({ variant: 'secondary' })} href="/helm">
@@ -402,7 +404,12 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                 <PackageIcon size={15} />
                 New Helm scan
               </Link>
-              <Button type="button" variant="secondary" onPress={loadHistory} isDisabled={historyLoading}>
+              <Button
+                type="button"
+                variant="secondary"
+                onPress={loadHistory}
+                isDisabled={historyLoading}
+              >
                 <Refresh01Icon size={14} className={historyLoading ? 'animate-spin' : ''} />
                 Refresh
               </Button>
@@ -413,383 +420,400 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
 
       {mode === 'new' ? (
         <>
-      <StepBar current={step} />
+          <StepBar current={step} />
 
-      {step === 'input' && (
-        <Card>
-          <Card.Header>
-            <Card.Title className="flex items-center gap-2">
-              <PackageIcon size={18} />
-              Chart
-            </Card.Title>
-            <Card.Description>
-              Extract container images from an OCI chart or HTTP chart repository.
-            </Card.Description>
-          </Card.Header>
-          <Card.Content>
-            <form onSubmit={handleExtract} className="space-y-4">
-              <TextField fullWidth isRequired value={chartURL} onChange={setChartURL}>
-                <Label>Chart URL</Label>
-                <Input
-                  variant="secondary"
-                  placeholder="oci://ghcr.io/org/charts/mychart or https://charts.bitnami.com/bitnami"
-                  value={chartURL}
-                  onChange={(e) => setChartURL(e.target.value)}
-                  required
-                />
-                <Description>
-                  OCI: <code className="font-mono">oci://registry/path/chartname</code>{' '}
-                  &nbsp;·&nbsp; HTTP: provide the repo URL and the chart name below
-                </Description>
-              </TextField>
-
-              {!isOCI && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <TextField fullWidth isRequired value={chartName} onChange={setChartName}>
-                    <Label>Chart Name</Label>
+          {step === 'input' && (
+            <Card>
+              <Card.Header>
+                <Card.Title className="flex items-center gap-2">
+                  <PackageIcon size={18} />
+                  Chart
+                </Card.Title>
+                <Card.Description>
+                  Extract container images from an OCI chart or HTTP chart repository.
+                </Card.Description>
+              </Card.Header>
+              <Card.Content>
+                <form onSubmit={handleExtract} className="space-y-4">
+                  <TextField fullWidth isRequired value={chartURL} onChange={setChartURL}>
+                    <Label>Chart URL</Label>
                     <Input
                       variant="secondary"
-                      placeholder="nginx"
-                      value={chartName}
-                      onChange={(e) => setChartName(e.target.value)}
+                      placeholder="oci://ghcr.io/org/charts/mychart or https://charts.bitnami.com/bitnami"
+                      value={chartURL}
+                      onChange={(e) => setChartURL(e.target.value)}
+                      required
                     />
+                    <Description>
+                      OCI: <code className="font-mono">oci://registry/path/chartname</code>{' '}
+                      &nbsp;·&nbsp; HTTP: provide the repo URL and the chart name below
+                    </Description>
                   </TextField>
-                  <TextField fullWidth value={chartVersion} onChange={setChartVersion}>
-                    <Label>Version</Label>
-                    <Input
-                      variant="secondary"
-                      placeholder="15.3.0"
-                      value={chartVersion}
-                      onChange={(e) => setChartVersion(e.target.value)}
-                    />
-                    <Description>Optional</Description>
-                  </TextField>
-                </div>
-              )}
 
-              {isOCI && (
-                <TextField fullWidth value={chartVersion} onChange={setChartVersion}>
-                  <Label>Version</Label>
-                  <Input
-                    variant="secondary"
-                    placeholder="1.0.0"
-                    value={chartVersion}
-                    onChange={(e) => setChartVersion(e.target.value)}
-                  />
-                  <Description>Optional</Description>
-                </TextField>
-              )}
-
-              {extractError && (
-                <Alert status="danger">
-                  <Alert.Indicator />
-                  <Alert.Content>
-                    <Alert.Title>Image extraction failed</Alert.Title>
-                    <Alert.Description>{extractError}</Alert.Description>
-                  </Alert.Content>
-                </Alert>
-              )}
-
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  isDisabled={extracting || !chartURL.trim()}
-                  isPending={extracting}
-                >
-                  Extract Images
-                </Button>
-              </div>
-            </form>
-          </Card.Content>
-        </Card>
-      )}
-
-      {(step === 'images' || step === 'configure') && extracted && (
-        <div className="space-y-4">
-          {step === 'configure' ? (
-          <>
-          <Card>
-            <Card.Content className="grid w-full gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">
-                  {extracted.chart_name}
-                  {extracted.chart_version && (
-                    <span className="ml-2 text-xs font-normal text-muted">
-                      v{extracted.chart_version}
-                    </span>
+                  {!isOCI && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <TextField fullWidth isRequired value={chartName} onChange={setChartName}>
+                        <Label>Chart Name</Label>
+                        <Input
+                          variant="secondary"
+                          placeholder="nginx"
+                          value={chartName}
+                          onChange={(e) => setChartName(e.target.value)}
+                        />
+                      </TextField>
+                      <TextField fullWidth value={chartVersion} onChange={setChartVersion}>
+                        <Label>Version</Label>
+                        <Input
+                          variant="secondary"
+                          placeholder="15.3.0"
+                          value={chartVersion}
+                          onChange={(e) => setChartVersion(e.target.value)}
+                        />
+                        <Description>Optional</Description>
+                      </TextField>
+                    </div>
                   )}
-                </p>
-                <p className="text-xs text-muted mt-0.5">
-                  Found {extracted.images.length} image{extracted.images.length !== 1 ? 's' : ''}{' '}
-                  &nbsp;·&nbsp;
-                  <span className="font-medium">{selected.size} selected</span>
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="justify-self-start sm:justify-self-end"
-                onPress={() => setStep('input')}
-              >
-                <ArrowLeft01Icon size={14} />
-                Change chart
-              </Button>
-            </Card.Content>
-          </Card>
 
-          <Card>
-            <Card.Content className="grid w-full gap-4 lg:grid-cols-[minmax(280px,380px)_minmax(180px,240px)_minmax(0,1fr)_auto] lg:items-end">
-              <div className="flex min-w-0 flex-col gap-1.5">
-                <Label className="text-xs">Registry</Label>
-                <Select
-                  className="w-full"
-                  value={registryId || '__auto__'}
-                  onChange={(value) =>
-                    setRegistryId(String(value === '__auto__' ? '' : (value ?? '')))
-                  }
-                  variant="secondary"
-                >
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id="__auto__">
-                        {capabilities.enable_trivy
-                          ? 'Auto-match from image hostname'
-                          : 'Auto-match from configured Xray registries'}
-                      </ListBox.Item>
-                      {selectableRegistries.map((registry) => (
-                        <ListBox.Item key={registry.id} id={registry.id}>
-                          {registry.name} ·{' '}
-                          {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-              </div>
-
-              {xrayOnlyWithoutRegistries && (
-                <Alert status="warning" className="w-full">
-                  <Alert.Indicator />
-                  <Alert.Content>
-                    <Alert.Description>
-                      No Artifactory Xray registry is configured yet, so this Helm run cannot be
-                      queued until one is added.
-                    </Alert.Description>
-                  </Alert.Content>
-                </Alert>
-              )}
-
-              <div className="flex min-w-0 flex-col gap-1.5">
-                <Label className="text-xs">Platform</Label>
-                <Select
-                  className="w-full"
-                  value={platform || '__auto__'}
-                  onChange={(value) =>
-                    setPlatform(String(value === '__auto__' ? '' : (value ?? '')))
-                  }
-                  variant="secondary"
-                >
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      {PLATFORMS.map((platformOption) => (
-                        <ListBox.Item key={platformOption.id} id={platformOption.id}>
-                          {platformOption.label}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-              </div>
-
-              {availableTags.length > 0 && (
-                <div className="flex min-w-0 flex-col gap-1.5">
-                  <Select
-                    className="w-full"
-                    placeholder="Select tags"
-                    selectionMode="multiple"
-                    value={Array.from(selectedTagIds)}
-                    onChange={(keys) =>
-                      setSelectedTagIds(new Set((keys as Key[]).map((key) => String(key))))
-                    }
-                    variant="secondary"
-                  >
-                    <Label className="text-xs">Tags</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox selectionMode="multiple">
-                        {availableTags.map((tag) => (
-                          <ListBox.Item key={tag.id} id={tag.id} textValue={tag.name}>
-                            {tag.name}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                  {selectedTagIds.size > 0 && (
-                    <p className="text-xs text-muted">
-                      {selectedTagIds.size} tag{selectedTagIds.size === 1 ? '' : 's'} selected
-                    </p>
+                  {isOCI && (
+                    <TextField fullWidth value={chartVersion} onChange={setChartVersion}>
+                      <Label>Version</Label>
+                      <Input
+                        variant="secondary"
+                        placeholder="1.0.0"
+                        value={chartVersion}
+                        onChange={(e) => setChartVersion(e.target.value)}
+                      />
+                      <Description>Optional</Description>
+                    </TextField>
                   )}
-                </div>
-              )}
 
-              <Switch
-                className="justify-self-start lg:justify-self-end"
-                isSelected={makePublic}
-                onChange={setMakePublic}
-              >
-                <Switch.Content>
-                  <Switch.Control>
-                    <Switch.Thumb />
-                  </Switch.Control>
-                  <span className="text-xs">Share publicly</span>
-                </Switch.Content>
-              </Switch>
-            </Card.Content>
-          </Card>
-          </>
-          ) : null}
+                  {extractError && (
+                    <Alert status="danger">
+                      <Alert.Indicator />
+                      <Alert.Content>
+                        <Alert.Title>Image extraction failed</Alert.Title>
+                        <Alert.Description>{extractError}</Alert.Description>
+                      </Alert.Content>
+                    </Alert>
+                  )}
 
-          {step === 'images' ? (
-          <>
-          <Table>
-            <Table.ScrollContainer>
-              <Table.Content aria-label="Extracted Helm images" className="min-w-[840px]">
-                <Table.Header>
-                  <Table.Column className="w-10">
-                    <Checkbox
-                      aria-label={
-                        selected.size === extracted.images.length ? 'Deselect all' : 'Select all'
-                      }
-                      isSelected={selected.size === extracted.images.length}
-                      isIndeterminate={selected.size > 0 && selected.size < extracted.images.length}
-                      slot="selection"
-                      onChange={toggleAll}
+                  <div className="flex justify-end">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      isDisabled={extracting || !chartURL.trim()}
+                      isPending={extracting}
                     >
-                      <Checkbox.Content>
-                        <Checkbox.Control>
-                          <Checkbox.Indicator />
-                        </Checkbox.Control>
-                      </Checkbox.Content>
-                    </Checkbox>
-                  </Table.Column>
-                  <Table.Column isRowHeader>Image</Table.Column>
-                  <Table.Column>Tag</Table.Column>
-                  <Table.Column>Source</Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {editableImages.map((img) => {
-                    const checked = selected.has(img.id);
-                    const parsed = parseHelmImageRef(img.edited_ref);
-                    return (
-                      <Table.Row
-                        key={img.id}
-                        id={img.id}
-                        className="cursor-pointer hover:bg-[var(--row-hover)]"
-                        onClick={() => toggleRow(img.id)}
+                      Extract Images
+                    </Button>
+                  </div>
+                </form>
+              </Card.Content>
+            </Card>
+          )}
+
+          {(step === 'images' || step === 'configure') && extracted && (
+            <div className="space-y-4">
+              {step === 'configure' ? (
+                <>
+                  <Card>
+                    <Card.Content className="grid w-full gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">
+                          {extracted.chart_name}
+                          {extracted.chart_version && (
+                            <span className="ml-2 text-xs font-normal text-muted">
+                              v{extracted.chart_version}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted mt-0.5">
+                          Found {extracted.images.length} image
+                          {extracted.images.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
+                          <span className="font-medium">{selected.size} selected</span>
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="justify-self-start sm:justify-self-end"
+                        onPress={() => setStep('input')}
                       >
-                        <Table.Cell onClick={(event) => event.stopPropagation()}>
-                          <Checkbox
-                            aria-label={`Select ${img.edited_ref || 'image'}`}
-                            isSelected={checked}
-                            slot="selection"
-                            onChange={() => toggleRow(img.id)}
+                        <ArrowLeft01Icon size={14} />
+                        Change chart
+                      </Button>
+                    </Card.Content>
+                  </Card>
+
+                  <Card>
+                    <Card.Content className="grid w-full gap-4 lg:grid-cols-[minmax(280px,380px)_minmax(180px,240px)_minmax(0,1fr)_auto] lg:items-end">
+                      <div className="flex min-w-0 flex-col gap-1.5">
+                        <Label className="text-xs">Registry</Label>
+                        <Select
+                          className="w-full"
+                          value={registryId || '__auto__'}
+                          onChange={(value) =>
+                            setRegistryId(String(value === '__auto__' ? '' : (value ?? '')))
+                          }
+                          variant="secondary"
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item id="__auto__">
+                                {capabilities.enable_trivy
+                                  ? 'Auto-match from image hostname'
+                                  : 'Auto-match from configured Xray registries'}
+                              </ListBox.Item>
+                              {selectableRegistries.map((registry) => (
+                                <ListBox.Item key={registry.id} id={registry.id}>
+                                  {registry.name} ·{' '}
+                                  {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </div>
+
+                      {xrayOnlyWithoutRegistries && (
+                        <Alert status="warning" className="w-full">
+                          <Alert.Indicator />
+                          <Alert.Content>
+                            <Alert.Description>
+                              No Artifactory Xray registry is configured yet, so this Helm run
+                              cannot be queued until one is added.
+                            </Alert.Description>
+                          </Alert.Content>
+                        </Alert>
+                      )}
+
+                      <div className="flex min-w-0 flex-col gap-1.5">
+                        <Label className="text-xs">Platform</Label>
+                        <Select
+                          className="w-full"
+                          value={platform || '__auto__'}
+                          onChange={(value) =>
+                            setPlatform(String(value === '__auto__' ? '' : (value ?? '')))
+                          }
+                          variant="secondary"
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {PLATFORMS.map((platformOption) => (
+                                <ListBox.Item key={platformOption.id} id={platformOption.id}>
+                                  {platformOption.label}
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </div>
+
+                      {availableTags.length > 0 && (
+                        <div className="flex min-w-0 flex-col gap-1.5">
+                          <Select
+                            className="w-full"
+                            placeholder="Select tags"
+                            selectionMode="multiple"
+                            value={Array.from(selectedTagIds)}
+                            onChange={(keys) =>
+                              setSelectedTagIds(new Set((keys as Key[]).map((key) => String(key))))
+                            }
+                            variant="secondary"
                           >
-                            <Checkbox.Content>
-                              <Checkbox.Control>
-                                <Checkbox.Indicator />
-                              </Checkbox.Control>
-                            </Checkbox.Content>
-                          </Checkbox>
-                        </Table.Cell>
-                        <Table.Cell className="min-w-[420px]">
-                          <div className="w-full space-y-1">
-                            <Input
-                              variant="secondary"
-                              value={img.edited_ref}
-                              onChange={(event) => updateEditedRef(img.id, event.target.value)}
-                              onClick={(event) => event.stopPropagation()}
-                              placeholder="registry.example.com/org/image:tag"
-                              className="w-full font-mono"
-                            />
-                            <p className="truncate text-xs text-muted">
-                              {parsed.name || 'Enter an image reference'}
+                            <Label className="text-xs">Tags</Label>
+                            <Select.Trigger>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox selectionMode="multiple">
+                                {availableTags.map((tag) => (
+                                  <ListBox.Item key={tag.id} id={tag.id} textValue={tag.name}>
+                                    {tag.name}
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                ))}
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                          {selectedTagIds.size > 0 && (
+                            <p className="text-xs text-muted">
+                              {selectedTagIds.size} tag{selectedTagIds.size === 1 ? '' : 's'}{' '}
+                              selected
                             </p>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="font-mono text-xs text-muted">
-                          {parsed.tag || '-'}
-                        </Table.Cell>
-                        <Table.Cell className="text-xs text-muted">
-                          <span title={getHelmImageSourceLabel(img)}>{img.source_file}</span>
-                        </Table.Cell>
-                      </Table.Row>
-                    );
-                  })}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+                          )}
+                        </div>
+                      )}
 
-          <p className="text-xs text-muted">
-            Override any extracted image reference before queueing. The selected rows will use the
-            edited values.
-          </p>
-          </>
-          ) : null}
-          {step === 'configure' && orgFeatureBlockMessage ? (
-            <Alert status="warning">
-              <Alert.Indicator />
-              <Alert.Content>
-                <Alert.Title>Scan creation disabled</Alert.Title>
-                <Alert.Description>{orgFeatureBlockMessage}</Alert.Description>
-              </Alert.Content>
-            </Alert>
-          ) : null}
+                      <Switch
+                        className="justify-self-start lg:justify-self-end"
+                        isSelected={makePublic}
+                        onChange={setMakePublic}
+                      >
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          <span className="text-xs">Share publicly</span>
+                        </Switch.Content>
+                      </Switch>
+                    </Card.Content>
+                  </Card>
+                </>
+              ) : null}
 
-          <div className="flex items-center justify-between gap-4 pt-1">
-            <Button type="button" variant="secondary" onPress={() => setStep(step === 'images' ? 'input' : 'images')}>
-              <ArrowLeft01Icon size={14} />
-              Back
-            </Button>
-            {step === 'images' ? (
-              <Button
-                type="button"
-                variant="primary"
-                onPress={() => setStep('configure')}
-                isDisabled={selected.size === 0 || hasInvalidSelection}
-              >
-                Continue to configuration
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="primary"
-                onPress={handleScan}
-                isDisabled={
-                  scanning || selected.size === 0 || hasInvalidSelection || xrayOnlyWithoutRegistries || Boolean(orgFeatureBlockMessage)
-                }
-                isPending={scanning}
-              >
-                Queue {selected.size} selected image{selected.size !== 1 ? 's' : ''}
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+              {step === 'images' ? (
+                <>
+                  <Table>
+                    <Table.ScrollContainer>
+                      <Table.Content aria-label="Extracted Helm images" className="min-w-[840px]">
+                        <Table.Header>
+                          <Table.Column className="w-10">
+                            <Checkbox
+                              aria-label={
+                                selected.size === extracted.images.length
+                                  ? 'Deselect all'
+                                  : 'Select all'
+                              }
+                              isSelected={selected.size === extracted.images.length}
+                              isIndeterminate={
+                                selected.size > 0 && selected.size < extracted.images.length
+                              }
+                              slot="selection"
+                              onChange={toggleAll}
+                            >
+                              <Checkbox.Content>
+                                <Checkbox.Control>
+                                  <Checkbox.Indicator />
+                                </Checkbox.Control>
+                              </Checkbox.Content>
+                            </Checkbox>
+                          </Table.Column>
+                          <Table.Column isRowHeader>Image</Table.Column>
+                          <Table.Column>Tag</Table.Column>
+                          <Table.Column>Source</Table.Column>
+                        </Table.Header>
+                        <Table.Body>
+                          {editableImages.map((img) => {
+                            const checked = selected.has(img.id);
+                            const parsed = parseHelmImageRef(img.edited_ref);
+                            return (
+                              <Table.Row
+                                key={img.id}
+                                id={img.id}
+                                className="cursor-pointer hover:bg-[var(--row-hover)]"
+                                onClick={() => toggleRow(img.id)}
+                              >
+                                <Table.Cell onClick={(event) => event.stopPropagation()}>
+                                  <Checkbox
+                                    aria-label={`Select ${img.edited_ref || 'image'}`}
+                                    isSelected={checked}
+                                    slot="selection"
+                                    onChange={() => toggleRow(img.id)}
+                                  >
+                                    <Checkbox.Content>
+                                      <Checkbox.Control>
+                                        <Checkbox.Indicator />
+                                      </Checkbox.Control>
+                                    </Checkbox.Content>
+                                  </Checkbox>
+                                </Table.Cell>
+                                <Table.Cell className="min-w-[420px]">
+                                  <div className="w-full space-y-1">
+                                    <Input
+                                      variant="secondary"
+                                      value={img.edited_ref}
+                                      onChange={(event) =>
+                                        updateEditedRef(img.id, event.target.value)
+                                      }
+                                      onClick={(event) => event.stopPropagation()}
+                                      placeholder="registry.example.com/org/image:tag"
+                                      className="w-full font-mono"
+                                    />
+                                    <p className="truncate text-xs text-muted">
+                                      {parsed.name || 'Enter an image reference'}
+                                    </p>
+                                  </div>
+                                </Table.Cell>
+                                <Table.Cell className="font-mono text-xs text-muted">
+                                  {parsed.tag || '-'}
+                                </Table.Cell>
+                                <Table.Cell className="text-xs text-muted">
+                                  <span title={getHelmImageSourceLabel(img)}>
+                                    {img.source_file}
+                                  </span>
+                                </Table.Cell>
+                              </Table.Row>
+                            );
+                          })}
+                        </Table.Body>
+                      </Table.Content>
+                    </Table.ScrollContainer>
+                  </Table>
+
+                  <p className="text-xs text-muted">
+                    Override any extracted image reference before queueing. The selected rows will
+                    use the edited values.
+                  </p>
+                </>
+              ) : null}
+              {step === 'configure' && orgFeatureBlockMessage ? (
+                <Alert status="warning">
+                  <Alert.Indicator />
+                  <Alert.Content>
+                    <Alert.Title>Scan creation disabled</Alert.Title>
+                    <Alert.Description>{orgFeatureBlockMessage}</Alert.Description>
+                  </Alert.Content>
+                </Alert>
+              ) : null}
+
+              <div className="flex items-center justify-between gap-4 pt-1">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onPress={() => setStep(step === 'images' ? 'input' : 'images')}
+                >
+                  <ArrowLeft01Icon size={14} />
+                  Back
+                </Button>
+                {step === 'images' ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onPress={() => setStep('configure')}
+                    isDisabled={selected.size === 0 || hasInvalidSelection}
+                  >
+                    Continue to configuration
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onPress={handleScan}
+                    isDisabled={
+                      scanning ||
+                      selected.size === 0 ||
+                      hasInvalidSelection ||
+                      xrayOnlyWithoutRegistries ||
+                      Boolean(orgFeatureBlockMessage)
+                    }
+                    isPending={scanning}
+                  >
+                    Queue {selected.size} selected image{selected.size !== 1 ? 's' : ''}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <HelmRunHistory
@@ -946,12 +970,8 @@ function HelmRunHistory({
   const columnCount = isAdmin ? 10 : 9;
 
   return (
-    <Card>
-      <Card.Header>
-        <Card.Title>Recent Helm runs</Card.Title>
-        <Card.Description>Search, filter, and sort recent chart scan runs.</Card.Description>
-      </Card.Header>
-      <Card.Content className="gap-4">
+    <>
+      <Card className="p-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <SearchField name="helm-run-search" variant="secondary" className="w-full sm:max-w-sm">
             <SearchField.Group>
@@ -994,7 +1014,13 @@ function HelmRunHistory({
             </Select.Popover>
           </Select>
         </div>
+      </Card>
 
+      <Card>
+        <Card.Header>
+          <Card.Title>Recent Helm runs</Card.Title>
+          <Card.Description>Search, filter, and sort recent chart scan runs.</Card.Description>
+        </Card.Header>
         <Table variant="secondary">
           <Table.ScrollContainer>
             <Table.Content
@@ -1229,8 +1255,8 @@ function HelmRunHistory({
             </span>
           </Table.Footer>
         </Table>
-      </Card.Content>
-    </Card>
+      </Card>
+    </>
   );
 }
 

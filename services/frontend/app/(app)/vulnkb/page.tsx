@@ -308,7 +308,7 @@ export default function VulnKBPage() {
                   placeholder="All Severities"
                   variant="secondary"
                 >
-                  <Select.Trigger className={selectTriggerCls}>
+                  <Select.Trigger className="h-10">
                     <Select.Value />
                     <Select.Indicator />
                   </Select.Trigger>

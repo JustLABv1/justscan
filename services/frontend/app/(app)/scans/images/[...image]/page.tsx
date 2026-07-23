@@ -221,7 +221,7 @@ export default function ImageScansPage() {
         }
       />
       {statsLoading ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {Array.from({ length: 6 }, (_, index) => (
             <Card key={index} className="p-3">
               <Skeleton className="h-14 rounded-lg" />
@@ -229,7 +229,7 @@ export default function ImageScansPage() {
           ))}
         </div>
       ) : stats ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Metric label="Total scans" value={stats.total_scans} icon={<Shield01Icon size={17} />} />
           <Metric
             label="Completed"
@@ -239,9 +239,9 @@ export default function ImageScansPage() {
             tone="success"
           />
           <Metric
-            label="Execution failed"
+            label="Failed executions"
             value={stats.failed_scans}
-            description="Scanner run failed"
+            description="Historical runs; not necessarily the latest"
             icon={<UnhappyIcon size={17} />}
             tone="danger"
           />
@@ -330,6 +330,26 @@ export default function ImageScansPage() {
                 </ListBox>
               </Select.Popover>
             </Select>
+            <Select
+              aria-label="Policy result"
+              className="min-w-[180px]"
+              value={policy || '__all__'}
+              onChange={(value) =>
+                setPolicy((value === '__all__' ? '' : (value ?? '')) as '' | 'fail')
+              }
+              variant="secondary"
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="__all__">Any policy result</ListBox.Item>
+                  <ListBox.Item id="fail">Policy failed</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
             <FilterDisclosureTrigger activeCount={filterCount} label="More filters" />
           </div>
           <Disclosure.Content>
@@ -355,26 +375,6 @@ export default function ImageScansPage() {
                         {option.label}
                       </ListBox.Item>
                     ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-              <Select
-                aria-label="Policy result"
-                className="min-w-[180px] flex-1"
-                value={policy || '__all__'}
-                onChange={(value) =>
-                  setPolicy((value === '__all__' ? '' : (value ?? '')) as '' | 'fail')
-                }
-                variant="secondary"
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="__all__">Any policy result</ListBox.Item>
-                    <ListBox.Item id="fail">Policy failed</ListBox.Item>
                   </ListBox>
                 </Select.Popover>
               </Select>

@@ -221,7 +221,7 @@ export default function ImageScansPage() {
         }
       />
       {statsLoading ? (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {Array.from({ length: 6 }, (_, index) => (
             <Card key={index} className="p-3">
               <Skeleton className="h-14 rounded-lg" />
@@ -229,7 +229,7 @@ export default function ImageScansPage() {
           ))}
         </div>
       ) : stats ? (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Metric label="Total scans" value={stats.total_scans} icon={<Shield01Icon size={17} />} />
           <Metric
             label="Completed"

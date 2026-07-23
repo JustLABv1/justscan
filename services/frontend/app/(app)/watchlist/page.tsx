@@ -73,7 +73,7 @@ import {
   Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -97,10 +97,16 @@ const postureChipColor: Record<
 
 type WatchlistFocus = 'all' | 'attention' | 'stale' | 'healthy' | 'never_scanned';
 
-function buildWatchlistTriageHref(imageName?: string) {
-  const params = new URLSearchParams({ kind: 'watchlist' });
-  if (imageName) params.set('q', imageName);
-  return `/triage?${params.toString()}`;
+function parseWatchlistFocus(value: string | null): WatchlistFocus {
+  switch (value) {
+    case 'attention':
+    case 'stale':
+    case 'healthy':
+    case 'never_scanned':
+      return value;
+    default:
+      return 'all';
+  }
 }
 
 function isNeverScannedItem(item: WatchlistItem) {
@@ -226,6 +232,8 @@ function LastScanState({
 function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item: WatchlistItem }) {
   const failedPolicies = item.compliance_summary?.failed_policy_names ?? [];
   const allPolicies = item.compliance_summary?.policy_names ?? [];
+  const criticalCount = item.last_scan?.critical_count ?? 0;
+  const highCount = item.last_scan?.high_count ?? 0;
   const policyTitle =
     failedPolicies.length > 0
       ? failedPolicies.join(', ')
@@ -241,12 +249,18 @@ function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item:
       <p className="truncate text-xs text-zinc-500" title={policyTitle}>
         {posture.description}
       </p>
+      {criticalCount > 0 || highCount > 0 ? (
+        <Chip color="default" variant="soft" size="sm">
+          {criticalCount} critical · {highCount} high
+        </Chip>
+      ) : null}
     </div>
   );
 }
 
 export default function WatchlistPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const { orgs, orgNamesById } = useOrgDirectory();
@@ -277,7 +291,7 @@ export default function WatchlistPage() {
   const [shareSaving, setShareSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
-  const [focusFilter, setFocusFilter] = useState<WatchlistFocus>('all');
+  const focusFilter = parseWatchlistFocus(searchParams.get('focus'));
   const [showFilters, setShowFilters] = useState(false);
   const [postureNow] = useState(() => Date.now());
   const modal = useOverlayState();
@@ -319,6 +333,21 @@ export default function WatchlistPage() {
         .catch(() => {});
     });
   }, [load, scopeKey]);
+
+  const updateFocusFilter = useCallback(
+    (focus: WatchlistFocus) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (focus === 'all') {
+        params.delete('focus');
+      } else {
+        params.set('focus', focus);
+      }
+      router.replace(params.size ? `/watchlist?${params.toString()}` : '/watchlist', {
+        scroll: false,
+      });
+    },
+    [router, searchParams]
+  );
 
   const selectableRegistries = registries.filter(
     (registry) => registry.scan_provider === 'artifactory_xray' || capabilities.enable_trivy
@@ -601,11 +630,6 @@ export default function WatchlistPage() {
         description="Recurring image monitoring, freshness tracking, and policy follow-up for your active workspace."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {attentionItems.length > 0 ? (
-              <Button variant="secondary" onPress={() => router.push(buildWatchlistTriageHref())}>
-                Review triage
-              </Button>
-            ) : null}
             <Dropdown>
               <Button variant="secondary">View settings</Button>
               <Dropdown.Popover placement="bottom end">
@@ -688,7 +712,9 @@ export default function WatchlistPage() {
                   <Select
                     aria-label="Watchlist focus"
                     value={focusFilter}
-                    onChange={(value) => setFocusFilter(String(value ?? 'all') as WatchlistFocus)}
+                    onChange={(value) =>
+                      updateFocusFilter(parseWatchlistFocus(String(value ?? 'all')))
+                    }
                     variant="secondary"
                     className="min-w-[180px]"
                   >
@@ -719,7 +745,7 @@ export default function WatchlistPage() {
                       onPress={() => {
                         setSearchQuery('');
                         setStatusFilter('all');
-                        setFocusFilter('all');
+                        updateFocusFilter('all');
                       }}
                     >
                       Clear filters
@@ -784,7 +810,7 @@ export default function WatchlistPage() {
                             onClick: () => {
                               setSearchQuery('');
                               setStatusFilter('all');
-                              setFocusFilter('all');
+                              updateFocusFilter('all');
                             },
                           }}
                         />

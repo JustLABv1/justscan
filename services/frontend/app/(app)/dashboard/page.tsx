@@ -60,7 +60,7 @@ import {
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 // ── severity config ──────────────────────────────────────────────────
 const SEV = [
@@ -108,19 +108,6 @@ function formatChartDate(date: string, options?: Intl.DateTimeFormatOptions): st
   return formatChartDateShared(date);
 }
 
-function buildTriageHref(filters?: {
-  kind?: 'scan' | 'policy' | 'fix' | 'watchlist';
-  priority?: 'critical' | 'high' | 'medium';
-  query?: string;
-}): string {
-  const params = new URLSearchParams();
-  if (filters?.kind) params.set('kind', filters.kind);
-  if (filters?.priority) params.set('priority', filters.priority);
-  if (filters?.query) params.set('q', filters.query);
-  const query = params.toString();
-  return query ? `/triage?${query}` : '/triage';
-}
-
 function toTimestamp(value?: string | null): number | null {
   if (!value) return null;
   const parsed = Date.parse(value);
@@ -151,13 +138,6 @@ function sumAvgFindings(point: DashboardVulnTrendPoint): number {
 }
 
 type PostureTone = 'success' | 'warning' | 'danger' | 'accent' | 'neutral';
-
-type PostureSummary = {
-  label: string;
-  title: string;
-  description: string;
-  tone: PostureTone;
-};
 
 type WatchlistCoverage = {
   enabledCount: number;
@@ -217,10 +197,7 @@ function formatCompactNumber(value: number): string {
   return value.toLocaleString();
 }
 
-function getWatchlistCoverage(
-  items: WatchlistItem[],
-  activeWatchlistCount: number
-): WatchlistCoverage {
+function getWatchlistCoverage(items: WatchlistItem[]): WatchlistCoverage {
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
   const weekMs = 7 * dayMs;
@@ -264,29 +241,9 @@ function getWatchlistCoverage(
     scanned7dCount,
     staleItems,
     neverScannedCount,
-    coverage7d:
-      activeWatchlistCount > 0 ? Math.round((scanned7dCount / activeWatchlistCount) * 100) : 0,
+    coverage7d: enabledItems.length > 0 ? Math.round((scanned7dCount / enabledItems.length) * 100) : 0,
     topSchedule,
   };
-}
-
-function getCriticalHighTrend(data: DashboardVulnTrendPoint[]): number {
-  let previous: { date: string; value: number } | null = null;
-  let latest: { date: string; value: number } | null = null;
-
-  for (const point of data) {
-    const value = point.critical + point.high;
-    if (value <= 0) continue;
-
-    if (!latest || point.date > latest.date) {
-      previous = latest;
-      latest = { date: point.date, value };
-    } else if (!previous || point.date > previous.date) {
-      previous = { date: point.date, value };
-    }
-  }
-
-  return latest && previous ? latest.value - previous.value : 0;
 }
 
 function buildVulnerabilityTrendSeries(
@@ -369,59 +326,6 @@ function isFlatSeries(series: { date: string; value: number }[]) {
   return series.every((point) => point.value === series[0]?.value);
 }
 
-function getRiskSummary({
-  criticalHighCount,
-  needsAttentionTotal,
-  policyIssueCount,
-  criticalHighTrend,
-}: {
-  criticalHighCount: number;
-  needsAttentionTotal: number;
-  policyIssueCount: number;
-  criticalHighTrend: number;
-}): PostureSummary {
-  if (criticalHighCount === 0 && needsAttentionTotal === 0) {
-    return {
-      label: 'Low risk',
-      title: 'No critical or high exposure is visible',
-      description: 'Current finalized scan data is not showing urgent vulnerability exposure.',
-      tone: 'success',
-    };
-  }
-
-  if (policyIssueCount > 0 || criticalHighCount >= 1000 || criticalHighTrend > 0) {
-    return {
-      label: 'Elevated risk',
-      title: 'Critical/high exposure needs review',
-      description:
-        policyIssueCount > 0
-          ? 'Policy-related scan issues and severe findings should be reviewed first.'
-          : 'Severe findings are present and the latest risk signal is moving up.',
-      tone: 'danger',
-    };
-  }
-
-  return {
-    label: 'Managed risk',
-    title: 'Severe findings exist but are not accelerating',
-    description: 'Keep an eye on critical and high findings while current coverage remains active.',
-    tone: 'warning',
-  };
-}
-
-function PosturePill({ summary }: { summary: PostureSummary }) {
-  const tone = TONE_STYLES[summary.tone];
-
-  return (
-    <span
-      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
-      style={{ background: tone.bg, borderColor: tone.border, color: tone.color }}
-    >
-      {summary.label}
-    </span>
-  );
-}
-
 function isScannerReady({
   isAdmin,
   scannerHealth,
@@ -439,98 +343,6 @@ function isScannerReady({
           scannerHealth.stale_workers === 0 &&
           scannerHealth.error_workers === 0)))
   );
-}
-
-function getDashboardFocus({
-  criticalHighCount,
-  totalVulns,
-  genericFailedCount,
-  policyIssueCount,
-  watchlistPolicyAttentionCount,
-  watchlistCoverage,
-  scannerReady,
-}: {
-  criticalHighCount: number;
-  totalVulns: number;
-  genericFailedCount: number;
-  policyIssueCount: number;
-  watchlistPolicyAttentionCount: number;
-  watchlistCoverage: WatchlistCoverage;
-  scannerReady: boolean;
-}): {
-  summary: PostureSummary;
-  title: string;
-  description: string;
-  primaryActionHref: string;
-  primaryActionLabel: string;
-  secondaryActionHref?: string;
-  secondaryActionLabel?: string;
-} {
-  if (policyIssueCount > 0 || genericFailedCount > 0) {
-    const total = policyIssueCount + genericFailedCount;
-    return {
-      summary: {
-        label: 'Needs action',
-        title: 'Blocked or failed scans need review',
-        description:
-          'Delivery-impacting scan outcomes should be reviewed before broader hygiene work.',
-        tone: 'danger',
-      },
-      title: 'Start with policy issues or failed scans',
-      description: `${total.toLocaleString()} scan result${total === 1 ? '' : 's'} need immediate attention, including ${policyIssueCount.toLocaleString()} policy-affected and ${genericFailedCount.toLocaleString()} failed scans.`,
-      primaryActionHref: buildTriageHref(),
-      primaryActionLabel: 'Open triage',
-      secondaryActionHref: buildRecentActivityHref('7d'),
-      secondaryActionLabel: 'Open scan activity',
-    };
-  }
-
-  if (
-    watchlistPolicyAttentionCount > 0 ||
-    watchlistCoverage.staleItems.length > 0 ||
-    watchlistCoverage.neverScannedCount > 0 ||
-    !scannerReady
-  ) {
-    return {
-      summary: {
-        label: 'Coverage gaps',
-        title: 'Coverage confidence needs follow-up',
-        description:
-          'Freshness gaps or scanner health issues reduce trust in the dashboard signal.',
-        tone: 'warning',
-      },
-      title: 'Coverage needs a quick review',
-      description: `${watchlistCoverage.staleItems.length.toLocaleString()} stale schedule${watchlistCoverage.staleItems.length === 1 ? '' : 's'}, ${watchlistCoverage.neverScannedCount.toLocaleString()} never-scanned image${watchlistCoverage.neverScannedCount === 1 ? '' : 's'}, and ${watchlistPolicyAttentionCount.toLocaleString()} watched policy issue${watchlistPolicyAttentionCount === 1 ? '' : 's'} are affecting confidence.`,
-      primaryActionHref: '/watchlist',
-      primaryActionLabel: 'Review watchlist',
-      secondaryActionHref: buildTriageHref({ kind: 'watchlist' }),
-      secondaryActionLabel: 'Open watchlist triage',
-    };
-  }
-
-  return {
-    summary: {
-      label: criticalHighCount > 0 ? 'Operationally clear' : 'Clear',
-      title: 'No failed scans or policy violations need immediate review',
-      description:
-        criticalHighCount > 0
-          ? 'Scan operations are healthy, and the remaining work is planned remediation rather than an active blocker.'
-          : 'Current scan outcomes and watchlist coverage are stable.',
-      tone: criticalHighCount > 0 ? 'accent' : 'success',
-    },
-    title:
-      criticalHighCount > 0
-        ? 'No active blockers, but remediation work remains'
-        : 'Nothing urgent is competing for attention right now',
-    description:
-      criticalHighCount > 0
-        ? `${formatCompactNumber(criticalHighCount)} critical or high findings remain visible across ${formatCompactNumber(totalVulns)} total findings, but there are no failed scans or policy blocks driving immediate action.`
-        : 'Use this dashboard as a quick status check, then move into scans or triage only if you want to investigate proactively.',
-    primaryActionHref: buildTriageHref(),
-    primaryActionLabel: criticalHighCount > 0 ? 'Open triage' : 'Start new scan',
-    secondaryActionHref: criticalHighCount > 0 ? '/scans/new' : buildTriageHref(),
-    secondaryActionLabel: criticalHighCount > 0 ? 'Start new scan' : 'Open triage',
-  };
 }
 
 function BriefingMetric({
@@ -643,38 +455,6 @@ function BriefingMetric({
   );
 }
 
-function DashboardFocusCard({
-  summary,
-  title,
-  description,
-  primaryAction,
-  secondaryAction,
-}: {
-  summary: PostureSummary;
-  title: string;
-  description: React.ReactNode;
-  primaryAction: React.ReactNode;
-  secondaryAction?: React.ReactNode;
-}) {
-  return (
-    <Card className="p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 space-y-3">
-          <PosturePill summary={summary} />
-          <div className="space-y-1.5">
-            <p className="text-lg font-semibold text-foreground">{title}</p>
-            <p className="text-sm leading-6 text-muted">{description}</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {primaryAction}
-          {secondaryAction}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 function DashboardSectionHeader({
   title,
   icon,
@@ -767,126 +547,6 @@ function ScanActivityCard({
           )}
         </div>
       </div>
-    </Card>
-  );
-}
-
-function AttentionQueueCard({
-  genericFailedCount,
-  policyIssueCount,
-  xrayBlockedCount,
-  orgPolicyFailCount,
-  watchlistPolicyAttentionCount,
-  activeQueueCount,
-  staleItems,
-  triageDefaultHref,
-  triageWatchlistPolicyHref,
-  triageWatchlistStaleHref,
-  triagePolicyHref,
-  triageFailedHref,
-  triageRunningHref,
-}: {
-  genericFailedCount: number;
-  policyIssueCount: number;
-  xrayBlockedCount: number;
-  orgPolicyFailCount: number;
-  watchlistPolicyAttentionCount: number;
-  activeQueueCount: number;
-  staleItems: WatchlistItem[];
-  triageDefaultHref: string;
-  triageWatchlistPolicyHref: string;
-  triageWatchlistStaleHref: string;
-  triagePolicyHref: string;
-  triageFailedHref: string;
-  triageRunningHref: string;
-}) {
-  const items = [
-    {
-      key: 'watchlist-policy',
-      label: 'Watched policy issues',
-      value: watchlistPolicyAttentionCount,
-      detail: 'Watched images blocked or failing org policy',
-      tone: 'danger' as const,
-      href: triageWatchlistPolicyHref,
-    },
-    {
-      key: 'blocked',
-      label: 'Policy issues',
-      value: policyIssueCount,
-      detail: `${xrayBlockedCount.toLocaleString()} Xray blocked · ${orgPolicyFailCount.toLocaleString()} org policy failed`,
-      tone: 'danger' as const,
-      href: triagePolicyHref,
-    },
-    {
-      key: 'failed',
-      label: 'Failed scans',
-      value: genericFailedCount,
-      detail: 'Scans that did not complete cleanly',
-      tone: 'danger' as const,
-      href: triageFailedHref,
-    },
-    {
-      key: 'stale',
-      label: 'Stale watchlist',
-      value: staleItems.length,
-      detail: 'Scheduled images not scanned in 7 days',
-      tone: 'warning' as const,
-      href: triageWatchlistStaleHref,
-    },
-    {
-      key: 'running',
-      label: 'Active scans',
-      value: activeQueueCount,
-      detail: 'Queued or running scan work',
-      tone: 'accent' as const,
-      href: triageRunningHref,
-    },
-  ].filter((item) => item.value > 0);
-
-  return (
-    <Card className="h-full p-4">
-      <DashboardSectionHeader
-        title="Next actions"
-        icon={<AlertCircleIcon size={16} />}
-        description="Highest-signal follow-ups"
-        action={
-          <Link href={triageDefaultHref}>
-            <Button size="sm" variant="secondary">
-              Open triage
-              <ArrowRight01Icon />
-            </Button>
-          </Link>
-        }
-      />
-
-      {items.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-surface-border bg-surface-secondary px-4 py-4">
-          <p className="text-sm font-medium text-foreground">No urgent follow-up right now.</p>
-          <p className="mt-1 text-xs text-muted">
-            Failed scans, policy blocks, and stale coverage will surface here when they need review.
-          </p>
-        </div>
-      ) : (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {items.map((item) => (
-            <Link
-              key={item.key}
-              href={item.href}
-              className="group min-w-0 rounded-xl border border-surface-border bg-surface-secondary px-3 py-2.5 text-left transition-colors hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
-            >
-              <span className="flex items-center justify-between gap-3">
-                <span className="truncate text-sm font-semibold text-foreground">{item.label}</span>
-                <Chip color={item.tone} size="sm" variant="soft">
-                  {item.value.toLocaleString()}
-                </Chip>
-              </span>
-              <span className="mt-1 block truncate text-xs text-muted" title={item.detail}>
-                {item.detail}
-              </span>
-            </Link>
-          ))}
-        </div>
-      )}
     </Card>
   );
 }
@@ -1114,7 +774,7 @@ function VulnTrendChart({
         <div>
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Risk trend</h2>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Average findings per finalized scan, by severity
+            Historical average findings per finalized scan, by severity
           </p>
           <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
             {latestActivePoint ? (
@@ -1263,23 +923,16 @@ export default function DashboardPage() {
     () => buildVulnerabilityTrendSeries(vulnTrends, 7, (point) => point.critical + point.high),
     [vulnTrends]
   );
-  const failedScansTrend = useMemo(
-    () => buildTrendSeries(trends, 7, (point) => point.failed),
-    [trends]
-  );
   const hasActiveScans = (stats?.attention_scans ?? []).some(
     (scan) => scan.status === 'pending' || scan.status === 'running'
   );
+  const refreshStats = useCallback(() => {
+    getStats()
+      .then(setStats)
+      .catch(() => {});
+  }, []);
 
-  useConditionalInterval(
-    () => {
-      getStats()
-        .then(setStats)
-        .catch(() => {});
-    },
-    hasActiveScans,
-    5000
-  );
+  useConditionalInterval(refreshStats, hasActiveScans, 5000);
 
   useEffect(() => {
     const healthPromise = isAdmin
@@ -1383,42 +1036,19 @@ export default function DashboardPage() {
   const totalVulns = Object.values(stats.severity_totals).reduce((a, b) => a + b, 0);
   const criticalHighCount =
     (stats.severity_totals.critical ?? 0) + (stats.severity_totals.high ?? 0);
-  const failedStatusCount = stats.status_counts['failed'] ?? 0;
-  const policyIssueCount =
-    stats.operations?.blocked_policy_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
-  const xrayBlockedCount =
-    stats.operations?.xray_blocked_count ?? stats.status_counts['blocked_by_xray_policy'] ?? 0;
-  const genericFailedCount = Math.max(0, failedStatusCount - xrayBlockedCount);
   const completedCount = stats.status_counts['completed'] ?? 0;
-  const needsAttentionTotal = genericFailedCount + policyIssueCount;
-  const watchlistCoverage = getWatchlistCoverage(watchlistOverviewItems, stats.watchlist_count);
-  const criticalHighTrend = getCriticalHighTrend(vulnTrends);
-  const riskSummary = getRiskSummary({
-    criticalHighCount,
-    needsAttentionTotal,
-    policyIssueCount,
-    criticalHighTrend,
-  });
+  const watchlistCoverage = getWatchlistCoverage(watchlistOverviewItems);
+  const watchlistAttentionCount = getWatchlistPolicyAttentionItems(watchlistOverviewItems).length;
   const scannerReady = isScannerReady({
     isAdmin,
     scannerHealth,
     scannerHealthError,
   });
-  const triageDefaultHref = buildTriageHref();
-  const triageCriticalHighHref = buildTriageHref({ kind: 'fix', priority: 'high' });
   const displayedModalScans = modalScans;
   const recentActivityRangeLabel =
     RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === recentActivityRange)?.label ??
     'Last 24 hours';
   const recentActivityHref = buildRecentActivityHref(recentActivityRange);
-  const severeFindingsTrendChip = getTrendChip(severeFindingsTrend, {
-    stableLabel: 'Severity stable',
-    noDataLabel: 'No trend yet',
-  });
-  const blockedFailedTrendChip = getTrendChip(failedScansTrend, {
-    stableLabel: 'Failures stable',
-    noDataLabel: 'No failures trend',
-  });
   const coverageTrendChip: TrendChip =
     watchlistCoverage.coverage7d >= 90 && watchlistCoverage.staleItems.length === 0
       ? { label: 'Fresh', tone: 'success' }
@@ -1492,24 +1122,21 @@ export default function DashboardPage() {
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <BriefingMetric
-          label="Severe findings"
+          label="Historical severe findings"
           icon={<Shield01Icon size={16} />}
           value={formatCompactNumber(criticalHighCount)}
-          detail={`${formatCompactNumber(totalVulns)} total findings visible`}
-          tone={riskSummary.tone}
-          trend={severeFindingsTrendChip}
+          detail={`${formatCompactNumber(totalVulns)} findings across scan history`}
+          tone={criticalHighCount > 0 ? 'danger' : 'neutral'}
           sparkline={{ data: severeFindingsTrend, valueLabel: 'critical and high findings' }}
-          href={triageCriticalHighHref}
+          href="/scans?critical=yes&sort=risk_desc"
         />
         <BriefingMetric
-          label="Blocked or failed"
+          label="Watchlist attention"
           icon={<AlertCircleIcon size={16} />}
-          value={needsAttentionTotal.toLocaleString()}
-          detail={`${policyIssueCount.toLocaleString()} policy issues · ${genericFailedCount.toLocaleString()} failed`}
-          tone={needsAttentionTotal > 0 ? 'danger' : 'success'}
-          trend={blockedFailedTrendChip}
-          sparkline={{ data: failedScansTrend, valueLabel: 'failed scans' }}
-          href={triageDefaultHref}
+          value={watchlistAttentionCount.toLocaleString()}
+          detail="Current scheduled scans with a policy or scan failure"
+          tone={watchlistAttentionCount > 0 ? 'danger' : 'success'}
+          href="/watchlist?focus=attention"
         />
         <BriefingMetric
           label="Coverage freshness"
@@ -1518,7 +1145,13 @@ export default function DashboardPage() {
           detail={`${watchlistCoverage.staleItems.length.toLocaleString()} stale · ${watchlistCoverage.neverScannedCount.toLocaleString()} never scanned`}
           tone={watchlistCoverage.coverage7d >= 90 && scannerReady ? 'success' : 'warning'}
           trend={coverageTrendChip}
-          href="/watchlist"
+          href={
+            watchlistCoverage.staleItems.length > 0
+              ? '/watchlist?focus=stale'
+              : watchlistCoverage.neverScannedCount > 0
+                ? '/watchlist?focus=never_scanned'
+                : '/watchlist'
+          }
         />
       </div>
 

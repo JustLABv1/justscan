@@ -73,7 +73,7 @@ function buildWorkspaceTour(includeAssistant: boolean): Tour[] {
       icon: <Shield01Icon size={18} />,
       title: 'Scans',
       content:
-        'Scans is where you launch image scans and review their results. Most day-to-day triage starts here when you need to inspect an image or rerun a check.',
+        'Scans is where you launch image scans and review historical results. Use Watchlist for day-to-day monitoring of scheduled images.',
     },
     {
       route: '/helm',
@@ -89,7 +89,7 @@ function buildWorkspaceTour(includeAssistant: boolean): Tour[] {
       icon: <Search01Icon size={18} />,
       title: 'Watchlist',
       content:
-        'Watchlist keeps an eye on images you care about over time. Register recurring targets here so you can track change without starting every scan manually.',
+        'Watchlist is your day-to-day operational view. Register recurring targets here to review current policy failures, scan failures, and coverage gaps.',
     },
     {
       route: '/vulnkb',
@@ -105,7 +105,7 @@ function buildWorkspaceTour(includeAssistant: boolean): Tour[] {
       icon: <GridTableIcon size={18} />,
       title: 'Suppressions',
       content:
-        'Suppressions is where you manage accepted risk and reduce noise. Use this page to document why a finding is being ignored and keep triage focused.',
+        'Suppressions is where you manage accepted risk and reduce noise. Use this page to document why a finding is being ignored and keep policy results focused.',
     },
     {
       route: '/status',

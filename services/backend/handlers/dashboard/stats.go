@@ -113,8 +113,8 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		result.SeverityTotals["low"] = sev.Low
 		result.SeverityTotals["unknown"] = sev.Unknown
 
-		// Attention scans back the dashboard triage list and are broader than the
-		// compact recent-scans list.
+		// Attention scans back the dashboard's current scan-activity view and are
+		// broader than the compact recent-scans list.
 		attentionQuery := db.NewSelect().Model(&result.AttentionScans).
 			Where(
 				"(status = ? OR status IN (?) OR external_status = ?)",

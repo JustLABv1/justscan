@@ -252,8 +252,7 @@ export function LandingProductStorySection() {
               Keep risk visible after the first scan.
             </h2>
             <p className="mt-5 text-base leading-7 text-muted">
-              Watchlists and triage views keep recurring work focused while ownership and evidence
-              remain attached.
+              Watchlists keep recurring work focused while ownership and evidence remain attached.
             </p>
             <ul className="mt-7 space-y-3">
               <DetailPoint>Schedule important images and surface newly disclosed CVEs.</DetailPoint>

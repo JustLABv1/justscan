@@ -24,9 +24,17 @@ import {
   SearchField,
   Select,
 } from '@heroui/react';
-import { GitCompareIcon, PlusSignIcon } from 'hugeicons-react';
+import { Clock01Icon, GitCompareIcon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useState,
+  type ReactNode,
+} from 'react';
 
 const PAGE_SIZE = 30;
 const STATUS_OPTIONS = [
@@ -47,6 +55,47 @@ type ScanFilters = {
   range: '' | RecentActivityRange;
   sort: string;
 };
+
+type MetricTone = 'default' | 'danger' | 'success';
+
+function Metric({
+  label,
+  value,
+  description,
+  icon,
+  tone = 'default',
+}: {
+  label: string;
+  value: string | number;
+  description?: string;
+  icon: ReactNode;
+  tone?: MetricTone;
+}) {
+  const toneClassName = {
+    default: 'border-transparent',
+    success: 'border-success/35',
+    danger: 'border-danger/40',
+  }[tone];
+  const labelClassName =
+    tone === 'default' ? 'text-muted' : tone === 'success' ? 'text-success' : 'text-danger';
+  const iconClassName =
+    tone === 'default' ? 'text-muted' : tone === 'success' ? 'text-success' : 'text-danger';
+
+  return (
+    <Card className={`min-w-0 px-3 py-2.5 ${toneClassName}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className={`text-xs font-medium ${labelClassName}`}>{label}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
+          {description ? (
+            <p className="mt-0.5 truncate text-[11px] leading-4 text-muted">{description}</p>
+          ) : null}
+        </div>
+        <div className={`shrink-0 ${iconClassName}`}>{icon}</div>
+      </div>
+    </Card>
+  );
+}
 
 function initialScanFilters(searchParams: { get(name: string): string | null }): ScanFilters {
   const range = searchParams.get('range');
@@ -86,6 +135,14 @@ function ScansPageContent() {
   const activeFilters = Boolean(query || status || critical || policy || range || sort);
   const filterCount = [critical, policy, range, sort].filter(Boolean).length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const visibleOverview = useMemo(
+    () => ({
+      critical: images.filter((image) => image.health_critical_count > 0).length,
+      policyFailed: images.filter((image) => image.health_policy_failed).length,
+      active: images.filter((image) => ['running', 'pending'].includes(image.latest_status)).length,
+    }),
+    [images]
+  );
 
   const syncRoute = useCallback(() => {
     const params = new URLSearchParams();
@@ -164,6 +221,34 @@ function ScansPageContent() {
           </>
         }
       />
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-2">
+        <Metric
+          description="Current filter scope"
+          icon={<Shield01Icon size={16} />}
+          label="Matching images"
+          value={total}
+        />
+        <Metric
+          description="On this page"
+          icon={<Shield01Icon size={16} />}
+          label="Critical risk"
+          tone="danger"
+          value={visibleOverview.critical}
+        />
+        <Metric
+          description="On this page"
+          icon={<Shield01Icon size={16} />}
+          label="Policy failed"
+          tone="danger"
+          value={visibleOverview.policyFailed}
+        />
+        <Metric
+          description="Running or queued"
+          icon={<Clock01Icon size={16} />}
+          label="Active scans"
+          value={visibleOverview.active}
+        />
+      </div>
       <Card className="p-3">
         <Disclosure className="w-full">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">

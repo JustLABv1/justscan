@@ -26,7 +26,7 @@ export interface AdminGettingStartedStep {
 
 export const ADMIN_TABS: AdminTabMeta[] = [
   { value: 'overview', label: 'Control center', href: '/admin', blurb: 'Platform health, attention, and recent activity.', area: 'overview' },
-  { value: 'scans', label: 'Scans', href: '/admin/scans', blurb: 'Cross-user scan operations and triage.', area: 'operations' },
+  { value: 'scans', label: 'Scans', href: '/admin/scans', blurb: 'Cross-user scan operations and history.', area: 'operations' },
   { value: 'scanner', label: 'Scanner', href: '/admin/scanner', blurb: 'Worker health and runtime tuning.', area: 'operations' },
   { value: 'autotags', label: 'Auto Tags', href: '/admin/autotags', blurb: 'Rule-driven tag automation.', area: 'operations' },
   { value: 'insights', label: 'Observability', href: '/admin/insights', blurb: 'API and xRay telemetry.', area: 'system' },

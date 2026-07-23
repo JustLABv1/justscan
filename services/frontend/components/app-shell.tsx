@@ -109,7 +109,6 @@ const navGroups = [
     items: [
       { href: '/scans', label: 'Scans', Icon: Shield01Icon },
       { href: '/helm', label: 'Helm', Icon: PackageIcon },
-      { href: '/triage', label: 'Triage', Icon: ShieldKeyIcon },
       { href: '/vulnkb', label: 'Vuln KB', Icon: BookOpen01Icon },
     ],
   },

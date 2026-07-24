@@ -585,7 +585,7 @@ backend:
     secretName: justscan-oidc-ca
 ```
 
-The backend entrypoint builds a combined CA bundle from the system trust store plus the mounted files and exports it through `SSL_CERT_FILE` before JustScan starts. Restart the backend pod after updating the referenced ConfigMap or Secret.
+The backend entrypoint builds a combined CA bundle from the system trust store plus the mounted files and exports it through `SSL_CERT_FILE` and `GIT_SSL_CAINFO` before JustScan starts. Restart the backend pod after updating the referenced ConfigMap or Secret.
 
 Show the full values schema:
 

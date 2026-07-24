@@ -84,6 +84,9 @@ setup_custom_ca_bundle() {
 
   if [ "$found" -eq 1 ]; then
     export SSL_CERT_FILE="$CUSTOM_CA_BUNDLE_PATH"
+    # Git's libcurl can otherwise use a different CA lookup path than the
+    # backend process. Point it directly at the combined runtime bundle.
+    export GIT_SSL_CAINFO="$CUSTOM_CA_BUNDLE_PATH"
     echo "info: loaded custom CA certificates into $CUSTOM_CA_BUNDLE_PATH" >&2
   fi
 }

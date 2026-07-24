@@ -717,8 +717,27 @@ func unresolvedCandidates(candidates []DiscoveryCandidate) int {
 
 func clone(ctx context.Context, repository models.GitRepository, dir string) error {
 	// Run with a blank credential helper so a system/global Git configuration
-	// cannot return stale credentials before JustScan's askpass provider runs.
-	args := []string{"-c", "credential.helper=", "clone", "--depth", "1", "--no-tags"}
+	// cannot return stale credentials before JustScan's provider runs.
+	args := []string{"-c", "credential.helper="}
+	var credentialHelper string
+	var secret string
+	if repository.AuthType != models.GitRepositoryAuthNone && repository.EncryptedCredential != "" {
+		decryptedSecret, err := crypto.Decrypt(crypto.KeyFromString(config.Config.Encryption.Key), repository.EncryptedCredential)
+		if err != nil {
+			return fmt.Errorf("decrypt Git credential: %w", err)
+		}
+		secret = decryptedSecret
+		credentialHelper = filepath.Join(filepath.Dir(dir), "justscan-git-credential-helper.sh")
+		helperScript := "#!/bin/sh\ncase \"${1:-}\" in\n  get) printf 'username=%s\\npassword=%s\\n\\n' \"$JUSTSCAN_GIT_USERNAME\" \"$JUSTSCAN_GIT_SECRET\" ;;\nesac\n"
+		if err := os.WriteFile(credentialHelper, []byte(helperScript), 0700); err != nil {
+			return err
+		}
+		defer os.Remove(credentialHelper)
+		// A ! helper is executed as a command by Git. The secret stays in the
+		// process environment rather than appearing in the clone URL or argv.
+		args = append(args, "-c", "credential.helper=!"+credentialHelper)
+	}
+	args = append(args, "clone", "--depth", "1", "--no-tags")
 	ref := strings.TrimSpace(repository.Ref)
 	if ref != "" && ref != "HEAD" {
 		args = append(args, "--branch", ref)
@@ -727,21 +746,10 @@ func clone(ctx context.Context, repository models.GitRepository, dir string) err
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Env = append(os.Environ(),
 		"GIT_TERMINAL_PROMPT=0",
-		"GIT_ASKPASS_REQUIRE=force",
 		"GIT_CONFIG_NOSYSTEM=1",
 	)
-	var askpass string
-	if repository.AuthType != models.GitRepositoryAuthNone && repository.EncryptedCredential != "" {
-		secret, err := crypto.Decrypt(crypto.KeyFromString(config.Config.Encryption.Key), repository.EncryptedCredential)
-		if err != nil {
-			return fmt.Errorf("decrypt Git credential: %w", err)
-		}
-		askpass = filepath.Join(filepath.Dir(dir), "justscan-git-askpass.sh")
-		if err := os.WriteFile(askpass, []byte("#!/bin/sh\ncase \"$1\" in *Username*) printf '%s' \"$JUSTSCAN_GIT_USERNAME\" ;; *) printf '%s' \"$JUSTSCAN_GIT_SECRET\" ;; esac\n"), 0700); err != nil {
-			return err
-		}
-		defer os.Remove(askpass)
-		cmd.Env = append(cmd.Env, "GIT_ASKPASS="+askpass, "JUSTSCAN_GIT_USERNAME="+repository.Username, "JUSTSCAN_GIT_SECRET="+secret)
+	if credentialHelper != "" {
+		cmd.Env = append(cmd.Env, "JUSTSCAN_GIT_USERNAME="+repository.Username, "JUSTSCAN_GIT_SECRET="+secret)
 	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {

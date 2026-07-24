@@ -122,9 +122,18 @@ export function LandingHeader() {
 
         <div className="flex items-center gap-2">
           <LandingThemeToggle />
-          <Link className="hidden text-sm text-muted lg:flex" href="/login">
-            Sign in
-          </Link>
+          <Separator
+            className="hidden h-6 lg:block"
+            orientation="vertical"
+            variant="tertiary"
+          />
+          <LandingButtonLink
+            className="hidden lg:inline-flex"
+            href="/login"
+            label="Sign in"
+            size="sm"
+            variant="outline"
+          />
           <LandingButtonLink href="/public/scan/image" label="Scan free" size="sm" />
         </div>
       </div>

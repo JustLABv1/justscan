@@ -1,19 +1,50 @@
 import { req } from './core';
 import { getDefaultScannerCapabilities } from './registries';
-import type { APIRequestLog, APIRequestLogFilters, APIUsageStats, AdminDashboard, AdminOrg, AdminToken, AdminUser, AdminXRayRequestLog, AuditLog, AuditLogFilters, NotificationChannel, NotificationDelivery, XRayRequestLogFilters, XRayUsageStats } from './types/admin';
-import type { AIProviderAdmin, AIProviderTestResult, AISettings, AISupportedProvider } from './types/ai';
-import type { AutoTagRule, OIDCClaimSyncPreview, OIDCDebugSession, OIDCGroupMapping, OIDCOrgRoleOverride, OIDCProviderAdmin, Registry, RegistryListResponse, ScannerSettings } from './types/registries';
+import type {
+  APIRequestLog,
+  APIRequestLogFilters,
+  APIUsageStats,
+  AdminDashboard,
+  AdminOrg,
+  AdminToken,
+  AdminUser,
+  AdminXRayRequestLog,
+  AuditLog,
+  AuditLogFilters,
+  NotificationChannel,
+  NotificationDelivery,
+  XRayRequestLogFilters,
+  XRayUsageStats,
+} from './types/admin';
+import type {
+  AIProviderAdmin,
+  AIProviderTestResult,
+  AISettings,
+  AISupportedProvider,
+} from './types/ai';
+import type {
+  AutoTagRule,
+  OIDCClaimSyncPreview,
+  OIDCDebugSession,
+  OIDCGroupMapping,
+  OIDCOrgRoleOverride,
+  OIDCProviderAdmin,
+  Registry,
+  RegistryListResponse,
+  ScannerSettings,
+} from './types/registries';
 import type { AdminScan } from './types/scans';
 
 type OIDCRegexMatchInput<T extends { match_type: string }> = Omit<Partial<T>, 'match_type'> & {
   match_type?: 'exact' | 'prefix' | 'regex';
 };
 
-export const getAdminDashboard = () =>
-  req<AdminDashboard>('GET', '/api/v1/admin/dashboard');
+export const getAdminDashboard = () => req<AdminDashboard>('GET', '/api/v1/admin/dashboard');
 
 export const adminListOIDCProviders = () =>
-  req<{ data: OIDCProviderAdmin[] }>('GET', '/api/v1/admin/oidc-providers').then((result) => result.data ?? []);
+  req<{ data: OIDCProviderAdmin[] }>('GET', '/api/v1/admin/oidc-providers').then(
+    (result) => result.data ?? []
+  );
 
 export const adminCreateOIDCProvider = (data: Partial<OIDCProviderAdmin>) =>
   req<OIDCProviderAdmin>('POST', '/api/v1/admin/oidc-providers', data);
@@ -25,19 +56,44 @@ export const adminDeleteOIDCProvider = (name: string) =>
   req<void>('DELETE', `/api/v1/admin/oidc-providers/${name}`);
 
 export const adminListGroupMappings = (providerName: string) =>
-  req<{ data: OIDCGroupMapping[] }>('GET', `/api/v1/admin/oidc-providers/${providerName}/group-mappings`).then((result) => result.data ?? []);
+  req<{ data: OIDCGroupMapping[] }>(
+    'GET',
+    `/api/v1/admin/oidc-providers/${providerName}/group-mappings`
+  ).then((result) => result.data ?? []);
 
-export const adminCreateGroupMapping = (providerName: string, data: OIDCRegexMatchInput<OIDCGroupMapping>) =>
-  req<OIDCGroupMapping>('POST', `/api/v1/admin/oidc-providers/${providerName}/group-mappings`, data);
+export const adminCreateGroupMapping = (
+  providerName: string,
+  data: OIDCRegexMatchInput<OIDCGroupMapping>
+) =>
+  req<OIDCGroupMapping>(
+    'POST',
+    `/api/v1/admin/oidc-providers/${providerName}/group-mappings`,
+    data
+  );
 
-export const adminUpdateGroupMapping = (providerName: string, mappingId: string, data: OIDCRegexMatchInput<OIDCGroupMapping>) =>
-  req<OIDCGroupMapping>('PUT', `/api/v1/admin/oidc-providers/${providerName}/group-mappings/${mappingId}`, data);
+export const adminUpdateGroupMapping = (
+  providerName: string,
+  mappingId: string,
+  data: OIDCRegexMatchInput<OIDCGroupMapping>
+) =>
+  req<OIDCGroupMapping>(
+    'PUT',
+    `/api/v1/admin/oidc-providers/${providerName}/group-mappings/${mappingId}`,
+    data
+  );
 
 export const adminDeleteGroupMapping = (providerName: string, mappingId: string) =>
   req<void>('DELETE', `/api/v1/admin/oidc-providers/${providerName}/group-mappings/${mappingId}`);
 
-export const adminPreviewOIDCClaimSync = (providerName: string, data: { groups?: string[]; roles?: string[] }) =>
-  req<{ data: OIDCClaimSyncPreview }>('POST', `/api/v1/admin/oidc-providers/${providerName}/claim-sync-preview`, data).then((result) => result.data);
+export const adminPreviewOIDCClaimSync = (
+  providerName: string,
+  data: { groups?: string[]; roles?: string[] }
+) =>
+  req<{ data: OIDCClaimSyncPreview }>(
+    'POST',
+    `/api/v1/admin/oidc-providers/${providerName}/claim-sync-preview`,
+    data
+  ).then((result) => result.data);
 
 export const adminCreateOIDCDebugSession = (providerName: string) =>
   req<{ session_id: string; expires_at: string; login_url: string }>(
@@ -46,7 +102,10 @@ export const adminCreateOIDCDebugSession = (providerName: string) =>
   );
 
 export const adminGetOIDCDebugSession = (sessionId: string) =>
-  req<OIDCDebugSession>('GET', `/api/v1/admin/oidc-debug-sessions/${encodeURIComponent(sessionId)}`).then((session) => ({
+  req<OIDCDebugSession>(
+    'GET',
+    `/api/v1/admin/oidc-debug-sessions/${encodeURIComponent(sessionId)}`
+  ).then((session) => ({
     ...session,
     report: session.report
       ? {
@@ -61,13 +120,31 @@ export const adminGetOIDCDebugSession = (sessionId: string) =>
   }));
 
 export const adminListOIDCRoleOverrides = (providerName: string) =>
-  req<{ data: OIDCOrgRoleOverride[] }>('GET', `/api/v1/admin/oidc-providers/${providerName}/role-overrides`).then((result) => result.data ?? []);
+  req<{ data: OIDCOrgRoleOverride[] }>(
+    'GET',
+    `/api/v1/admin/oidc-providers/${providerName}/role-overrides`
+  ).then((result) => result.data ?? []);
 
-export const adminCreateOIDCRoleOverride = (providerName: string, data: OIDCRegexMatchInput<OIDCOrgRoleOverride>) =>
-  req<OIDCOrgRoleOverride>('POST', `/api/v1/admin/oidc-providers/${providerName}/role-overrides`, data);
+export const adminCreateOIDCRoleOverride = (
+  providerName: string,
+  data: OIDCRegexMatchInput<OIDCOrgRoleOverride>
+) =>
+  req<OIDCOrgRoleOverride>(
+    'POST',
+    `/api/v1/admin/oidc-providers/${providerName}/role-overrides`,
+    data
+  );
 
-export const adminUpdateOIDCRoleOverride = (providerName: string, overrideId: string, data: OIDCRegexMatchInput<OIDCOrgRoleOverride>) =>
-  req<OIDCOrgRoleOverride>('PUT', `/api/v1/admin/oidc-providers/${providerName}/role-overrides/${overrideId}`, data);
+export const adminUpdateOIDCRoleOverride = (
+  providerName: string,
+  overrideId: string,
+  data: OIDCRegexMatchInput<OIDCOrgRoleOverride>
+) =>
+  req<OIDCOrgRoleOverride>(
+    'PUT',
+    `/api/v1/admin/oidc-providers/${providerName}/role-overrides/${overrideId}`,
+    data
+  );
 
 export const adminDeleteOIDCRoleOverride = (providerName: string, overrideId: string) =>
   req<void>('DELETE', `/api/v1/admin/oidc-providers/${providerName}/role-overrides/${overrideId}`);
@@ -75,14 +152,29 @@ export const adminDeleteOIDCRoleOverride = (providerName: string, overrideId: st
 export const adminUpdateScannerSettings = (data: Partial<ScannerSettings>) =>
   req<{ updated: Record<string, string> }>('PUT', '/api/v1/admin/settings/scanner', data);
 
-export const adminUpdateAuthSettings = (data: { local_auth_enabled: boolean }) =>
-  req<{ local_auth_enabled: boolean }>('PUT', '/api/v1/admin/settings/auth', data);
+export const adminUpdateAuthSettings = (
+  data: Partial<{
+    local_auth_enabled: boolean;
+    sign_in_enabled: boolean;
+    sign_up_enabled: boolean;
+    sso_only: boolean;
+  }>
+) =>
+  req<{
+    local_auth_enabled: boolean;
+    sign_in_enabled: boolean;
+    sign_up_enabled: boolean;
+    sso_only: boolean;
+  }>('PUT', '/api/v1/admin/settings/auth', data);
 
 export const adminUpdateMaintenanceSettings = (data: { enabled: boolean; message: string }) =>
   req<{ enabled: boolean; message: string }>('PUT', '/api/v1/admin/settings/maintenance', data);
 
 export const adminListGlobalRegistries = () =>
-  req<RegistryListResponse>('GET', '/api/v1/admin/registries').then((result) => ({ data: result.data ?? [], capabilities: result.capabilities ?? getDefaultScannerCapabilities() }));
+  req<RegistryListResponse>('GET', '/api/v1/admin/registries').then((result) => ({
+    data: result.data ?? [],
+    capabilities: result.capabilities ?? getDefaultScannerCapabilities(),
+  }));
 
 export const adminCreateGlobalRegistry = (data: Partial<Registry>) =>
   req<Registry>('POST', '/api/v1/admin/registries', data);
@@ -99,17 +191,21 @@ export const adminSetDefaultRegistry = (id: string) =>
 export const adminUnsetDefaultRegistry = (id: string) =>
   req<{ id: string; is_default: boolean }>('PUT', `/api/v1/admin/registries/${id}/unset-default`);
 
-export const getAdminAISettings = () =>
-  req<AISettings>('GET', '/api/v1/admin/ai/settings');
+export const getAdminAISettings = () => req<AISettings>('GET', '/api/v1/admin/ai/settings');
 
-export const adminUpdateAISettings = (data: Partial<Pick<AISettings, 'enabled' | 'allowAnonymous'>>) =>
-  req<AISettings>('PUT', '/api/v1/admin/ai/settings', data);
+export const adminUpdateAISettings = (
+  data: Partial<Pick<AISettings, 'enabled' | 'allowAnonymous'>>
+) => req<AISettings>('PUT', '/api/v1/admin/ai/settings', data);
 
 export const adminListAIProviders = () =>
-  req<{ providers: AIProviderAdmin[] }>('GET', '/api/v1/admin/ai/providers').then((result) => result.providers ?? []);
+  req<{ providers: AIProviderAdmin[] }>('GET', '/api/v1/admin/ai/providers').then(
+    (result) => result.providers ?? []
+  );
 
 export const adminListAISupportedProviders = () =>
-  req<{ providers: AISupportedProvider[] }>('GET', '/api/v1/admin/ai/providers/supported').then((result) => result.providers ?? []);
+  req<{ providers: AISupportedProvider[] }>('GET', '/api/v1/admin/ai/providers/supported').then(
+    (result) => result.providers ?? []
+  );
 
 export const adminCreateAIProvider = (data: Record<string, unknown>) =>
   req<AIProviderAdmin>('POST', '/api/v1/admin/ai/providers', data);
@@ -123,8 +219,7 @@ export const adminDeleteAIProvider = (key: string) =>
 export const adminTestAIProvider = (key: string) =>
   req<AIProviderTestResult>('POST', `/api/v1/admin/ai/providers/${encodeURIComponent(key)}/test`);
 
-export const getAdminSettings = () =>
-  req<Record<string, string>>('GET', '/api/v1/admin/settings');
+export const getAdminSettings = () => req<Record<string, string>>('GET', '/api/v1/admin/settings');
 
 export const setPublicScanEnabled = (enabled: boolean) =>
   req<{ enabled: boolean }>('PUT', '/api/v1/admin/settings/public-scan', { enabled });
@@ -144,14 +239,19 @@ export const deleteAutoTagRule = (id: string) =>
 export const listAdminUsers = () =>
   req<{ users: AdminUser[] }>('GET', '/api/v1/admin/users').then((result) => result.users ?? []);
 
-export const updateAdminUser = (id: string, data: { username?: string; email?: string; role?: string; password?: string }) =>
-  req<{ result: string }>('PUT', `/api/v1/admin/users/${id}`, data);
+export const updateAdminUser = (
+  id: string,
+  data: { username?: string; email?: string; role?: string; password?: string }
+) => req<{ result: string }>('PUT', `/api/v1/admin/users/${id}`, data);
 
 export const deleteAdminUser = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/admin/users/${id}`);
 
 export const disableAdminUser = (id: string, disabled: boolean, disabled_reason?: string) =>
-  req<{ result: string }>('PUT', `/api/v1/admin/users/${id}/disable`, { disabled, disabled_reason: disabled_reason ?? '' });
+  req<{ result: string }>('PUT', `/api/v1/admin/users/${id}/disable`, {
+    disabled,
+    disabled_reason: disabled_reason ?? '',
+  });
 
 export const createAdminUser = (username: string, email: string, password: string, role: string) =>
   req<{ result: string }>('POST', '/api/v1/admin/users/', { username, email, password, role });
@@ -160,23 +260,37 @@ export const listAdminOrgs = (q?: string) => {
   const params = new URLSearchParams();
   if (q?.trim()) params.set('q', q.trim());
   const suffix = params.toString() ? `?${params}` : '';
-  return req<{ data: AdminOrg[] }>('GET', `/api/v1/admin/orgs${suffix}`).then((result) => result.data ?? []);
+  return req<{ data: AdminOrg[] }>('GET', `/api/v1/admin/orgs${suffix}`).then(
+    (result) => result.data ?? []
+  );
 };
 
-export const getAdminOrg = (id: string) =>
-  req<AdminOrg>('GET', `/api/v1/admin/orgs/${id}`);
+export const getAdminOrg = (id: string) => req<AdminOrg>('GET', `/api/v1/admin/orgs/${id}`);
 
 export const updateAdminOrgGovernance = (
   id: string,
-  data: Partial<Pick<AdminOrg, 'is_active' | 'allow_image_scans' | 'allow_helm_scans' | 'allow_rescans' | 'allow_member_invites' | 'allow_org_tokens'>>
-) =>
-  req<AdminOrg>('PUT', `/api/v1/admin/orgs/${id}/governance`, data);
+  data: Partial<
+    Pick<
+      AdminOrg,
+      | 'is_active'
+      | 'allow_image_scans'
+      | 'allow_helm_scans'
+      | 'allow_rescans'
+      | 'allow_member_invites'
+      | 'allow_org_tokens'
+    >
+  >
+) => req<AdminOrg>('PUT', `/api/v1/admin/orgs/${id}/governance`, data);
 
 export const listAdminTokens = () =>
-  req<{ tokens: AdminToken[] }>('GET', '/api/v1/admin/tokens').then((result) => result.tokens ?? []);
+  req<{ tokens: AdminToken[] }>('GET', '/api/v1/admin/tokens').then(
+    (result) => result.tokens ?? []
+  );
 
-export const updateAdminToken = (id: string, data: Pick<AdminToken, 'description' | 'disabled' | 'disabled_reason'>) =>
-  req<{ result: string }>('PUT', `/api/v1/admin/tokens/${id}`, data);
+export const updateAdminToken = (
+  id: string,
+  data: Pick<AdminToken, 'description' | 'disabled' | 'disabled_reason'>
+) => req<{ result: string }>('PUT', `/api/v1/admin/tokens/${id}`, data);
 
 export const deleteAdminToken = (id: string) =>
   req<{ result: string }>('DELETE', `/api/v1/admin/tokens/${id}`);
@@ -239,7 +353,9 @@ export const updateXRayLogRetention = (days: number) =>
   req<{ days: number }>('PUT', '/api/v1/admin/settings/xray-log-retention', { days });
 
 export const listNotificationChannels = () =>
-  req<{ data: NotificationChannel[] }>('GET', '/api/v1/admin/notifications').then((result) => result.data ?? []);
+  req<{ data: NotificationChannel[] }>('GET', '/api/v1/admin/notifications').then(
+    (result) => result.data ?? []
+  );
 
 export const createNotificationChannel = (data: Partial<NotificationChannel>) =>
   req<NotificationChannel>('POST', '/api/v1/admin/notifications', data);
@@ -254,7 +370,10 @@ export const testNotificationChannel = (id: string, event?: string) =>
   req<{ result: string }>('POST', `/api/v1/admin/notifications/${id}/test`, event ? { event } : {});
 
 export const listNotificationDeliveries = (id: string, limit = 10) =>
-  req<{ data: NotificationDelivery[] }>('GET', `/api/v1/admin/notifications/${id}/deliveries?limit=${limit}`).then((result) => result.data ?? []);
+  req<{ data: NotificationDelivery[] }>(
+    'GET',
+    `/api/v1/admin/notifications/${id}/deliveries?limit=${limit}`
+  ).then((result) => result.data ?? []);
 
 export const updateRateLimit = (limit: number) =>
   req<{ limit: number }>('PUT', '/api/v1/admin/settings/rate-limit', { limit });
@@ -262,7 +381,14 @@ export const updateRateLimit = (limit: number) =>
 export const updateRegisterRateLimit = (limit: number) =>
   req<{ limit: number }>('PUT', '/api/v1/admin/settings/register-rate-limit', { limit });
 
-export const listAdminScans = (page = 1, limit = 50, image?: string, status?: string, helmOnly?: boolean, owner?: string) => {
+export const listAdminScans = (
+  page = 1,
+  limit = 50,
+  image?: string,
+  status?: string,
+  helmOnly?: boolean,
+  owner?: string
+) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
   if (status) params.set('status', status);

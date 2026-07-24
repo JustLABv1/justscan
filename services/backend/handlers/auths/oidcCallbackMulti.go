@@ -28,6 +28,10 @@ func OIDCCallbackMulti(db *bun.DB) gin.HandlerFunc {
 			handleOIDCDebugCallback(c, providerName)
 			return
 		}
+		if !config.SignInEnabled() {
+			c.JSON(http.StatusForbidden, gin.H{"error": "sign-in is disabled"})
+			return
+		}
 
 		// --- 1. Verify state ---
 		stateParam := c.Query("state")

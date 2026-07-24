@@ -15,7 +15,11 @@ import (
 )
 
 func RegisterUser(context *gin.Context, db *bun.DB) {
-	if !config.Config.LocalAuth.Enabled {
+	if !config.SignUpEnabled() {
+		httperror.Unauthorized(context, "Sign-up is disabled", errors.New("sign-up disabled"))
+		return
+	}
+	if !config.LocalAuthEnabled() {
 		httperror.Unauthorized(context, "Local authentication is disabled", errors.New("local auth disabled"))
 		return
 	}

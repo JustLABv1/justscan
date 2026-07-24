@@ -35,6 +35,8 @@ WORKDIR /app
 # Install necessary packages
 RUN apk add --upgrade --no-cache \
     ca-certificates \
+    git \
+    helm \
     tini \
     postgresql-client \
     tzdata \

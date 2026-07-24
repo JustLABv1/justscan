@@ -53,6 +53,7 @@ type Scan struct {
 	ShareToken              *string                `bun:"share_token,type:varchar(64)" json:"share_token,omitempty"`
 	ShareVisibility         *string                `bun:"share_visibility,type:varchar(20)" json:"share_visibility,omitempty"`
 	HelmScanRunID           *uuid.UUID             `bun:"helm_scan_run_id,type:uuid" json:"helm_scan_run_id,omitempty"`
+	GitRepositoryRunID      *uuid.UUID             `bun:"git_repository_run_id,type:uuid" json:"git_repository_run_id,omitempty"`
 	HelmChart               string                 `bun:"helm_chart,type:text,default:''" json:"helm_chart,omitempty"`
 	HelmChartName           string                 `bun:"helm_chart_name,type:text,default:''" json:"helm_chart_name,omitempty"`
 	HelmChartVersion        string                 `bun:"helm_chart_version,type:text,default:''" json:"helm_chart_version,omitempty"`
@@ -116,6 +117,7 @@ const (
 const (
 	ScanSourceRegistry        = "registry"
 	ScanSourceUploadedArchive = "uploaded_archive"
+	ScanSourceGitRepository   = "git_repository"
 )
 
 const (

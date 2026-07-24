@@ -40,6 +40,7 @@ import {
   EyeIcon,
   FileExportIcon,
   GridTableIcon,
+	GitBranchIcon,
   Key01Icon,
   LinkSquare02Icon,
   Logout02Icon,
@@ -123,6 +124,7 @@ const navGroups = [
     label: 'Workspace setup',
     items: [
       { href: '/registries', label: 'Registries', Icon: ServerStack01Icon },
+      { href: '/git-repositories', label: 'Git repositories', Icon: GitBranchIcon },
       { href: '/tags', label: 'Tags', Icon: Tag01Icon },
       { href: '/orgs', label: 'Organizations', Icon: Building04Icon },
     ],

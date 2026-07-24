@@ -1,0 +1,746 @@
+'use client';
+
+import {
+  Accordion,
+  Button,
+  Card,
+  Checkbox,
+  Chip,
+  Label,
+  ListBox,
+  Modal,
+  Select,
+  Spinner,
+  TextArea,
+  useOverlayState,
+} from '@heroui/react';
+import {
+  ArrowLeft01Icon,
+  Download01Icon,
+  Folder01Icon,
+  GitBranchIcon,
+  Search01Icon,
+  Settings02Icon,
+} from 'hugeicons-react';
+import { useParams, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+import { useToast } from '@/components/toast';
+import { EmptyState } from '@/components/ui/empty-state';
+import { FormField } from '@/components/ui/form-field';
+import { PageContainer, PageTitle } from '@/components/ui/page-header';
+import {
+  createGitRepositoryDiscoveryRule,
+  discoverGitRepository,
+  exportGitRepositoryDiscoveryRules,
+  getGitRepository,
+  getGitRepositoryRun,
+  listGitRepositoryCandidates,
+  listGitRepositoryRuns,
+  type GitRepository,
+  type GitRepositoryRun,
+  type GitRepositoryRunCandidate,
+  type GitRepositoryRunImage,
+} from '@/lib/api';
+import { deferEffect } from '@/lib/defer-effect';
+import { fullDate, timeAgo } from '@/lib/time';
+
+type Preview = { run: GitRepositoryRun; images: GitRepositoryRunImage[] };
+
+function locationsFor(image: GitRepositoryRunImage) {
+  return image.locations?.items ?? [];
+}
+
+function targetGroup(target: string) {
+  if (target.startsWith('Helm chart ')) {
+    return { label: 'Helm', path: target.slice('Helm chart '.length) };
+  }
+  if (/kustomization\.ya?ml$/i.test(target)) {
+    return { label: 'Kustomize', path: target };
+  }
+  return { label: 'Manifests', path: target };
+}
+
+export default function GitRepositoryDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [repository, setRepository] = useState<GitRepository | null>(null);
+  const [runs, setRuns] = useState<GitRepositoryRun[]>([]);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [candidates, setCandidates] = useState<GitRepositoryRunCandidate[]>([]);
+  const [reviewing, setReviewing] = useState<GitRepositoryRunCandidate | null>(null);
+  const [resolution, setResolution] = useState<'helm' | 'kustomize' | 'manifests' | 'ignore'>(
+    'helm'
+  );
+  const [chart, setChart] = useState('');
+  const [values, setValues] = useState('');
+  const [selectedCandidateIDs, setSelectedCandidateIDs] = useState<Set<string>>(new Set());
+  const reviewOverlay = useOverlayState();
+  const [loading, setLoading] = useState(true);
+  const [discovering, setDiscovering] = useState(false);
+  const [ignoringCandidates, setIgnoringCandidates] = useState(false);
+  const { success, error } = useToast();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [nextRepository, nextRuns] = await Promise.all([
+        getGitRepository(id),
+        listGitRepositoryRuns(id),
+      ]);
+      setRepository(nextRepository);
+      setRuns(nextRuns);
+      const latestDryRun = nextRuns.find((run) => run.trigger === 'dry_run');
+      if (latestDryRun) {
+        const [nextPreview, nextCandidates] = await Promise.all([
+          getGitRepositoryRun(id, latestDryRun.id),
+          listGitRepositoryCandidates(id, latestDryRun.id),
+        ]);
+        setPreview(nextPreview);
+        setCandidates(nextCandidates);
+      }
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not load Git repository.');
+    } finally {
+      setLoading(false);
+    }
+  }, [error, id]);
+
+  useEffect(() => deferEffect(() => void load()), [load]);
+
+  async function discover() {
+    setDiscovering(true);
+    try {
+      const result = await discoverGitRepository(id);
+      setPreview({
+        run: result.run,
+        images: (result.images ?? []).map((image) => ({
+          ...image,
+          id: image.full_ref,
+          run_id: result.run.id,
+          locations: { items: image.locations },
+          state: 'discovered',
+        })),
+      });
+      setRuns((current) => [result.run, ...current]);
+      setCandidates(await listGitRepositoryCandidates(id, result.run.id));
+      setSelectedCandidateIDs(new Set());
+      success(`Dry run completed: ${(result.images ?? []).length} images discovered.`);
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Dry run failed.');
+    } finally {
+      setDiscovering(false);
+    }
+  }
+
+  function review(candidate: GitRepositoryRunCandidate) {
+    setReviewing(candidate);
+    setResolution(candidate.detected_type.startsWith('helm') ? 'helm' : 'manifests');
+    setChart('');
+    setValues(candidate.detected_type === 'helm_values' ? candidate.path : '');
+    reviewOverlay.open();
+  }
+
+  async function saveResolution() {
+    if (!reviewing) return;
+    if (resolution === 'helm' && !chart.trim()) {
+      error('Enter the local Helm chart path before saving this rule.');
+      return;
+    }
+    const config =
+      resolution === 'helm'
+        ? {
+            chart,
+            values: values
+              .split('\n')
+              .map((value) => value.trim())
+              .filter(Boolean),
+          }
+        : resolution === 'kustomize' || resolution === 'manifests'
+          ? { paths: [reviewing.path] }
+          : {};
+    try {
+      await createGitRepositoryDiscoveryRule(id, {
+        path_pattern: reviewing.path,
+        resolution,
+        config,
+      });
+      reviewOverlay.close();
+      success('Discovery rule saved. Running a new dry discovery.');
+      await discover();
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not save discovery rule.');
+    }
+  }
+
+  async function ignoreCandidate(candidate: GitRepositoryRunCandidate) {
+    try {
+      await createGitRepositoryDiscoveryRule(id, {
+        path_pattern: candidate.path,
+        resolution: 'ignore',
+        config: {},
+      });
+      success('Path ignored. Running a new dry discovery.');
+      await discover();
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not ignore this path.');
+    }
+  }
+
+  function toggleCandidate(candidateID: string, isSelected: boolean) {
+    setSelectedCandidateIDs((current) => {
+      const next = new Set(current);
+      if (isSelected) next.add(candidateID);
+      else next.delete(candidateID);
+      return next;
+    });
+  }
+
+  function toggleAllPending(isSelected: boolean) {
+    setSelectedCandidateIDs(
+      isSelected ? new Set(pendingCandidates.map((candidate) => candidate.id)) : new Set()
+    );
+  }
+
+  async function ignoreSelectedCandidates() {
+    const selected = pendingCandidates.filter((candidate) =>
+      selectedCandidateIDs.has(candidate.id)
+    );
+    if (selected.length === 0) return;
+    setIgnoringCandidates(true);
+    try {
+      await Promise.all(
+        selected.map((candidate) =>
+          createGitRepositoryDiscoveryRule(id, {
+            path_pattern: candidate.path,
+            resolution: 'ignore',
+            config: {},
+          })
+        )
+      );
+      setSelectedCandidateIDs(new Set());
+      success(`${selected.length} paths ignored. Running one new dry discovery.`);
+      await discover();
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not ignore the selected paths.');
+    } finally {
+      setIgnoringCandidates(false);
+    }
+  }
+
+  async function exportRules() {
+    try {
+      const yaml = await exportGitRepositoryDiscoveryRules(id);
+      const url = URL.createObjectURL(new Blob([yaml], { type: 'application/x-yaml' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = '.justscan.yaml';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not export discovery rules.');
+    }
+  }
+
+  const files = useMemo(() => {
+    const grouped = new Map<string, string[]>();
+    for (const image of preview?.images ?? []) {
+      for (const location of locationsFor(image)) {
+        const source = location.target || location.file;
+        const refs = grouped.get(source) ?? [];
+        refs.push(image.full_ref);
+        grouped.set(source, refs);
+      }
+    }
+    return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right));
+  }, [preview]);
+
+  const filesByDeploymentType = useMemo(() => {
+    const groups = new Map<string, Array<[string, string[]]>>();
+    for (const [file, refs] of files) {
+      const group = targetGroup(file);
+      const items = groups.get(group.label) ?? [];
+      items.push([group.path, refs]);
+      groups.set(group.label, items);
+    }
+    return ['Kustomize', 'Helm', 'Manifests']
+      .map((label) => [label, groups.get(label) ?? []] as const)
+      .filter(([, items]) => items.length > 0);
+  }, [files]);
+
+  const previewImages = preview?.images ?? [];
+  const pendingCandidates = candidates.filter((candidate) => candidate.status === 'unresolved');
+  const handledCandidates = candidates
+    .filter((candidate) => candidate.status !== 'unresolved')
+    .sort(
+      (left, right) =>
+        Number(left.status === 'ignored') - Number(right.status === 'ignored') ||
+        left.path.localeCompare(right.path)
+    );
+
+  if (loading) {
+    return (
+      <PageContainer>
+        <Card>
+          <Card.Content className="flex items-center gap-2 py-12 text-sm text-foreground/60">
+            <Spinner size="sm" /> Loading repository…
+          </Card.Content>
+        </Card>
+      </PageContainer>
+    );
+  }
+  if (!repository) {
+    return (
+      <PageContainer>
+        <EmptyState
+          icon={<GitBranchIcon />}
+          title="Git repository not found"
+          description="It may have been removed or you may no longer have access."
+        />
+      </PageContainer>
+    );
+  }
+
+  return (
+    <PageContainer>
+      <PageTitle
+        title={repository.name}
+        icon={<GitBranchIcon />}
+        breadcrumbs={[
+          { label: 'Git repositories', href: '/git-repositories' },
+          { label: repository.name },
+        ]}
+        description={`${repository.clone_url} · ${repository.ref}`}
+        actions={
+          <>
+            <Button onPress={() => router.push('/git-repositories')} variant="tertiary">
+              <ArrowLeft01Icon size={16} /> All repositories
+            </Button>
+            <Button onPress={() => void exportRules()} variant="secondary">
+              <Download01Icon size={16} /> Export .justscan.yaml
+            </Button>
+            <Button isPending={discovering} onPress={() => void discover()}>
+              <Search01Icon size={16} /> Dry run discovery
+            </Button>
+          </>
+        }
+      />
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard
+          title="Needs review"
+          value={String(candidates.filter((candidate) => candidate.status === 'unresolved').length)}
+          detail="ambiguous deployment markers"
+        />
+        <MetricCard
+          title="Latest discovery"
+          value={String(previewImages.length)}
+          detail="unique image references"
+        />
+        <MetricCard
+          title={
+            repository.discovery_mode === 'manifests' ? 'Files with images' : 'Deployment targets'
+          }
+          value={String(files.length)}
+          detail={
+            repository.discovery_mode === 'manifests'
+              ? 'manifest files represented'
+              : 'rendered entrypoints represented'
+          }
+        />
+        <MetricCard
+          title="Latest commit"
+          value={preview?.run.commit_sha || '—'}
+          detail={preview?.run.completed_at ? fullDate(preview.run.completed_at) : 'No dry run yet'}
+          mono
+        />
+      </div>
+
+      {!preview ? (
+        <EmptyState
+          icon={<Search01Icon />}
+          title="No discovery preview yet"
+          description="Run a dry discovery to inspect every image and its Git location before creating a scan."
+          action={{ label: 'Run dry discovery', onClick: () => void discover() }}
+        />
+      ) : (
+        <>
+          {candidates.length > 0 ? (
+            <Card>
+              <Card.Header>
+                <Card.Title>Discovery review</Card.Title>
+                <Card.Description>
+                  JustScan found deployment markers it cannot safely classify on its own. Ignore a
+                  marker when it is not a deployment input.
+                </Card.Description>
+              </Card.Header>
+              <Card.Content>
+                <Accordion
+                  defaultExpandedKeys={pendingCandidates.length > 0 ? ['pending'] : []}
+                  variant="surface"
+                >
+                  <Accordion.Item id="pending">
+                    <Accordion.Heading>
+                      <Accordion.Trigger>
+                        <span>Needs review</span>
+                        <Chip
+                          size="sm"
+                          color={pendingCandidates.length > 0 ? 'warning' : 'success'}
+                          variant="soft"
+                        >
+                          {pendingCandidates.length}
+                        </Chip>
+                        <Accordion.Indicator />
+                      </Accordion.Trigger>
+                    </Accordion.Heading>
+                    <Accordion.Panel>
+                      <Accordion.Body className="space-y-2">
+                        {pendingCandidates.length === 0 ? (
+                          <p className="text-sm text-foreground/60">Nothing needs a decision.</p>
+                        ) : (
+                          <>
+                            <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
+                              <Checkbox
+                                isIndeterminate={
+                                  selectedCandidateIDs.size > 0 &&
+                                  selectedCandidateIDs.size < pendingCandidates.length
+                                }
+                                isSelected={selectedCandidateIDs.size === pendingCandidates.length}
+                                onChange={toggleAllPending}
+                                variant="secondary"
+                              >
+                                <Checkbox.Content>
+                                  <Checkbox.Control>
+                                    <Checkbox.Indicator />
+                                  </Checkbox.Control>
+                                  <Label>Select all pending</Label>
+                                </Checkbox.Content>
+                              </Checkbox>
+                              <Button
+                                isDisabled={selectedCandidateIDs.size === 0}
+                                isPending={ignoringCandidates}
+                                size="sm"
+                                variant="secondary"
+                                onPress={() => void ignoreSelectedCandidates()}
+                              >
+                                Ignore selected
+                                {selectedCandidateIDs.size > 0
+                                  ? ` (${selectedCandidateIDs.size})`
+                                  : ''}
+                              </Button>
+                            </div>
+                            {pendingCandidates.map((candidate) => (
+                              <CandidateRow
+                                key={candidate.id}
+                                candidate={candidate}
+                                isSelected={selectedCandidateIDs.has(candidate.id)}
+                                onIgnore={ignoreCandidate}
+                                onReview={review}
+                                onSelectedChange={toggleCandidate}
+                              />
+                            ))}
+                          </>
+                        )}
+                      </Accordion.Body>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                  {handledCandidates.length > 0 ? (
+                    <Accordion.Item id="handled">
+                      <Accordion.Heading>
+                        <Accordion.Trigger>
+                          <span>Resolved and ignored</span>
+                          <Chip size="sm" variant="soft">
+                            {handledCandidates.length}
+                          </Chip>
+                          <Accordion.Indicator />
+                        </Accordion.Trigger>
+                      </Accordion.Heading>
+                      <Accordion.Panel>
+                        <Accordion.Body className="space-y-2">
+                          {handledCandidates.map((candidate) => (
+                            <CandidateRow key={candidate.id} candidate={candidate} />
+                          ))}
+                        </Accordion.Body>
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  ) : null}
+                </Accordion>
+              </Card.Content>
+            </Card>
+          ) : null}
+          <Card>
+            <Card.Header>
+              <Card.Title>Repository tree</Card.Title>
+              <Card.Description>
+                {repository.discovery_mode === 'manifests'
+                  ? 'Each manifest lists the workload images JustScan found.'
+                  : 'Each deployment target lists images from its effective rendered manifests.'}{' '}
+                A dry run does not queue scans.
+              </Card.Description>
+            </Card.Header>
+            <Card.Content>
+              <div className="space-y-5">
+                {filesByDeploymentType.map(([deploymentType, items]) => (
+                  <section key={deploymentType}>
+                    <div className="mb-2 flex items-center gap-2">
+                      <p className="text-sm font-medium">{deploymentType}</p>
+                      <Chip size="sm" variant="soft">
+                        {items.length} targets
+                      </Chip>
+                    </div>
+                    <Accordion variant="surface">
+                      {items.map(([file, refs]) => (
+                        <Accordion.Item key={`${deploymentType}:${file}`} id={`${deploymentType}:${file}`}>
+                          <Accordion.Heading>
+                            <Accordion.Trigger>
+                              <span className="flex min-w-0 flex-1 items-center gap-2">
+                                <Folder01Icon className="shrink-0" size={16} />
+                                <span className="truncate font-mono text-xs">{file}</span>
+                              </span>
+                              <Chip size="sm" variant="soft">
+                                {new Set(refs).size} images
+                              </Chip>
+                              <Accordion.Indicator />
+                            </Accordion.Trigger>
+                          </Accordion.Heading>
+                          <Accordion.Panel>
+                            <Accordion.Body className="flex flex-wrap gap-2">
+                              {[...new Set(refs)].map((ref) => (
+                                <Chip key={ref} size="sm" variant="soft">
+                                  {ref}
+                                </Chip>
+                              ))}
+                            </Accordion.Body>
+                          </Accordion.Panel>
+                        </Accordion.Item>
+                      ))}
+                    </Accordion>
+                  </section>
+                ))}
+              </div>
+            </Card.Content>
+          </Card>
+          <Card>
+            <Card.Header>
+              <Card.Title>Discovered images</Card.Title>
+              <Card.Description>
+                {preview.run.image_count} images from dry run{' '}
+                <Chip size="sm">{timeAgo(preview.run.created_at)}</Chip>.
+              </Card.Description>
+            </Card.Header>
+            <Card.Content>
+              <Accordion variant="surface">
+                {previewImages.map((image) => {
+                  const locations = locationsFor(image);
+                  return (
+                    <Accordion.Item key={image.id} id={image.id}>
+                      <Accordion.Heading>
+                        <Accordion.Trigger>
+                          <code className="min-w-0 flex-1 truncate text-left text-xs">
+                            {image.full_ref}
+                          </code>
+                          <Chip size="sm" variant="soft">
+                            {locations.length} locations
+                          </Chip>
+                          <Accordion.Indicator />
+                        </Accordion.Trigger>
+                      </Accordion.Heading>
+                      <Accordion.Panel>
+                        <Accordion.Body className="space-y-3">
+                          {locations.map((location) => (
+                            <div key={`${location.file}:${location.path}`} className="text-xs">
+                              <p>
+                                {location.target
+                                  ? `Rendered from ${location.target}`
+                                  : location.file}{' '}
+                                <span className="text-foreground/55">· {location.path}</span>
+                              </p>
+                              <p className="mt-1 text-foreground/60">
+                                {location.kind ?? 'Manifest'}
+                                {location.name ? `/${location.name}` : ''}
+                                {location.namespace ? ` · ${location.namespace}` : ''}
+                              </p>
+                            </div>
+                          ))}
+                        </Accordion.Body>
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  );
+                })}
+              </Accordion>
+            </Card.Content>
+          </Card>
+        </>
+      )}
+
+      <Card>
+        <Card.Header>
+          <Card.Title>Recent activity</Card.Title>
+        </Card.Header>
+        <Card.Content className="space-y-2">
+          {runs.slice(0, 6).map((run) => (
+            <div key={run.id} className="flex items-center justify-between gap-3 text-sm">
+              <div>
+                <Chip
+                  size="sm"
+                  variant="soft"
+                  color={run.trigger === 'dry_run' ? 'accent' : 'default'}
+                >
+                  {run.trigger === 'dry_run' ? 'Dry run' : run.trigger}
+                </Chip>{' '}
+                <span className="ml-2">{run.image_count} images</span>
+              </div>
+              <span className="text-foreground/60">{timeAgo(run.created_at)}</span>
+            </div>
+          ))}
+        </Card.Content>
+      </Card>
+
+      <Modal>
+        <Modal.Backdrop isOpen={reviewOverlay.isOpen} onOpenChange={reviewOverlay.setOpen}>
+          <Modal.Container size="lg">
+            <Modal.Dialog>
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Resolve {reviewing?.path}</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="grid gap-4">
+                <Select
+                  aria-label="Resolution"
+                  value={resolution}
+                  onChange={(value) => setResolution(String(value) as typeof resolution)}
+                  variant="secondary"
+                >
+                  <Label>Use this path as</Label>
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="helm">Helm values or chart</ListBox.Item>
+                      <ListBox.Item id="kustomize">Kustomize entrypoint</ListBox.Item>
+                      <ListBox.Item id="manifests">Plain manifests</ListBox.Item>
+                      <ListBox.Item id="ignore">Ignore</ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                {resolution === 'helm' ? (
+                  <>
+                    <FormField
+                      label="Local chart path"
+                      value={chart}
+                      onChange={(event) => setChart(event.target.value)}
+                      placeholder="charts/app2"
+                    />
+                    <div className="grid gap-2">
+                      <Label htmlFor="value-paths">Values files</Label>
+                      <TextArea
+                        id="value-paths"
+                        value={values}
+                        onChange={(event) => setValues(event.target.value)}
+                        rows={3}
+                        variant="secondary"
+                      />
+                    </div>
+                  </>
+                ) : null}
+              </Modal.Body>
+              <Modal.Footer>
+                <Button slot="close" variant="tertiary">
+                  Cancel
+                </Button>
+                <Button onPress={() => void saveResolution()}>Save and rediscover</Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+    </PageContainer>
+  );
+}
+
+function MetricCard({
+  title,
+  value,
+  detail,
+  mono = false,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  mono?: boolean;
+}) {
+  return (
+    <Card className="h-full">
+      <Card.Header>
+        <Card.Title>{title}</Card.Title>
+      </Card.Header>
+      <Card.Content className="flex flex-1 flex-col">
+        <p className={`truncate text-2xl font-semibold ${mono ? 'font-mono text-sm' : ''}`}>
+          {value}
+        </p>
+        <p className="mt-auto pt-3 text-sm text-foreground/60">{detail}</p>
+      </Card.Content>
+    </Card>
+  );
+}
+
+function CandidateRow({
+  candidate,
+  isSelected = false,
+  onIgnore,
+  onReview,
+  onSelectedChange,
+}: {
+  candidate: GitRepositoryRunCandidate;
+  isSelected?: boolean;
+  onIgnore?: (candidate: GitRepositoryRunCandidate) => Promise<void>;
+  onReview?: (candidate: GitRepositoryRunCandidate) => void;
+  onSelectedChange?: (candidateID: string, isSelected: boolean) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-divider/70 p-3">
+      <div className="flex min-w-0 items-center gap-3">
+        {candidate.status === 'unresolved' && onSelectedChange ? (
+          <Checkbox
+            aria-label={`Select ${candidate.path}`}
+            isSelected={isSelected}
+            onChange={(next) => onSelectedChange(candidate.id, next)}
+            variant="secondary"
+          >
+            <Checkbox.Content>
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+            </Checkbox.Content>
+          </Checkbox>
+        ) : null}
+        <div>
+          <p className="font-mono text-xs">{candidate.path}</p>
+          <p className="mt-1 text-xs text-foreground/60">
+            {candidate.detected_type.replace('_', ' ')} · {candidate.confidence}
+          </p>
+        </div>
+      </div>
+      {candidate.status === 'unresolved' && onIgnore && onReview ? (
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="tertiary" onPress={() => void onIgnore(candidate)}>
+            Ignore
+          </Button>
+          <Button size="sm" variant="secondary" onPress={() => onReview(candidate)}>
+            <Settings02Icon size={15} /> Resolve
+          </Button>
+        </div>
+      ) : (
+        <Chip
+          size="sm"
+          color={candidate.status === 'ignored' ? 'default' : 'success'}
+          variant="soft"
+        >
+          {candidate.status.replace('_', ' ')}
+        </Chip>
+      )}
+    </div>
+  );
+}

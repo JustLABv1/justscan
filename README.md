@@ -15,6 +15,7 @@ JustScan is a self-hosted container image vulnerability scanner powered by [Triv
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
+- [GitOps repository discovery](#gitops-repository-discovery)
 - [CLI](#cli)
 - [Quick Start](#quick-start)
 - [Configuration Reference](#configuration-reference)
@@ -43,6 +44,18 @@ JustScan helps teams scan container images for vulnerabilities before deployment
 - OIDC SSO support (Keycloak, Authentik, Okta, Azure AD, Google Workspace)
 - API endpoints for CI/CD automation
 - Docker Compose and Helm deployment options
+
+## GitOps repository discovery
+
+Git repositories can be connected in the web UI to preview and schedule image scans. The dry run always discovers first and never queues scans.
+
+- **Auto** (the default) detects unreferenced Kustomize deployment roots, renders them with Kustomize's built-in Helm support, and extracts images only from the resulting Kubernetes workloads. When no Kustomization exists, it scans plain Kubernetes workload manifests instead.
+- **Kustomize entrypoints** renders only the relative repository paths supplied by the operator. Use this for repositories with several independent environments or conventions that cannot be inferred.
+- **Plain Kubernetes manifests** skips rendering and extracts images from `containers`, `initContainers`, and `ephemeralContainers` in YAML manifests. This supports repositories that do not use Kustomize.
+
+Helm is required when a selected Kustomization uses `helmCharts`; the provided container images include it. For local backend development, install Helm or choose plain-manifest discovery for repositories that do not need Helm rendering.
+
+For repositories that combine several deployment mechanisms, add a repository-owned [`.justscan.yaml` discovery configuration](docs/gitops-discovery.md). It can compose Kustomize roots, direct Helm charts, and selected plain-manifest paths in one dry run.
 
 ## Architecture
 

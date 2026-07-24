@@ -23,7 +23,7 @@ type TokenRequest struct {
 }
 
 func GenerateTokenUser(db *bun.DB, context *gin.Context) {
-	if !config.Config.LocalAuth.Enabled {
+	if !config.LocalAuthEnabled() {
 		context.JSON(http.StatusForbidden, gin.H{"error": "local authentication is disabled"})
 		context.Abort()
 		return

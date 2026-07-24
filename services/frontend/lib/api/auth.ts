@@ -3,7 +3,13 @@ import type { User } from './types/common';
 import type { OIDCProvider } from './types/registries';
 
 export const getOIDCAvailability = () =>
-  req<{ oidc_enabled: boolean; local_auth_enabled: boolean }>('GET', '/api/v1/auth/oidc/available');
+  req<{
+    oidc_enabled: boolean;
+    local_auth_enabled: boolean;
+    sign_in_enabled: boolean;
+    sign_up_enabled: boolean;
+    sso_only: boolean;
+  }>('GET', '/api/v1/auth/oidc/available');
 
 export const login = (email: string, password: string, rememberMe = false) =>
   publicReq<{ token: string; user: User; expires_at: number }>('POST', '/api/v1/auth/login', {
@@ -16,4 +22,6 @@ export const register = (username: string, email: string, password: string) =>
   req<{ result: string }>('POST', '/api/v1/auth/register', { username, email, password });
 
 export const listOIDCProviders = () =>
-  req<OIDCProvider[]>('GET', '/api/v1/auth/oidc/providers').then((result) => (Array.isArray(result) ? result : []));
+  req<OIDCProvider[]>('GET', '/api/v1/auth/oidc/providers').then((result) =>
+    Array.isArray(result) ? result : []
+  );

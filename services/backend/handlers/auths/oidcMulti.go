@@ -3,6 +3,7 @@ package auths
 import (
 	"net/http"
 
+	"justscan-backend/config"
 	"justscan-backend/functions/auth"
 	"justscan-backend/functions/httperror"
 
@@ -34,6 +35,10 @@ func OIDCProviders(c *gin.Context) {
 
 // OIDCLoginForProvider initiates the OIDC authorization code flow for the named provider.
 func OIDCLoginForProvider(c *gin.Context) {
+	if !config.SignInEnabled() {
+		c.JSON(http.StatusForbidden, gin.H{"error": "sign-in is disabled"})
+		return
+	}
 	providerName := c.Param("provider")
 	// An abandoned diagnostic flow must not capture a later normal callback.
 	clearOIDCDebugCookies(c)

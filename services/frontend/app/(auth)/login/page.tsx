@@ -4,7 +4,14 @@ import { AuthCard } from '@/components/auth-card';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { getApiBase } from '@/lib/api/base';
-import { getOIDCAvailability, listOIDCProviders, login, OIDCProvider, setToken, setUser } from '@/lib/api';
+import {
+  getOIDCAvailability,
+  listOIDCProviders,
+  login,
+  OIDCProvider,
+  setToken,
+  setUser,
+} from '@/lib/api';
 import { Button, Form } from '@heroui/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -17,34 +24,43 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [localAuthEnabled, setLocalAuthEnabled] = useState(true);
+  const [signInEnabled, setSignInEnabled] = useState(true);
+  const [signUpEnabled, setSignUpEnabled] = useState(true);
+  const [ssoOnly, setSsoOnly] = useState(false);
   const [oidcProviders, setOidcProviders] = useState<OIDCProvider[]>([]);
   const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
   const oidcApiBase = getApiBase();
 
   useEffect(() => {
-    Promise.allSettled([
-      getOIDCAvailability(),
-      listOIDCProviders(),
-    ]).then(([availability, providers]) => {
-      if (availability.status === 'fulfilled') {
-        setLocalAuthEnabled(availability.value.local_auth_enabled);
-      }
-      if (providers.status === 'fulfilled') {
-        setOidcProviders(providers.value);
-      }
-    }).finally(() => setAvailabilityLoaded(true));
+    Promise.allSettled([getOIDCAvailability(), listOIDCProviders()])
+      .then(([availability, providers]) => {
+        if (availability.status === 'fulfilled') {
+          setLocalAuthEnabled(availability.value.local_auth_enabled);
+          setSignInEnabled(availability.value.sign_in_enabled);
+          setSignUpEnabled(availability.value.sign_up_enabled);
+          setSsoOnly(availability.value.sso_only);
+        }
+        if (providers.status === 'fulfilled') {
+          setOidcProviders(providers.value);
+        }
+      })
+      .finally(() => setAvailabilityLoaded(true));
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(''); setLoading(true);
+    setError('');
+    setLoading(true);
     try {
       const res = await login(email, password);
-      setToken(res.token); setUser(res.user);
+      setToken(res.token);
+      setUser(res.user);
       router.replace('/scans');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (!availabilityLoaded) {
@@ -61,18 +77,23 @@ export default function LoginPage() {
     <AuthCard
       title="JustScan"
       subtitle="Great to see you again. Sign in to continue."
-      footer={localAuthEnabled ? (
-        <>
-          No account?{' '}
-          <Link href="/register" className="font-medium text-accent transition-colors hover:opacity-80">
-            Register
-          </Link>
-        </>
-      ) : undefined}
+      footer={
+        signInEnabled && localAuthEnabled && signUpEnabled ? (
+          <>
+            No account?{' '}
+            <Link
+              href="/register"
+              className="font-medium text-accent transition-colors hover:opacity-80"
+            >
+              Register
+            </Link>
+          </>
+        ) : undefined
+      }
     >
       {error ? <FormAlert description={error} title="Sign-in failed" /> : null}
 
-      {localAuthEnabled ? (
+      {signInEnabled && localAuthEnabled ? (
         <Form className="space-y-4" onSubmit={handleSubmit}>
           <FormField
             autoComplete="username"
@@ -92,17 +113,13 @@ export default function LoginPage() {
             type="password"
             value={password}
           />
-          <Button
-            fullWidth
-            isPending={loading}
-            type="submit"
-          >
+          <Button fullWidth isPending={loading} type="submit">
             {({ isPending }) => (isPending ? 'Signing In…' : 'Sign In')}
           </Button>
         </Form>
       ) : null}
 
-      {hasOIDC ? (
+      {signInEnabled && hasOIDC ? (
         <>
           {localAuthEnabled ? (
             <div className="flex items-center gap-3">
@@ -110,7 +127,9 @@ export default function LoginPage() {
                 className="h-px flex-1"
                 style={{ background: 'color-mix(in oklab,var(--accent) 20%,transparent)' }}
               />
-              <span className="text-xs" style={{ color: 'var(--text-faint)' }}>or</span>
+              <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
+                or
+              </span>
               <div
                 className="h-px flex-1"
                 style={{ background: 'color-mix(in oklab,var(--accent) 20%,transparent)' }}
@@ -140,7 +159,15 @@ export default function LoginPage() {
         </>
       ) : null}
 
-      {!localAuthEnabled && !hasOIDC ? (
+      {!signInEnabled ? (
+        <FormAlert
+          description="Sign-in is currently disabled for this installation. Please contact your administrator."
+          status="accent"
+          title="Sign-in disabled"
+        />
+      ) : null}
+
+      {signInEnabled && !localAuthEnabled && !hasOIDC ? (
         <FormAlert
           description="No login methods are currently configured. Please contact your administrator."
           status="accent"
@@ -148,9 +175,13 @@ export default function LoginPage() {
         />
       ) : null}
 
-      {!localAuthEnabled && hasOIDC ? (
+      {signInEnabled && !localAuthEnabled && hasOIDC ? (
         <FormAlert
-          description="Local auth is disabled for this installation. Use your configured single sign-on provider to continue."
+          description={
+            ssoOnly
+              ? 'This installation requires single sign-on. Use your configured provider to continue.'
+              : 'Local auth is disabled for this installation. Use your configured single sign-on provider to continue.'
+          }
           status="accent"
           title="SSO required"
         />

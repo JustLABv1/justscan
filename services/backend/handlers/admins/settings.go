@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"justscan-backend/config"
 	"justscan-backend/middlewares"
 	"justscan-backend/pkg/models"
 
@@ -30,6 +31,11 @@ func upsertSystemSetting(c *gin.Context, db *bun.DB, key string, value string) e
 		Set("value = EXCLUDED.value, updated_at = EXCLUDED.updated_at").
 		Exec(c.Request.Context())
 
+	if err == nil {
+		if resolver := config.GetResolver(); resolver != nil {
+			resolver.Invalidate(key)
+		}
+	}
 	return err
 }
 
@@ -233,22 +239,41 @@ func UpdateScannerSettings(c *gin.Context, db *bun.DB) {
 func UpdateAuthSettings(c *gin.Context, db *bun.DB) {
 	var req struct {
 		LocalAuthEnabled *bool `json:"local_auth_enabled"`
+		SignInEnabled    *bool `json:"sign_in_enabled"`
+		SignUpEnabled    *bool `json:"sign_up_enabled"`
+		SSOOnly          *bool `json:"sso_only"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.LocalAuthEnabled == nil {
+	if req.LocalAuthEnabled == nil && req.SignInEnabled == nil && req.SignUpEnabled == nil && req.SSOOnly == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no settings provided"})
 		return
 	}
-	value := "false"
-	if *req.LocalAuthEnabled {
-		value = "true"
+	settings := map[string]bool{}
+	if req.LocalAuthEnabled != nil {
+		settings["auth.local_enabled"] = *req.LocalAuthEnabled
 	}
-	if err := upsertSystemSetting(c, db, "auth.local_enabled", value); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update auth settings"})
-		return
+	if req.SignInEnabled != nil {
+		settings["auth.sign_in_enabled"] = *req.SignInEnabled
 	}
-	c.JSON(http.StatusOK, gin.H{"local_auth_enabled": *req.LocalAuthEnabled})
+	if req.SignUpEnabled != nil {
+		settings["auth.sign_up_enabled"] = *req.SignUpEnabled
+	}
+	if req.SSOOnly != nil {
+		settings["auth.sso_only"] = *req.SSOOnly
+	}
+	for key, enabled := range settings {
+		if err := upsertSystemSetting(c, db, key, strconv.FormatBool(enabled)); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update auth settings"})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"local_auth_enabled": config.LocalAuthEnabled(),
+		"sign_in_enabled":    config.SignInEnabled(),
+		"sign_up_enabled":    config.SignUpEnabled(),
+		"sso_only":           config.SSOOnly(),
+	})
 }

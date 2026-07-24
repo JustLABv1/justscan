@@ -40,6 +40,7 @@ import {
   EyeIcon,
   FileExportIcon,
   GridTableIcon,
+	GitBranchIcon,
   Key01Icon,
   LinkSquare02Icon,
   Logout02Icon,
@@ -99,16 +100,20 @@ function workspaceColorFor(kind: 'personal' | 'org', name: string): WorkspaceAva
 const navGroups = [
   {
     label: 'Overview',
+    items: [{ href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon }],
+  },
+  {
+    label: 'Scanning',
     items: [
-      { href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon },
-      { href: '/watchlist', label: 'Watchlist', Icon: Clock01Icon },
+      { href: '/scans', label: 'Scans', Icon: Shield01Icon },
+      { href: '/git-repositories', label: 'Git repositories', Icon: GitBranchIcon },
+      { href: '/helm', label: 'Helm', Icon: PackageIcon },
     ],
   },
   {
-    label: 'Scan & investigate',
+    label: 'Research & intelligence',
     items: [
-      { href: '/scans', label: 'Scans', Icon: Shield01Icon },
-      { href: '/helm', label: 'Helm', Icon: PackageIcon },
+      { href: '/watchlist', label: 'Watchlist', Icon: Clock01Icon },
       { href: '/vulnkb', label: 'Vuln KB', Icon: BookOpen01Icon },
     ],
   },

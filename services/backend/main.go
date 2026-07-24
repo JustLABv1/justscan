@@ -11,6 +11,7 @@ import (
 
 	"justscan-backend/config"
 	"justscan-backend/database"
+	gitrepositories "justscan-backend/functions/gitrepositories"
 	"justscan-backend/handlers/registries"
 	"justscan-backend/notifications"
 	"justscan-backend/pipelines"
@@ -82,6 +83,7 @@ func main() {
 
 	// Start watchlist scheduler
 	scheduler.Start(db)
+	gitrepositories.Start(db)
 	registries.StartHealthChecks(db)
 
 	// Set up signal handling for graceful shutdown
@@ -94,6 +96,7 @@ func main() {
 	log.Info("Shutting down server...")
 
 	scheduler.Stop()
+	gitrepositories.Stop()
 	registries.StopHealthChecks()
 	notifications.Stop()
 	pipelines.Stop()

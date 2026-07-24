@@ -716,14 +716,20 @@ func unresolvedCandidates(candidates []DiscoveryCandidate) int {
 }
 
 func clone(ctx context.Context, repository models.GitRepository, dir string) error {
-	args := []string{"clone", "--depth", "1", "--no-tags"}
+	// Run with a blank credential helper so a system/global Git configuration
+	// cannot return stale credentials before JustScan's askpass provider runs.
+	args := []string{"-c", "credential.helper=", "clone", "--depth", "1", "--no-tags"}
 	ref := strings.TrimSpace(repository.Ref)
 	if ref != "" && ref != "HEAD" {
 		args = append(args, "--branch", ref)
 	}
 	args = append(args, repository.CloneURL, dir)
 	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_ASKPASS_REQUIRE=force",
+		"GIT_CONFIG_NOSYSTEM=1",
+	)
 	var askpass string
 	if repository.AuthType != models.GitRepositoryAuthNone && repository.EncryptedCredential != "" {
 		secret, err := crypto.Decrypt(crypto.KeyFromString(config.Config.Encryption.Key), repository.EncryptedCredential)

@@ -324,7 +324,7 @@ jobs:
           name: cli-binaries
           path: dist
 
-      - uses: ncipollo/release-action@40bb172bd05f266cf9ba4ff965cb61e9ee5f6d01 # v1
+      - uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
         with:
           name: Release ${{ github.ref_name }}
           tag: ${{ github.ref_name }}

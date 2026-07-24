@@ -59,6 +59,7 @@ func List(db *bun.DB) gin.HandlerFunc {
 				return q
 			})
 		}
+		q = authz.ApplyWorkspaceScope(c, q, "", "owner_user_id", "owner_org_id", "", "", userID)
 		if err := q.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list Git repositories"})
 			return
@@ -182,15 +183,78 @@ func CreateRun(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 		var body struct {
-			Policy string `json:"policy"`
+			Policy         string   `json:"policy"`
+			SelectedImages []string `json:"selected_images"`
 		}
 		_ = c.ShouldBindJSON(&body)
-		run, err := gitservice.CreateRun(c.Request.Context(), item.ID, "manual", body.Policy)
+		run, err := gitservice.CreateRun(c.Request.Context(), item.ID, "manual", body.Policy, body.SelectedImages)
 		if err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusCreated, run)
+	}
+}
+
+func ListImageExclusions(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok {
+			return
+		}
+		var exclusions []models.GitRepositoryImageExclusion
+		if err := db.NewSelect().Model(&exclusions).Where("repository_id = ?", item.ID).OrderExpr("full_ref ASC").Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load image exclusions"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"data": exclusions})
+	}
+}
+
+func CreateImageExclusion(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok || !requireEdit(c, db, item) {
+			return
+		}
+		var body struct {
+			FullRef string `json:"full_ref"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		body.FullRef = strings.TrimSpace(body.FullRef)
+		if body.FullRef == "" || len(body.FullRef) > 2048 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "full_ref is required"})
+			return
+		}
+		userID, _, _ := authz.RequireRequestUser(c, db)
+		exclusion := &models.GitRepositoryImageExclusion{RepositoryID: item.ID, FullRef: body.FullRef, CreatedByID: userID, CreatedAt: time.Now()}
+		if _, err := db.NewInsert().Model(exclusion).On("CONFLICT (repository_id, full_ref) DO NOTHING").Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to exclude image"})
+			return
+		}
+		c.JSON(http.StatusCreated, exclusion)
+	}
+}
+
+func DeleteImageExclusion(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok || !requireEdit(c, db, item) {
+			return
+		}
+		id, err := uuid.Parse(c.Param("exclusionId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid exclusion ID"})
+			return
+		}
+		if _, err := db.NewDelete().Model((*models.GitRepositoryImageExclusion)(nil)).Where("id = ? AND repository_id = ?", id, item.ID).Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to re-enable image"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
 	}
 }
 func Discover(db *bun.DB) gin.HandlerFunc {

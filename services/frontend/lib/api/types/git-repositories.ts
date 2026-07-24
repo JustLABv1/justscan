@@ -39,9 +39,17 @@ export interface GitRepositoryRun {
   image_count: number;
   scan_count: number;
   unresolved_count: number;
+  requested_images: string[];
   created_at: string;
   started_at?: string | null;
   completed_at?: string | null;
+}
+
+export interface GitRepositoryImageExclusion {
+  id: string;
+  repository_id: string;
+  full_ref: string;
+  created_at: string;
 }
 
 export type GitRepositoryCandidateStatus = 'unresolved' | 'auto_accepted' | 'resolved' | 'ignored';

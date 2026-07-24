@@ -79,9 +79,22 @@ type GitRepositoryRun struct {
 	ImageCount      int        `bun:"image_count,type:int,notnull,default:0" json:"image_count"`
 	ScanCount       int        `bun:"scan_count,type:int,notnull,default:0" json:"scan_count"`
 	UnresolvedCount int        `bun:"unresolved_count,type:int,notnull,default:0" json:"unresolved_count"`
+	RequestedImages []string   `bun:"requested_images,type:jsonb,notnull,default:'[]'" json:"requested_images"`
 	StartedAt       *time.Time `bun:"started_at,type:timestamptz" json:"started_at,omitempty"`
 	CompletedAt     *time.Time `bun:"completed_at,type:timestamptz" json:"completed_at,omitempty"`
 	CreatedAt       time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+}
+
+// GitRepositoryImageExclusion keeps a discovered image visible in previews
+// while excluding it from future repository-triggered scans.
+type GitRepositoryImageExclusion struct {
+	bun.BaseModel `bun:"table:git_repository_image_exclusions"`
+
+	ID           uuid.UUID `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	RepositoryID uuid.UUID `bun:"repository_id,type:uuid,notnull" json:"repository_id"`
+	FullRef      string    `bun:"full_ref,type:text,notnull" json:"full_ref"`
+	CreatedByID  uuid.UUID `bun:"created_by_id,type:uuid,notnull" json:"created_by_id"`
+	CreatedAt    time.Time `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 }
 
 type GitRepositoryDiscoveryRule struct {

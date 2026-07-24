@@ -156,7 +156,7 @@ func SyncSchedule(repository models.GitRepository) {
 		return
 	}
 	id, err := state.cron.AddFunc(fmt.Sprintf("CRON_TZ=%s %s", location.String(), spec), func() {
-		_, err := CreateRun(context.Background(), repository.ID, "scheduled", "")
+		_, err := CreateRun(context.Background(), repository.ID, "scheduled", "", nil)
 		if err != nil {
 			log.Warnf("git repository scheduled run %s: %v", repository.ID, err)
 		}
@@ -168,7 +168,7 @@ func SyncSchedule(repository models.GitRepository) {
 
 func Unschedule(repositoryID uuid.UUID) { SyncSchedule(models.GitRepository{ID: repositoryID}) }
 
-func CreateRun(ctx context.Context, repositoryID uuid.UUID, trigger, policy string) (*models.GitRepositoryRun, error) {
+func CreateRun(ctx context.Context, repositoryID uuid.UUID, trigger, policy string, requestedImages []string) (*models.GitRepositoryRun, error) {
 	state.Lock()
 	db := state.db
 	state.Unlock()
@@ -192,7 +192,8 @@ func CreateRun(ctx context.Context, repositoryID uuid.UUID, trigger, policy stri
 	if trigger == "" {
 		trigger = "manual"
 	}
-	run := &models.GitRepositoryRun{RepositoryID: repositoryID, Trigger: trigger, RequestedPolicy: policy, Ref: repository.Ref, Status: models.GitRepositoryRunQueued, CreatedAt: time.Now()}
+	requestedImages = uniqueImageRefs(requestedImages)
+	run := &models.GitRepositoryRun{RepositoryID: repositoryID, Trigger: trigger, RequestedPolicy: policy, Ref: repository.Ref, RequestedImages: requestedImages, Status: models.GitRepositoryRunQueued, CreatedAt: time.Now()}
 	if _, err := db.NewInsert().Model(run).Exec(ctx); err != nil {
 		return nil, err
 	}
@@ -306,6 +307,7 @@ func processRun(runID uuid.UUID) {
 		failRun(ctx, db, &run, err)
 		return
 	}
+	images = requestedDiscoveredImages(images, run.RequestedImages)
 	run.CommitSHA, run.TargetCount, run.ImageCount, run.UnresolvedCount = commitSHA, len(uniqueTargetFiles(images)), len(images), unresolvedCandidates(candidates)
 	for _, candidate := range candidates {
 		row := &models.GitRepositoryRunCandidate{RunID: run.ID, Path: candidate.Path, DetectedType: candidate.DetectedType, Confidence: candidate.Confidence, Evidence: candidate.Evidence, Status: candidate.Status, RuleID: candidate.RuleID, CreatedAt: time.Now()}
@@ -315,9 +317,15 @@ func processRun(runID uuid.UUID) {
 		}
 	}
 	previous := previousRefs(ctx, db, repository.ID, run.ID)
+	excluded := excludedImageRefs(ctx, db, repository.ID)
 	created := 0
 	for _, image := range images {
 		stateName := "discovered"
+		if excluded[image.FullRef] {
+			row := &models.GitRepositoryRunImage{RunID: run.ID, FullRef: image.FullRef, ImageName: image.ImageName, ImageTag: image.ImageTag, Locations: models.JSONObject{"items": image.Locations}, State: "excluded", CreatedAt: time.Now()}
+			db.NewInsert().Model(row).Exec(ctx) //nolint:errcheck
+			continue
+		}
 		if run.RequestedPolicy == models.GitRepositoryRescanChanged && previous[image.FullRef] {
 			stateName = "unchanged"
 		}
@@ -415,6 +423,48 @@ func previousRefs(ctx context.Context, db *bun.DB, repositoryID, currentRunID uu
 	return result
 }
 
+func uniqueImageRefs(refs []string) []string {
+	seen := map[string]bool{}
+	result := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		ref = strings.TrimSpace(ref)
+		if ref != "" && !seen[ref] {
+			seen[ref] = true
+			result = append(result, ref)
+		}
+	}
+	return result
+}
+
+func requestedDiscoveredImages(images []DiscoveredImage, refs []string) []DiscoveredImage {
+	if len(refs) == 0 {
+		return images
+	}
+	wanted := map[string]bool{}
+	for _, ref := range refs {
+		wanted[ref] = true
+	}
+	result := make([]DiscoveredImage, 0, len(refs))
+	for _, image := range images {
+		if wanted[image.FullRef] {
+			result = append(result, image)
+		}
+	}
+	return result
+}
+
+func excludedImageRefs(ctx context.Context, db *bun.DB, repositoryID uuid.UUID) map[string]bool {
+	var refs []string
+	if err := db.NewSelect().Model((*models.GitRepositoryImageExclusion)(nil)).Column("full_ref").Where("repository_id = ?", repositoryID).Scan(ctx, &refs); err != nil {
+		return map[string]bool{}
+	}
+	result := make(map[string]bool, len(refs))
+	for _, ref := range refs {
+		result[ref] = true
+	}
+	return result
+}
+
 func reconcileLoop(db *bun.DB) {
 	ticker := time.NewTicker(20 * time.Second)
 	defer ticker.Stop()
@@ -439,7 +489,7 @@ func reconcileRun(ctx context.Context, db *bun.DB, runID uuid.UUID) {
 	for _, row := range rows {
 		total += row.Count
 		switch row.Status {
-		case models.ScanStatusCompleted, "unchanged":
+		case models.ScanStatusCompleted, "unchanged", "excluded":
 			complete += row.Count
 		case models.ScanStatusFailed:
 			failed += row.Count
@@ -978,12 +1028,16 @@ func appendHelmChart(ctx context.Context, root string, byRef map[string]*Discove
 		releaseName = filepath.Base(chart)
 	}
 	args := []string{"template", releaseName, chart}
+	target := "Helm chart " + relativePath(root, chart)
 	for _, configuredValue := range source.Values {
 		valueFile, err := resolveRepositoryPath(root, configuredValue)
 		if err != nil {
 			return fmt.Errorf("values: %w", err)
 		}
 		args = append(args, "--values", valueFile)
+		// Values are applied in order, so the final file is the most useful
+		// deployment entrypoint to show in the discovery tree.
+		target = "Helm values " + relativePath(root, valueFile)
 	}
 	temporaryHelmHome, err := os.MkdirTemp("", "justscan-helm-")
 	if err != nil {
@@ -996,7 +1050,7 @@ func appendHelmChart(ctx context.Context, root string, byRef map[string]*Discove
 	if err != nil {
 		return fmt.Errorf("render chart %s: %s", relativePath(root, chart), strings.TrimSpace(string(output)))
 	}
-	appendManifestImages(byRef, output, "(rendered)", "Helm chart "+relativePath(root, chart))
+	appendManifestImages(byRef, output, "(rendered)", target)
 	return nil
 }
 

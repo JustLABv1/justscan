@@ -31,13 +31,18 @@ import { FormField } from '@/components/ui/form-field';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import {
   createGitRepositoryDiscoveryRule,
+  createGitRepositoryImageExclusion,
+  deleteGitRepositoryImageExclusion,
   discoverGitRepository,
   exportGitRepositoryDiscoveryRules,
   getGitRepository,
   getGitRepositoryRun,
   listGitRepositoryCandidates,
+  listGitRepositoryImageExclusions,
   listGitRepositoryRuns,
+  runGitRepository,
   type GitRepository,
+  type GitRepositoryImageExclusion,
   type GitRepositoryRun,
   type GitRepositoryRunCandidate,
   type GitRepositoryRunImage,
@@ -54,6 +59,9 @@ function locationsFor(image: GitRepositoryRunImage) {
 function targetGroup(target: string) {
   if (target.startsWith('Helm chart ')) {
     return { label: 'Helm', path: target.slice('Helm chart '.length) };
+  }
+  if (target.startsWith('Helm values ')) {
+    return { label: 'Helm', path: target.slice('Helm values '.length) };
   }
   if (/kustomization\.ya?ml$/i.test(target)) {
     return { label: 'Kustomize', path: target };
@@ -75,21 +83,27 @@ export default function GitRepositoryDetailPage() {
   const [chart, setChart] = useState('');
   const [values, setValues] = useState('');
   const [selectedCandidateIDs, setSelectedCandidateIDs] = useState<Set<string>>(new Set());
+  const [selectedImageRefs, setSelectedImageRefs] = useState<Set<string>>(new Set());
+  const [imageExclusions, setImageExclusions] = useState<GitRepositoryImageExclusion[]>([]);
   const reviewOverlay = useOverlayState();
   const [loading, setLoading] = useState(true);
   const [discovering, setDiscovering] = useState(false);
   const [ignoringCandidates, setIgnoringCandidates] = useState(false);
+  const [startingScan, setStartingScan] = useState(false);
+  const [updatingImageExclusions, setUpdatingImageExclusions] = useState(false);
   const { success, error } = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextRepository, nextRuns] = await Promise.all([
+      const [nextRepository, nextRuns, nextExclusions] = await Promise.all([
         getGitRepository(id),
         listGitRepositoryRuns(id),
+        listGitRepositoryImageExclusions(id),
       ]);
       setRepository(nextRepository);
       setRuns(nextRuns);
+      setImageExclusions(nextExclusions);
       const latestDryRun = nextRuns.find((run) => run.trigger === 'dry_run');
       if (latestDryRun) {
         const [nextPreview, nextCandidates] = await Promise.all([
@@ -107,6 +121,22 @@ export default function GitRepositoryDetailPage() {
   }, [error, id]);
 
   useEffect(() => deferEffect(() => void load()), [load]);
+
+  const hasActiveRun = runs.some((run) =>
+    ['queued', 'discovering', 'scanning'].includes(run.status)
+  );
+
+  useEffect(() => {
+    if (!hasActiveRun) return;
+    const refresh = () => {
+      void listGitRepositoryRuns(id)
+        .then(setRuns)
+        .catch(() => undefined);
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 3_000);
+    return () => window.clearInterval(interval);
+  }, [hasActiveRun, id]);
 
   async function discover() {
     setDiscovering(true);
@@ -202,6 +232,21 @@ export default function GitRepositoryDetailPage() {
     );
   }
 
+  function toggleImage(imageRef: string, isSelected: boolean) {
+    setSelectedImageRefs((current) => {
+      const next = new Set(current);
+      if (isSelected) next.add(imageRef);
+      else next.delete(imageRef);
+      return next;
+    });
+  }
+
+  function toggleAllImages(isSelected: boolean) {
+    setSelectedImageRefs(
+      isSelected ? new Set(selectableImages.map((image) => image.full_ref)) : new Set()
+    );
+  }
+
   async function ignoreSelectedCandidates() {
     const selected = pendingCandidates.filter((candidate) =>
       selectedCandidateIDs.has(candidate.id)
@@ -225,6 +270,55 @@ export default function GitRepositoryDetailPage() {
       error(caught instanceof Error ? caught.message : 'Could not ignore the selected paths.');
     } finally {
       setIgnoringCandidates(false);
+    }
+  }
+
+  async function startScan(selectedImages?: string[]) {
+    if (selectedImages && selectedImages.length === 0) return;
+    setStartingScan(true);
+    try {
+      const run = await runGitRepository(id, { policy: 'all', selected_images: selectedImages });
+      setRuns((current) => [run, ...current]);
+      setSelectedImageRefs(new Set());
+      success(
+        selectedImages
+          ? `${selectedImages.length} selected image scans queued.`
+          : 'Full repository scan queued.'
+      );
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not start repository scan.');
+    } finally {
+      setStartingScan(false);
+    }
+  }
+
+  async function excludeImages(refs: string[]) {
+    if (refs.length === 0) return;
+    setUpdatingImageExclusions(true);
+    try {
+      await Promise.all(refs.map((ref) => createGitRepositoryImageExclusion(id, ref)));
+      setImageExclusions(await listGitRepositoryImageExclusions(id));
+      setSelectedImageRefs(new Set());
+      success(
+        `${refs.length} image${refs.length === 1 ? '' : 's'} excluded from future repository scans.`
+      );
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not exclude the selected images.');
+    } finally {
+      setUpdatingImageExclusions(false);
+    }
+  }
+
+  async function reenableImage(exclusion: GitRepositoryImageExclusion) {
+    setUpdatingImageExclusions(true);
+    try {
+      await deleteGitRepositoryImageExclusion(id, exclusion.id);
+      setImageExclusions((current) => current.filter((item) => item.id !== exclusion.id));
+      success('Image re-enabled for future repository scans.');
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not re-enable this image.');
+    } finally {
+      setUpdatingImageExclusions(false);
     }
   }
 
@@ -269,6 +363,11 @@ export default function GitRepositoryDetailPage() {
   }, [files]);
 
   const previewImages = preview?.images ?? [];
+  const exclusionByRef = useMemo(
+    () => new Map(imageExclusions.map((exclusion) => [exclusion.full_ref, exclusion])),
+    [imageExclusions]
+  );
+  const selectableImages = previewImages.filter((image) => !exclusionByRef.has(image.full_ref));
   const pendingCandidates = candidates.filter((candidate) => candidate.status === 'unresolved');
   const handledCandidates = candidates
     .filter((candidate) => candidate.status !== 'unresolved')
@@ -310,7 +409,7 @@ export default function GitRepositoryDetailPage() {
           { label: 'Git repositories', href: '/git-repositories' },
           { label: repository.name },
         ]}
-        description={`${repository.clone_url} · ${repository.ref}`}
+        description={`${repository.clone_url} · ${repository.ref}${repository.owner_type === 'org' ? ' · Scans appear in the organization workspace.' : ''}`}
         actions={
           <>
             <Button onPress={() => router.push('/git-repositories')} variant="tertiary">
@@ -318,6 +417,9 @@ export default function GitRepositoryDetailPage() {
             </Button>
             <Button onPress={() => void exportRules()} variant="secondary">
               <Download01Icon size={16} /> Export .justscan.yaml
+            </Button>
+            <Button isPending={startingScan} onPress={() => void startScan()} variant="secondary">
+              Start full scan
             </Button>
             <Button isPending={discovering} onPress={() => void discover()}>
               <Search01Icon size={16} /> Dry run discovery
@@ -490,7 +592,10 @@ export default function GitRepositoryDetailPage() {
                     </div>
                     <Accordion variant="surface">
                       {items.map(([file, refs]) => (
-                        <Accordion.Item key={`${deploymentType}:${file}`} id={`${deploymentType}:${file}`}>
+                        <Accordion.Item
+                          key={`${deploymentType}:${file}`}
+                          id={`${deploymentType}:${file}`}
+                        >
                           <Accordion.Heading>
                             <Accordion.Trigger>
                               <span className="flex min-w-0 flex-1 items-center gap-2">
@@ -528,46 +633,132 @@ export default function GitRepositoryDetailPage() {
                 <Chip size="sm">{timeAgo(preview.run.created_at)}</Chip>.
               </Card.Description>
             </Card.Header>
-            <Card.Content>
-              <Accordion variant="surface">
+            <Card.Content className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Checkbox
+                  isDisabled={selectableImages.length === 0}
+                  isIndeterminate={
+                    selectedImageRefs.size > 0 && selectedImageRefs.size < selectableImages.length
+                  }
+                  isSelected={
+                    selectableImages.length > 0 &&
+                    selectedImageRefs.size === selectableImages.length
+                  }
+                  onChange={toggleAllImages}
+                  variant="secondary"
+                >
+                  <Checkbox.Content>
+                    <Checkbox.Control>
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                    <Label>Select all scan-enabled images</Label>
+                  </Checkbox.Content>
+                </Checkbox>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    isDisabled={selectedImageRefs.size === 0}
+                    isPending={startingScan}
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => void startScan([...selectedImageRefs])}
+                  >
+                    Scan selected{selectedImageRefs.size > 0 ? ` (${selectedImageRefs.size})` : ''}
+                  </Button>
+                  <Button
+                    isDisabled={selectedImageRefs.size === 0}
+                    isPending={updatingImageExclusions}
+                    size="sm"
+                    variant="tertiary"
+                    onPress={() => void excludeImages([...selectedImageRefs])}
+                  >
+                    Exclude selected
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
                 {previewImages.map((image) => {
                   const locations = locationsFor(image);
+                  const exclusion = exclusionByRef.get(image.full_ref);
                   return (
-                    <Accordion.Item key={image.id} id={image.id}>
-                      <Accordion.Heading>
-                        <Accordion.Trigger>
-                          <code className="min-w-0 flex-1 truncate text-left text-xs">
-                            {image.full_ref}
-                          </code>
-                          <Chip size="sm" variant="soft">
-                            {locations.length} locations
-                          </Chip>
-                          <Accordion.Indicator />
-                        </Accordion.Trigger>
-                      </Accordion.Heading>
-                      <Accordion.Panel>
-                        <Accordion.Body className="space-y-3">
-                          {locations.map((location) => (
-                            <div key={`${location.file}:${location.path}`} className="text-xs">
-                              <p>
-                                {location.target
-                                  ? `Rendered from ${location.target}`
-                                  : location.file}{' '}
-                                <span className="text-foreground/55">· {location.path}</span>
-                              </p>
-                              <p className="mt-1 text-foreground/60">
-                                {location.kind ?? 'Manifest'}
-                                {location.name ? `/${location.name}` : ''}
-                                {location.namespace ? ` · ${location.namespace}` : ''}
-                              </p>
-                            </div>
-                          ))}
-                        </Accordion.Body>
-                      </Accordion.Panel>
-                    </Accordion.Item>
+                    <div key={image.id} className="flex items-start gap-3">
+                      <Checkbox
+                        aria-label={`Select ${image.full_ref}`}
+                        className="mt-3 shrink-0"
+                        isDisabled={Boolean(exclusion)}
+                        isSelected={selectedImageRefs.has(image.full_ref)}
+                        onChange={(next) => toggleImage(image.full_ref, next)}
+                        variant="secondary"
+                      >
+                        <Checkbox.Content>
+                          <Checkbox.Control>
+                            <Checkbox.Indicator />
+                          </Checkbox.Control>
+                        </Checkbox.Content>
+                      </Checkbox>
+                      <Accordion className="min-w-0 flex-1" hideSeparator variant="surface">
+                        <Accordion.Item id={image.id}>
+                          <Accordion.Heading>
+                            <Accordion.Trigger className="min-w-0">
+                              <span className="min-w-0 flex-1 truncate text-left">
+                                <code className="block truncate text-xs">{image.full_ref}</code>
+                              </span>
+                              {exclusion ? (
+                                <Chip className="shrink-0" color="warning" size="sm" variant="soft">
+                                  Excluded
+                                </Chip>
+                              ) : null}
+                              <Chip className="shrink-0" size="sm" variant="soft">
+                                {locations.length} locations
+                              </Chip>
+                              <Accordion.Indicator className="shrink-0" />
+                            </Accordion.Trigger>
+                          </Accordion.Heading>
+                          <Accordion.Panel>
+                            <Accordion.Body className="space-y-3">
+                              {locations.map((location) => (
+                                <div key={`${location.file}:${location.path}`} className="text-xs">
+                                  <p>
+                                    {location.target
+                                      ? `Rendered from ${location.target}`
+                                      : location.file}{' '}
+                                    <span className="text-foreground/55">· {location.path}</span>
+                                  </p>
+                                  <p className="mt-1 text-foreground/60">
+                                    {location.kind ?? 'Manifest'}
+                                    {location.name ? `/${location.name}` : ''}
+                                    {location.namespace ? ` · ${location.namespace}` : ''}
+                                  </p>
+                                </div>
+                              ))}
+                            </Accordion.Body>
+                          </Accordion.Panel>
+                        </Accordion.Item>
+                      </Accordion>
+                      {exclusion ? (
+                        <Button
+                          className="mt-2 shrink-0"
+                          isPending={updatingImageExclusions}
+                          size="sm"
+                          variant="secondary"
+                          onPress={() => void reenableImage(exclusion)}
+                        >
+                          Re-enable
+                        </Button>
+                      ) : (
+                        <Button
+                          className="mt-2 shrink-0"
+                          isPending={updatingImageExclusions}
+                          size="sm"
+                          variant="outline"
+                          onPress={() => void excludeImages([image.full_ref])}
+                        >
+                          Exclude
+                        </Button>
+                      )}
+                    </div>
                   );
                 })}
-              </Accordion>
+              </div>
             </Card.Content>
           </Card>
         </>
@@ -587,8 +778,16 @@ export default function GitRepositoryDetailPage() {
                   color={run.trigger === 'dry_run' ? 'accent' : 'default'}
                 >
                   {run.trigger === 'dry_run' ? 'Dry run' : run.trigger}
-                </Chip>{' '}
-                <span className="ml-2">{run.image_count} images</span>
+                </Chip>
+                <Chip
+                  className="ml-2"
+                  color={run.status === 'failed' ? 'danger' : run.status === 'completed' ? 'success' : run.status === 'partial' ? 'warning' : 'accent'}
+                  size="sm"
+                  variant="soft"
+                >
+                  {run.status}
+                </Chip>
+                <span className="ml-2">{run.image_count} images · {run.scan_count} scans</span>
               </div>
               <span className="text-foreground/60">{timeAgo(run.created_at)}</span>
             </div>

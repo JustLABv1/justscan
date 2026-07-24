@@ -169,6 +169,9 @@ func TestDiscoverRepositoryUsesJustScanConfiguredSources(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "raw"), 0700); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(dir, "envs", "dev", "demo"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	files := map[string]string{
 		filepath.Join(chartDir, "Chart.yaml"): "apiVersion: v2\nname: demo\nversion: 0.1.0\n",
 		filepath.Join(chartDir, "templates", "deploy.yaml"): `apiVersion: apps/v1
@@ -193,11 +196,14 @@ spec:
         - name: demo
           image: registry.example.com/raw-demo:2.0.0
 `,
+		filepath.Join(dir, "envs", "dev", "demo", "values.yaml"): "replicas: 1\n",
 		filepath.Join(dir, ".justscan.yaml"): `version: 1
 discovery:
   sources:
     - type: helm
       chart: charts/demo
+      values:
+        - envs/dev/demo/values.yaml
     - type: manifests
       paths:
         - raw
@@ -214,6 +220,9 @@ discovery:
 	}
 	if len(images) != 2 || images[0].FullRef != "registry.example.com/chart-demo:1.0.0" || images[1].FullRef != "registry.example.com/raw-demo:2.0.0" {
 		t.Fatalf("unexpected configured images: %#v", images)
+	}
+	if target := images[0].Locations[0].Target; target != "Helm values envs/dev/demo/values.yaml" {
+		t.Fatalf("Helm target = %q, want final values file", target)
 	}
 }
 

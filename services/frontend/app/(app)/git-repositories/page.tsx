@@ -23,6 +23,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   createGitRepository,
   deleteGitRepository,
@@ -32,7 +33,6 @@ import {
   type GitRepository,
   type GitRepositoryInput,
 } from '@/lib/api';
-import { getWorkScope } from '@/lib/api/scope';
 import { deferEffect } from '@/lib/defer-effect';
 import { timeAgo } from '@/lib/time';
 
@@ -73,19 +73,21 @@ export default function GitRepositoriesPage() {
   const [saving, setSaving] = useState(false);
   const [editingRepository, setEditingRepository] = useState<GitRepository | null>(null);
   const overlay = useOverlayState();
+  const workScope = useWorkScope();
+  const workspaceScope = workScope.kind === 'org' ? workScope.orgId : 'personal';
   const { success, error: showError } = useToast();
   const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setRepositories(await listGitRepositories());
+      setRepositories(await listGitRepositories(workspaceScope));
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Could not load Git repositories.');
     } finally {
       setLoading(false);
     }
-  }, [showError]);
+  }, [showError, workspaceScope]);
   useEffect(
     () =>
       deferEffect(() => {
@@ -104,10 +106,9 @@ export default function GitRepositoriesPage() {
       if (editingRepository) {
         await updateGitRepository(editingRepository.id, input);
       } else {
-        const scope = getWorkScope();
         await createGitRepository({
           ...input,
-          ...(scope.kind === 'org' ? { org_id: scope.orgId } : {}),
+          ...(workScope.kind === 'org' ? { org_id: workScope.orgId } : {}),
         });
       }
       overlay.close();
@@ -149,7 +150,7 @@ export default function GitRepositoriesPage() {
     policy: 'changed' | 'all' = repository.rescan_policy
   ) {
     try {
-      await runGitRepository(repository.id, policy);
+      await runGitRepository(repository.id, { policy });
       success(`${repository.name} scan queued.`);
       await load();
     } catch (error) {

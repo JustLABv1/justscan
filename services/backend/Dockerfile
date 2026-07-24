@@ -12,13 +12,21 @@ COPY . .
 
 RUN go build -o justscan-backend
 
+FROM builder AS helm-builder
+
+# Alpine's packaged Helm binary currently embeds older Go dependencies. Build
+# the same Helm release used by the backend instead, so the runtime CLI gets
+# a current, pinned dependency set.
+RUN GOBIN=/out go install helm.sh/helm/v4/cmd/helm@v4.2.3
+
 FROM alpine:3.24 AS runtime-base
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 WORKDIR /app
 
-RUN apk add --upgrade --no-cache ca-certificates git helm tzdata libcrypto3 libssl3
+RUN apk add --upgrade --no-cache ca-certificates git tzdata libcrypto3 libssl3
 
 COPY --from=builder /app/backend/justscan-backend /app/
+COPY --from=helm-builder /out/helm /usr/local/bin/helm
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
 RUN addgroup --system --gid 1001 justscan \

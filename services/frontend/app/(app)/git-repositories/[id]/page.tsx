@@ -39,10 +39,12 @@ import {
   getGitRepositoryRun,
   listGitRepositoryCandidates,
   listGitRepositoryImageExclusions,
+  listGitRepositoryLatestImageScans,
   listGitRepositoryRuns,
   runGitRepository,
   type GitRepository,
   type GitRepositoryImageExclusion,
+  type GitRepositoryLatestImageScan,
   type GitRepositoryRun,
   type GitRepositoryRunCandidate,
   type GitRepositoryRunImage,
@@ -85,6 +87,7 @@ export default function GitRepositoryDetailPage() {
   const [selectedCandidateIDs, setSelectedCandidateIDs] = useState<Set<string>>(new Set());
   const [selectedImageRefs, setSelectedImageRefs] = useState<Set<string>>(new Set());
   const [imageExclusions, setImageExclusions] = useState<GitRepositoryImageExclusion[]>([]);
+  const [latestImageScans, setLatestImageScans] = useState<GitRepositoryLatestImageScan[]>([]);
   const reviewOverlay = useOverlayState();
   const [loading, setLoading] = useState(true);
   const [discovering, setDiscovering] = useState(false);
@@ -96,14 +99,16 @@ export default function GitRepositoryDetailPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextRepository, nextRuns, nextExclusions] = await Promise.all([
+      const [nextRepository, nextRuns, nextExclusions, nextLatestImageScans] = await Promise.all([
         getGitRepository(id),
         listGitRepositoryRuns(id),
         listGitRepositoryImageExclusions(id),
+        listGitRepositoryLatestImageScans(id),
       ]);
       setRepository(nextRepository);
       setRuns(nextRuns);
       setImageExclusions(nextExclusions);
+      setLatestImageScans(nextLatestImageScans);
       const latestDryRun = nextRuns.find((run) => run.trigger === 'dry_run');
       if (latestDryRun) {
         const [nextPreview, nextCandidates] = await Promise.all([
@@ -129,8 +134,11 @@ export default function GitRepositoryDetailPage() {
   useEffect(() => {
     if (!hasActiveRun) return;
     const refresh = () => {
-      void listGitRepositoryRuns(id)
-        .then(setRuns)
+      void Promise.all([listGitRepositoryRuns(id), listGitRepositoryLatestImageScans(id)])
+        .then(([nextRuns, nextLatestImageScans]) => {
+          setRuns(nextRuns);
+          setLatestImageScans(nextLatestImageScans);
+        })
         .catch(() => undefined);
     };
     refresh();
@@ -154,6 +162,7 @@ export default function GitRepositoryDetailPage() {
       });
       setRuns((current) => [result.run, ...current]);
       setCandidates(await listGitRepositoryCandidates(id, result.run.id));
+      setLatestImageScans(await listGitRepositoryLatestImageScans(id));
       setSelectedCandidateIDs(new Set());
       success(`Dry run completed: ${(result.images ?? []).length} images discovered.`);
     } catch (caught) {
@@ -366,6 +375,10 @@ export default function GitRepositoryDetailPage() {
   const exclusionByRef = useMemo(
     () => new Map(imageExclusions.map((exclusion) => [exclusion.full_ref, exclusion])),
     [imageExclusions]
+  );
+  const latestScanByRef = useMemo(
+    () => new Map(latestImageScans.map((scan) => [scan.full_ref, scan])),
+    [latestImageScans]
   );
   const selectableImages = previewImages.filter((image) => !exclusionByRef.has(image.full_ref));
   const pendingCandidates = candidates.filter((candidate) => candidate.status === 'unresolved');
@@ -679,6 +692,7 @@ export default function GitRepositoryDetailPage() {
                 {previewImages.map((image) => {
                   const locations = locationsFor(image);
                   const exclusion = exclusionByRef.get(image.full_ref);
+                  const latestScan = latestScanByRef.get(image.full_ref);
                   return (
                     <div key={image.id} className="flex items-start gap-3">
                       <Checkbox
@@ -707,6 +721,16 @@ export default function GitRepositoryDetailPage() {
                                   Excluded
                                 </Chip>
                               ) : null}
+                              {latestScan ? (
+                                <Chip
+                                  className="shrink-0"
+                                  color={latestScan.status === 'failed' ? 'danger' : latestScan.status === 'completed' ? 'success' : 'accent'}
+                                  size="sm"
+                                  variant="soft"
+                                >
+                                  {latestScan.status}
+                                </Chip>
+                              ) : null}
                               <Chip className="shrink-0" size="sm" variant="soft">
                                 {locations.length} locations
                               </Chip>
@@ -730,6 +754,17 @@ export default function GitRepositoryDetailPage() {
                                   </p>
                                 </div>
                               ))}
+                              {latestScan ? (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onPress={() => router.push(`/scans/details/${latestScan.scan_id}`)}
+                                >
+                                  Open latest scan · {timeAgo(latestScan.created_at)}
+                                </Button>
+                              ) : (
+                                <p className="text-xs text-foreground/60">Not scanned from this repository yet.</p>
+                              )}
                             </Accordion.Body>
                           </Accordion.Panel>
                         </Accordion.Item>

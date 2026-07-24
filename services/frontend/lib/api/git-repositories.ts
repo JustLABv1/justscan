@@ -1,6 +1,6 @@
 import { req } from './core';
 import { appendScope } from './scope';
-import type { GitDiscoveredImage, GitRepository, GitRepositoryDiscoveryRule, GitRepositoryImageExclusion, GitRepositoryRun, GitRepositoryRunCandidate, GitRepositoryRunImage } from './types/git-repositories';
+import type { GitDiscoveredImage, GitRepository, GitRepositoryDiscoveryRule, GitRepositoryImageExclusion, GitRepositoryLatestImageScan, GitRepositoryRun, GitRepositoryRunCandidate, GitRepositoryRunImage } from './types/git-repositories';
 
 export type GitRepositoryInput = Partial<GitRepository> & { credential?: string; org_id?: string };
 
@@ -17,6 +17,7 @@ export const updateGitRepository = (id: string, data: GitRepositoryInput) => req
 export const deleteGitRepository = (id: string) => req<{ result: string }>('DELETE', `/api/v1/git-repositories/${id}`);
 export const validateGitRepository = (data: GitRepositoryInput) => req<{ commit_sha: string; images: GitDiscoveredImage[] }>('POST', '/api/v1/git-repositories/validate', data);
 export const listGitRepositoryRuns = (id: string) => req<{ data: GitRepositoryRun[] }>('GET', `/api/v1/git-repositories/${id}/runs`).then((result) => result.data ?? []);
+export const listGitRepositoryLatestImageScans = (id: string) => req<{ data: GitRepositoryLatestImageScan[] }>('GET', `/api/v1/git-repositories/${id}/latest-image-scans`).then((result) => result.data ?? []);
 export const runGitRepository = (id: string, options: { policy?: 'changed' | 'all'; selected_images?: string[] } = {}) => req<GitRepositoryRun>('POST', `/api/v1/git-repositories/${id}/runs`, options);
 export const listGitRepositoryImageExclusions = (id: string) => req<{ data: GitRepositoryImageExclusion[] }>('GET', `/api/v1/git-repositories/${id}/image-exclusions`).then((result) => result.data ?? []);
 export const createGitRepositoryImageExclusion = (id: string, full_ref: string) => req<GitRepositoryImageExclusion>('POST', `/api/v1/git-repositories/${id}/image-exclusions`, { full_ref });

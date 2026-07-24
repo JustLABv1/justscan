@@ -93,3 +93,10 @@ export interface GitRepositoryRunImage {
   state: string;
   scan_id?: string | null;
 }
+
+export interface GitRepositoryLatestImageScan {
+  full_ref: string;
+  scan_id: string;
+  status: string;
+  created_at: string;
+}

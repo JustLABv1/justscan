@@ -19,7 +19,7 @@ RUN CGO_ENABLED=0 go build -trimpath \
 
 # docker-cli is the smallest practical base for local-image scans: the CLI calls
 # Docker through its Unix socket, but it never runs a vulnerability scanner here.
-FROM docker:27-cli
+FROM docker:29-cli
 
 COPY --from=builder /out/justscan /usr/local/bin/justscan
 

@@ -2,102 +2,9 @@ import { Logo } from '@/components/logo';
 import { LandingButtonLink, LandingThemeToggle } from '@/components/landing/landing-controls';
 import { LandingGlitchHero } from '@/components/landing/landing-glitch-hero';
 import { LandingHeroIntro, LandingReveal } from '@/components/landing/landing-motion';
-import { FindingPreview, WatchlistPreview } from '@/components/landing/product-visuals';
-import { Chip, Link, Separator, Surface } from '@heroui/react';
-import {
-  ArrowUpRight01Icon,
-  Building04Icon,
-  FileExportIcon,
-  GridTableIcon,
-  Notification01Icon,
-  PackageIcon,
-  Search01Icon,
-  ServerStack01Icon,
-  Shield01Icon,
-} from 'hugeicons-react';
+import { Chip, Link, Separator } from '@heroui/react';
+import { ArrowUpRight01Icon } from 'hugeicons-react';
 import NextLink from 'next/link';
-import type { ComponentType } from 'react';
-
-type IconComponent = ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>;
-
-const CAPABILITIES: Array<{ title: string; description: string; Icon: IconComponent }> = [
-  {
-    title: 'Identity that fits',
-    description: 'Connect OIDC identity providers and map access into JustScan.',
-    Icon: Building04Icon,
-  },
-  {
-    title: 'Protected registry access',
-    description: 'Keep credentials for private registry workflows encrypted at rest.',
-    Icon: Shield01Icon,
-  },
-  {
-    title: 'Deployment control',
-    description: 'Run with Docker Compose or Helm on infrastructure you control.',
-    Icon: ServerStack01Icon,
-  },
-  {
-    title: 'Automation ready',
-    description: 'Use the API and CI/CD workflows to scan before release.',
-    Icon: GridTableIcon,
-  },
-];
-
-const WORKFLOW_STEPS = [
-  {
-    number: '01',
-    title: 'Connect the source',
-    description: 'Use an image, chart, private registry, Xray route, or archive.',
-    Icon: PackageIcon,
-  },
-  {
-    number: '02',
-    title: 'Scan and prioritize',
-    description: 'Review severity, package, fix, and policy context together.',
-    Icon: Search01Icon,
-  },
-  {
-    number: '03',
-    title: 'Monitor and share',
-    description: 'Carry results into watchlists, reports, SBOMs, and team workflows.',
-    Icon: Notification01Icon,
-  },
-] as const;
-
-function SectionHeading({
-  eyebrow,
-  title,
-  description,
-  centered = false,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  centered?: boolean;
-}) {
-  return (
-    <div className={centered ? 'mx-auto max-w-3xl text-center' : 'max-w-2xl'}>
-      <Chip color="accent" size="sm" variant="soft">
-        {eyebrow}
-      </Chip>
-      <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-[-0.035em] text-foreground sm:text-4xl lg:text-5xl">
-        {title}
-      </h2>
-      <p className={`mt-5 text-base leading-7 text-muted ${centered ? 'mx-auto max-w-2xl' : ''}`}>
-        {description}
-      </p>
-    </div>
-  );
-}
-
-function DetailPoint({ children }: { children: string }) {
-  return (
-    <li className="flex items-start gap-3 text-sm leading-6 text-muted">
-      <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-accent" />
-      <span>{children}</span>
-    </li>
-  );
-}
 
 export function LandingHeader() {
   return (
@@ -109,24 +16,23 @@ export function LandingHeader() {
         </NextLink>
 
         <nav aria-label="Primary navigation" className="hidden items-center gap-5 md:flex">
-          <Link className="text-sm text-muted" href="#product">
-            Product
+          <Link className="text-sm text-muted" href="#features">
+            Features
           </Link>
-          <Link className="text-sm text-muted" href="#capabilities">
-            Capabilities
+          <Link className="text-sm text-muted" href="#cli">
+            CLI
           </Link>
-          <Link className="text-sm text-muted" href="#workflow">
-            Workflow
+          <Link className="text-sm text-muted" href="#gitops">
+            GitOps
+          </Link>
+          <Link className="text-sm text-muted" href="#faq">
+            FAQ
           </Link>
         </nav>
 
         <div className="flex items-center gap-2">
           <LandingThemeToggle />
-          <Separator
-            className="hidden h-6 lg:block"
-            orientation="vertical"
-            variant="tertiary"
-          />
+          <Separator className="hidden h-6 lg:block" orientation="vertical" variant="tertiary" />
           <LandingButtonLink
             className="hidden lg:inline-flex"
             href="/login"
@@ -216,129 +122,6 @@ export function LandingProofStrip() {
   );
 }
 
-export function LandingProductStorySection() {
-  return (
-    <section id="product" className="scroll-mt-24 px-5 py-20 sm:px-6 lg:py-28">
-      <div className="mx-auto max-w-7xl space-y-24 lg:space-y-32">
-        <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-16">
-          <LandingReveal className="lg:col-span-5">
-            <Chip color="accent" size="sm" variant="soft">
-              Make decisions faster
-            </Chip>
-            <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-[-0.035em] text-foreground sm:text-4xl">
-              A scan result built for action.
-            </h2>
-            <p className="mt-5 text-base leading-7 text-muted">
-              Findings arrive with the context teams need to choose the next action—not another
-              dashboard to decode.
-            </p>
-            <ul className="mt-7 space-y-3">
-              <DetailPoint>
-                Start with critical and high exposure without losing the full result.
-              </DetailPoint>
-              <DetailPoint>
-                See fixed versions beside the affected package and vulnerability.
-              </DetailPoint>
-              <DetailPoint>
-                Keep organization and Xray policy signals in the decision flow.
-              </DetailPoint>
-            </ul>
-          </LandingReveal>
-          <LandingReveal className="lg:col-span-7" delay={0.06}>
-            <FindingPreview />
-          </LandingReveal>
-        </div>
-
-        <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-16">
-          <LandingReveal className="order-2 lg:order-1 lg:col-span-7" delay={0.06}>
-            <WatchlistPreview />
-          </LandingReveal>
-          <LandingReveal className="order-1 lg:order-2 lg:col-span-5">
-            <Chip color="accent" size="sm" variant="soft">
-              Stay ahead
-            </Chip>
-            <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-[-0.035em] text-foreground sm:text-4xl">
-              Keep risk visible after the first scan.
-            </h2>
-            <p className="mt-5 text-base leading-7 text-muted">
-              Watchlists keep recurring work focused while ownership and evidence remain attached.
-            </p>
-            <ul className="mt-7 space-y-3">
-              <DetailPoint>Schedule important images and surface newly disclosed CVEs.</DetailPoint>
-              <DetailPoint>
-                Group scans, suppressions, and reports around the responsible organization.
-              </DetailPoint>
-              <DetailPoint>
-                Move from detection to shared follow-up without duplicating context.
-              </DetailPoint>
-            </ul>
-          </LandingReveal>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export function LandingCapabilitiesSection() {
-  return (
-    <section id="capabilities" className="scroll-mt-24 px-5 py-20 sm:px-6 lg:py-28">
-      <div className="mx-auto max-w-7xl">
-        <LandingReveal>
-          <SectionHeading
-            centered
-            description="Bring a polished security workflow into the environment, identity model, and delivery process your organization already operates."
-            eyebrow="Built for your environment"
-            title="Control the workflow without adding friction."
-          />
-        </LandingReveal>
-
-        <LandingReveal className="mt-12" delay={0.06}>
-          <Surface
-            className="overflow-hidden rounded-2xl border border-foreground/20"
-            variant="secondary"
-          >
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4">
-              {CAPABILITIES.map(({ title, description, Icon }, index) => (
-                <div
-                  key={title}
-                  className={`px-6 py-7 ${index > 0 ? 'lg:border-l lg:border-foreground/15' : ''}`}
-                >
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
-                    <Icon aria-hidden size={20} />
-                  </div>
-                  <h3 className="mt-5 text-base font-semibold text-foreground">{title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-muted">{description}</p>
-                </div>
-              ))}
-            </div>
-            <Separator className="bg-foreground/15" variant="tertiary" />
-            <div
-              id="workflow"
-              className="scroll-mt-24 grid gap-6 px-6 py-7 md:grid-cols-3 md:gap-0"
-            >
-              {WORKFLOW_STEPS.map(({ number, title, description, Icon }, index) => (
-                <div
-                  key={title}
-                  className={`relative ${index > 0 ? 'md:border-l md:border-foreground/15 md:pl-7' : 'md:pr-7'}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-semibold tracking-[0.18em] text-accent">
-                      {number}
-                    </span>
-                    <Icon aria-hidden className="text-muted" size={18} />
-                  </div>
-                  <h3 className="mt-4 text-base font-semibold text-foreground">{title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-muted">{description}</p>
-                </div>
-              ))}
-            </div>
-          </Surface>
-        </LandingReveal>
-      </div>
-    </section>
-  );
-}
-
 export function LandingFinalCta() {
   return (
     <section className="relative overflow-hidden px-5 py-20 sm:px-6 lg:py-28">
@@ -388,8 +171,17 @@ export function LandingFooter() {
         </div>
 
         <nav aria-label="Footer navigation" className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <Link className="text-sm text-muted" href="#product">
-            Product
+          <Link className="text-sm text-muted" href="#features">
+            Features
+          </Link>
+          <Link className="text-sm text-muted" href="#cli">
+            CLI
+          </Link>
+          <Link className="text-sm text-muted" href="#gitops">
+            GitOps
+          </Link>
+          <Link className="text-sm text-muted" href="#faq">
+            FAQ
           </Link>
           <Link className="text-sm text-muted" href="/public/scan/image">
             Image scan

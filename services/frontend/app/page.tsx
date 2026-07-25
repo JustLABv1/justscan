@@ -1,12 +1,17 @@
 import {
-  LandingCapabilitiesSection,
   LandingFinalCta,
   LandingFooter,
   LandingHeader,
   LandingHeroSection,
-  LandingProductStorySection,
   LandingProofStrip,
 } from '@/components/landing/landing-sections';
+import {
+  LandingCliSection,
+  LandingCollectorsSection,
+  LandingFaqSection,
+  LandingFeatureOverviewSection,
+  LandingGitOpsSection,
+} from '@/components/landing/landing-feature-scenes';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -40,8 +45,11 @@ export default function Page() {
       <main id="main-content" className="relative z-10">
         <LandingHeroSection />
         <LandingProofStrip />
-        <LandingProductStorySection />
-        <LandingCapabilitiesSection />
+        <LandingFeatureOverviewSection />
+        <LandingCliSection />
+        <LandingGitOpsSection />
+        <LandingCollectorsSection />
+        <LandingFaqSection />
         <LandingFinalCta />
       </main>
       <LandingFooter />

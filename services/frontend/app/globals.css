@@ -67,6 +67,531 @@
     );
   }
 
+  .landing-hero-intro-item {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: landing-intro-enter 440ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+    animation-delay: calc(var(--landing-intro-index, 0) * 50ms);
+  }
+
+  .landing-reveal {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @supports (animation-timeline: view()) {
+    .landing-reveal {
+      animation: landing-reveal-enter linear both;
+      animation-delay: var(--landing-reveal-delay, 0s);
+      animation-range: entry 0% cover 18%;
+      animation-timeline: view();
+    }
+  }
+
+  .landing-stage {
+    background-color: color-mix(in oklab, var(--surface-secondary) 88%, transparent);
+    box-shadow:
+      inset 0 1px color-mix(in oklab, var(--foreground) 5%, transparent),
+      0 24px 70px color-mix(in oklab, var(--foreground) 7%, transparent);
+  }
+
+  .landing-technical-grid {
+    background-image:
+      linear-gradient(color-mix(in oklab, var(--divider) 48%, transparent) 1px, transparent 1px),
+      linear-gradient(
+        90deg,
+        color-mix(in oklab, var(--divider) 48%, transparent) 1px,
+        transparent 1px
+      );
+    background-size: 30px 30px;
+  }
+
+  .landing-stage-glow {
+    background:
+      radial-gradient(
+        circle at 72% 22%,
+        color-mix(in oklab, var(--accent) 14%, transparent),
+        transparent 34%
+      ),
+      linear-gradient(135deg, color-mix(in oklab, var(--surface) 45%, transparent), transparent 48%);
+  }
+
+  .landing-scene-node,
+  .landing-scanner-node {
+    display: flex;
+    width: 5.25rem;
+    height: 5.25rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border: 1px solid color-mix(in oklab, var(--divider) 85%, transparent);
+    border-radius: 1rem;
+    background: color-mix(in oklab, var(--surface) 92%, transparent);
+    color: var(--muted);
+    box-shadow: 0 12px 34px color-mix(in oklab, var(--foreground) 7%, transparent);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .landing-scanner-node {
+    width: 6.25rem;
+    height: 6.25rem;
+    overflow: hidden;
+    border-color: color-mix(in oklab, var(--accent) 34%, var(--divider));
+    color: var(--accent);
+  }
+
+  .landing-scene-track {
+    position: absolute;
+    height: 1px;
+    overflow: visible;
+    background: color-mix(in oklab, var(--divider) 90%, transparent);
+  }
+
+  .landing-scene-packet {
+    position: absolute;
+    top: -3px;
+    left: 0;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 16px color-mix(in oklab, var(--accent) 75%, transparent);
+    animation: landing-packet-travel 3.4s linear infinite;
+  }
+
+  .landing-scanner-beam {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 28%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--accent) 18%, transparent),
+      transparent
+    );
+    animation: landing-scanner-sweep 2.8s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+  }
+
+  .landing-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid color-mix(in oklab, var(--success) 30%, transparent);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--success) 8%, transparent);
+    padding: 0.2rem 0.5rem;
+    color: var(--success);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .landing-live-badge > span {
+    width: 0.35rem;
+    height: 0.35rem;
+    border-radius: 999px;
+    background: currentColor;
+    animation: landing-status-pulse 1.8s ease-in-out infinite;
+  }
+
+  .landing-finding-row {
+    animation: landing-row-emphasis 4.8s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  }
+
+  .landing-finding-scanline {
+    position: absolute;
+    inset-inline: 1.25rem;
+    top: 4.75rem;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--accent) 80%, transparent),
+      transparent
+    );
+    box-shadow: 0 0 18px color-mix(in oklab, var(--accent) 42%, transparent);
+    animation: landing-findings-scan 4.8s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+  }
+
+  .landing-radar {
+    background:
+      radial-gradient(circle, color-mix(in oklab, var(--accent) 8%, transparent), transparent 62%),
+      color-mix(in oklab, var(--surface) 72%, transparent);
+  }
+
+  .landing-radar-ring {
+    position: absolute;
+    border: 1px solid color-mix(in oklab, var(--divider) 72%, transparent);
+    border-radius: 999px;
+  }
+
+  .landing-radar-cross {
+    position: absolute;
+    background: color-mix(in oklab, var(--divider) 70%, transparent);
+  }
+
+  .landing-radar-cross-x {
+    top: 50%;
+    right: 0;
+    left: 0;
+    height: 1px;
+  }
+
+  .landing-radar-cross-y {
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+  }
+
+  .landing-radar-sweep {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      transparent 290deg,
+      color-mix(in oklab, var(--accent) 28%, transparent) 338deg,
+      transparent 360deg
+    );
+    animation: landing-radar-sweep 5.5s linear infinite;
+  }
+
+  .landing-radar-dot {
+    position: absolute;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 16px color-mix(in oklab, var(--accent) 65%, transparent);
+    animation: landing-radar-dot 3.6s ease-in-out infinite;
+  }
+
+  .landing-cli-line {
+    opacity: 0.38;
+    transform: translateY(4px);
+    animation: landing-cli-line 6s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  }
+
+  .landing-cli-spinner {
+    width: 0.85rem;
+    height: 0.85rem;
+    border: 1.5px solid color-mix(in oklab, var(--accent) 25%, transparent);
+    border-top-color: var(--accent);
+    border-radius: 999px;
+    animation: landing-spin 0.8s linear infinite;
+  }
+
+  .landing-cli-progress {
+    transform: scaleX(0.18);
+    transform-origin: left;
+    animation: landing-cli-progress 6s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  }
+
+  .landing-cli-verdict {
+    opacity: 0.35;
+    transform: translateY(6px);
+    animation: landing-cli-verdict 6s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  }
+
+  .landing-manifest-row {
+    animation: landing-manifest-pulse 5.4s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  }
+
+  .landing-gitops-packet {
+    position: absolute;
+    left: 0;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 70%, transparent);
+    animation: landing-gitops-packet 3.2s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+  }
+
+  .landing-collector-orbit {
+    position: absolute;
+    border: 1px dashed color-mix(in oklab, var(--accent) 28%, var(--divider));
+    border-radius: 999px;
+    animation: landing-orbit-turn 28s linear infinite;
+  }
+
+  .landing-collector-core::before,
+  .landing-collector-core::after {
+    position: absolute;
+    inset: -0.65rem;
+    border: 1px solid color-mix(in oklab, var(--accent) 32%, transparent);
+    border-radius: 2rem;
+    content: '';
+    opacity: 0;
+    animation: landing-collector-pulse 3.4s ease-out infinite;
+  }
+
+  .landing-collector-core::after {
+    animation-delay: 1.7s;
+  }
+
+  .landing-collector-node {
+    animation: landing-collector-node 4.6s ease-in-out infinite;
+  }
+
+  .landing-collector-signal {
+    position: absolute;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 75%, transparent);
+    animation: landing-signal-pulse 3.4s ease-in-out infinite;
+  }
+
+  @keyframes landing-intro-enter {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes landing-reveal-enter {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes landing-packet-travel {
+    0% {
+      opacity: 0;
+      transform: translateX(0);
+    }
+    12% {
+      opacity: 1;
+    }
+    88% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(clamp(10rem, 45vw, 20rem));
+    }
+  }
+
+  @keyframes landing-scanner-sweep {
+    0%,
+    18% {
+      opacity: 0;
+      transform: translateX(-120%);
+    }
+    32% {
+      opacity: 1;
+    }
+    70% {
+      opacity: 1;
+    }
+    82%,
+    100% {
+      opacity: 0;
+      transform: translateX(420%);
+    }
+  }
+
+  @keyframes landing-status-pulse {
+    0%,
+    100% {
+      opacity: 0.45;
+      transform: scale(0.92);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes landing-row-emphasis {
+    0%,
+    18%,
+    100% {
+      border-color: color-mix(in oklab, var(--divider) 70%, transparent);
+      transform: translateX(0);
+    }
+    26%,
+    44% {
+      border-color: color-mix(in oklab, var(--accent) 34%, var(--divider));
+      transform: translateX(3px);
+    }
+    54% {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes landing-findings-scan {
+    0%,
+    10% {
+      opacity: 0;
+      transform: translateY(0);
+    }
+    20% {
+      opacity: 1;
+    }
+    72% {
+      opacity: 1;
+    }
+    84%,
+    100% {
+      opacity: 0;
+      transform: translateY(9rem);
+    }
+  }
+
+  @keyframes landing-radar-sweep {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes landing-radar-dot {
+    0%,
+    100% {
+      opacity: 0.32;
+      transform: scale(0.92);
+    }
+    48%,
+    66% {
+      opacity: 1;
+      transform: scale(1.22);
+    }
+  }
+
+  @keyframes landing-cli-line {
+    0%,
+    8%,
+    100% {
+      opacity: 0.38;
+      transform: translateY(4px);
+    }
+    20%,
+    82% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes landing-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes landing-cli-progress {
+    0%,
+    10% {
+      transform: scaleX(0.18);
+    }
+    76%,
+    100% {
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes landing-cli-verdict {
+    0%,
+    68% {
+      opacity: 0.25;
+      transform: translateY(6px);
+    }
+    78%,
+    94% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    100% {
+      opacity: 0.25;
+      transform: translateY(3px);
+    }
+  }
+
+  @keyframes landing-manifest-pulse {
+    0%,
+    16%,
+    100% {
+      border-color: color-mix(in oklab, var(--divider) 70%, transparent);
+      transform: translateX(0);
+    }
+    27%,
+    43% {
+      border-color: color-mix(in oklab, var(--accent) 36%, var(--divider));
+      transform: translateX(3px);
+    }
+  }
+
+  @keyframes landing-gitops-packet {
+    0% {
+      opacity: 0;
+      transform: translateX(0);
+    }
+    18% {
+      opacity: 1;
+    }
+    76% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(4rem);
+    }
+  }
+
+  @keyframes landing-orbit-turn {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes landing-collector-pulse {
+    0% {
+      opacity: 0.55;
+      transform: scale(0.95);
+    }
+    75%,
+    100% {
+      opacity: 0;
+      transform: scale(1.25);
+    }
+  }
+
+  @keyframes landing-collector-node {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+
+  @keyframes landing-signal-pulse {
+    0%,
+    100% {
+      opacity: 0.25;
+      transform: scale(0.9);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.35);
+    }
+  }
+
   @starting-style {
     .scan-form-reveal {
       opacity: 0;
@@ -98,6 +623,44 @@
 
     [data-landing-motion] {
       transform: none !important;
+    }
+
+    .landing-hero-intro-item,
+    .landing-reveal {
+      animation: none !important;
+      opacity: 1;
+      transform: none;
+    }
+
+    .landing-scene-packet,
+    .landing-scanner-beam,
+    .landing-live-badge > span,
+    .landing-finding-row,
+    .landing-finding-scanline,
+    .landing-radar-sweep,
+    .landing-radar-dot,
+    .landing-cli-line,
+    .landing-cli-spinner,
+    .landing-cli-progress,
+    .landing-cli-verdict,
+    .landing-manifest-row,
+    .landing-gitops-packet,
+    .landing-collector-orbit,
+    .landing-collector-core::before,
+    .landing-collector-core::after,
+    .landing-collector-node,
+    .landing-collector-signal {
+      animation: none !important;
+    }
+
+    .landing-cli-line,
+    .landing-cli-verdict {
+      opacity: 1;
+      transform: none;
+    }
+
+    .landing-cli-progress {
+      transform: scaleX(1);
     }
 
     @starting-style {

@@ -20,7 +20,23 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN pnpm run build
 
-# Stage 2: Build the backend
+# Stage 2: Build the documentation service
+FROM node:25.9.0-alpine AS docs-builder
+WORKDIR /app/docs
+
+RUN npm install -g pnpm
+RUN apk add --no-cache libc6-compat
+
+COPY services/docs/package.json services/docs/pnpm-lock.yaml services/docs/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+COPY services/docs/ ./
+
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN pnpm run build
+
+# Stage 3: Build the backend
 FROM golang:1.26-alpine AS backend-builder
 WORKDIR /app/backend
 COPY services/backend/go.mod services/backend/go.sum ./
@@ -28,7 +44,7 @@ RUN go mod download
 COPY services/backend/ ./
 RUN go build -o justscan-backend
 
-# Stage 3: Create the final image
+# Stage 4: Create the final image
 FROM base AS runner
 WORKDIR /app
 
@@ -64,6 +80,12 @@ RUN mkdir .next \
 COPY --from=frontend-builder --chown=nextjs:nodejs /app/frontend/.next/standalone ./
 COPY --from=frontend-builder --chown=nextjs:nodejs /app/frontend/.next/static ./.next/static
 
+# Copy the documentation standalone server into its own directory so it can
+# run beside the frontend process on an internal port.
+COPY --from=docs-builder --chown=nextjs:nodejs /app/docs/public /app/docs/public
+COPY --from=docs-builder --chown=nextjs:nodejs /app/docs/.next/standalone /app/docs/
+COPY --from=docs-builder --chown=nextjs:nodejs /app/docs/.next/static /app/docs/.next/static
+
 RUN chown -R nextjs:nodejs /app
 
 RUN mkdir -p /etc/justscan \
@@ -81,12 +103,12 @@ ENV TRIVY_CACHE_DIR=/app/data/trivy-cache
 VOLUME [ "/etc/justscan", "/app/data" ]
 
 # Expose ports
-EXPOSE 8080 3000
+EXPOSE 8080 3000 3001
 
 USER nextjs
 
 # Use tini as the entrypoint
 ENTRYPOINT ["/sbin/tini", "--", "/app/docker-entrypoint.sh"]
 
-# Start the backend and frontend
-CMD ["sh", "-c", "./justscan-backend --config /etc/justscan/config.yaml & node /app/server.js"]
+# Start the backend, frontend, and documentation service.
+CMD ["sh", "-c", "./justscan-backend --config /etc/justscan/config.yaml & PORT=3001 HOSTNAME=0.0.0.0 node /app/docs/server.js & node /app/server.js"]

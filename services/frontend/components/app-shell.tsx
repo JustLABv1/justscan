@@ -782,7 +782,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     <Dropdown.Menu
                       onAction={(key) => {
                         if (key === 'settings') router.push('/profile');
-                        if (key === 'api-docs') window.open('/swagger/index.html', '_blank');
+                        if (key === 'documentation') window.open('/docs', '_blank');
                         if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
                         if (key === 'retake-tour') handleRetakeWorkspaceTour();
                         if (key === 'signout') handleLogout();
@@ -800,10 +800,10 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                           <Label>{themeToggleTitle}</Label>
                         </div>
                       </Dropdown.Item>
-                      <Dropdown.Item id="api-docs" textValue="API Docs">
+                      <Dropdown.Item id="documentation" textValue="Documentation">
                         <div className="flex items-center gap-2">
                           <FileExportIcon size={14} className="text-muted" />
-                          <Label>API Docs</Label>
+                          <Label>Documentation</Label>
                         </div>
                       </Dropdown.Item>
                       <Dropdown.Item id="retake-tour" textValue="Retake tour">
@@ -1058,8 +1058,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                     router.push('/profile');
                                     setMobileNavOpen(false);
                                   }
-                                  if (key === 'api-docs') {
-                                    window.open('/swagger/index.html', '_blank');
+                                  if (key === 'documentation') {
+                                    window.open('/docs', '_blank');
                                     setMobileNavOpen(false);
                                   }
                                   if (key === 'theme') {
@@ -1097,10 +1097,10 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                     </div>
                                   </div>
                                 </Dropdown.Item>
-                                <Dropdown.Item key="api-docs" id="api-docs" textValue="API Docs">
+                                <Dropdown.Item key="documentation" id="documentation" textValue="Documentation">
                                   <div className="flex items-center gap-2">
                                     <FileExportIcon size={14} className="text-zinc-500" />
-                                    <Label>API Docs</Label>
+                                    <Label>Documentation</Label>
                                   </div>
                                 </Dropdown.Item>
                                 <Dropdown.Item
@@ -1176,7 +1176,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       <Dropdown.Menu
                         onAction={(key) => {
                           if (key === 'settings') router.push('/profile');
-                          if (key === 'api-docs') window.open('/swagger/index.html', '_blank');
+                          if (key === 'documentation') window.open('/docs', '_blank');
                           if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
                           if (key === 'retake-tour') handleRetakeWorkspaceTour();
                           if (key === 'signout') handleLogout();
@@ -1202,10 +1202,10 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                             <Label>{themeToggleTitle}</Label>
                           </div>
                         </Dropdown.Item>
-                        <Dropdown.Item key="api-docs" id="api-docs" textValue="API Docs">
+                        <Dropdown.Item key="documentation" id="documentation" textValue="Documentation">
                           <div className="flex items-center gap-2">
                             <FileExportIcon size={14} className="text-zinc-500" />
-                            <Label>API Docs</Label>
+                            <Label>Documentation</Label>
                           </div>
                         </Dropdown.Item>
                         <Dropdown.Item key="retake-tour" id="retake-tour" textValue="Retake Tour">

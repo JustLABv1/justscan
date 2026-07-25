@@ -395,7 +395,7 @@ export function LandingCliSection() {
               showArrow
             />
             <LandingButtonLink
-              href="https://github.com/JustLABv1/justscan/blob/main/docs/justscan-cli.md"
+              href="/docs/integrations/cli"
               label="Read the guide"
               variant="outline"
             />

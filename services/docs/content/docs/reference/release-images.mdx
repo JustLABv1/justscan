@@ -1,0 +1,14 @@
+---
+title: Release images
+description: Reference the published JustScan container image families.
+---
+
+| Image tag | Purpose |
+| --- | --- |
+| `backend-<version>` | Standard backend with local scanner support |
+| `backend-minimal-<version>` | Xray-only backend without local scanners |
+| `frontend-<version>` | Next.js application frontend |
+| `docs-<version>` | Fumadocs documentation service |
+| `<version>` | Combined backend, frontend, and documentation image |
+
+Use the same release version for every service. Stable releases also publish `latest`; beta releases publish the matching beta tags.

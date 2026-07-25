@@ -43,12 +43,23 @@ services:
       backend:
         condition: service_healthy
 
+  docs:
+    image: ghcr.io/justlabv1/justscan:docs-${JUSTSCAN_VERSION:-latest}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/docs"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   nginx:
     image: nginx:alpine
     restart: unless-stopped
     depends_on:
       - frontend
       - backend
+      - docs
     ports:
       - "${HTTP_PORT:-80}:80"
     volumes:

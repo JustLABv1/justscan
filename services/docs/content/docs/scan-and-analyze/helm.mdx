@@ -1,0 +1,10 @@
+---
+title: Scan Helm charts
+description: Extract workload images from a Helm chart and submit them for analysis.
+---
+
+The Helm workflow renders a chart, extracts images from Kubernetes workloads, and creates scans for the selected images. It is useful when image references are defined by chart values rather than a single deployable artifact.
+
+Use the public Helm scan page for an exploratory scan, or use an authenticated workspace when the resulting evidence, policy verdicts, and ownership should be retained.
+
+For repository-based Helm and Kustomize layouts, use [GitOps discovery](/scan-and-analyze/gitops).

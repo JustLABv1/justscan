@@ -1,0 +1,16 @@
+---
+title: Configuration
+description: Configure backend behavior through YAML and BACKEND_ environment variables.
+---
+
+The backend reads `/etc/justscan/config.yaml` and applies `BACKEND_` environment variables as overrides. Replace dots with underscores in environment variable names.
+
+Important settings include:
+
+- `allow_origins` for browser origins that can call the backend
+- `scanner.enable_trivy`, `scanner.enable_grype`, timeouts, concurrency, and database age
+- `vuln_kb.nvd_api_key` and cache duration
+- `security.allow_insecure_defaults` for local development only
+- `local_auth.enabled` and OIDC configuration stored through the administration flow
+
+Use [authentication](/operate/authentication) and [scanner configuration](/operate/scanners-and-xray) alongside the full [configuration reference](/reference/backend-configuration).

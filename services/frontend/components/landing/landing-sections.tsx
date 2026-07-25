@@ -28,6 +28,9 @@ export function LandingHeader() {
           <Link className="text-sm text-muted" href="#faq">
             FAQ
           </Link>
+          <Link className="text-sm text-muted" href="/docs">
+            Docs
+          </Link>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -182,6 +185,9 @@ export function LandingFooter() {
           </Link>
           <Link className="text-sm text-muted" href="#faq">
             FAQ
+          </Link>
+          <Link className="text-sm text-muted" href="/docs">
+            Docs
           </Link>
           <Link className="text-sm text-muted" href="/public/scan/image">
             Image scan

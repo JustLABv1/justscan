@@ -1,0 +1,10 @@
+---
+title: Authentication and OIDC
+description: Configure local authentication and OpenID Connect for JustScan.
+---
+
+JustScan supports local username/password authentication and OIDC. Configure the identity provider from administration, register the backend callback URL, and list the application URL in `allow_origins`.
+
+The OIDC redirect URI must exactly match the provider registration. The first `allow_origins` value is used as the post-login destination and for notification links.
+
+Group and role claims can grant the JustScan administrator role. Mapping is evaluated at every OIDC login, so removed membership takes effect on the user's next sign-in. Set `local_auth.enabled: false` only after confirming that OIDC sign-in works for administrators.

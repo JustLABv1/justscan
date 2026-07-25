@@ -1,0 +1,17 @@
+---
+title: Backend configuration reference
+description: Reference the most important JustScan backend configuration settings.
+---
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `port` | `8080` | Backend HTTP port |
+| `allow_origins` | Local frontend origins | Browser origins allowed by CORS |
+| `scanner.enable_trivy` | `true` | Enable local Trivy scans |
+| `scanner.enable_grype` | `false` | Enable Grype augmentation |
+| `scanner.concurrency` | `2` | Maximum concurrent scanner workers |
+| `scanner.command_timeout_seconds` | `7200` | Scanner process timeout |
+| `vuln_kb.cache_days` | `7` | NVD enrichment cache lifetime |
+| `local_auth.enabled` | `true` | Enable username/password login |
+
+Every setting can be overridden with a `BACKEND_` environment variable using underscore-separated names. For example, `scanner.concurrency` becomes `BACKEND_SCANNER_CONCURRENCY`.

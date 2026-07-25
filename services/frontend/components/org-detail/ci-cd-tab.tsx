@@ -208,7 +208,7 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                 render={(props: any) => (
                   <a
                     {...props}
-                    href="https://github.com/JustLABv1/justscan/blob/main/docs/justscan-cli.md"
+                    href="/docs/integrations/cli"
                     target="_blank"
                     rel="noreferrer"
                   />

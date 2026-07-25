@@ -1,0 +1,12 @@
+{
+  "title": "JustScan documentation",
+  "pages": [
+    "index",
+    "getting-started",
+    "scan-and-analyze",
+    "organize-and-govern",
+    "integrations",
+    "operate",
+    "reference"
+  ]
+}

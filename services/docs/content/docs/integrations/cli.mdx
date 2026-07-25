@@ -1,0 +1,29 @@
+---
+title: JustScan CLI
+description: Install, authenticate, and use the CLI for local and CI-driven scans.
+---
+
+The `justscan` CLI submits work to a running JustScan instance. It does not include or execute a vulnerability scanner locally.
+
+## Install
+
+Download a release binary from the [latest GitHub release](https://github.com/JustLABv1/justscan/releases/latest), or build it from source:
+
+```sh
+cd services/cli
+go build ./cmd/justscan
+```
+
+## Configure a profile
+
+```sh
+justscan config set production \
+  --server https://justscan.example.com \
+  --org 00000000-0000-0000-0000-000000000000
+```
+
+For interactive use, run `justscan login --profile production --email you@example.com`. For CI, set `JUSTSCAN_TOKEN` to an organization token with the `pipeline_scan` scope.
+
+## Exit codes
+
+`0` means the policy passed, `1` means the policy failed, and `2` means an operational or scan-execution error. See [CI/CD](/integrations/ci-cd) for examples.

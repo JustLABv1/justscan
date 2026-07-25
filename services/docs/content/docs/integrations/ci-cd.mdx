@@ -1,0 +1,15 @@
+---
+title: CI/CD integration
+description: Run policy-aware scans in pipelines and use their final verdict safely.
+---
+
+Use the CLI for most pipelines. It handles profiles, authentication, registry scans, local Docker or Podman images, archives, polling, and exit codes.
+
+```sh
+export JUSTSCAN_TOKEN="<pipeline-scoped-org-token>"
+justscan scan registry.example.com/my-app:${GIT_SHA}
+```
+
+The CLI waits for the final verdict by default. A successful command means the policy passed; a policy failure exits `1`; infrastructure or scan problems exit `2`.
+
+Use the [GitHub Actions](/integrations/github-actions), [GitLab CI](/integrations/gitlab-ci), and [callback guide](/integrations/callbacks-and-n8n) for provider-specific patterns.

@@ -1,0 +1,4 @@
+{
+  "title": "Scan and analyze",
+  "pages": ["images-and-archives", "helm", "gitops", "registries-and-xray", "findings-and-sbom", "watchlists-and-vuln-kb"]
+}

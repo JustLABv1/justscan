@@ -84,6 +84,18 @@ Defaults to frontend-<Chart.appVersion> when not overridden.
 {{- end }}
 
 {{/*
+Resolved documentation image tag.
+Defaults to docs-<Chart.appVersion> when not overridden.
+*/}}
+{{- define "justscan.docs.imageTag" -}}
+{{- if .Values.docs.image.tag }}
+{{- .Values.docs.image.tag }}
+{{- else }}
+{{- printf "docs-%s" .Chart.AppVersion }}
+{{- end }}
+{{- end }}
+
+{{/*
 Name of the Secret that holds JustScan backend secrets.
 Returns the existingSecret name when set, otherwise the generated name.
 */}}

@@ -12,6 +12,14 @@ services/frontend/coverage
 services/frontend/.next/
 services/frontend/out/
 
+# Documentation service
+services/docs/node_modules
+services/docs/.next/
+services/docs/out/
+services/docs/next-env.d.ts
+services/docs/*.tsbuildinfo
+services/docs/.source/
+
 .venv
 
 # production

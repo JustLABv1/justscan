@@ -92,8 +92,8 @@ For an interactive user session, run `justscan login --profile production --emai
 The CLI prompts for the password and stores the credential in the system keychain; use
 `JUSTSCAN_TOKEN` only for CI/CD or other unattended automation.
 
-See [the CLI guide](docs/justscan-cli.md) and [the CI/CD API guide](docs/ci-cd-pipeline-api.md)
-for options and provider examples.
+After deployment, open `/docs` on the same JustScan host for the CLI guide, CI/CD provider
+examples, GitOps discovery, operator configuration, and troubleshooting.
 
 ## Quick Start
 

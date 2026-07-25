@@ -1,0 +1,10 @@
+---
+title: Scanners and Xray
+description: Choose a scanner image and configure Trivy, Grype, or Artifactory Xray.
+---
+
+The standard backend image includes Trivy and can enable Grype augmentation. The `backend-minimal` image is for Xray-only deployments and requires both `scanner.enable_trivy` and `scanner.enable_grype` to be false.
+
+Tune concurrency and command timeouts to match the image size, registry bandwidth, and available CPU. JustScan refreshes vulnerability databases automatically; persistent backend data avoids repeatedly rebuilding those caches.
+
+See [registry and Xray modes](/scan-and-analyze/registries-and-xray) for the credentials and behavior expected by each Xray mode.

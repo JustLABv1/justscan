@@ -1,0 +1,36 @@
+---
+title: GitOps repository discovery
+description: Discover deployment images from Kustomize, Helm, and plain Kubernetes manifests.
+---
+
+Connect a Git repository in the application, validate access, then run discovery before scheduling scans. A dry run discovers candidates only; it never queues scans.
+
+## Discovery modes
+
+- **Auto** detects unreferenced Kustomize roots and falls back to Kubernetes workload manifests.
+- **Kustomize entrypoints** renders only operator-selected repository paths.
+- **Plain Kubernetes manifests** extracts images from `containers`, `initContainers`, and `ephemeralContainers`.
+
+## Repository-owned configuration
+
+Place a `.justscan.yaml` file at the repository root when one repository mixes Kustomize, direct Helm charts, and selected manifest paths. It takes precedence over the connector's discovery mode.
+
+```yaml
+version: 1
+discovery:
+  sources:
+    - type: kustomize
+      root: envs
+    - type: manifests
+      paths:
+        - manifests
+    - type: helm
+      chart: charts/standalone-service
+      releaseName: standalone-service
+      values:
+        - envs/demo/values.yaml
+```
+
+- A `kustomize` source accepts a discovery `root` or explicit `paths` to `kustomization.yaml` files.
+- A `manifests` source requires `paths` to plain Kubernetes YAML files or directories.
+- A `helm` source requires a local chart directory. Dependencies must already be present in the repository because JustScan does not update them during discovery.

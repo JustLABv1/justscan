@@ -1,0 +1,20 @@
+---
+title: Core concepts
+description: Understand JustScan's scan engines, workspaces, evidence, and policy results.
+---
+
+## Scan engines
+
+JustScan can scan with Trivy, optionally augment Trivy results with Grype, or use Artifactory Xray. The selected registry provider determines how an image is analyzed.
+
+## Workspaces and organizations
+
+Personal workspaces hold work owned by one user. Organizations provide shared scans, registries, policies, tokens, members, and audit history. Ownership and organization grants control who can see and manage a resource.
+
+## Scan evidence
+
+A completed scan includes image metadata, vulnerability findings, SBOM data when available, scanner progress, policy evaluation, and optional comments or manual findings. Scans can be rescanned, compared, exported, shared, or assigned to an organization.
+
+## Policy verdicts
+
+Organization policies evaluate scan findings. CI/CD callers receive a final verdict so a workflow can pass, fail, or report an operational error predictably.

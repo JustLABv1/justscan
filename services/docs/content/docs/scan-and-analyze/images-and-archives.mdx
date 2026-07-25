@@ -1,0 +1,19 @@
+---
+title: Scan images and archives
+description: Scan registry images, local Docker or Podman images, and Docker or OCI archives.
+---
+
+Registry scans let JustScan pull an image from a configured registry. For images available only on a developer machine or CI runner, the CLI streams a Docker or Podman archive to JustScan; it does not run a vulnerability scanner locally.
+
+```sh
+# JustScan pulls this image from the configured registry.
+justscan scan registry.example.com/team/api:1.2.3
+
+# Stream an image from Docker without creating a temporary archive.
+justscan scan --local team/api:ci
+
+# Upload an existing Docker or OCI archive.
+justscan scan --archive ./team-api.tar --name team-api --tag ci
+```
+
+Archives must be `.tar`, `.tar.gz`, or `.tgz` and can be up to 5 GiB. Use a pipeline-scoped organization token for unattended work; see [CLI authentication](/integrations/cli#authentication).

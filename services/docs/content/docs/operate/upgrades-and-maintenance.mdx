@@ -1,0 +1,10 @@
+---
+title: Upgrades and maintenance
+description: Upgrade safely, protect persistent data, and monitor scanner health.
+---
+
+Use matching backend, frontend, and docs image tags for each JustScan release. Database migrations run during backend startup, so take a PostgreSQL backup before a production upgrade.
+
+Back up PostgreSQL and the backend data volume. Preserve the encryption key with the backup because it is required to restore encrypted registry credentials.
+
+Monitor backend health at `/api/v1/health`, scanner health in administration, scan queue activity, notification delivery logs, and audit records. Investigate stale scans before increasing timeouts globally.

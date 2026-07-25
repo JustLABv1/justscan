@@ -1,0 +1,8 @@
+---
+title: Roles and token scopes
+description: Apply least privilege to user access and automation tokens.
+---
+
+Use organization roles for people and scoped tokens for automation. Administrators manage global configuration, scanner settings, identity, and system-wide resources. Organization access controls shared work while ownership and organization grants control each resource.
+
+For CI, create a dedicated organization token with only `pipeline_scan`. Rotate and revoke it through the organization token screen rather than reusing a personal credential.

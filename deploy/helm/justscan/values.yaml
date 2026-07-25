@@ -167,6 +167,26 @@ frontend:
   extraEnv: []
 
 # ------------------------------------------------------------------
+# Documentation
+# ------------------------------------------------------------------
+docs:
+  image:
+    repository: ghcr.io/justlabv1/justscan
+    # When empty, the chart defaults to docs-<Chart.appVersion>.
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  resources: {}
+
+  service:
+    type: ClusterIP
+    port: 3000
+
+  extraEnv: []
+
+# ------------------------------------------------------------------
 # Ingress
 # ------------------------------------------------------------------
 ingress:

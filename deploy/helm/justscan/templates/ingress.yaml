@@ -37,6 +37,14 @@ spec:
                 name: {{ include "justscan.fullname" $ }}-backend
                 port:
                   number: {{ $.Values.backend.service.port }}
+          # Product documentation
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "justscan.fullname" $ }}-docs
+                port:
+                  number: {{ $.Values.docs.service.port }}
           # Everything else → frontend
           - path: /
             pathType: Prefix
@@ -47,4 +55,3 @@ spec:
                   number: {{ $.Values.frontend.service.port }}
     {{- end }}
 {{- end }}
-

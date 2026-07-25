@@ -1,0 +1,14 @@
+---
+title: CLI environment variables and exit codes
+description: Reference non-secret CLI profiles, CI tokens, and final verdict behavior.
+---
+
+Profiles store an instance URL, organization ID, and optional CA certificate path. They never store access tokens.
+
+| Variable | Purpose |
+| --- | --- |
+| `JUSTSCAN_TOKEN` | Pipeline-scoped organization token for unattended scans |
+| `JUSTSCAN_URL` | Instance URL when configured by environment |
+| `JUSTSCAN_ORG_ID` | Target organization ID when configured by environment |
+
+Exit code `0` means policy pass, `1` means policy fail, and `2` means an operational error. Never interpret an operational error as a policy pass.

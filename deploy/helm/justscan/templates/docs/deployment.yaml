@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "justscan.fullname" . }}-docs
+  labels:
+    {{- include "justscan.labels" . | nindent 4 }}
+    app.kubernetes.io/component: docs
+spec:
+  replicas: {{ .Values.docs.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "justscan.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: docs
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "justscan.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: docs
+    spec:
+      serviceAccountName: {{ include "justscan.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: docs
+          image: {{ printf "%s:%s" .Values.docs.image.repository (include "justscan.docs.imageTag" .) | quote }}
+          imagePullPolicy: {{ .Values.docs.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.docs.service.port }}
+              protocol: TCP
+          {{- with .Values.docs.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /docs
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /docs
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          {{- with .Values.docs.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -134,8 +134,9 @@ This builds both images and starts all services. On first run, the backend autom
 
 ### 4. Open the app
 
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8080/api/v1
+- Application: http://localhost
+- Documentation: http://localhost/docs
+- Backend API: http://localhost/api/v1
 
 ---
 

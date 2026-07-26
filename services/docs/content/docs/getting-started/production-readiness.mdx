@@ -1,0 +1,28 @@
+---
+title: Production readiness
+description: Confirm the infrastructure, identity, data, and operating prerequisites before a production rollout.
+---
+
+Use this checklist before making JustScan part of a deployment gate. It separates a successful installation from a supportable production service.
+
+## Infrastructure and network
+
+- Choose one public HTTPS hostname that will serve the application, `/api`, `/swagger`, and `/docs`.
+- Provide PostgreSQL storage and persistent backend storage. The backend volume retains scanner and vulnerability-data caches; PostgreSQL retains product data.
+- Size backend CPU, memory, storage, and scanner concurrency for the largest images and the expected number of concurrent scans. Start conservatively, then use queue activity and scan duration to tune concurrency.
+- Make the public hostname available to browsers, OIDC, CI runners, registries, and any approved callback receivers.
+
+## Security and recovery
+
+- Generate distinct JWT and encryption secrets with at least 32 characters. The encryption key is required to decrypt stored registry credentials after a restore.
+- Decide whether local authentication remains enabled. If OIDC is required, retain an administrator recovery path until sign-in has been tested.
+- Put database passwords, JWT secrets, encryption keys, registry credentials, and automation tokens in the platform secret manager or Kubernetes Secrets; never commit them to a values file.
+- Define PostgreSQL and backend-volume backup ownership, retention, restore testing, and secret recovery before production data is created.
+
+## Rollout gates
+
+1. Deploy the selected topology from [Docker Compose](/operate/docker-compose) or [Helm](/operate/helm).
+2. Confirm `/api/v1/health` is healthy through the intended route and verify `/docs` and `/swagger` resolve on the same hostname.
+3. Test login, create an organization, add a test registry, and complete a small image scan.
+4. Test the notification channel and pipeline token without making the policy result blocking.
+5. Record the release image tags and the current backup restore procedure in the operations runbook.

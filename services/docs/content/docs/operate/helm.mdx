@@ -13,4 +13,6 @@ helm upgrade --install justscan oci://ghcr.io/justlabv1/charts/justscan \
   --set postgresql.auth.password="<database-password>"
 ```
 
-Use a values file for production. Keep secrets in a pre-existing Kubernetes Secret when your platform manages them centrally.
+Use a values file for production. Keep secrets in a pre-existing Kubernetes Secret when your platform manages them centrally. Set the public HTTPS URL in `backend.config.allowOrigins`, configure ingress TLS and archive upload limits, and choose a persistent storage class for PostgreSQL and any enabled backend persistence.
+
+When `postgresql.enabled=false`, configure the external database server and provide `backend.secrets.dbPassword`. The chart creates separate backend, frontend, and documentation services; ingress exposes documentation at `/docs`.

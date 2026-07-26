@@ -1,17 +1,27 @@
 ---
 title: JustScan documentation
-description: Deploy, configure, and operate self-hosted container image security.
+description: The current-release guide for deploying, securing, integrating, and operating JustScan.
 ---
 
-JustScan helps teams scan container images and Helm charts, investigate findings, and apply organization policy before software ships.
+JustScan helps teams scan container images and Helm charts, investigate findings, and apply organization policy before software ships. This portal documents the current JustScan release running in your environment. Use the [release image reference](/reference/release-images) when planning an upgrade.
 
 <img src="/docs/architecture.svg" alt="JustScan deployment topology" />
 
-## Start here
+## Choose your path
 
-- [Quick start](/getting-started/quick-start) installs a local development instance.
-- [Choose a scan source](/getting-started/scan-sources) explains registry, local image, archive, Helm, and GitOps scans.
-- [Docker Compose](/operate/docker-compose) and [Helm](/operate/helm) cover supported production deployments.
+| Your role | Start here | Continue with |
+| --- | --- | --- |
+| Platform administrator | [Plan a production deployment](/operate/production-deployment) | [Configure identity](/operate/authentication), [scanners](/operate/scanners-and-xray), and [operations](/operate/observability-and-maintenance). |
+| Security administrator | [Create an organization](/organize-and-govern/organizations-and-access) | [Set policy](/organize-and-govern/policies-and-compliance), notifications, and accepted-risk controls. |
+| Developer or pipeline owner | [Run a first scan](/getting-started/first-scan) | [Install the CLI](/integrations/cli) and add a CI quality gate. |
+
+## Recommended rollout
+
+1. Confirm [production readiness](/getting-started/production-readiness), select [Docker Compose](/operate/docker-compose) or [Helm](/operate/helm), and verify the service health endpoint.
+2. Configure local authentication or [OIDC](/operate/authentication), then create the first organization, roles, and automation token.
+3. Add and test a registry, complete a first scan, and review findings, SBOM evidence, and the policy verdict.
+4. Start policy in report-only practice, set up notifications, then make the final verdict a [CI/CD gate](/integrations/ci-cd).
+5. Establish the backup, upgrade, monitoring, and troubleshooting routines before relying on JustScan for release decisions.
 
 ## Common tasks
 
@@ -19,5 +29,6 @@ JustScan helps teams scan container images and Helm charts, investigate findings
 - [Create an organization policy](/organize-and-govern/policies-and-compliance)
 - [Run JustScan in CI/CD](/integrations/ci-cd)
 - [Configure OIDC](/operate/authentication)
+- [Recover from an operational problem](/operate/troubleshooting)
 
 For endpoint-level exploration, use the <a href="/swagger/index.html">interactive API reference</a>.

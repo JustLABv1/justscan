@@ -1,4 +1,4 @@
 {
   "title": "Get started",
-  "pages": ["quick-start", "concepts", "scan-sources"]
+  "pages": ["quick-start", "production-readiness", "first-scan", "concepts", "scan-sources"]
 }

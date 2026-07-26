@@ -7,7 +7,7 @@ The Compose deployment routes public traffic through nginx. It exposes the appli
 
 ## Configure
 
-Create `.env` beside `docker-compose.yml` and set `POSTGRES_PASSWORD`. It must match `database.password` in `backend-config.yaml`.
+Create `.env` beside `docker-compose.yml` and set `POSTGRES_PASSWORD`. It must match `database.password` in `backend-config.yaml`. For production, also replace the development-safe JWT and encryption configuration in `backend-config.yaml` with secrets delivered through your host or deployment process.
 
 ```sh
 cd deploy/docker-compose
@@ -23,4 +23,4 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker compose down -v` removes PostgreSQL and backend data volumes. Back up data before using it.
+`docker compose down -v` removes PostgreSQL and backend data volumes. Back up data before using it. Verify the public hostname returns `/`, `/docs`, `/swagger`, and `/api/v1/health` after any nginx or image change.

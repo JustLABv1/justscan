@@ -5,6 +5,6 @@ description: Protect credentials and trust internal certificate authorities.
 
 Production startup requires a JWT secret and encryption key of at least 32 characters. The encryption key protects registry credentials at rest; losing it prevents JustScan from decrypting existing credentials.
 
-Use Kubernetes Secrets or deployment-specific secret injection instead of committing sensitive values. The Helm chart can mount PEM files from a ConfigMap or Secret and appends them to the backend's runtime trust bundle.
+Use Kubernetes Secrets or deployment-specific secret injection instead of committing sensitive values. The Helm chart can mount PEM files from a ConfigMap or Secret and appends them to the backend's runtime trust bundle. Use custom CAs for internal registries, Artifactory, identity providers, or HTTPS artifact sources only when the backend must trust a private certificate chain.
 
-Pipeline callbacks are limited to public HTTPS addresses by default. Add private hosts or CIDRs only when you operate and trust the callback receiver.
+Pipeline callbacks are limited to public HTTPS addresses by default. Add private hosts or CIDRs only when you operate and trust the callback receiver. Callback targets do not follow redirects; validate received payloads before any downstream deployment action.

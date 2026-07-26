@@ -1,0 +1,21 @@
+---
+title: Scan lifecycle and release decision
+description: Understand how an artifact becomes scan evidence and a policy-aware CI decision.
+---
+
+Every JustScan workflow follows the same decision path: identify an artifact, submit it to a configured scanner provider, collect evidence, evaluate organization policy, and expose the terminal outcome to people or automation.
+
+<img src="/docs/pipeline-flow.svg" alt="CI build submits to JustScan, which analyzes with Trivy, Grype, or Xray, evaluates policy, and returns either continue or stop and review" />
+
+## Lifecycle states
+
+1. **Submission:** the application, CLI, or API accepts a registry image, local image archive, Helm-derived image, or GitOps-discovered image.
+2. **Analysis:** JustScan pulls or receives the artifact and uses the selected provider. Scan step details reveal whether work is queued, active, waiting on Xray, importing results, or needs attention.
+3. **Evidence:** completed scans expose findings, package details, available SBOM data, policy context, comments, and comparisons.
+4. **Verdict:** organization policy evaluates the completed evidence. A policy failure is distinct from an operational or scan-execution error.
+
+## Choose the source deliberately
+
+Use a registry image when JustScan can authenticate to the registry; use CLI local-image or archive mode for unpublished build outputs; use Helm for rendered chart workloads; and use GitOps discovery for continuously managed deployment repositories. See [scan sources](/getting-started/scan-sources) for the selection table.
+
+For CI, make the terminal verdict the gate. The CLI returns `0` for pass, `1` for policy failure, and `2` for an operational error. Do not configure a fallback that turns errors into a release pass.

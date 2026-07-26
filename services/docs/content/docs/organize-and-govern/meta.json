@@ -1,4 +1,4 @@
 {
   "title": "Organize and govern",
-  "pages": ["organizations-and-access", "policies-and-compliance", "ownership-sharing-and-suppressions", "notifications-and-status-pages", "ai-assistant"]
+  "pages": ["organizations-and-access", "identity-and-access", "policies-and-compliance", "ownership-sharing-and-suppressions", "notifications-and-status-pages", "audit-and-governance", "ai-assistant"]
 }

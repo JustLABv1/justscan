@@ -1,0 +1,20 @@
+---
+title: Observe and maintain JustScan
+description: Monitor health, scan progress, notifications, and maintenance changes before they affect delivery workflows.
+---
+
+Treat JustScan as a release-decision service once CI depends on policy outcomes. Monitor the service and its dependencies, then keep a visible maintenance process for changes.
+
+## Signals to review
+
+- **Backend health:** query `/api/v1/health` through the same route used by users and CI.
+- **Scan activity:** review pending, active, stale, and failed scans; inspect scan step progress and backend logs before changing global timeouts.
+- **Scanner readiness:** use the administration scanner health view and confirm registry reachability, database freshness, and available worker capacity.
+- **Notifications:** test channels and inspect delivery logs and queued delivery state after configuration changes.
+- **Audit records:** review organization and administrator activity when investigating access, ownership, policy, or token changes.
+
+## Planned maintenance
+
+Use the administration maintenance setting to communicate planned work to application users. Before an upgrade, capture backups, pin the target release tags, and tell CI owners whether the policy gate should be temporarily non-blocking. After the change, verify health, authentication, a registry connection, a representative scan, and notification delivery.
+
+If a signal is unhealthy, work from [troubleshooting](/operate/troubleshooting) before increasing concurrency or timeouts. A larger timeout can hide a credential, network, or scanner-data failure instead of resolving it.

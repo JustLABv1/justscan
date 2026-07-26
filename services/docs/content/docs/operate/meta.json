@@ -1,4 +1,4 @@
 {
   "title": "Operate JustScan",
-  "pages": ["docker-compose", "helm", "configuration", "authentication", "scanners-and-xray", "security-and-custom-cas", "upgrades-and-maintenance", "troubleshooting"]
+  "pages": ["production-deployment", "docker-compose", "helm", "reverse-proxy-and-tls", "configuration", "authentication", "scanners-and-xray", "security-and-custom-cas", "backups-and-recovery", "observability-and-maintenance", "upgrades-and-maintenance", "troubleshooting"]
 }

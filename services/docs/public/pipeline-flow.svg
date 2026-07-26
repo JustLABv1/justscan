@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 270" role="img" aria-labelledby="title desc">
+  <title id="title">JustScan pipeline decision flow</title><desc id="desc">A CI pipeline submits an image scan, JustScan scans and evaluates policy, and the resulting verdict determines whether a release continues.</desc>
+  <style>text{font-family:Arial,sans-serif;fill:#17211c}.box{fill:#f5faf6;stroke:#3f8d57;stroke-width:2}.warn{fill:#fff8e8;stroke:#b97916;stroke-width:2}.arrow{stroke:#3f8d57;stroke-width:3;fill:none}.label{font-size:16px;font-weight:700}.body{font-size:12px;fill:#45604d}</style>
+  <rect width="960" height="270" rx="18" fill="#fbfdfb"/><rect class="box" x="28" y="90" width="145" height="88" rx="14"/><text class="label" x="73" y="124">CI build</text><text class="body" x="47" y="148">CLI or API request</text>
+  <path class="arrow" d="M173 134h75m-12-8 12 8-12 8"/><rect class="box" x="248" y="90" width="160" height="88" rx="14"/><text class="label" x="283" y="124">JustScan</text><text class="body" x="270" y="148">registry or archive</text>
+  <path class="arrow" d="M408 134h75m-12-8 12 8-12 8"/><rect class="box" x="483" y="90" width="160" height="88" rx="14"/><text class="label" x="524" y="124">Analyze</text><text class="body" x="504" y="148">Trivy, Grype, or Xray</text>
+  <path class="arrow" d="M643 134h75m-12-8 12 8-12 8"/><rect class="box" x="718" y="90" width="160" height="88" rx="14"/><text class="label" x="754" y="124">Policy verdict</text><text class="body" x="742" y="148">pass, fail, or error</text>
+  <path class="arrow" d="M798 178v48H690m12-8-12 8 12 8"/><path class="arrow" d="M798 178v48h106m-12-8 12 8-12 8"/><rect class="box" x="582" y="205" width="150" height="46" rx="14"/><text class="label" x="616" y="234">Continue</text><rect class="warn" x="811" y="205" width="120" height="46" rx="14"/><text class="label" x="834" y="234">Stop/review</text>
+</svg>

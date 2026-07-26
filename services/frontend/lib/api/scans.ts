@@ -13,6 +13,9 @@ import type {
   ImageSummary,
   ImageStats,
   SBOMComponent,
+  SBOMComponentDetail,
+  SBOMDocument,
+  SBOMGraph,
   Scan,
   ScanComparison,
   ScanQueueSummary,
@@ -315,11 +318,21 @@ export const getScanSBOM = (scanId: string, name?: string, type?: string) => {
   const params = new URLSearchParams();
   if (name) params.set('name', name);
   if (type) params.set('type', type);
-  return req<{ data: SBOMComponent[]; total: number }>(
+  return req<{ data: SBOMComponent[]; total: number; document?: SBOMDocument }>(
     'GET',
     `/api/v1/scans/${scanId}/sbom?${params}`
   );
 };
+
+export const getScanSBOMGraph = (scanId: string, focus?: string, limit?: number) => {
+  const params = new URLSearchParams();
+  if (focus) params.set('focus', focus);
+  if (limit) params.set('limit', String(limit));
+  return req<SBOMGraph>('GET', `/api/v1/scans/${scanId}/sbom/graph?${params}`);
+};
+
+export const getScanSBOMComponent = (scanId: string, componentId: string) =>
+  req<SBOMComponentDetail>('GET', `/api/v1/scans/${scanId}/sbom/components/${componentId}`);
 
 export const createShare = (scanId: string, visibility: 'public' | 'authenticated') =>
   req<ScanShareResponse>('POST', `/api/v1/scans/${scanId}/share`, { visibility });

@@ -36,8 +36,13 @@ func GetSBOM(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load SBOM"})
 			return
 		}
+		if err := AttachSBOMVulnerabilityCounts(c.Request.Context(), db, components); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load SBOM vulnerability links"})
+			return
+		}
 
-		c.JSON(http.StatusOK, gin.H{"data": components, "total": len(components)})
+		document, _ := LoadSBOMDocument(c.Request.Context(), db, scanID)
+		c.JSON(http.StatusOK, gin.H{"data": components, "total": len(components), "document": document})
 	}
 }
 

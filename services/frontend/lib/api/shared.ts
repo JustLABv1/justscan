@@ -1,5 +1,5 @@
 import { sharedReq } from './core';
-import type { Scan, SharedScanRescanResponse, Vulnerability, VulnerabilityContextAnalysis } from './types/scans';
+import type { SBOMComponent, SBOMComponentDetail, SBOMDocument, SBOMGraph, Scan, SharedScanRescanResponse, Vulnerability, VulnerabilityContextAnalysis } from './types/scans';
 
 export const getSharedScan = (token: string) =>
   sharedReq<Scan>('GET', `/api/v1/shared/${token}`);
@@ -30,3 +30,18 @@ export const rescanShared = (token: string) =>
 
 export const getSharedVulnerabilityContextAnalysis = (token: string, vulnerabilityId: string) =>
   sharedReq<VulnerabilityContextAnalysis>('GET', `/api/v1/shared/${token}/vulnerabilities/${vulnerabilityId}/analysis`);
+
+export const getSharedSBOM = (token: string, name?: string) => {
+  const params = new URLSearchParams();
+  if (name) params.set('name', name);
+  return sharedReq<{ data: SBOMComponent[]; total: number; document?: SBOMDocument }>('GET', `/api/v1/shared/${token}/sbom?${params}`);
+};
+
+export const getSharedSBOMGraph = (token: string, focus?: string) => {
+  const params = new URLSearchParams();
+  if (focus) params.set('focus', focus);
+  return sharedReq<SBOMGraph>('GET', `/api/v1/shared/${token}/sbom/graph?${params}`);
+};
+
+export const getSharedSBOMComponent = (token: string, componentId: string) =>
+  sharedReq<SBOMComponentDetail>('GET', `/api/v1/shared/${token}/sbom/components/${componentId}`);

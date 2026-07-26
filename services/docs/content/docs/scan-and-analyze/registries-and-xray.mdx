@@ -11,3 +11,9 @@ Create registries in **Workspace setup → Registries**. Credentials are encrypt
 - **Full** requires Xray Read and Manage Xray Metadata. JustScan requests a fresh `scanArtifact` run and fails with an actionable error when permission is missing.
 
 Use the standard backend image when any registry uses local Trivy scanning. An Xray-only deployment can use the minimal backend image with local scanners disabled. Verify the custom CA chain if Artifactory or the registry uses internal TLS, then test both the registry connection and a real small scan before enabling a CI gate.
+
+## SBOM evidence and fallback
+
+When Xray returns a CycloneDX export, JustScan retains its package inventory and dependency relationships for the **Packages & SBOM** investigation view. The export uses the canonical Artifactory component name and path returned by Xray's artifact summary; this matters for Docker artifacts whose requested image reference differs from Artifactory's stored path.
+
+The registry credential needs Xray **Read** access to export component details. If Xray's SBOM export is unavailable or denied, JustScan keeps the Xray vulnerability result and attempts a local Trivy CycloneDX fallback. The package view identifies this as **Trivy fallback** and records the export failure, so the evidence source is never confused with Xray. A fallback needs the backend to be able to pull the image with the configured registry credentials; it is reported as unavailable when that pull cannot be performed.

@@ -377,13 +377,14 @@ func processScan(job ScanJob, cacheDir string) {
 	} else if sbomOut != nil {
 		components := ParseSBOMComponents(sbomOut, scanID)
 		if len(components) > 0 {
-			for i := range components {
-				components[i].ScanID = scanID
+			if err := PersistSBOMDocument(context.Background(), db, scanID, sbomOut, SBOMSourceTrivy, ""); err != nil {
+				log.Warnf("Worker: failed to store SBOM document for %s: %v", scanID, err)
+				recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("SBOM document storage failed: %v", err))
+			} else if err := LinkVulnerabilitiesToSBOM(context.Background(), db, scanID); err != nil {
+				log.Warnf("Worker: failed to link vulnerabilities to SBOM for %s: %v", scanID, err)
+			} else {
+				recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Stored %d SBOM components and their dependency graph.", len(components)))
 			}
-			if _, err := db.NewInsert().Model(&components).Exec(context.Background()); err != nil {
-				log.Warnf("Worker: failed to store SBOM components for %s: %v", scanID, err)
-			}
-			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Stored %d SBOM components.", len(components)))
 			osvVulns = AugmentJavaVulnerabilitiesFromOSV(ctx, db, scanID, components, vulns)
 			if len(osvVulns) > 0 {
 				if _, err := db.NewInsert().Model(&osvVulns).Exec(context.Background()); err != nil {
@@ -393,6 +394,9 @@ func processScan(job ScanJob, cacheDir string) {
 				} else {
 					log.Infof("Worker: added %d OSV Java findings for scan %s", len(osvVulns), scanID)
 					recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("OSV added %d supplemental Java findings.", len(osvVulns)))
+					if err := LinkVulnerabilitiesToSBOM(context.Background(), db, scanID); err != nil {
+						log.Warnf("Worker: failed to link OSV findings to SBOM for %s: %v", scanID, err)
+					}
 				}
 			} else {
 				recordScanStepOutput(ctx, db, scanID, "OSV enrichment did not add supplemental Java findings.")

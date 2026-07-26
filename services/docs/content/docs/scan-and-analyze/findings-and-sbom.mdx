@@ -7,4 +7,12 @@ Open a scan to review vulnerability severity, package and fixed-version data, sc
 
 From a completed scan you can export evidence, download available SBOM data, compare scans, add comments or manual findings, rescan an image, and share a result or grant an organization access.
 
+## Package investigation
+
+The **Packages & SBOM** view keeps the original CycloneDX document alongside a searchable package inventory and its dependency relationships. Select a package to see its package URL, supplier, license evidence, direct dependencies, reverse dependencies, and the vulnerabilities linked to that package. This is the quickest way to answer “which package introduced this CVE?” without relying on a package-name guess in the UI.
+
+The dependency tree and graph are generated only from relationships supplied by the SBOM. JustScan marks incomplete graph evidence when the source omits dependency records or references a component it did not include. Circular references are displayed as cycles rather than expanded repeatedly. A graph may be capped for very large images; use package search and the package drawer to investigate the exact neighborhood.
+
+Use **CycloneDX** to download the retained source document. The authenticated scan page and token-shared result page expose the same package evidence; a public result does not expose this expanded investigation surface.
+
 Use suppressions only for accepted risk; document the decision with a comment and review it regularly. A suppression is not a scanner fix and should not hide an unresolved operational error. See [audit and governance](/organize-and-govern/audit-and-governance) for an evidence handoff checklist.

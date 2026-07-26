@@ -12,12 +12,14 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@dagrejs/dagre": "1.1.5",
     "@gsap/react": "^2.1.2",
     "@heroui/react": "3.2.2",
     "@heroui/styles": "3.2.2",
     "@internationalized/date": "3.12.2",
     "@phosphor-icons/react": "^2.1.10",
     "@react-three/fiber": "^9.6.1",
+    "@xyflow/react": "12.11.2",
     "clsx": "^2.1.1",
     "gsap": "^3.15.0",
     "hugeicons-react": "^0.4.0",

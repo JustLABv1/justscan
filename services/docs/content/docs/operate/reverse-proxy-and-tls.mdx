@@ -1,0 +1,25 @@
+---
+title: Reverse proxy, ingress, and TLS
+description: Publish JustScan safely behind nginx or Kubernetes ingress on a single HTTPS hostname.
+---
+
+Expose JustScan through one public hostname. Keeping the application and API on the same scheme and host simplifies browser access, OIDC redirects, cookies, and CORS configuration.
+
+## Required routes
+
+| Route | Destination | Purpose |
+| --- | --- | --- |
+| `/` | Frontend | Application and authentication screens |
+| `/api` | Backend | API and health endpoint |
+| `/swagger` | Backend | Generated API reference |
+| `/docs` | Documentation service | User, administrator, and operator guides |
+
+The supplied Compose nginx configuration already maps these routes. The Helm chart ingress maps `/docs` to the documentation service and the other routes to their corresponding services.
+
+## TLS and upload limits
+
+Terminate TLS at the proxy or ingress and publish the HTTPS URL in `allow_origins`. OIDC redirect URIs must use that same public URL exactly. Archive uploads can be as large as 5 GiB, so configure the ingress request-body size, read/send timeouts, and request buffering to accommodate the upload and scanner command timeout. The Helm values file includes ingress-nginx annotation examples for these settings.
+
+## Verification
+
+From a browser outside the cluster or host network, confirm the application loads, `/docs` navigation stays under `/docs`, `<a href="/swagger/index.html">Swagger</a>` opens, and `/api/v1/health` returns a healthy response through the public hostname. If the frontend cannot reach the backend, use the [network troubleshooting runbook](/operate/troubleshooting#frontend-or-browser-cannot-reach-the-backend).

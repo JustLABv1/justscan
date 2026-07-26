@@ -1,0 +1,23 @@
+---
+title: Backups and recovery
+description: Preserve JustScan data and encrypted credentials with a tested platform-managed recovery procedure.
+---
+
+JustScan does not automate backups. Your recovery procedure must cover both PostgreSQL and the backend persistent data, as well as the secrets required to decrypt and authenticate restored data.
+
+## What to preserve
+
+- **PostgreSQL:** users, organizations, scan records, policies, tokens, notification configuration, audit records, and related product data.
+- **Backend data volume:** scanner and vulnerability-data caches plus runtime data retained by the deployment.
+- **Encryption key:** required to decrypt stored registry credentials after restore. A database backup without the matching key cannot restore those credentials.
+- **JWT secret:** preserve when continuing existing browser/API sessions matters; rotate intentionally when invalidating sessions is desired.
+
+## Recovery procedure
+
+1. Record the deployed image tags and configuration before an upgrade or incident response action.
+2. Restore PostgreSQL using the database service's documented backup process, then restore the backend data volume if it was part of the recovery point.
+3. Provide the matching database password and encryption key through the secret manager or Kubernetes Secret references.
+4. Start the backend, allow migrations to complete, and verify `/api/v1/health`.
+5. Test an administrator login, registry credential access, and a safe scan before reopening CI gates.
+
+Practice restores in an isolated environment. Do not rotate or replace the encryption key during a restore unless you have a separate credential re-encryption migration plan.

@@ -3,7 +3,7 @@ title: GitLab CI
 description: Gate GitLab pipelines with JustScan policy verdicts.
 ---
 
-Use a masked `JUSTSCAN_TOKEN` variable and configure the CLI profile with your public JustScan URL and organization ID. Run the CLI after building the image and before publishing or deploying it.
+Use a masked `JUSTSCAN_TOKEN` variable and configure the CLI profile with your public JustScan URL and organization ID. Run the CLI after building the image and before publishing or deploying it. Protect the variable so untrusted branches cannot read a production organization token.
 
 ```yaml
 justscan_scan:
@@ -12,4 +12,4 @@ justscan_scan:
     - justscan scan registry.example.com/my-app:$CI_COMMIT_SHA
 ```
 
-For archive-based workflows and the complete request/response model, see [CI/CD integration](/integrations/ci-cd).
+For archive-based workflows and the complete request/response model, see [CI/CD integration](/integrations/ci-cd). Confirm that a nonzero exit code fails the job; do not use an unconditional `allow_failure` once JustScan is the release gate.

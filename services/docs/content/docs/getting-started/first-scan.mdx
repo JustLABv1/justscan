@@ -1,0 +1,26 @@
+---
+title: Complete your first governed scan
+description: Create shared security context, scan an image, and verify the policy result before automating it.
+---
+
+This workflow gives a platform or security team a safe first success before connecting production CI.
+
+## 1. Create the shared workspace
+
+Sign in as an administrator or organization owner, create an organization, and invite the people who will configure registries, policies, or automation. Give each person the least privileged role needed for their work. Keep personal experimentation separate from the organization that will own release evidence.
+
+## 2. Configure a scan source
+
+Add a registry in **Workspace setup → Registries**, select the scanner provider, and test the connection. For an image that has not been pushed, use the CLI local-image or archive workflow instead. See [registries and Xray](/scan-and-analyze/registries-and-xray) and [scan sources](/getting-started/scan-sources).
+
+## 3. Submit and inspect a scan
+
+Scan a small image from the application or CLI. When it completes, review the scanner progress, package and fixed-version data, policy result, SBOM availability, and any provider context. A completed scan is evidence; a policy verdict is the organization-specific decision derived from that evidence.
+
+## 4. Introduce policy safely
+
+Create or adjust organization policy against representative scan history. Start with findings that are critical and have a fix, validate the expected outcome, and communicate the accepted-risk process. Use comments or narrow suppressions to capture decisions that must be revisited.
+
+## 5. Prove automation without blocking delivery
+
+Create a least-privilege organization token with `pipeline_scan`, run the [CLI](/integrations/cli) in a non-blocking pipeline job, and confirm the pass, policy-failure, and operational-error outcomes. Only make the job required after its scan source, policy, notification, and recovery path are understood.

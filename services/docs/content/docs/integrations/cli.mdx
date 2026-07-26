@@ -22,8 +22,28 @@ justscan config set production \
   --org 00000000-0000-0000-0000-000000000000
 ```
 
-For interactive use, run `justscan login --profile production --email you@example.com`. For CI, set `JUSTSCAN_TOKEN` to an organization token with the `pipeline_scan` scope.
+For interactive use, run `justscan login --profile production --email you@example.com`. The CLI stores the resulting user credential in the operating-system keychain, not in the profile file. Use `justscan logout` when changing users or retiring a workstation.
+
+For CI, set `JUSTSCAN_TOKEN` to an organization token with the `pipeline_scan` scope. Profiles store the server URL, organization ID, and optional CA certificate path; they do not store tokens.
+
+## Scan sources
+
+```sh
+# JustScan pulls from the selected configured registry.
+justscan scan registry.example.com/team/api:1.2.3
+
+# Stream a local Docker image without a temporary archive.
+justscan scan --local team/api:ci
+
+# Use Podman instead of Docker for the local image source.
+justscan scan --local team/api:ci --engine podman
+
+# Upload a Docker or OCI archive.
+justscan scan --archive ./team-api.tar --name team-api --tag ci
+```
+
+The CLI submits artifacts to JustScan; it does not run the vulnerability scanner on the developer laptop or CI runner. Local-image mode requires the image to exist in the selected Docker or Podman engine. Archive uploads accept `.tar`, `.tar.gz`, and `.tgz` files up to 5 GiB.
 
 ## Exit codes
 
-`0` means the policy passed, `1` means the policy failed, and `2` means an operational or scan-execution error. See [CI/CD](/integrations/ci-cd) for examples.
+`0` means the policy passed, `1` means the policy failed, and `2` means an operational or scan-execution error. Treat `2` as an unavailable release decision, not a policy pass. See [CI/CD](/integrations/ci-cd) for provider examples and [CLI environment and exit codes](/reference/cli-environment-and-exit-codes) for the compact reference.

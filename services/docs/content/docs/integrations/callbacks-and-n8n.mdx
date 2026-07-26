@@ -5,4 +5,4 @@ description: Receive asynchronous pipeline results in external workflow systems.
 
 Pipeline scan requests can include a callback destination. JustScan restricts callbacks to public HTTPS destinations and does not follow redirects. Private destinations require an explicit host or CIDR allowlist in backend security configuration.
 
-Use this pattern for n8n and similar workflow systems: submit a scan, receive the terminal result callback, then branch on the policy verdict. Treat callback payloads as untrusted input and validate their fields before triggering deployment actions.
+Use this pattern for n8n and similar workflow systems: submit a scan, receive the terminal result callback, then branch on the policy verdict. Treat callback payloads as untrusted input and validate their fields before triggering deployment actions. Keep the receiver idempotent because it is an external integration boundary, and alert on callback delivery failures through the JustScan notification delivery log.

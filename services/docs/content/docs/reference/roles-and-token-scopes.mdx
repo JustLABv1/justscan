@@ -3,6 +3,11 @@ title: Roles and token scopes
 description: Apply least privilege to user access and automation tokens.
 ---
 
-Use organization roles for people and scoped tokens for automation. Administrators manage global configuration, scanner settings, identity, and system-wide resources. Organization access controls shared work while ownership and organization grants control each resource.
+Use organization roles for people and scoped tokens for automation. System administrators manage global configuration, scanner settings, identity, and system-wide resources. Organization membership supports `owner`, `admin`, `editor`, and `viewer` roles; ownership and organization grants control each resource.
 
-For CI, create a dedicated organization token with only `pipeline_scan`. Rotate and revoke it through the organization token screen rather than reusing a personal credential.
+| Token scope | Intended use |
+| --- | --- |
+| `pipeline_scan` | Submit and observe pipeline scan workflows for one organization. Use for normal CI/CD. |
+| `org_admin` | Organization administration automation. Use only when pipeline scope is insufficient. |
+
+For CI, create a dedicated organization token with only `pipeline_scan`. Rotate and revoke it through the organization token screen rather than reusing a personal credential. Pipeline-scoped tokens are intentionally rejected from endpoints outside the allowed pipeline workflow.

@@ -3,8 +3,10 @@ title: Policies and compliance
 description: Turn scan findings into organization-specific release decisions.
 ---
 
-Create policies in an organization to define acceptable risk. JustScan evaluates policies against completed scans and reports the resulting verdict in the UI, API, and CLI.
+Create policies in an organization to define acceptable risk. JustScan evaluates policies against completed scans and reports the resulting verdict in the UI, API, and CLI. A policy evaluates scan evidence; it does not make a failed scanner run safe.
 
 Use policy failures to block deployment only after validating the rule against representative scans. Start with the critical findings that have a fix, then tighten thresholds and required metadata as the workflow matures.
 
-The [CI/CD guide](/integrations/ci-cd) explains the pass, policy-failure, and operational-error exit behavior.
+Run proposed policy rules against representative images before enforcement. Start with critical findings that have fixes, validate the expected verdict with the release owners, and expand rules only after reviewing false positives and accepted-risk cases.
+
+The [CI/CD guide](/integrations/ci-cd) explains the pass, policy-failure, and operational-error exit behavior. Use [ownership and suppressions](/organize-and-govern/ownership-sharing-and-suppressions) to document narrow exceptions rather than weakening an organization-wide rule.

@@ -55,7 +55,10 @@ jobs:
 
       - name: Build
         working-directory: services/docs
-        run: pnpm build
+        run: |
+          pnpm lint
+          pnpm check:links
+          pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: 1
 

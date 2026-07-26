@@ -3,11 +3,11 @@ title: Registries and Artifactory Xray
 description: Configure image registry access and select Trivy, Grype, or Xray analysis.
 ---
 
-Create registries in **Workspace setup → Registries**. Credentials are encrypted at rest with the configured encryption key. Test a registry connection before relying on it in a scheduled or CI workflow.
+Create registries in **Workspace setup → Registries**. Credentials are encrypted at rest with the configured encryption key. Test a registry connection before relying on it in a scheduled or CI workflow. Set a default registry only when that default is unambiguous for the intended workspace.
 
 ## Xray modes
 
 - **Limited** reads an existing Xray result after warming the image through Artifactory. It is suitable for consumer credentials and does not trigger a rescan.
 - **Full** requires Xray Read and Manage Xray Metadata. JustScan requests a fresh `scanArtifact` run and fails with an actionable error when permission is missing.
 
-Use the standard backend image when any registry uses local Trivy scanning. An Xray-only deployment can use the minimal backend image with local scanners disabled.
+Use the standard backend image when any registry uses local Trivy scanning. An Xray-only deployment can use the minimal backend image with local scanners disabled. Verify the custom CA chain if Artifactory or the registry uses internal TLS, then test both the registry connection and a real small scan before enabling a CI gate.

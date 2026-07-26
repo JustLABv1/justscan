@@ -5,12 +5,18 @@ description: Configure backend behavior through YAML and BACKEND_ environment va
 
 The backend reads `/etc/justscan/config.yaml` and applies `BACKEND_` environment variables as overrides. Replace dots with underscores in environment variable names.
 
+## Configuration order
+
+The YAML file provides the deployable baseline. Explicit `BACKEND_` environment variables override it at runtime, which is how the Helm chart injects secret values. Keep non-secret values in version-controlled deployment configuration and keep secrets in the platform secret manager.
+
 Important settings include:
 
 - `allow_origins` for browser origins that can call the backend
 - `scanner.enable_trivy`, `scanner.enable_grype`, timeouts, concurrency, and database age
 - `vuln_kb.nvd_api_key` and cache duration
 - `security.allow_insecure_defaults` for local development only
-- `local_auth.enabled` and OIDC configuration stored through the administration flow
+- `local_auth.enabled`; OIDC provider records are configured through the administration flow
+
+The backend validates that production JWT and encryption keys are at least 32 characters unless `security.allow_insecure_defaults` is explicitly enabled for local development. Grype augmentation requires local Trivy to remain enabled.
 
 Use [authentication](/operate/authentication) and [scanner configuration](/operate/scanners-and-xray) alongside the full [configuration reference](/reference/backend-configuration).

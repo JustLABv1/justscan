@@ -3,8 +3,8 @@ title: API workflows
 description: Authenticate API clients and automate pipeline scans safely.
 ---
 
-JustScan serves its API below `/api/v1`. Use an organization token with the smallest required scope for unattended integrations, and send it in the `Authorization: Bearer` header.
+JustScan serves its API below `/api/v1`. Use an organization token with the smallest required scope for unattended integrations, and send it in the `Authorization: Bearer` header. Use `pipeline_scan` for normal pipeline work and reserve `org_admin` for administrative automation.
 
-The main automation flow is: create a pipeline scan, poll the result or receive a callback, then use the terminal policy verdict to decide whether to continue.
+The main automation flow is: create a pipeline scan, poll the result or receive a callback, then use the terminal policy verdict to decide whether to continue. Preserve the scan identifier in the calling system for audit and troubleshooting, and distinguish policy failure from transport, authentication, or scanner errors.
 
 The <a href="/swagger/index.html">interactive API reference</a> lists all registered endpoints. It is generated from the running backend; the guides in this section remain the recommended starting point for authentication, pipeline scans, callbacks, and CI behavior.

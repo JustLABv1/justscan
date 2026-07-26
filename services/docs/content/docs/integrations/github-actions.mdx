@@ -3,7 +3,7 @@ title: GitHub Actions
 description: Scan registry, local Docker, and archive artifacts in GitHub Actions.
 ---
 
-Store the organization ID and pipeline token as GitHub Actions secrets. For an image built in the runner's Docker daemon, use the CLI local-image mode so the image does not need to be pushed before scanning.
+Store the organization ID and pipeline token as GitHub Actions secrets. Configure the CLI profile with the public JustScan HTTPS URL and target organization ID. For an image built in the runner's Docker daemon, use the CLI local-image mode so the image does not need to be pushed before scanning.
 
 ```yaml
 - name: Scan image with JustScan
@@ -12,4 +12,4 @@ Store the organization ID and pipeline token as GitHub Actions secrets. For an i
   run: justscan scan --local my-app:${{ github.sha }}
 ```
 
-Set the JustScan URL and organization ID in the selected CLI profile or environment. Do not print access tokens in workflow logs.
+Set the JustScan URL and organization ID in the selected CLI profile or environment. Do not print access tokens in workflow logs. Make the job required only after confirming the expected policy fail and operational error behavior with a representative image.

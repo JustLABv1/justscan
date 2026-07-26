@@ -3,6 +3,6 @@ title: Watchlists and vulnerability intelligence
 description: Track important images and investigate cached vulnerability knowledge.
 ---
 
-Watchlists schedule recurring scans of important images and summarize freshness and policy posture. The Vulnerability KB stores enriched vulnerability data so teams can investigate findings without repeatedly querying external services.
+Watchlists schedule recurring scans of important images and summarize freshness and policy posture. Use them for images whose risk needs review even when a new build is not being released. The Vulnerability KB stores enriched vulnerability data so teams can investigate findings without repeatedly querying external services.
 
-Configure an NVD API key when you need faster CVE enrichment. The cache lifetime is controlled by `vuln_kb.cache_days`.
+Configure an NVD API key when you need faster CVE enrichment. The cache lifetime is controlled by `vuln_kb.cache_days`. Review notification delivery and freshness expectations before treating a missed watchlist scan as an incident.

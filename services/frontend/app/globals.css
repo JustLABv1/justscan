@@ -1,6 +1,36 @@
 @import 'tailwindcss';
 @import '@heroui/styles';
 @import 'tw-animate-css';
+@import '@xyflow/react/dist/style.css';
+
+@layer components {
+  .react-flow__controls {
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    border-radius: 0.75rem;
+    background: var(--surface);
+    box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 10%, transparent);
+  }
+
+  .react-flow__controls-button {
+    border-bottom-color: var(--divider) !important;
+    background: var(--surface) !important;
+    color: var(--foreground) !important;
+  }
+
+  .react-flow__controls-button:hover {
+    background: var(--surface-secondary) !important;
+  }
+
+  .react-flow__controls-button svg {
+    fill: currentColor !important;
+  }
+
+  .react-flow__attribution {
+    background: color-mix(in oklab, var(--surface) 88%, transparent) !important;
+    color: var(--muted) !important;
+  }
+}
 
 @layer components {
   .tabs__list-container__scroll-prev,

@@ -2,6 +2,7 @@
 import { PublicNavbar } from '@/components/public/public-navbar';
 import { ScanDetailHeader } from '@/components/scans/scan-detail-header';
 import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
+import { SBOMWorkspace } from '@/components/scans/sbom-workspace';
 import { VulnerabilitiesTable } from '@/components/scans/vulnerabilities-table';
 import { FormField } from '@/components/ui/form-field';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -10,6 +11,9 @@ import type { Scan, Vulnerability } from '@/lib/api';
 import {
   ApiError,
   getSharedScan,
+  getSharedSBOM,
+  getSharedSBOMComponent,
+  getSharedSBOMGraph,
   getSharedVulnerabilityContextAnalysis,
   getToken,
   listScans,
@@ -214,7 +218,7 @@ function buildPaginationItems(currentPage: number, totalPages: number): Array<nu
   return items;
 }
 
-type ResultTab = 'overview' | 'timeline';
+type ResultTab = 'overview' | 'timeline' | 'sbom';
 
 export default function SharedScanPage() {
   const { token } = useParams<{ token: string }>();
@@ -563,6 +567,7 @@ export default function SharedScanPage() {
                     ? `Timeline (${scan.step_logs.length})`
                     : 'Timeline',
                 },
+                { id: 'sbom', label: 'Packages & SBOM' },
               ]}
               value={activeTab}
               onChange={setActiveTab}
@@ -612,6 +617,16 @@ export default function SharedScanPage() {
             scanProvider={scan.scan_provider}
             xrayMode={scan.xray_mode}
             xrayProviderScannedAt={scan.xray_provider_scanned_at}
+          />
+        )}
+
+        {scan && !isScanning && activeTab === 'sbom' && (
+          <SBOMWorkspace
+            readOnly
+            loadComponents={(query) => getSharedSBOM(token, query)}
+            loadGraph={(focus) => getSharedSBOMGraph(token, focus)}
+            loadComponent={(componentId) => getSharedSBOMComponent(token, componentId)}
+            downloadHref={`/api/v1/shared/${token}/sbom/download`}
           />
         )}
 

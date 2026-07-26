@@ -71,7 +71,10 @@ type TrivyResult struct {
 
 type TrivyVuln struct {
 	VulnerabilityID  string               `json:"VulnerabilityID"`
+	PkgID            string               `json:"PkgID,omitempty"`
 	PkgName          string               `json:"PkgName"`
+	PkgPath          string               `json:"PkgPath,omitempty"`
+	Relationship     string               `json:"Relationship,omitempty"`
 	InstalledVersion string               `json:"InstalledVersion"`
 	FixedVersion     string               `json:"FixedVersion,omitempty"`
 	Title            string               `json:"Title,omitempty"`
@@ -80,6 +83,12 @@ type TrivyVuln struct {
 	References       []string             `json:"References,omitempty"`
 	CVSS             map[string]TrivyCVSS `json:"CVSS,omitempty"`
 	DataSource       *TrivyDataSource     `json:"DataSource,omitempty"`
+	Layer            *TrivyLayer          `json:"Layer,omitempty"`
+}
+
+type TrivyLayer struct {
+	Digest string `json:"Digest,omitempty"`
+	DiffID string `json:"DiffID,omitempty"`
 }
 
 type TrivyCVSS struct {
@@ -98,18 +107,45 @@ type TrivyDataSource struct {
 // TrivySBOMOutput holds the CycloneDX SBOM output
 type TrivySBOMOutput struct {
 	BOMFormat       string                   `json:"bomFormat"`
+	SpecVersion     string                   `json:"specVersion,omitempty"`
+	SerialNumber    string                   `json:"serialNumber,omitempty"`
+	Metadata        TrivySBOMMetadata        `json:"metadata,omitempty"`
 	Components      []TrivySBOMComp          `json:"components"`
+	Dependencies    []TrivySBOMDependency    `json:"dependencies,omitempty"`
 	Vulnerabilities []TrivySBOMVulnerability `json:"vulnerabilities,omitempty"`
 }
 
+type TrivySBOMMetadata struct {
+	Component *TrivySBOMComp `json:"component,omitempty"`
+}
+
+type TrivySBOMDependency struct {
+	Ref       string   `json:"ref,omitempty"`
+	DependsOn []string `json:"dependsOn,omitempty"`
+}
+
 type TrivySBOMComp struct {
-	BOMRef   string         `json:"bom-ref,omitempty"`
-	Type     string         `json:"type"`
-	Name     string         `json:"name"`
-	Version  string         `json:"version,omitempty"`
-	PURL     string         `json:"purl,omitempty"`
-	Licenses []TrivySBOMLic `json:"licenses,omitempty"`
-	Supplier *TrivySBOMOrg  `json:"supplier,omitempty"`
+	BOMRef     string              `json:"bom-ref,omitempty"`
+	Type       string              `json:"type"`
+	Group      string              `json:"group,omitempty"`
+	Name       string              `json:"name"`
+	Version    string              `json:"version,omitempty"`
+	PURL       string              `json:"purl,omitempty"`
+	Scope      string              `json:"scope,omitempty"`
+	Licenses   []TrivySBOMLic      `json:"licenses,omitempty"`
+	Hashes     []TrivySBOMHash     `json:"hashes,omitempty"`
+	Properties []TrivySBOMProperty `json:"properties,omitempty"`
+	Supplier   *TrivySBOMOrg       `json:"supplier,omitempty"`
+}
+
+type TrivySBOMHash struct {
+	Alg     string `json:"alg,omitempty"`
+	Content string `json:"content,omitempty"`
+}
+
+type TrivySBOMProperty struct {
+	Name  string `json:"name,omitempty"`
+	Value string `json:"value,omitempty"`
 }
 
 type TrivySBOMLic struct {
@@ -348,7 +384,7 @@ func RunSBOMScan(ctx context.Context, imageName, imageTag string, envVars []stri
 	defer cancel()
 
 	imageRef := buildImageRef(imageName, imageTag)
-	args := []string{"image", "--format", "cyclonedx", "--exit-code", "0", "--no-progress"}
+	args := []string{"image", "--format", "cyclonedx", "--scanners", "license", "--exit-code", "0", "--no-progress"}
 	if cacheDir != "" {
 		args = append(args, "--cache-dir", cacheDir)
 	}
@@ -381,7 +417,7 @@ func RunSBOMScanFromArchive(ctx context.Context, archivePath, platform, cacheDir
 	scanCtx, cancel := context.WithTimeout(ctx, scanCommandTimeout())
 	defer cancel()
 
-	args := []string{"image", "--format", "cyclonedx", "--exit-code", "0", "--no-progress"}
+	args := []string{"image", "--format", "cyclonedx", "--scanners", "license", "--exit-code", "0", "--no-progress"}
 	if cacheDir != "" {
 		args = append(args, "--cache-dir", cacheDir)
 	}

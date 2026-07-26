@@ -534,6 +534,14 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	artifactRepoPath = resolvedArtifact.Path
 	repoPath = resolvedArtifact.RepoPath
 	artifactPath = resolvedArtifact.ArtifactPath
+	if resolvedName, resolvedPath := xraySummaryExportDetails(summary, client.artifactoryID); resolvedName != "" {
+		exportComponentName = resolvedName
+		if resolvedPath != "" {
+			repoPath = resolvedPath
+			artifactPath = resolvedPath
+		}
+		recordScanStepOutput(ctx, db, scan.ID, "Using the canonical Xray component identifier returned by the artifact summary for SBOM export.")
+	}
 
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "importing", models.ScanStepImportingResults); err != nil {
 		return err
@@ -557,8 +565,14 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	if err := persistXraySBOMComponents(ctx, db, scan, client, exportComponentName, artifactPath, repoPath); err != nil {
 		log.Warnf("Failed to persist Xray SBOM components for scan %s (non-fatal): %v", scan.ID, err)
 		recordScanStepOutput(ctx, db, scan.ID, describeNonFatalXraySBOMImportError(err))
+		if fallbackErr := persistTrivyFallbackSBOM(ctx, db, scan, err); fallbackErr != nil {
+			recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Local Trivy SBOM fallback was unavailable: %v", fallbackErr))
+		}
 	} else {
 		recordScanStepOutput(ctx, db, scan.ID, "Imported Xray SBOM component details.")
+		if err := LinkVulnerabilitiesToSBOM(ctx, db, scan.ID); err != nil {
+			log.Warnf("Failed to link Xray findings to SBOM components for scan %s: %v", scan.ID, err)
+		}
 	}
 	if err := persistXrayIgnoreRuleSnapshots(ctx, db, scan, client, exportComponentName, repoPath, artifactPath); err != nil {
 		log.Warnf("Failed to persist Xray ignore-rule snapshots for scan %s (non-fatal): %v", scan.ID, err)
@@ -601,6 +615,28 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 			scan.CriticalCount, scan.HighCount, scan.MediumCount, scan.LowCount),
 	})
 
+	return nil
+}
+
+// persistTrivyFallbackSBOM keeps the scan useful when Xray's optional export
+// capability is disabled. It is intentionally labeled separately from the
+// Xray findings so users can see where package evidence came from.
+func persistTrivyFallbackSBOM(ctx context.Context, db *bun.DB, scan *models.Scan, xrayErr error) error {
+	if scan == nil {
+		return fmt.Errorf("scan is required")
+	}
+	sbom, err := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, nil, scan.Platform, "")
+	if err != nil {
+		return err
+	}
+	diagnostic := fmt.Sprintf("Xray SBOM export failed and JustScan generated this SBOM locally: %v", xrayErr)
+	if err := PersistSBOMDocument(ctx, db, scan.ID, sbom, SBOMSourceTrivyFallback, diagnostic); err != nil {
+		return err
+	}
+	if err := LinkVulnerabilitiesToSBOM(ctx, db, scan.ID); err != nil {
+		return err
+	}
+	recordScanStepOutput(ctx, db, scan.ID, "Generated a Trivy fallback SBOM after the Xray component export failed.")
 	return nil
 }
 
@@ -1010,18 +1046,11 @@ func (c *xrayClient) exportComponentCycloneDX(ctx context.Context, componentName
 	var lastErr error
 	for _, candidatePath := range trimmedPaths {
 		body := xrayComponentExportRequest{
-			PackageType:       "docker",
-			ComponentName:     componentName,
-			Path:              candidatePath,
-			OutputFormat:      "json",
-			CycloneDX:         true,
-			CycloneDXFormat:   "json",
-			License:           true,
-			LicenseResolution: true,
-			Vulnerabilities:   true,
-			Violations:        true,
-			IncludeIgnored:    true,
-			OperationalRisk:   true,
+			PackageType:     "docker",
+			ComponentName:   componentName,
+			Path:            candidatePath,
+			CycloneDX:       true,
+			CycloneDXFormat: "json",
 		}
 
 		payload, err := c.doRawJSON(ctx, http.MethodPost, "/xray/api/v2/component/exportDetails", body, "application/zip", http.StatusOK)
@@ -3487,13 +3516,10 @@ func persistXrayCycloneDXFallback(ctx context.Context, db *bun.DB, scan *models.
 
 	components := dedupeSBOMComponents(ParseSBOMComponents(sbom, scan.ID))
 	if len(components) > 0 {
-		if _, err := db.NewDelete().Model((*models.SBOMComponent)(nil)).Where("scan_id = ?", scan.ID).Exec(ctx); err != nil {
-			return 0, fmt.Errorf("failed to clear existing Xray SBOM components: %w", err)
+		if err := PersistSBOMDocument(ctx, db, scan.ID, sbom, SBOMSourceXray, ""); err != nil {
+			return 0, fmt.Errorf("failed to store Xray SBOM document from fallback export: %w", err)
 		}
-		if _, err := db.NewInsert().Model(&components).Exec(ctx); err != nil {
-			return 0, fmt.Errorf("failed to store Xray SBOM components from fallback export: %w", err)
-		}
-		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Stored %d Xray SBOM components from %s.", len(components), exportPath))
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Stored %d Xray SBOM components and dependency edges from %s.", len(components), exportPath))
 	}
 
 	vulns := ParseCycloneDXVulnerabilities(sbom, scan.ID)
@@ -3503,6 +3529,9 @@ func persistXrayCycloneDXFallback(ctx context.Context, db *bun.DB, scan *models.
 
 	if _, err := db.NewInsert().Model(&vulns).Exec(ctx); err != nil {
 		return 0, fmt.Errorf("failed to store Xray vulnerabilities from fallback export: %w", err)
+	}
+	if err := LinkVulnerabilitiesToSBOM(ctx, db, scan.ID); err != nil {
+		log.Warnf("Failed to link Xray CycloneDX fallback findings to components for scan %s: %v", scan.ID, err)
 	}
 
 	kbEntries := ExtractCycloneDXKBEntries(sbom)
@@ -3559,11 +3588,8 @@ func persistXraySBOMComponents(ctx context.Context, db *bun.DB, scan *models.Sca
 		return nil
 	}
 
-	if _, err := db.NewDelete().Model((*models.SBOMComponent)(nil)).Where("scan_id = ?", scan.ID).Exec(ctx); err != nil {
-		return fmt.Errorf("failed to clear existing Xray SBOM components: %w", err)
-	}
-	if _, err := db.NewInsert().Model(&components).Exec(ctx); err != nil {
-		return fmt.Errorf("failed to store Xray SBOM components: %w", err)
+	if err := PersistSBOMDocument(ctx, db, scan.ID, sbom, SBOMSourceXray, ""); err != nil {
+		return fmt.Errorf("failed to store Xray SBOM document: %w", err)
 	}
 
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Stored %d Xray SBOM components from %s.", len(components), exportPath))
@@ -4544,6 +4570,10 @@ func xrayJSONObjectString(value models.JSONObject, key string) string {
 }
 
 func parseXrayCycloneDXExport(payload []byte) (*TrivySBOMOutput, error) {
+	var direct TrivySBOMOutput
+	if err := json.Unmarshal(payload, &direct); err == nil && (strings.TrimSpace(direct.BOMFormat) != "" || len(direct.Components) > 0) {
+		return &direct, nil
+	}
 	reader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open Xray export ZIP: %w", err)

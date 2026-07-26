@@ -344,6 +344,53 @@ export interface SBOMComponent {
   license: string;
   supplier: string;
   created_at: string;
+  document_id?: string;
+  bom_ref?: string;
+  group?: string;
+  scope?: string;
+  ecosystem?: string;
+  is_root?: boolean;
+  dependency_depth?: number | null;
+  licenses?: string[];
+  hashes?: Array<Record<string, unknown>>;
+  properties?: Array<Record<string, unknown>>;
+  vulnerability_count?: number;
+}
+
+export interface SBOMDocument {
+  id: string;
+  scan_id: string;
+  source: 'trivy' | 'xray' | 'trivy_fallback' | 'legacy';
+  status: string;
+  format: string;
+  spec_version?: string;
+  root_ref?: string;
+  component_count: number;
+  dependency_count: number;
+  graph_complete: boolean;
+  warnings?: string[];
+  diagnostic?: string;
+}
+
+export interface SBOMDependency {
+  id: string;
+  document_id: string;
+  from_component_id: string;
+  to_component_id: string;
+}
+
+export interface SBOMGraph {
+  document?: SBOMDocument;
+  nodes: SBOMComponent[];
+  edges: SBOMDependency[];
+  truncated: boolean;
+}
+
+export interface SBOMComponentDetail {
+  component: SBOMComponent;
+  dependencies: SBOMComponent[];
+  dependents: SBOMComponent[];
+  vulnerabilities: Vulnerability[];
 }
 
 export interface ScanComparison {

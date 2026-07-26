@@ -2,6 +2,7 @@
 import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
+import { SBOMWorkspace } from '@/components/scans/sbom-workspace';
 import { ManageSuppressionAccessModal } from '@/components/suppressions/manage-suppression-access-modal';
 import { useToast } from '@/components/toast';
 import {
@@ -30,7 +31,6 @@ import type {
   Org,
   PolicyRule,
   ResourceShare,
-  SBOMComponent,
   Scan,
   Suppression,
   Tag,
@@ -52,6 +52,8 @@ import {
   getScan,
   getScanCompliance,
   getScanSBOM,
+  getScanSBOMComponent,
+  getScanSBOMGraph,
   getScanVulnerabilityViewSettings,
   getTokenType,
   getUser,
@@ -536,14 +538,6 @@ export default function ScanDetailPage() {
   const [vulnTotal, setVulnTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<ScanTab>('vulns');
-  const [sbomComponents, setSbomComponents] = useState<SBOMComponent[]>([]);
-  const [sbomTotal, setSbomTotal] = useState(0);
-  const [sbomLoading, setSbomLoading] = useState(false);
-  const [sbomLoaded, setSbomLoaded] = useState(false);
-  const [sbomNameFilter, setSbomNameFilter] = useState('');
-  const [sbomNameInput, setSbomNameInput] = useState('');
-  const [sbomTypeFilter, setSbomTypeFilter] = useState('');
-  const sbomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [severityFilter, setSeverityFilter] = useState<ActiveVulnerabilitySeverityFilter>('');
   const [pkgFilter, setPkgFilter] = useState('');
   const [pkgInput, setPkgInput] = useState('');
@@ -1010,47 +1004,6 @@ export default function ScanDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedVuln]);
 
-  // Debounce SBOM name filter
-  useEffect(() => {
-    if (sbomDebounceRef.current) clearTimeout(sbomDebounceRef.current);
-    sbomDebounceRef.current = setTimeout(() => setSbomNameFilter(sbomNameInput), 350);
-    return () => {
-      if (sbomDebounceRef.current) clearTimeout(sbomDebounceRef.current);
-    };
-  }, [sbomNameInput]);
-
-  // Load SBOM when tab is first opened
-  useEffect(() => {
-    return deferEffect(() => {
-      if (activeTab !== 'sbom' || sbomLoaded || !scan || scan.status !== 'completed') return;
-      setSbomLoading(true);
-      getScanSBOM(id, sbomNameFilter || undefined, sbomTypeFilter || undefined)
-        .then((res) => {
-          setSbomComponents(res.data ?? []);
-          setSbomTotal(res.total);
-          setSbomLoaded(true);
-        })
-        .catch(() => {})
-        .finally(() => setSbomLoading(false));
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, scan?.status]);
-
-  // Reload SBOM when filters change (after first load)
-  useEffect(() => {
-    return deferEffect(() => {
-      if (!sbomLoaded) return;
-      setSbomLoading(true);
-      getScanSBOM(id, sbomNameFilter || undefined, sbomTypeFilter || undefined)
-        .then((res) => {
-          setSbomComponents(res.data ?? []);
-          setSbomTotal(res.total);
-        })
-        .catch(() => {})
-        .finally(() => setSbomLoading(false));
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sbomNameFilter, sbomTypeFilter]);
 
   function loadVulns() {
     if (!scan || scan.status === 'pending' || scan.status === 'running' || !viewSettingsReady)
@@ -2367,7 +2320,7 @@ export default function ScanDetailPage() {
                   label: 'Compliance',
                   count: complianceViolationRows.length,
                 },
-                { id: 'sbom', label: 'SBOM', count: sbomTotal },
+                { id: 'sbom', label: 'Packages & SBOM' },
                 { id: 'timeline', label: 'Timeline', count: scan.step_logs?.length ?? 0 },
                 { id: 'details', label: 'Details', count: null },
               ].map((tab) => (
@@ -2401,113 +2354,13 @@ export default function ScanDetailPage() {
           xrayProviderScannedAt={scan.xray_provider_scanned_at}
         />
       )}
-      {/* SBOM tab */}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'sbom' && (
-        <div className="space-y-3">
-          <Card className="p-3">
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-              <SearchField
-                aria-label="Filter components by name"
-                className="min-w-0 md:flex-1"
-                value={sbomNameInput}
-                onChange={setSbomNameInput}
-                variant="secondary"
-              >
-                <SearchField.Group>
-                  <SearchField.SearchIcon />
-                  <SearchField.Input placeholder="Filter components by name…" />
-                  <SearchField.ClearButton />
-                </SearchField.Group>
-              </SearchField>
-              <Select
-                aria-label="Component type"
-                value={sbomTypeFilter || '__all__'}
-                onChange={(value: any) => {
-                  setSbomTypeFilter(String(value === '__all__' ? '' : (value ?? '')));
-                  setSbomLoaded(false);
-                }}
-                variant="secondary"
-                className="min-w-0 md:w-56 md:flex-none"
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="__all__">All Types</ListBox.Item>
-                    <ListBox.Item id="library">Library</ListBox.Item>
-                    <ListBox.Item id="application">Application</ListBox.Item>
-                    <ListBox.Item id="operating-system">OS</ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-            </div>
-          </Card>
-          <Card className="surface-panel rounded-2xl overflow-hidden">
-            <Table variant="secondary">
-              <Table.ScrollContainer>
-                <Table.Content aria-label="SBOM components" className="min-w-[860px]">
-                  <Table.Header>
-                    <Table.Column isRowHeader>Name</Table.Column>
-                    <Table.Column>Version</Table.Column>
-                    <Table.Column>Type</Table.Column>
-                    <Table.Column>License</Table.Column>
-                    <Table.Column>Package URL</Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {sbomLoading || sbomComponents.length === 0 ? (
-                      <Table.Row key="sbom-state" id="sbom-state">
-                        <Table.Cell colSpan={5}>
-                          {sbomLoading ? (
-                            <div className="py-12 text-center">
-                              <div className="flex justify-center">
-                                <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="py-12 text-center text-sm text-zinc-500">
-                              No SBOM components found for this scan.
-                            </div>
-                          )}
-                        </Table.Cell>
-                      </Table.Row>
-                    ) : (
-                      sbomComponents.map((c) => (
-                        <Table.Row key={c.id} id={c.id} className="hover:bg-[var(--row-hover)]">
-                          <Table.Cell className=" text-xs text-zinc-700 dark:text-zinc-200">
-                            {c.name}
-                          </Table.Cell>
-                          <Table.Cell className=" text-xs text-zinc-500">
-                            {c.version || '-'}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <span
-                              className="text-xs px-1.5 py-0.5 rounded font-medium"
-                              style={{
-                                background: 'var(--row-hover)',
-                                border: '1px solid var(--surface-border)',
-                                color: 'var(--text-muted)',
-                              }}
-                            >
-                              {c.type}
-                            </span>
-                          </Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-500">
-                            {c.license || '-'}
-                          </Table.Cell>
-                          <Table.Cell className=" text-xs text-zinc-400 max-w-xs truncate">
-                            <span title={c.package_url}>{c.package_url || '-'}</span>
-                          </Table.Cell>
-                        </Table.Row>
-                      ))
-                    )}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
-          </Card>
-        </div>
+        <SBOMWorkspace
+          loadComponents={(query) => getScanSBOM(id, query)}
+          loadGraph={(focus) => getScanSBOMGraph(id, focus)}
+          loadComponent={(componentId) => getScanSBOMComponent(id, componentId)}
+          downloadHref={`/api/v1/scans/${id}/sbom/download`}
+        />
       )}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'vulns' && (
         <Card className="overflow-hidden">

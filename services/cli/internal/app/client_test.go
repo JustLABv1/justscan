@@ -79,6 +79,13 @@ func TestPrintUploadedArchiveScan(t *testing.T) {
 	}
 }
 
+func TestVerdictExitIncludesScanExecutionError(t *testing.T) {
+	err := verdictExit(ScanResult{Verdict: "error", ErrorMessage: "uploaded OCI archive could not be opened"})
+	if err == nil || !strings.Contains(err.Error(), "uploaded OCI archive could not be opened") {
+		t.Fatalf("verdictExit() error = %v", err)
+	}
+}
+
 func TestClientCreatesAndReadsPipelineScan(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer token" {

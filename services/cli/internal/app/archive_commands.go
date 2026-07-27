@@ -109,7 +109,7 @@ func newLocalImageScanCommand(opt *options) *cobra.Command {
 	settings := localImageScanOptions{}
 	cmd := &cobra.Command{
 		Use:    "local IMAGE",
-		Short:  "Stream a local Docker or Podman image to JustScan for remote analysis",
+		Short:  "Upload a local Docker, Podman, or Apple Container image to JustScan for remote analysis",
 		Hidden: true,
 		Args:   cobra.ExactArgs(1),
 		RunE:   func(cmd *cobra.Command, args []string) error { return runLocalImageScan(cmd, opt, args[0], settings) },
@@ -119,7 +119,7 @@ func newLocalImageScanCommand(opt *options) *cobra.Command {
 }
 
 func addLocalImageScanFlags(cmd *cobra.Command, settings *localImageScanOptions) {
-	cmd.Flags().StringVar(&settings.engine, "engine", "docker", "container engine command (for example docker or podman)")
+	cmd.Flags().StringVar(&settings.engine, "engine", "docker", "container engine command (for example docker, podman, or container)")
 	cmd.Flags().StringVar(&settings.imageName, "name", "", "image name displayed in JustScan")
 	cmd.Flags().StringVar(&settings.imageTag, "tag", "", "image tag displayed in JustScan")
 	cmd.Flags().StringVar(&settings.platform, "platform", "", "target platform")
@@ -131,6 +131,9 @@ func addLocalImageScanFlags(cmd *cobra.Command, settings *localImageScanOptions)
 func runLocalImageScan(cmd *cobra.Command, opt *options, image string, settings localImageScanOptions) error {
 	if err := validateArchiveScanOptions(settings.noWait, settings.timeout, settings.pollInterval, opt.output); err != nil {
 		return &exitError{code: 2, err: err}
+	}
+	if isAppleContainerEngine(settings.engine) {
+		return runAppleContainerImageScan(cmd, opt, image, settings)
 	}
 	estimatedSize, err := localImageSize(cmd.Context(), settings.engine, image)
 	if err != nil {
@@ -144,7 +147,7 @@ func runLocalImageScan(cmd *cobra.Command, opt *options, image string, settings 
 		return &exitError{code: 2, err: err}
 	}
 	var stderr bytes.Buffer
-	imageExport := exec.CommandContext(cmd.Context(), settings.engine, "image", "save", image)
+	imageExport := exec.CommandContext(cmd.Context(), settings.engine, localImageSaveArguments(settings.engine, image, settings.platform, "")...)
 	imageExport.Stderr = &stderr
 	stdout, err := imageExport.StdoutPipe()
 	if err != nil {
@@ -180,6 +183,87 @@ func runLocalImageScan(cmd *cobra.Command, opt *options, image string, settings 
 		return &exitError{code: 2, err: err}
 	}
 	return finishUploadedArchiveScan(cmd, opt, client, orgID, accepted, settings.noWait, settings.timeout, settings.pollInterval)
+}
+
+func runAppleContainerImageScan(cmd *cobra.Command, opt *options, image string, settings localImageScanOptions) error {
+	client, orgID, err := resolveClient(cmd, opt)
+	if err != nil {
+		return &exitError{code: 2, err: err}
+	}
+
+	archive, err := os.CreateTemp("", "justscan-container-image-*.tar")
+	if err != nil {
+		return &exitError{code: 2, err: fmt.Errorf("create temporary Apple Container image archive: %w", err)}
+	}
+	archivePath := archive.Name()
+	if err := archive.Close(); err != nil {
+		_ = os.Remove(archivePath)
+		return &exitError{code: 2, err: fmt.Errorf("prepare temporary Apple Container image archive: %w", err)}
+	}
+	if err := os.Remove(archivePath); err != nil {
+		return &exitError{code: 2, err: fmt.Errorf("prepare temporary Apple Container image archive: %w", err)}
+	}
+	defer os.Remove(archivePath)
+
+	export := exec.CommandContext(cmd.Context(), settings.engine, localImageSaveArguments(settings.engine, image, settings.platform, archivePath)...)
+	output, err := export.CombinedOutput()
+	if err != nil {
+		message := strings.TrimSpace(string(output))
+		if message != "" {
+			return &exitError{code: 2, err: fmt.Errorf("%s image export failed: %s", settings.engine, message)}
+		}
+		return &exitError{code: 2, err: fmt.Errorf("%s image export failed: %w", settings.engine, err)}
+	}
+
+	info, err := os.Stat(archivePath)
+	if err != nil {
+		return &exitError{code: 2, err: fmt.Errorf("read exported Apple Container image archive: %w", err)}
+	}
+	if info.Size() > maxArchiveBytes {
+		return &exitError{code: 2, err: fmt.Errorf("%s image %q is approximately %s, above JustScan's 5 GiB archive upload limit", settings.engine, image, humanBytes(info.Size()))}
+	}
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return &exitError{code: 2, err: fmt.Errorf("open exported Apple Container image archive: %w", err)}
+	}
+	defer file.Close()
+
+	if settings.imageName == "" {
+		settings.imageName = localImageName(image)
+	}
+	if settings.imageTag == "" {
+		settings.imageTag = localImageTag(image)
+	}
+	filename := strings.NewReplacer("/", "_", ":", "_").Replace(image) + ".tar"
+	archiveReader := io.Reader(file)
+	var progress *uploadProgress
+	if opt.output == "human" {
+		progress = newUploadProgress(cmd.ErrOrStderr(), "Uploading local image", info.Size())
+		archiveReader = progress.wrap(file)
+	}
+	accepted, err := client.UploadArchive(cmd.Context(), orgID, archiveReader, filename, info.Size(), settings.imageName, settings.imageTag, settings.platform)
+	if progress != nil {
+		progress.finish()
+	}
+	if err != nil {
+		return &exitError{code: 2, err: err}
+	}
+	return finishUploadedArchiveScan(cmd, opt, client, orgID, accepted, settings.noWait, settings.timeout, settings.pollInterval)
+}
+
+func isAppleContainerEngine(engine string) bool {
+	return filepath.Base(strings.TrimSpace(engine)) == "container"
+}
+
+func localImageSaveArguments(engine, image, platform, outputPath string) []string {
+	if isAppleContainerEngine(engine) {
+		args := []string{"image", "save", "--output", outputPath}
+		if strings.TrimSpace(platform) != "" {
+			args = append(args, "--platform", platform)
+		}
+		return append(args, image)
+	}
+	return []string{"image", "save", image}
 }
 
 func localImageExportError(engine string, uploadErr, waitErr error, stderr string, stoppedForUploadError bool) error {

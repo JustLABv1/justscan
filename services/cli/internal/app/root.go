@@ -242,9 +242,9 @@ func newScanCommand(opt *options) *cobra.Command {
 	cmd.Flags().DurationVar(&timeout, "timeout", 30*time.Minute, "maximum wait duration")
 	cmd.Flags().DurationVar(&pollInterval, "poll-interval", 5*time.Second, "scan status polling interval")
 	cmd.Flags().BoolVar(&noWait, "no-wait", false, "return after scan acceptance")
-	cmd.Flags().BoolVar(&localMode, "local", false, "scan an image from the local Docker or Podman engine")
+	cmd.Flags().BoolVar(&localMode, "local", false, "scan an image from the local Docker, Podman, or Apple Container engine")
 	cmd.Flags().StringVar(&archiveSource, "archive", "", "scan an image archive from disk or an HTTPS URL")
-	cmd.Flags().StringVar(&engine, "engine", "docker", "container engine command for --local (for example docker or podman)")
+	cmd.Flags().StringVar(&engine, "engine", "docker", "container engine command for --local (for example docker, podman, or container)")
 	cmd.Flags().StringVar(&imageName, "name", "", "image name displayed in JustScan for --local or --archive")
 	cmd.Flags().StringVar(&imageTag, "tag", "", "image tag displayed in JustScan for --local or --archive")
 	cmd.Flags().StringVar(&archiveFilename, "filename", "", "archive filename when --archive URL does not include one")
@@ -407,6 +407,9 @@ func verdictExit(result ScanResult) error {
 	case "fail":
 		return &exitError{code: 1, err: errors.New("scan verdict failed")}
 	case "error":
+		if message := strings.TrimSpace(result.ErrorMessage); message != "" {
+			return &exitError{code: 2, err: fmt.Errorf("scan execution failed: %s", message)}
+		}
 		return &exitError{code: 2, err: errors.New("scan verdict returned an error")}
 	default:
 		return &exitError{code: 2, err: fmt.Errorf("unknown scan verdict %q", result.Verdict)}

@@ -222,6 +222,15 @@ func processScan(job ScanJob, cacheDir string) {
 		setFailed(db, scan, err.Error())
 		return
 	}
+	if scan.ScanSource == models.ScanSourceUploadedArchive {
+		preparedPath, cleanupPreparedPath, err := prepareUploadedArchiveInput(job.ArchivePath)
+		if err != nil {
+			setFailed(db, scan, "prepare uploaded archive: "+err.Error())
+			return
+		}
+		job.ArchivePath = preparedPath
+		defer cleanupPreparedPath()
+	}
 	recordScanStepOutput(ctx, db, scanID, "Worker started and is preparing the local scan environment.")
 	if job.Platform != "" {
 		recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Requested platform override: %s.", job.Platform))

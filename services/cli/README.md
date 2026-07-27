@@ -81,11 +81,14 @@ justscan scan --local my-app:local
 ```
 
 This asks Docker to stream the local image archive directly to JustScan—there is no temporary
-archive file and no local vulnerability scan. Use `--engine podman` for Podman. You can still
-upload an archive you already have:
+archive file and no local vulnerability scan. Use `--engine podman` for Podman or
+`--engine container` for Apple's Container CLI. Apple Container writes an OCI archive to a
+temporary file while it is uploaded, then the CLI removes it. You can still upload an archive
+you already have:
 
-The image must already be present in the selected local engine. Use `podman pull IMAGE` or
-`docker pull IMAGE` first; omit `local` when JustScan should pull the image from a registry.
+The image must already be present in the selected local engine. Use `docker pull IMAGE`,
+`podman pull IMAGE`, or `container image pull IMAGE` first; omit `local` when JustScan should
+pull the image from a registry.
 
 ```sh
 justscan scan --archive ./my-app.tar --name my-app --tag local

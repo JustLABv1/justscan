@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -73,5 +74,29 @@ func TestLocalImageExportKeepsUploadErrorAfterStoppingExporter(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "signal: killed") {
 		t.Fatalf("error exposed expected exporter termination: %v", err)
+	}
+}
+
+func TestAppleContainerImageSaveArguments(t *testing.T) {
+	if !isAppleContainerEngine("/usr/local/bin/container") {
+		t.Fatal("expected the Apple Container executable path to be recognized")
+	}
+	if isAppleContainerEngine("docker") {
+		t.Fatal("docker must not be recognized as the Apple Container executable")
+	}
+
+	got := localImageSaveArguments("container", "example/app:latest", "linux/arm64", "/tmp/image.tar")
+	want := []string{"image", "save", "--output", "/tmp/image.tar", "--platform", "linux/arm64", "example/app:latest"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Apple Container save arguments = %#v, want %#v", got, want)
+	}
+}
+
+func TestDockerAndPodmanImageSaveArgumentsRemainStreamingCompatible(t *testing.T) {
+	want := []string{"image", "save", "example/app:latest"}
+	for _, engine := range []string{"docker", "podman"} {
+		if got := localImageSaveArguments(engine, "example/app:latest", "linux/arm64", ""); !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s save arguments = %#v, want %#v", engine, got, want)
+		}
 	}
 }

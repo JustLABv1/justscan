@@ -141,23 +141,18 @@ func QualifyImageNameForRegistryWithXrayRepository(imageName string, registry *m
 	}
 
 	host := normalizeRegistryHost(registry.URL)
-	prefix := ""
 	remainder := strings.TrimPrefix(strings.Trim(trimmedName, "/"), "/")
 	if hasRegistryHost(trimmedName) {
 		if host == "" || !strings.HasPrefix(trimmedName, host+"/") {
 			return trimmedName
 		}
-		prefix = host + "/"
-		remainder = strings.TrimPrefix(trimmedName, prefix)
+		// A fully qualified image on the selected Artifactory host already
+		// carries its repository key as the first path segment. Preserve that
+		// explicit routing instead of forcing the registry's default Xray repo.
+		return trimmedName
 	}
 
 	remainder = qualifyXrayRepositoryPath(remainder, effectiveXrayRepository(registry, xrayRepository))
-	if prefix != "" {
-		return prefix + remainder
-	}
-	if hasRegistryHost(trimmedName) {
-		return trimmedName
-	}
 	return host + "/" + remainder
 }
 

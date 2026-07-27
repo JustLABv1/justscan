@@ -48,7 +48,7 @@ func TestNormalizeScanTargetWithXrayRepository_DoesNotDoublePrefix(t *testing.T)
 	}
 }
 
-func TestNormalizeScanTargetWithXrayRepository_InsertsRepoAfterMatchingHost(t *testing.T) {
+func TestNormalizeScanTargetWithXrayRepository_PreservesExplicitRepoAfterMatchingHost(t *testing.T) {
 	registry := &models.Registry{
 		URL:            "https://registry.example.com",
 		ScanProvider:   models.ScanProviderArtifactoryXray,
@@ -56,8 +56,26 @@ func TestNormalizeScanTargetWithXrayRepository_InsertsRepoAfterMatchingHost(t *t
 	}
 
 	imageName, _ := NormalizeScanTargetWithXrayRepository("registry.example.com/n8nio/n8n", "latest", registry, "")
-	if imageName != "registry.example.com/docker-remote/n8nio/n8n" {
-		t.Fatalf("expected repo insertion after matching host, got %q", imageName)
+	if imageName != "registry.example.com/n8nio/n8n" {
+		t.Fatalf("expected explicit repository path to be preserved, got %q", imageName)
+	}
+}
+
+func TestNormalizeScanTargetWithXrayRepository_PreservesNestedExplicitRemotePath(t *testing.T) {
+	registry := &models.Registry{
+		URL:            "https://artifactory.example.com",
+		ScanProvider:   models.ScanProviderArtifactoryXray,
+		XrayRepository: "default-remote",
+	}
+
+	imageName, _ := NormalizeScanTargetWithXrayRepository(
+		"artifactory.example.com/docker-remote/ghcr-remote/justlabv1/justapps",
+		"latest",
+		registry,
+		"",
+	)
+	if imageName != "artifactory.example.com/docker-remote/ghcr-remote/justlabv1/justapps" {
+		t.Fatalf("expected nested explicit remote path to be preserved, got %q", imageName)
 	}
 }
 

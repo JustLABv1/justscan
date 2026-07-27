@@ -6,6 +6,7 @@ import {
   Card,
   Checkbox,
   Chip,
+  Description,
   Label,
   ListBox,
   Modal,
@@ -16,9 +17,11 @@ import {
 } from '@heroui/react';
 import {
   ArrowLeft01Icon,
+  Clock01Icon,
   Download01Icon,
   Folder01Icon,
   GitBranchIcon,
+  PackageIcon,
   Search01Icon,
   Settings02Icon,
 } from 'hugeicons-react';
@@ -483,12 +486,17 @@ export default function GitRepositoryDetailPage() {
         <>
           {candidates.length > 0 ? (
             <Card>
-              <Card.Header>
-                <Card.Title>Discovery review</Card.Title>
-                <Card.Description>
-                  JustScan found deployment markers it cannot safely classify on its own. Ignore a
-                  marker when it is not a deployment input.
-                </Card.Description>
+              <Card.Header className="!flex-row items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+                  <Search01Icon size={17} />
+                </span>
+                <div>
+                  <Card.Title>Discovery review</Card.Title>
+                  <Card.Description>
+                    JustScan found deployment markers it cannot safely classify on its own. Ignore a
+                    marker when it is not a deployment input.
+                  </Card.Description>
+                </div>
               </Card.Header>
               <Card.Content>
                 <Accordion
@@ -584,71 +592,30 @@ export default function GitRepositoryDetailPage() {
               </Card.Content>
             </Card>
           ) : null}
-          <Card>
-            <Card.Header>
-              <Card.Title>Repository tree</Card.Title>
-              <Card.Description>
-                {repository.discovery_mode === 'manifests'
-                  ? 'Each manifest lists the workload images JustScan found.'
-                  : 'Each deployment target lists images from its effective rendered manifests.'}{' '}
-                A dry run does not queue scans.
-              </Card.Description>
-            </Card.Header>
-            <Card.Content>
-              <div className="space-y-5">
-                {filesByDeploymentType.map(([deploymentType, items]) => (
-                  <section key={deploymentType}>
-                    <div className="mb-2 flex items-center gap-2">
-                      <p className="text-sm font-medium">{deploymentType}</p>
-                      <Chip size="sm" variant="soft">
-                        {items.length} targets
-                      </Chip>
-                    </div>
-                    <Accordion variant="surface">
-                      {items.map(([file, refs]) => (
-                        <Accordion.Item
-                          key={`${deploymentType}:${file}`}
-                          id={`${deploymentType}:${file}`}
-                        >
-                          <Accordion.Heading>
-                            <Accordion.Trigger>
-                              <span className="flex min-w-0 flex-1 items-center gap-2">
-                                <Folder01Icon className="shrink-0" size={16} />
-                                <span className="truncate font-mono text-xs">{file}</span>
-                              </span>
-                              <Chip size="sm" variant="soft">
-                                {new Set(refs).size} images
-                              </Chip>
-                              <Accordion.Indicator />
-                            </Accordion.Trigger>
-                          </Accordion.Heading>
-                          <Accordion.Panel>
-                            <Accordion.Body className="flex flex-wrap gap-2">
-                              {[...new Set(refs)].map((ref) => (
-                                <Chip key={ref} size="sm" variant="soft">
-                                  {ref}
-                                </Chip>
-                              ))}
-                            </Accordion.Body>
-                          </Accordion.Panel>
-                        </Accordion.Item>
-                      ))}
-                    </Accordion>
-                  </section>
-                ))}
+          <Card className="overflow-hidden">
+            <Card.Header className="!flex-row items-start justify-between gap-4 border-b border-divider/70">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+                  <PackageIcon size={17} />
+                </span>
+                <div className="min-w-0">
+                  <Card.Title>Discovered images</Card.Title>
+                  <Card.Description>
+                    Review the images found in this dry run, then scan only the workloads you want to track.
+                  </Card.Description>
+                </div>
               </div>
-            </Card.Content>
-          </Card>
-          <Card>
-            <Card.Header>
-              <Card.Title>Discovered images</Card.Title>
-              <Card.Description>
-                {preview.run.image_count} images from dry run{' '}
-                <Chip size="sm">{timeAgo(preview.run.created_at)}</Chip>.
-              </Card.Description>
+              <div className="flex shrink-0 items-center gap-2">
+                <Chip size="sm" variant="soft">
+                  {preview.run.image_count} images
+                </Chip>
+                <Chip size="sm" variant="soft">
+                  {timeAgo(preview.run.created_at)}
+                </Chip>
+              </div>
             </Card.Header>
-            <Card.Content className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            <Card.Content className="p-0">
+              <div className="m-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-2.5">
                 <Checkbox
                   isDisabled={selectableImages.length === 0}
                   isIndeterminate={
@@ -665,7 +632,12 @@ export default function GitRepositoryDetailPage() {
                     <Checkbox.Control>
                       <Checkbox.Indicator />
                     </Checkbox.Control>
-                    <Label>Select all scan-enabled images</Label>
+                    <div className="flex flex-col gap-0.5">
+                      <Label>Select all scan-enabled images</Label>
+                      <Description>
+                        {selectableImages.length} ready to add to a scan
+                      </Description>
+                    </div>
                   </Checkbox.Content>
                 </Checkbox>
                 <div className="flex flex-wrap gap-2">
@@ -673,7 +645,7 @@ export default function GitRepositoryDetailPage() {
                     isDisabled={selectedImageRefs.size === 0}
                     isPending={startingScan}
                     size="sm"
-                    variant="secondary"
+                    variant="primary"
                     onPress={() => void startScan([...selectedImageRefs])}
                   >
                     Scan selected{selectedImageRefs.size > 0 ? ` (${selectedImageRefs.size})` : ''}
@@ -689,16 +661,19 @@ export default function GitRepositoryDetailPage() {
                   </Button>
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="border-t border-divider/70">
                 {previewImages.map((image) => {
                   const locations = locationsFor(image);
                   const exclusion = exclusionByRef.get(image.full_ref);
                   const latestScan = latestScanByRef.get(image.full_ref);
                   return (
-                    <div key={image.id} className="flex items-start gap-3">
+                    <div
+                      key={image.id}
+                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 border-b border-divider/70 px-4 py-3 last:border-b-0 transition-colors hover:bg-surface-secondary"
+                    >
                       <Checkbox
                         aria-label={`Select ${image.full_ref}`}
-                        className="mt-3 shrink-0"
+                        className="mt-2 shrink-0"
                         isDisabled={Boolean(exclusion)}
                         isSelected={selectedImageRefs.has(image.full_ref)}
                         onChange={(next) => toggleImage(image.full_ref, next)}
@@ -710,12 +685,29 @@ export default function GitRepositoryDetailPage() {
                           </Checkbox.Control>
                         </Checkbox.Content>
                       </Checkbox>
-                      <Accordion className="min-w-0 flex-1" hideSeparator variant="surface">
+                      <Accordion className="min-w-0 flex-1" hideSeparator>
                         <Accordion.Item id={image.id}>
                           <Accordion.Heading>
-                            <Accordion.Trigger className="min-w-0">
-                              <span className="min-w-0 flex-1 truncate text-left">
-                                <code className="block truncate text-xs">{image.full_ref}</code>
+                            <Accordion.Trigger className="min-w-0 py-0">
+                              <span className="flex min-w-0 flex-1 items-start gap-3 text-left">
+                                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-tertiary text-muted">
+                                  <PackageIcon size={16} />
+                                </span>
+                                <span className="min-w-0 flex-1 space-y-1.5">
+                                  <code className="block truncate text-xs font-medium text-foreground">
+                                    {image.full_ref}
+                                  </code>
+                                  <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                                    <span>
+                                      {locations.length} deployment {locations.length === 1 ? 'location' : 'locations'}
+                                    </span>
+                                    {latestScan ? (
+                                      <span>Last scanned {timeAgo(latestScan.created_at)}</span>
+                                    ) : (
+                                      <span>Not scanned yet</span>
+                                    )}
+                                  </span>
+                                </span>
                               </span>
                               {exclusion ? (
                                 <Chip className="shrink-0" color="warning" size="sm" variant="soft">
@@ -732,40 +724,42 @@ export default function GitRepositoryDetailPage() {
                                   {latestScan.status}
                                 </Chip>
                               ) : null}
-                              <Chip className="shrink-0" size="sm" variant="soft">
-                                {locations.length} locations
-                              </Chip>
                               <Accordion.Indicator className="shrink-0" />
                             </Accordion.Trigger>
                           </Accordion.Heading>
                           <Accordion.Panel>
-                            <Accordion.Body className="space-y-3">
-                              {locations.map((location) => (
-                                <div key={`${location.file}:${location.path}`} className="text-xs">
-                                  <p>
-                                    {location.target
-                                      ? `Rendered from ${location.target}`
-                                      : location.file}{' '}
-                                    <span className="text-foreground/55">· {location.path}</span>
-                                  </p>
-                                  <p className="mt-1 text-foreground/60">
-                                    {location.kind ?? 'Manifest'}
-                                    {location.name ? `/${location.name}` : ''}
-                                    {location.namespace ? ` · ${location.namespace}` : ''}
-                                  </p>
-                                </div>
-                              ))}
+                            <Accordion.Body className="mt-3 border-t border-divider/70 pt-3">
+                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted">
+                                Deployment locations
+                              </p>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {locations.map((location) => (
+                                  <div
+                                    key={`${location.file}:${location.path}`}
+                                    className="rounded-lg border border-divider/70 bg-surface-secondary px-3 py-2.5 text-xs"
+                                  >
+                                    <p className="truncate font-mono text-foreground">
+                                      {location.target ? `Rendered from ${location.target}` : location.file}
+                                    </p>
+                                    <p className="mt-1 truncate text-muted">{location.path}</p>
+                                    <p className="mt-1.5 text-muted">
+                                      {location.kind ?? 'Manifest'}
+                                      {location.name ? `/${location.name}` : ''}
+                                      {location.namespace ? ` · ${location.namespace}` : ''}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
                               {latestScan ? (
                                 <Button
+                                  className="mt-3"
                                   size="sm"
                                   variant="secondary"
                                   onPress={() => router.push(`/scans/details/${latestScan.scan_id}`)}
                                 >
                                   Open latest scan · {timeAgo(latestScan.created_at)}
                                 </Button>
-                              ) : (
-                                <p className="text-xs text-foreground/60">Not scanned from this repository yet.</p>
-                              )}
+                              ) : null}
                             </Accordion.Body>
                           </Accordion.Panel>
                         </Accordion.Item>
@@ -797,12 +791,91 @@ export default function GitRepositoryDetailPage() {
               </div>
             </Card.Content>
           </Card>
+          <Card className="overflow-hidden p-0">
+            <Accordion hideSeparator>
+              <Accordion.Item id="repository-tree">
+                <Accordion.Heading>
+                  <Accordion.Trigger>
+                    <span className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+                        <Folder01Icon size={17} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-foreground">Repository tree</span>
+                        <span className="mt-0.5 block truncate text-xs text-muted">
+                          {repository.discovery_mode === 'manifests'
+                            ? 'Source manifests and their detected image references'
+                            : 'Rendered deployment targets and their detected image references'}
+                        </span>
+                      </span>
+                    </span>
+                    <Chip className="shrink-0" size="sm" variant="soft">
+                      {files.length} {files.length === 1 ? 'file' : 'files'}
+                    </Chip>
+                    <Accordion.Indicator className="shrink-0" />
+                  </Accordion.Trigger>
+                </Accordion.Heading>
+                <Accordion.Panel>
+                  <Accordion.Body className="border-t border-divider/70 px-4 py-4">
+                    <div className="space-y-5">
+                      {filesByDeploymentType.map(([deploymentType, items]) => (
+                        <section key={deploymentType}>
+                          <div className="mb-2 flex items-center gap-2">
+                            <p className="text-sm font-medium">{deploymentType}</p>
+                            <Chip size="sm" variant="soft">
+                              {items.length} targets
+                            </Chip>
+                          </div>
+                          <Accordion variant="surface">
+                            {items.map(([file, refs]) => (
+                              <Accordion.Item
+                                key={`${deploymentType}:${file}`}
+                                id={`${deploymentType}:${file}`}
+                              >
+                                <Accordion.Heading>
+                                  <Accordion.Trigger>
+                                    <span className="flex min-w-0 flex-1 items-center gap-2">
+                                      <Folder01Icon className="shrink-0" size={16} />
+                                      <span className="truncate font-mono text-xs">{file}</span>
+                                    </span>
+                                    <Chip size="sm" variant="soft">
+                                      {new Set(refs).size} images
+                                    </Chip>
+                                    <Accordion.Indicator />
+                                  </Accordion.Trigger>
+                                </Accordion.Heading>
+                                <Accordion.Panel>
+                                  <Accordion.Body className="flex flex-wrap gap-2">
+                                    {[...new Set(refs)].map((ref) => (
+                                      <Chip key={ref} size="sm" variant="soft">
+                                        {ref}
+                                      </Chip>
+                                    ))}
+                                  </Accordion.Body>
+                                </Accordion.Panel>
+                              </Accordion.Item>
+                            ))}
+                          </Accordion>
+                        </section>
+                      ))}
+                    </div>
+                  </Accordion.Body>
+                </Accordion.Panel>
+              </Accordion.Item>
+            </Accordion>
+          </Card>
         </>
       )}
 
       <Card>
-        <Card.Header>
-          <Card.Title>Recent activity</Card.Title>
+        <Card.Header className="!flex-row items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+            <Clock01Icon size={17} />
+          </span>
+          <div>
+            <Card.Title>Recent activity</Card.Title>
+            <Card.Description>Latest discovery and scan runs for this repository.</Card.Description>
+          </div>
         </Card.Header>
         <Card.Content className="space-y-2">
           {runs.slice(0, 6).map((run) => (

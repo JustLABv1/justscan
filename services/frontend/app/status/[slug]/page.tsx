@@ -24,8 +24,9 @@ import {
   Button,
   Card,
   Chip,
+  Drawer,
   ListBox,
-  Modal,
+  Popover,
   SearchField,
   Select,
   Skeleton,
@@ -33,18 +34,24 @@ import {
   Tooltip,
   useOverlayState,
 } from '@heroui/react';
-import { ArrowRight01Icon, Cancel01Icon, PackageIcon, Shield01Icon } from 'hugeicons-react';
+import {
+  ArrowRight01Icon,
+  Cancel01Icon,
+  FilterIcon,
+  PackageIcon,
+  Shield01Icon,
+} from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 const AUTO_REFRESH_MS = 30000;
 const RECENT_SCAN_SEGMENTS = 14;
-const SCAN_HISTORY_SKELETON_KEYS = Array.from(
-  { length: 8 },
-  (_, index) => `scan-history-skeleton-${index + 1}`
-);
+const SCAN_HISTORY_DAY_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+});
 const STATUS_PRIORITY: Record<string, number> = {
   failed: 0,
   blocked_by_xray_policy: 1,
@@ -126,7 +133,9 @@ function getEffectiveScanStatus(status: string, externalStatus?: string) {
   return resolveDisplayStatus(status, externalStatus);
 }
 
-function getFindingTotal(item: StatusPageItem) {
+function getFindingTotal(
+  item: Pick<StatusPageItem, 'critical_count' | 'high_count' | 'medium_count' | 'low_count'>
+) {
   return item.critical_count + item.high_count + item.medium_count + item.low_count;
 }
 
@@ -201,15 +210,6 @@ function compareItemsByPriority(left: StatusPageItem, right: StatusPageItem) {
   );
 }
 
-function compactErrorSummary(message?: string) {
-  const firstLine = message
-    ?.split('\n')
-    .map((line) => line.trim())
-    .find(Boolean);
-  if (!firstLine) return '';
-  return firstLine.length > 180 ? `${firstLine.slice(0, 177)}...` : firstLine;
-}
-
 function getRefreshCadence(lastLoadedAt: number | null, now: number) {
   const elapsedMs = lastLoadedAt ? Math.max(0, now - lastLoadedAt) : 0;
 
@@ -262,74 +262,6 @@ function StatusDot({ status }: { status: string }) {
   );
 }
 
-function getServiceTone(item: StatusPageItem) {
-  const operationalStatus = getPresentationStatus(item);
-  const exposureStatus = getExposureStatus(item, operationalStatus);
-  const totalFindings = getFindingTotal(item);
-
-  if (ACTIVE_SCAN_STATUSES.has(operationalStatus)) {
-    return {
-      label: 'Scanning',
-      detail: item.current_step ? formatStatusLabel(item.current_step) : 'Scan in progress',
-      color: STATUS_COLOR[operationalStatus] ?? STATUS_COLOR.running,
-    };
-  }
-
-  if (operationalStatus === 'failed') {
-    return {
-      label: 'Issue Detected',
-      detail: compactErrorSummary(item.error_message) || 'Latest scan failed',
-      color: STATUS_COLOR.failed,
-    };
-  }
-
-  if (operationalStatus === 'blocked_by_xray_policy') {
-    return {
-      label: 'Xray Policy Blocked',
-      detail: 'Xray blocked the latest snapshot',
-      color: STATUS_COLOR.blocked_by_xray_policy,
-    };
-  }
-
-  if (item.compliance_status === 'fail') {
-    return {
-      label: 'Organization Policy Failed',
-      detail: 'The latest completed scan failed an organization policy',
-      color: STATUS_COLOR.failed,
-    };
-  }
-
-  if (operationalStatus === 'stale') {
-    return {
-      label: 'Stale Snapshot',
-      detail: `Observed ${timeAgo(item.observed_at)}`,
-      color: STATUS_COLOR.stale,
-    };
-  }
-
-  if (exposureStatus === 'high_risk') {
-    return {
-      label: 'Findings Present',
-      detail: `${totalFindings.toLocaleString()} findings in the latest scan`,
-      color: EXPOSURE_COLOR.high_risk,
-    };
-  }
-
-  if (exposureStatus === 'findings_present') {
-    return {
-      label: 'Findings Present',
-      detail: `${totalFindings.toLocaleString()} findings in the latest scan`,
-      color: EXPOSURE_COLOR.findings_present,
-    };
-  }
-
-  return {
-    label: 'Operational',
-    detail: 'No known issues in the latest snapshot',
-    color: STATUS_COLOR.healthy,
-  };
-}
-
 type PolicyDecision = 'passed' | 'failed' | 'not_evaluated';
 
 function getPolicyDecision(item: Pick<StatusPageItem, 'compliance_status'>): PolicyDecision {
@@ -342,10 +274,13 @@ function getPolicyDecisionMeta(decision: PolicyDecision) {
   if (decision === 'failed') {
     return { label: 'Org policy failed', color: 'danger' as const, tone: STATUS_COLOR.failed };
   }
-  if (decision === 'passed') {
-    return { label: 'Org policy passed', color: 'success' as const, tone: STATUS_COLOR.healthy };
-  }
-  return { label: 'No org policy', color: 'default' as const, tone: EXPOSURE_COLOR.unknown };
+  return null;
+}
+
+function getPolicyDecisionLabel(decision: PolicyDecision) {
+  if (decision === 'failed') return 'org policy failed';
+  if (decision === 'passed') return 'org policy passed';
+  return '';
 }
 
 function getOperationalStatusMeta(status: string) {
@@ -398,16 +333,10 @@ function getScanHistoryMeta(
   };
 }
 
-function formatScanner(scanProvider?: string) {
-  if (!scanProvider) return '-';
-  if (scanProvider.toLowerCase() === 'xray') return 'Xray';
-  if (scanProvider.toLowerCase() === 'trivy') return 'Trivy';
-  return scanProvider;
-}
-
 function formatScanHistoryOptionLabel(scan: StatusPageScanSummary) {
   const meta = getScanHistoryMeta(scan);
-  return `${scan.is_latest ? 'Latest' : 'Previous'} · ${meta.label} · ${timeAgo(scan.observed_at)}`;
+  const findings = getFindingTotal(scan);
+  return `${scan.is_latest ? 'Latest' : 'Previous'} · ${meta.label} · ${findings} finding${findings === 1 ? '' : 's'} · ${timeAgo(scan.observed_at)}`;
 }
 
 function buildFallbackScanSummary(item: StatusPageItem): StatusPageScanSummary {
@@ -440,88 +369,115 @@ function getRecentScanStripScans(item: StatusPageItem, scans?: StatusPageScanSum
     .toSorted(
       (left, right) => new Date(left.observed_at).getTime() - new Date(right.observed_at).getTime()
     )
-    .slice(-RECENT_SCAN_SEGMENTS);
+    .slice(-RECENT_SCAN_SEGMENTS * 12);
+}
+
+type ScanHistoryDay = {
+  key: string;
+  label: string;
+  scan: StatusPageScanSummary | null;
+  scanCount: number;
+};
+
+function getScanHistoryDays(
+  item: StatusPageItem,
+  scans?: StatusPageScanSummary[]
+): ScanHistoryDay[] {
+  const recentScans = getRecentScanStripScans(item, scans);
+  const dayKey = (value: Date) =>
+    `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+  const scansByDay = new Map<string, StatusPageScanSummary[]>();
+
+  for (const scan of recentScans) {
+    const key = dayKey(new Date(scan.observed_at));
+    scansByDay.set(key, [...(scansByDay.get(key) ?? []), scan]);
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: RECENT_SCAN_SEGMENTS }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (RECENT_SCAN_SEGMENTS - 1 - index));
+    const key = dayKey(date);
+    const dayScans = scansByDay.get(key) ?? [];
+    const scan = dayScans.at(-1) ?? null;
+
+    return {
+      key,
+      label: SCAN_HISTORY_DAY_FORMATTER.format(date),
+      scan,
+      scanCount: dayScans.length,
+    };
+  });
 }
 
 function RecentScanStrip({
   item,
   scans,
-  compact,
-  onOpen,
 }: {
   item: StatusPageItem;
   scans?: StatusPageScanSummary[];
-  compact?: boolean;
-  onOpen: (item: StatusPageItem) => void;
 }) {
-  const tone = getServiceTone(item);
   const hasLoadedHistory = scans !== undefined;
-  const recentScans = getRecentScanStripScans(item, scans);
-  const latestScan = recentScans[recentScans.length - 1] ?? buildFallbackScanSummary(item);
+  const historyDays = getScanHistoryDays(item, scans);
 
   if (!hasLoadedHistory) {
     return (
-      <div className="flex gap-1.5" aria-label="Loading scan history">
-        {SCAN_HISTORY_SKELETON_KEYS.slice(0, compact ? 5 : 8).map((key) => (
-          <Skeleton
-            key={key}
-            className={compact ? 'h-14 w-2.5 rounded-[3px]' : 'h-10 flex-1 rounded-[3px]'}
-          />
+      <div className="flex items-end gap-1" aria-label="Loading 14 day scan history">
+        {Array.from({ length: RECENT_SCAN_SEGMENTS }, (_, index) => (
+          <Skeleton key={`scan-history-skeleton-${index}`} className="h-10 w-3 rounded-sm" />
         ))}
       </div>
     );
   }
 
-  if (compact) {
-    return (
-      <div className="flex gap-1.5 overflow-hidden" aria-label="14 day scan history">
-        {recentScans.map((scan) => {
-          const { color } = getScanHistoryMeta(scan);
-          return (
-            <Tooltip key={scan.scan_id} delay={100}>
-              <Tooltip.Trigger aria-label={formatScanHistoryOptionLabel(scan)}>
-                <button
-                  type="button"
-                  aria-label={formatScanHistoryOptionLabel(scan)}
-                  className="h-14 w-2.5 shrink-0 rounded-[3px] outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  style={{ background: color, opacity: scan.is_latest ? 1 : 0.84 }}
-                  onClick={() => onOpen(item)}
-                />
-              </Tooltip.Trigger>
-              <Tooltip.Content showArrow>
-                <Tooltip.Arrow />
-                {formatScanHistoryOptionLabel(scan)}
-              </Tooltip.Content>
-            </Tooltip>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-3">
-      <div className="flex gap-1.5 overflow-hidden" aria-label="Recent scan history">
-        {recentScans.map((scan) => {
-          const { color } = getScanHistoryMeta(scan);
-          return (
+    <div className="flex items-end gap-1" aria-label="14 day scan history">
+      {historyDays.map((day) => {
+        const meta = day.scan ? getScanHistoryMeta(day.scan) : null;
+        const content = (
+          <span
+            className="flex h-10 w-3 shrink-0 items-end rounded-sm bg-surface-secondary p-px"
+            aria-hidden
+          >
             <span
-              key={scan.scan_id}
-              className="h-10 flex-1 rounded-[3px]"
-              style={{ background: color, opacity: scan.is_latest ? 1 : 0.84 }}
-              title={formatScanHistoryOptionLabel(scan)}
-              aria-label={formatScanHistoryOptionLabel(scan)}
+              className="h-full w-full rounded-[2px] transition-colors duration-150"
+              style={{
+                background: meta?.color ?? 'var(--border-subtle)',
+                opacity: day.scan?.is_latest ? 1 : 0.86,
+              }}
             />
+          </span>
+        );
+
+        if (!day.scan) {
+          return (
+            <span key={day.key} aria-label={`${day.label}: no scans`}>
+              {content}
+            </span>
           );
-        })}
-      </div>
-      <div className="flex items-center gap-4 text-[12px] text-default-500">
-        <span>Older scans</span>
-        <span className="h-px flex-1 bg-divider" />
-        <span style={{ color: tone.color }}>{recentScans.length} recent scans</span>
-        <span className="h-px flex-1 bg-divider" />
-        <span>{timeAgo(latestScan.observed_at)}</span>
-      </div>
+        }
+
+        const label = `${day.label}: ${formatScanHistoryOptionLabel(day.scan)}${day.scanCount > 1 ? ` · ${day.scanCount} scans` : ''}`;
+        return (
+          <Tooltip key={day.key} delay={100}>
+            <Tooltip.Trigger aria-label={label}>
+              <Link
+                href={`/scans/details/${day.scan.scan_id}`}
+                aria-label={label}
+                className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                {content}
+              </Link>
+            </Tooltip.Trigger>
+            <Tooltip.Content showArrow>
+              <Tooltip.Arrow />
+              {label}
+            </Tooltip.Content>
+          </Tooltip>
+        );
+      })}
     </div>
   );
 }
@@ -532,9 +488,11 @@ function ImageStatusChips({ item }: { item: StatusPageItem }) {
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <Chip color={decisionMeta.color} size="sm" variant="soft">
-        <Chip.Label>{decisionMeta.label}</Chip.Label>
-      </Chip>
+      {decisionMeta ? (
+        <Chip color={decisionMeta.color} size="sm" variant="soft">
+          <Chip.Label>{decisionMeta.label}</Chip.Label>
+        </Chip>
+      ) : null}
       <Chip color={operationalMeta.color} size="sm" variant="soft">
         <Chip.Label>{operationalMeta.label}</Chip.Label>
       </Chip>
@@ -542,32 +500,41 @@ function ImageStatusChips({ item }: { item: StatusPageItem }) {
   );
 }
 
-function FindingDeltas({ item }: { item: StatusPageItem }) {
+function FindingsSummary({ item }: { item: StatusPageItem }) {
+  const totalFindings = getFindingTotal(item);
   const deltas = [
     { label: 'critical', value: item.delta_critical_count },
     { label: 'high', value: item.delta_high_count },
     { label: 'medium', value: item.delta_medium_count },
     { label: 'low', value: item.delta_low_count },
   ];
+  const totalDelta = deltas.reduce((sum, delta) => sum + (delta.value ?? 0), 0);
   const hasPreviousScan = deltas.some((delta) => delta.value !== undefined);
-  if (!hasPreviousScan) return null;
-
-  const changed = deltas.filter((delta) => delta.value && delta.value !== 0).slice(0, 2);
-  if (changed.length === 0) {
-    return <p className="mt-1 text-[11px] text-muted">No finding changes</p>;
-  }
+  const trendLabel = !hasPreviousScan
+    ? 'First recorded scan'
+    : totalDelta === 0
+      ? 'No change from previous scan'
+      : `${totalDelta > 0 ? '+' : ''}${totalDelta} from previous scan`;
 
   return (
-    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] tabular-nums">
-      {changed.map((delta) => (
-        <span
-          key={delta.label}
-          className={Number(delta.value) > 0 ? 'text-danger' : 'text-success'}
-        >
-          {Number(delta.value) > 0 ? '+' : ''}
-          {delta.value} {delta.label}
-        </span>
-      ))}
+    <div className="space-y-1.5 tabular-nums">
+      <div className="flex items-baseline gap-2">
+        <span className="text-base font-semibold text-foreground">{totalFindings}</span>
+        <span className="text-xs text-muted">findings</span>
+        <span className="text-xs text-danger">{item.critical_count} critical</span>
+        <span className="text-xs text-warning">{item.high_count} high</span>
+      </div>
+      <p
+        className={
+          totalDelta > 0
+            ? 'text-[11px] text-danger'
+            : totalDelta < 0
+              ? 'text-[11px] text-success'
+              : 'text-[11px] text-muted'
+        }
+      >
+        {trendLabel}
+      </p>
     </div>
   );
 }
@@ -575,11 +542,9 @@ function FindingDeltas({ item }: { item: StatusPageItem }) {
 function MobileImageStatusCard({
   item,
   scans,
-  onOpen,
 }: {
   item: StatusPageItem;
   scans?: StatusPageScanSummary[];
-  onOpen: (item: StatusPageItem) => void;
 }) {
   const totalFindings = getFindingTotal(item);
 
@@ -591,25 +556,25 @@ function MobileImageStatusCard({
             <PackageIcon size={17} aria-hidden />
           </span>
           <div className="min-w-0">
-            <button
-              type="button"
+            <Link
+              href={`/scans/details/${item.latest_scan_id}`}
               className="block max-w-full truncate text-left text-sm font-semibold text-foreground hover:underline"
-              onClick={() => onOpen(item)}
             >
               {item.image_name}
-            </button>
+            </Link>
             <p className="mt-0.5 truncate font-mono text-[11px] text-muted">{item.image_tag}</p>
           </div>
         </div>
-        <Button
-          isIconOnly
-          aria-label={`View scan history for ${item.image_name}:${item.image_tag}`}
-          size="sm"
-          variant="tertiary"
-          onPress={() => onOpen(item)}
-        >
-          <ArrowRight01Icon size={16} aria-hidden />
-        </Button>
+        <Link href={`/scans/details/${item.latest_scan_id}`}>
+          <Button
+            isIconOnly
+            aria-label={`View scan details for ${item.image_name}:${item.image_tag}`}
+            size="sm"
+            variant="tertiary"
+          >
+            <ArrowRight01Icon size={16} aria-hidden />
+          </Button>
+        </Link>
       </div>
 
       <div className="mt-3">
@@ -630,14 +595,11 @@ function MobileImageStatusCard({
           <p className="mt-0.5 font-semibold tabular-nums text-foreground">{totalFindings}</p>
         </div>
       </div>
-      <FindingDeltas item={item} />
+      <FindingsSummary item={item} />
 
       <div className="mt-4 border-t border-divider/70 pt-3">
-        <RecentScanStrip compact item={item} onOpen={onOpen} scans={scans} />
-        <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted">
-          <span>{formatScanner(item.scan_provider)}</span>
-          <span>Scanned {timeAgo(item.observed_at)}</span>
-        </div>
+        <RecentScanStrip item={item} scans={scans} />
+        <p className="mt-3 text-[11px] text-muted">Scanned {timeAgo(item.observed_at)}</p>
       </div>
     </Card>
   );
@@ -898,126 +860,126 @@ function StatusItemHistoryModal({
   }, [selectedScanId]);
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container size="md" placement="center">
-          <Modal.Dialog className="surface-modal w-[min(720px,calc(100vw-1.5rem))] max-w-none overflow-hidden rounded-[28px]">
-            <Modal.Body className="space-y-4 p-4 sm:p-6">
-              <Card className="border border-divider/70" variant="default">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted">
-                      <PackageIcon size={18} aria-hidden />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-                        Scan history
-                      </p>
-                      <h3 className="mt-1 truncate font-mono text-sm font-semibold text-foreground sm:text-base">
-                        {item?.image_name ?? 'Loading image'}
-                      </h3>
-                      {item ? (
-                        <p className="mt-1 truncate font-mono text-xs text-muted">
-                          {item.image_tag}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-1.5">
-                    {selectedScan ? (
-                      <>
-                        <Chip
-                          color={getPolicyDecisionMeta(getPolicyDecision(selectedScan)).color}
-                          size="sm"
-                          variant="soft"
-                        >
-                          <Chip.Label>
-                            {getPolicyDecisionMeta(getPolicyDecision(selectedScan)).label}
-                          </Chip.Label>
-                        </Chip>
-                        <StatusBadge
-                          externalStatus={selectedScan.external_status}
-                          status={selectedScan.scan_status}
-                        />
-                      </>
-                    ) : item ? (
-                      <ImageStatusChips item={item} />
+    <Drawer state={state}>
+      <Drawer.Backdrop variant="blur">
+        <Drawer.Content placement="right">
+          <Drawer.Dialog className="flex h-full w-full max-w-xl flex-col border-l border-divider bg-surface shadow-2xl">
+            <Drawer.Header className="border-b border-divider/70 p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted">
+                    <PackageIcon size={18} aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                      Scan history
+                    </p>
+                    <Drawer.Heading className="mt-1 truncate font-mono text-sm font-semibold text-foreground sm:text-base">
+                      {item?.image_name ?? 'Loading image'}
+                    </Drawer.Heading>
+                    {item ? (
+                      <p className="mt-1 truncate font-mono text-xs text-muted">{item.image_tag}</p>
                     ) : null}
                   </div>
                 </div>
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  {selectedScan ? (
+                    <>
+                      {getPolicyDecisionMeta(getPolicyDecision(selectedScan)) ? (
+                        <Chip color="danger" size="sm" variant="soft">
+                          <Chip.Label>Org policy failed</Chip.Label>
+                        </Chip>
+                      ) : null}
+                      <StatusBadge
+                        externalStatus={selectedScan.external_status}
+                        status={selectedScan.scan_status}
+                      />
+                    </>
+                  ) : item ? (
+                    <ImageStatusChips item={item} />
+                  ) : null}
+                  <Drawer.CloseTrigger aria-label="Close scan history" />
+                </div>
+              </div>
+            </Drawer.Header>
+
+            <Drawer.Body className="space-y-5 p-4 sm:p-5">
+              {historyError ? (
+                <StatusAlert
+                  status="danger"
+                  title="Scan history failed to load"
+                  description={historyError}
+                />
+              ) : null}
+
+              <Card className="border border-divider/70 p-4" variant="secondary">
+                <p className="text-xs font-semibold text-foreground">14-day scan history</p>
+                <p className="mt-1 text-xs text-muted">
+                  Choose a completed scan to compare its findings.
+                </p>
+                <div className="mt-4">
+                  <ScanTimeline
+                    isLoading={historyLoading}
+                    onSelect={setSelectedScanId}
+                    scans={history}
+                    selectedId={selectedScanId}
+                  />
+                </div>
               </Card>
 
-              <div className="space-y-4">
-                {historyError ? (
-                  <StatusAlert
-                    status="danger"
-                    title="Scan history failed to load"
-                    description={historyError}
-                  />
-                ) : null}
-
-                <ScanTimeline
-                  isLoading={historyLoading}
-                  onSelect={setSelectedScanId}
-                  scans={history}
-                  selectedId={selectedScanId}
-                />
-
-                {displayedScan ? (
-                  <Card
-                    className="border border-divider/70 bg-surface-secondary/70 p-4"
-                    variant="secondary"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-medium text-muted">
-                          {selectedScan?.is_latest === false ? 'Previous scan' : 'Latest scan'}
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-foreground">
-                          {formatScanner(displayedScan.scan_provider)} ·{' '}
-                          {timeAgo(displayedScan.observed_at)}
+              {displayedScan ? (
+                <Card
+                  className="border border-divider/70 bg-surface-secondary/70 p-4"
+                  variant="secondary"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium text-muted">
+                        {selectedScan?.is_latest === false ? 'Previous scan' : 'Latest scan'}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-foreground">
+                        {timeAgo(displayedScan.observed_at)}
+                      </p>
+                    </div>
+                    <Chip size="sm" variant="secondary">
+                      <Chip.Label>{totalFindings.toLocaleString()} findings</Chip.Label>
+                    </Chip>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {[
+                      {
+                        label: 'Critical',
+                        value: displayedScan.critical_count,
+                        color: 'text-danger',
+                      },
+                      { label: 'High', value: displayedScan.high_count, color: 'text-warning' },
+                      {
+                        label: 'Medium',
+                        value: displayedScan.medium_count,
+                        color: 'text-warning',
+                      },
+                      { label: 'Low', value: displayedScan.low_count, color: 'text-muted' },
+                    ].map((metric) => (
+                      <div key={metric.label} className="rounded-xl bg-surface p-3">
+                        <p className="text-[11px] font-medium text-muted">{metric.label}</p>
+                        <p className={`mt-1 text-lg font-semibold tabular-nums ${metric.color}`}>
+                          {metric.value}
                         </p>
                       </div>
-                      <Chip size="sm" variant="secondary">
-                        <Chip.Label>{totalFindings.toLocaleString()} findings</Chip.Label>
-                      </Chip>
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      {[
-                        {
-                          label: 'Critical',
-                          value: displayedScan.critical_count,
-                          color: 'text-danger',
-                        },
-                        { label: 'High', value: displayedScan.high_count, color: 'text-warning' },
-                        {
-                          label: 'Medium',
-                          value: displayedScan.medium_count,
-                          color: 'text-warning',
-                        },
-                        { label: 'Low', value: displayedScan.low_count, color: 'text-muted' },
-                      ].map((metric) => (
-                        <div key={metric.label} className="rounded-xl bg-surface p-3">
-                          <p className="text-[11px] font-medium text-muted">{metric.label}</p>
-                          <p className={`mt-1 text-lg font-semibold tabular-nums ${metric.color}`}>
-                            {metric.value}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                ) : null}
+                    ))}
+                  </div>
+                </Card>
+              ) : null}
 
-                {scanAccess === 'denied' ? (
-                  <p className="text-xs leading-5 text-muted">
-                    Scan details are only available when your JustScan account has access to this
-                    scan.
-                  </p>
-                ) : null}
-              </div>
-            </Modal.Body>
+              {scanAccess === 'denied' ? (
+                <p className="text-xs leading-5 text-muted">
+                  Scan details are only available when your JustScan account has access to this
+                  scan.
+                </p>
+              ) : null}
+            </Drawer.Body>
 
-            <Modal.Footer className="flex items-center justify-end gap-2 border-t border-divider/70 px-4 py-4 sm:px-6">
+            <Drawer.Footer className="flex items-center justify-end gap-2 border-t border-divider/70 px-4 py-4 sm:px-5">
               <Button size="sm" variant="secondary" onPress={onClose}>
                 Close
               </Button>
@@ -1033,11 +995,11 @@ function StatusItemHistoryModal({
                   Checking access
                 </Button>
               ) : null}
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+            </Drawer.Footer>
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    </Drawer>
   );
 }
 
@@ -1083,7 +1045,6 @@ export default function PublicStatusPage() {
   const [needsAuth, setNeedsAuth] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
-  const [activeItem, setActiveItem] = useState<StatusPageItem | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<ImageStatusFilter>('__all__');
   const [decisionFilter, setDecisionFilter] = useState<DecisionFilter>('__all__');
@@ -1092,30 +1053,7 @@ export default function PublicStatusPage() {
   const mountedRef = useRef(true);
   const filtersInitializedRef = useRef(false);
   const scanHistoryRequestsRef = useRef<Set<string> | null>(null);
-  const historyModal = useOverlayState();
   const refreshClock = useTicker(1000);
-
-  function openItemDetails(item: StatusPageItem) {
-    setActiveItem(item);
-    historyModal.open();
-  }
-
-  function closeItemDetails() {
-    historyModal.close();
-  }
-
-  function syncRowHistory(scanId: string, scans: StatusPageScanSummary[]) {
-    setRowScanHistory((current) => {
-      const existing = current[scanId];
-      if (existing && existing.length >= scans.length) {
-        return current;
-      }
-      return {
-        ...current,
-        [scanId]: scans,
-      };
-    });
-  }
 
   const load = useCallback(
     async (showLoader: boolean) => {
@@ -1148,6 +1086,9 @@ export default function PublicStatusPage() {
     },
     [slug]
   );
+  const refreshStatusPage = useEffectEvent(() => {
+    void load(false);
+  });
 
   useEffect(() => {
     const cancelMounted = deferEffect(() => setMounted(true));
@@ -1163,11 +1104,11 @@ export default function PublicStatusPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!isPageVisible || historyModal.isOpen || !lastLoadedAt) return;
+    if (!isPageVisible || !lastLoadedAt) return;
     const elapsed = Math.max(0, Date.now() - lastLoadedAt);
-    const timeout = setTimeout(() => void load(false), Math.max(0, AUTO_REFRESH_MS - elapsed));
+    const timeout = setTimeout(refreshStatusPage, Math.max(0, AUTO_REFRESH_MS - elapsed));
     return () => clearTimeout(timeout);
-  }, [historyModal.isOpen, isPageVisible, lastLoadedAt, load]);
+  }, [isPageVisible, lastLoadedAt]);
 
   useEffect(() => {
     const updateVisibility = () => setIsPageVisible(document.visibilityState === 'visible');
@@ -1275,14 +1216,13 @@ export default function PublicStatusPage() {
       const operationalStatus = getPresentationStatus(item);
       const exposureStatus = getExposureStatus(item, operationalStatus);
       const decision = getPolicyDecision(item);
-      const decisionLabel = getPolicyDecisionMeta(decision).label.toLowerCase();
+      const decisionLabel = getPolicyDecisionLabel(decision);
       const matchesSearch =
         !query ||
         item.image_name.toLowerCase().includes(query) ||
         item.image_tag.toLowerCase().includes(query) ||
         `${item.image_name}:${item.image_tag}`.toLowerCase().includes(query) ||
         formatStatusLabel(operationalStatus).toLowerCase().includes(query) ||
-        formatScanner(item.scan_provider).toLowerCase().includes(query) ||
         decisionLabel.includes(query);
       const matchesDecision = decisionFilter === '__all__' || decision === decisionFilter;
       const matchesStatus =
@@ -1333,6 +1273,8 @@ export default function PublicStatusPage() {
 
   const hasImageFilters =
     searchQuery.trim().length > 0 || statusFilter !== '__all__' || decisionFilter !== '__all__';
+  const selectedImageFilterCount =
+    Number(statusFilter !== '__all__') + Number(decisionFilter !== '__all__');
   const statusFilterLabel = IMAGE_STATUS_FILTER_OPTIONS.find(
     (option) => option.key === statusFilter
   )?.label;
@@ -1528,7 +1470,7 @@ export default function PublicStatusPage() {
         </section>
 
         <OverallStatusBanner
-          autoRefreshPaused={!isPageVisible || historyModal.isOpen}
+          autoRefreshPaused={!isPageVisible}
           exposedCount={exposedCount}
           healthyCount={healthyCount}
           issueCount={issueCount}
@@ -1593,73 +1535,118 @@ export default function PublicStatusPage() {
                   </Chip>
                 </div>
                 <p className="mt-1 text-xs text-muted">
-                  Latest operational state, org policy result, findings, and scan history.
+                  Current health, policy failures, findings, and a 14-day scan history.
                 </p>
               </div>
 
-              <div className="grid w-full gap-2 sm:grid-cols-2 xl:w-auto xl:grid-cols-[minmax(260px,1fr)_190px_170px_auto]">
+              <div className="flex w-full gap-2 xl:w-auto xl:min-w-[420px]">
                 <SearchField
                   aria-label="Search images"
-                  className="sm:col-span-2 xl:col-span-1"
+                  className="min-w-0 flex-1"
                   value={searchQuery}
                   variant="secondary"
                   onChange={setSearchQuery}
                 >
                   <SearchField.Group>
                     <SearchField.SearchIcon />
-                    <SearchField.Input placeholder="Search image, tag, scanner..." />
+                    <SearchField.Input placeholder="Search image or tag..." />
                     <SearchField.ClearButton />
                   </SearchField.Group>
                 </SearchField>
-                <Select
-                  aria-label="Filter images by state"
-                  variant="secondary"
-                  value={statusFilter}
-                  onChange={(value) => setStatusFilter(String(value) as ImageStatusFilter)}
-                >
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      {IMAGE_STATUS_FILTER_OPTIONS.map((option) => (
-                        <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
-                          {option.label}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-                <Select
-                  aria-label="Filter images by organization policy result"
-                  variant="secondary"
-                  value={decisionFilter}
-                  onChange={(value) => setDecisionFilter(String(value) as DecisionFilter)}
-                >
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      {DECISION_FILTER_OPTIONS.map((option) => (
-                        <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
-                          {option.label}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-                <Button
-                  isDisabled={!hasImageFilters}
-                  variant="tertiary"
-                  onPress={clearImageFilters}
-                >
-                  Clear
-                </Button>
+                <Popover>
+                  <Popover.Trigger>
+                    <Button variant={selectedImageFilterCount > 0 ? 'secondary' : 'tertiary'}>
+                      <FilterIcon size={16} aria-hidden />
+                      Filters{selectedImageFilterCount > 0 ? ` (${selectedImageFilterCount})` : ''}
+                    </Button>
+                  </Popover.Trigger>
+                  <Popover.Content
+                    className="w-[min(22rem,calc(100vw-2rem))]"
+                    placement="bottom end"
+                  >
+                    <Popover.Arrow />
+                    <Popover.Dialog className="space-y-4 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <Popover.Heading className="text-sm font-semibold text-foreground">
+                            Filter images
+                          </Popover.Heading>
+                          <p className="mt-1 text-xs text-muted">
+                            Refine the currently shown images.
+                          </p>
+                        </div>
+                        <Button
+                          isDisabled={!hasImageFilters}
+                          size="sm"
+                          variant="tertiary"
+                          onPress={clearImageFilters}
+                        >
+                          Clear all
+                        </Button>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-medium text-muted">Image state</p>
+                          <Select
+                            aria-label="Filter images by state"
+                            variant="secondary"
+                            value={statusFilter}
+                            onChange={(value) =>
+                              setStatusFilter(String(value) as ImageStatusFilter)
+                            }
+                          >
+                            <Select.Trigger>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox>
+                                {IMAGE_STATUS_FILTER_OPTIONS.map((option) => (
+                                  <ListBox.Item
+                                    id={option.key}
+                                    key={option.key}
+                                    textValue={option.label}
+                                  >
+                                    {option.label}
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                ))}
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-medium text-muted">Organization policy</p>
+                          <Select
+                            aria-label="Filter images by organization policy result"
+                            variant="secondary"
+                            value={decisionFilter}
+                            onChange={(value) => setDecisionFilter(String(value) as DecisionFilter)}
+                          >
+                            <Select.Trigger>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox>
+                                {DECISION_FILTER_OPTIONS.map((option) => (
+                                  <ListBox.Item
+                                    id={option.key}
+                                    key={option.key}
+                                    textValue={option.label}
+                                  >
+                                    {option.label}
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                ))}
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                        </div>
+                      </div>
+                    </Popover.Dialog>
+                  </Popover.Content>
+                </Popover>
               </div>
             </div>
             {hasImageFilters ? (
@@ -1714,7 +1701,6 @@ export default function PublicStatusPage() {
                 <MobileImageStatusCard
                   item={item}
                   key={`${item.image_name}:${item.image_tag}`}
-                  onOpen={openItemDetails}
                   scans={rowScanHistory[item.latest_scan_id]}
                 />
               ))
@@ -1724,20 +1710,18 @@ export default function PublicStatusPage() {
           <div className="hidden md:block">
             <Table variant="secondary">
               <Table.ScrollContainer>
-                <Table.Content aria-label="Image policy status table" className="min-w-[1100px]">
+                <Table.Content aria-label="Image policy status table" className="min-w-[840px]">
                   <Table.Header>
                     <Table.Column isRowHeader>Image</Table.Column>
                     <Table.Column>State</Table.Column>
                     <Table.Column>Findings</Table.Column>
                     <Table.Column>14 days</Table.Column>
-                    <Table.Column>Scanner</Table.Column>
                     <Table.Column>Last scan</Table.Column>
-                    <Table.Column>Action</Table.Column>
                   </Table.Header>
                   <Table.Body>
                     {filteredTrackedItems.length === 0 ? (
                       <Table.Row id="empty">
-                        <Table.Cell colSpan={7}>
+                        <Table.Cell colSpan={5}>
                           <div className="py-12 text-center text-sm text-muted">
                             {trackedItems.length === 0
                               ? 'No images are currently tracked.'
@@ -1758,13 +1742,12 @@ export default function PublicStatusPage() {
                                 <PackageIcon size={15} aria-hidden />
                               </span>
                               <div className="min-w-0">
-                                <button
-                                  type="button"
+                                <Link
+                                  href={`/scans/details/${item.latest_scan_id}`}
                                   className="block max-w-full truncate text-left text-sm font-semibold text-foreground hover:underline"
-                                  onClick={() => openItemDetails(item)}
                                 >
                                   {item.image_name}
-                                </button>
+                                </Link>
                                 <p className="mt-0.5 truncate font-mono text-[11px] text-muted">
                                   {item.image_tag}
                                 </p>
@@ -1775,41 +1758,16 @@ export default function PublicStatusPage() {
                             <ImageStatusChips item={item} />
                           </Table.Cell>
                           <Table.Cell>
-                            <div>
-                              <div className="flex items-center gap-3 text-xs tabular-nums">
-                                <span className="text-danger">{item.critical_count} critical</span>
-                                <span className="text-warning">{item.high_count} high</span>
-                                <span className="text-muted">{getFindingTotal(item)} total</span>
-                              </div>
-                              <FindingDeltas item={item} />
-                            </div>
+                            <FindingsSummary item={item} />
                           </Table.Cell>
                           <Table.Cell>
                             <RecentScanStrip
-                              compact
                               item={item}
-                              onOpen={openItemDetails}
                               scans={rowScanHistory[item.latest_scan_id]}
                             />
                           </Table.Cell>
                           <Table.Cell>
-                            <span className="text-xs text-muted">
-                              {formatScanner(item.scan_provider)}
-                            </span>
-                          </Table.Cell>
-                          <Table.Cell>
                             <span className="text-xs text-muted">{timeAgo(item.observed_at)}</span>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Button
-                              isIconOnly
-                              aria-label={`View scan history for ${item.image_name}:${item.image_tag}`}
-                              size="sm"
-                              variant="tertiary"
-                              onPress={() => openItemDetails(item)}
-                            >
-                              <ArrowRight01Icon size={16} aria-hidden />
-                            </Button>
                           </Table.Cell>
                         </Table.Row>
                       ))
@@ -1821,17 +1779,6 @@ export default function PublicStatusPage() {
           </div>
         </Card>
       </main>
-
-      {activeItem && historyModal.isOpen && (
-        <StatusItemHistoryModal
-          key={`${activeItem.image_name}:${activeItem.image_tag}`}
-          slug={slug}
-          item={activeItem}
-          state={historyModal}
-          onClose={closeItemDetails}
-          onHistoryLoaded={syncRowHistory}
-        />
-      )}
     </div>
   );
 }

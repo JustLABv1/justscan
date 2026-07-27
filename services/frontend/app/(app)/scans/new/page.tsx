@@ -84,6 +84,19 @@ function mergeUniqueStringLists(...groups: string[][]) {
   return merged;
 }
 
+const DIGEST_REFERENCE_PATTERN = /^[A-Za-z][A-Za-z0-9+._-]*:[0-9a-fA-F]{32,}$/;
+
+function buildPrimaryImageReference(imageName: string, tagOrDigest: string) {
+  const name = imageName.trim();
+  const reference = tagOrDigest.trim().replace(/^@/, '');
+
+  if (!name) return '';
+  if (name.includes('@')) return name;
+  if (!reference) return name;
+  if (DIGEST_REFERENCE_PATTERN.test(reference)) return `${name}@${reference}`;
+  return `${name}:${reference}`;
+}
+
 function ScanSourceCard({
   description,
   disabled = false,
@@ -288,9 +301,7 @@ export default function NewScanPage() {
             ? ''
             : 'Image scans are disabled for this organization.';
   const pendingAdditionalImages = parseImageReferences(additionalImageDraft);
-  const primaryImage = imageName.trim()
-    ? `${imageName.trim()}${imageTag.trim() ? `:${imageTag.trim()}` : ''}`
-    : '';
+  const primaryImage = buildPrimaryImageReference(imageName, imageTag);
   const requestedImages = mergeUniqueStringLists(
     primaryImage ? [primaryImage] : [],
     additionalImageEntries,
@@ -699,8 +710,17 @@ export default function NewScanPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   className="font-mono"
+                  description={
+                    scanSource === 'local_archive'
+                      ? undefined
+                      : 'You can also paste a complete image@sha256:… reference here.'
+                  }
                   label={scanSource === 'local_archive' ? 'Display name' : 'Image name'}
-                  onChange={(e) => setImageName(e.target.value)}
+                  onChange={(e) => {
+                    const nextImageName = e.target.value;
+                    setImageName(nextImageName);
+                    if (nextImageName.includes('@')) setImageTag('');
+                  }}
                   placeholder={
                     scanSource === 'artifactory_xray' ? 'n8nio/n8n' : 'ghcr.io/example/api'
                   }
@@ -709,9 +729,10 @@ export default function NewScanPage() {
                 />
                 <FormField
                   className="font-mono"
-                  label="Tag"
+                  description="Use a tag such as latest, or an immutable digest such as sha256:…"
+                  label="Tag or digest"
                   onChange={(e) => setImageTag(e.target.value)}
-                  placeholder="latest"
+                  placeholder="latest or sha256:…"
                   required={scanSource !== 'local_archive'}
                   value={imageTag}
                 />

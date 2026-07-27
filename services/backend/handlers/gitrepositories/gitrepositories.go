@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 	"sigs.k8s.io/yaml"
 )
@@ -271,6 +272,12 @@ func Discover(db *bun.DB) gin.HandlerFunc {
 		}
 		run, images, err := gitservice.CreateDiscovery(c.Request.Context(), item.ID)
 		if err != nil {
+			log.WithFields(log.Fields{
+				"repository_id":         item.ID,
+				"auth_type":             item.AuthType,
+				"username":              item.Username,
+				"credential_configured": item.EncryptedCredential != "",
+			}).WithError(err).Warn("Git repository discovery failed")
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error(), "run": run})
 			return
 		}

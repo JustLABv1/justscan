@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -759,6 +760,19 @@ func clone(ctx context.Context, repository models.GitRepository, dir string) err
 	if credentialHelper != "" {
 		cmd.Env = append(cmd.Env, "JUSTSCAN_GIT_USERNAME="+repository.Username, "JUSTSCAN_GIT_SECRET="+secret)
 	}
+	cloneHost := ""
+	if parsedURL, err := url.Parse(repository.CloneURL); err == nil {
+		cloneHost = parsedURL.Hostname()
+	}
+	log.WithFields(log.Fields{
+		"repository_id":         repository.ID,
+		"host":                  cloneHost,
+		"auth_type":             repository.AuthType,
+		"username":              repository.Username,
+		"credential_configured": credentialHelper != "",
+		"credential_length":     len(secret),
+		"custom_ca_configured":  strings.TrimSpace(os.Getenv("GIT_SSL_CAINFO")) != "",
+	}).Debug("Git repository clone starting")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if repository.AuthType != models.GitRepositoryAuthNone {

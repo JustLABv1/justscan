@@ -2,10 +2,16 @@ package gitrepositories
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 
+	"justscan-backend/config"
+	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
 )
 
@@ -285,5 +291,108 @@ func TestValidateCloneURL(t *testing.T) {
 	}
 	if err := validateCloneURL("https://git.example.com/group/repository.git"); err != nil {
 		t.Fatalf("validateCloneURL() error = %v", err)
+	}
+}
+
+func TestCreateGitCredentialHelperUsesUniquePrivateFiles(t *testing.T) {
+	dir := t.TempDir()
+	first, err := createGitCredentialHelper(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(first)
+	second, err := createGitCredentialHelper(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(second)
+
+	if first == second {
+		t.Fatalf("credential helper paths are identical: %s", first)
+	}
+	for _, path := range []string{first, second} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0700 {
+			t.Fatalf("credential helper mode = %o, want 700", info.Mode().Perm())
+		}
+	}
+}
+
+func TestCloneSuppliesStoredCredentialsAfterHTTPChallenge(t *testing.T) {
+	const (
+		username = "git-user"
+		secret   = "token-$-percent%"
+		key      = "git-repository-test-encryption-key"
+	)
+
+	var authenticated atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		actualUsername, actualSecret, ok := r.BasicAuth()
+		if ok && actualUsername == username && actualSecret == secret {
+			authenticated.Store(true)
+			http.Error(w, "authenticated test endpoint", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("WWW-Authenticate", `Basic realm="git"`)
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	previousConfig := config.Config
+	config.Config = &config.RestfulConf{Encryption: config.EncryptionConf{Key: key}}
+	defer func() { config.Config = previousConfig }()
+
+	encryptedSecret, err := crypto.Encrypt(crypto.KeyFromString(key), secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := models.GitRepository{
+		CloneURL:            server.URL + "/group/repository.git",
+		Ref:                 "HEAD",
+		AuthType:            models.GitRepositoryAuthToken,
+		Username:            username,
+		EncryptedCredential: encryptedSecret,
+	}
+
+	_ = clone(context.Background(), repository, filepath.Join(t.TempDir(), "checkout"))
+	if !authenticated.Load() {
+		t.Fatal("Git did not send the stored connector credentials after the HTTP challenge")
+	}
+}
+
+func TestCloneRejectsIncompleteStoredAuthentication(t *testing.T) {
+	tests := []struct {
+		name       string
+		repository models.GitRepository
+		want       string
+	}{
+		{
+			name: "missing username",
+			repository: models.GitRepository{
+				AuthType:            models.GitRepositoryAuthToken,
+				EncryptedCredential: "configured",
+			},
+			want: "Git username is missing",
+		},
+		{
+			name: "missing credential",
+			repository: models.GitRepository{
+				AuthType: models.GitRepositoryAuthToken,
+				Username: "git-user",
+			},
+			want: "Git token or password is missing",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := clone(context.Background(), test.repository, filepath.Join(t.TempDir(), "checkout"))
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("clone() error = %v, want message containing %q", err, test.want)
+			}
+		})
 	}
 }

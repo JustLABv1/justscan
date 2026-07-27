@@ -519,7 +519,11 @@ func build(c *gin.Context, db *bun.DB, body repositoryRequest, userID uuid.UUID,
 	if authType != models.GitRepositoryAuthNone && username == "" {
 		return nil, fmt.Errorf("Git username is required when authentication is enabled")
 	}
-	credentialConfigured := body.Credential != ""
+	credential := body.Credential
+	if authType == models.GitRepositoryAuthToken {
+		credential = strings.TrimSpace(credential)
+	}
+	credentialConfigured := credential != ""
 	if previous != nil && previous.EncryptedCredential != "" {
 		credentialConfigured = true
 	}
@@ -586,8 +590,8 @@ func build(c *gin.Context, db *bun.DB, body repositoryRequest, userID uuid.UUID,
 		}
 		item.OwnerType, item.OwnerUserID, item.OwnerOrgID = models.OwnerTypeOrg, nil, &orgID
 	}
-	if body.Credential != "" {
-		encrypted, err := crypto.Encrypt(crypto.KeyFromString(config.Config.Encryption.Key), body.Credential)
+	if credential != "" {
+		encrypted, err := crypto.Encrypt(crypto.KeyFromString(config.Config.Encryption.Key), credential)
 		if err != nil {
 			return nil, err
 		}

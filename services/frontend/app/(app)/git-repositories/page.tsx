@@ -364,12 +364,25 @@ export default function GitRepositoriesPage() {
                   <>
                     <FormField
                       label="Username"
+                      autoComplete="off"
+                      name="git-connector-username"
+                      required
                       value={draft.username}
                       onChange={(event) => setDraft({ ...draft, username: event.target.value })}
                       description="Use the Git provider’s token username when required."
                     />
                     <FormField
                       label="Token or password"
+                      autoComplete="new-password"
+                      description={
+                        draft.credential
+                          ? `${draft.credential.length} characters entered.`
+                          : editingRepository
+                            ? 'Leave blank to keep the currently stored credential.'
+                            : 'Required. The credential is encrypted before it is stored.'
+                      }
+                      name="git-connector-credential"
+                      required={!editingRepository}
                       type="password"
                       value={draft.credential}
                       onChange={(event) => setDraft({ ...draft, credential: event.target.value })}

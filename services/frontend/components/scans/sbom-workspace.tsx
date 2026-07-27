@@ -26,7 +26,7 @@ import {
   useOverlayState,
 } from '@heroui/react';
 import { Download01Icon, GitBranchIcon, PackageIcon, ShareKnowledgeIcon } from 'hugeicons-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type SBOMWorkspaceProps = {
   loadComponents: (
@@ -36,6 +36,7 @@ type SBOMWorkspaceProps = {
   loadComponent: (componentId: string) => Promise<SBOMComponentDetail>;
   downloadHref?: string;
   readOnly?: boolean;
+  focusPackage?: { packageName: string; version?: string; requestId: number } | null;
 };
 
 type View = 'inventory' | 'tree' | 'graph';
@@ -136,9 +137,10 @@ export function SBOMWorkspace({
   loadGraph,
   loadComponent,
   downloadHref,
+  focusPackage,
 }: SBOMWorkspaceProps) {
   const [view, setView] = useState<View>('inventory');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => focusPackage?.packageName ?? '');
   const [components, setComponents] = useState<SBOMComponent[]>([]);
   const [total, setTotal] = useState(0);
   const [document, setDocument] = useState<SBOMGraph['document']>();
@@ -155,6 +157,7 @@ export function SBOMWorkspace({
     direction: 'ascending',
   });
   const drawer = useOverlayState();
+  const handledFocusRequestRef = useRef<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -291,6 +294,25 @@ export function SBOMWorkspace({
     },
     [drawer, loadComponent]
   );
+
+  useEffect(() => {
+    if (!focusPackage || loading || handledFocusRequestRef.current === focusPackage.requestId) return;
+    const exactMatch = components.find(
+      (component) =>
+        packageLabel(component) === focusPackage.packageName &&
+        (!focusPackage.version || component.version === focusPackage.version)
+    );
+    const packageMatch = components.find(
+      (component) => packageLabel(component) === focusPackage.packageName
+    );
+    handledFocusRequestRef.current = focusPackage.requestId;
+    if (exactMatch ?? packageMatch) {
+      const timer = window.setTimeout(() => {
+        void openComponent(exactMatch ?? packageMatch!);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+  }, [components, focusPackage, loading, openComponent]);
   const flow = useMemo(() => graphLayout(graph, openComponent), [graph, openComponent]);
 
   function selectView(nextView: View) {

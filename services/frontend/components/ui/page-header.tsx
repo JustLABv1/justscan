@@ -27,7 +27,7 @@ export function PageTitle({
   breadcrumbs,
 }: PageTitleProps) {
   return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <header id="tour-page-header" className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0 flex-1">
         {breadcrumbs && breadcrumbs.length > 1 ? (
           <Breadcrumbs className="mb-2 text-sm">

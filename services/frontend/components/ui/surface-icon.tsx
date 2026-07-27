@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 export type SurfaceIconTone = 'default' | 'accent' | 'success' | 'warning' | 'danger';
 export type SurfaceIconSize = 'sm' | 'md' | 'lg';
+export type SurfaceIconVariant = 'default' | 'repository';
 
 const toneClasses: Record<SurfaceIconTone, string> = {
   default: 'bg-default-100 text-default-600 dark:bg-default-200/10 dark:text-default-400',
@@ -25,6 +26,7 @@ interface SurfaceIconProps {
   icon: ReactNode;
   tone?: SurfaceIconTone;
   size?: SurfaceIconSize;
+  variant?: SurfaceIconVariant;
   className?: string;
 }
 
@@ -32,6 +34,7 @@ export function SurfaceIcon({
   icon,
   tone = 'default',
   size = 'md',
+  variant = 'default',
   className,
 }: SurfaceIconProps) {
   return (
@@ -39,8 +42,9 @@ export function SurfaceIcon({
       aria-hidden
       className={joinClassNames(
         'inline-flex shrink-0 items-center justify-center',
-        toneClasses[tone],
-        sizeClasses[size],
+        variant === 'repository'
+          ? 'size-9 rounded-lg bg-surface-secondary text-muted'
+          : `${toneClasses[tone]} ${sizeClasses[size]}`,
         className
       )}
     >

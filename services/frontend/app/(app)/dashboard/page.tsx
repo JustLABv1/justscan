@@ -56,6 +56,8 @@ import {
   ArrowRight01Icon,
   ChartIcon,
   Clock01Icon,
+  GitBranchIcon,
+  PackageIcon,
   Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
@@ -241,7 +243,8 @@ function getWatchlistCoverage(items: WatchlistItem[]): WatchlistCoverage {
     scanned7dCount,
     staleItems,
     neverScannedCount,
-    coverage7d: enabledItems.length > 0 ? Math.round((scanned7dCount / enabledItems.length) * 100) : 0,
+    coverage7d:
+      enabledItems.length > 0 ? Math.round((scanned7dCount / enabledItems.length) * 100) : 0,
     topSchedule,
   };
 }
@@ -377,6 +380,8 @@ function BriefingMetric({
       value={value}
       hint={detail}
       icon={icon}
+      iconTone="default"
+      iconVariant="repository"
       tone={statTone}
       variant="stacked"
       className={['h-full', className].filter(Boolean).join(' ')}
@@ -470,7 +475,7 @@ function DashboardSectionHeader({
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
-          {icon ? <SurfaceIcon icon={icon} size="sm" /> : null}
+          {icon ? <SurfaceIcon icon={icon} variant="repository" /> : null}
           <h2 className="truncate text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
             {title}
           </h2>
@@ -771,23 +776,26 @@ function VulnTrendChart({
 
       {/* Header */}
       <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Risk trend</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Historical average findings per finalized scan, by severity
-          </p>
-          <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-            {latestActivePoint ? (
-              <>
-                <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
-                  {latestActivePoint.total}
-                </span>{' '}
-                on {formatChartDate(latestActivePoint.date)}
-              </>
-            ) : (
-              `No finalized scans in the last ${period} days`
-            )}
-          </p>
+        <div className="flex min-w-0 items-start gap-3">
+          <SurfaceIcon icon={<Shield01Icon size={17} />} variant="repository" />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Risk trend</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Historical average findings per finalized scan, by severity
+            </p>
+            <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+              {latestActivePoint ? (
+                <>
+                  <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                    {latestActivePoint.total}
+                  </span>{' '}
+                  on {formatChartDate(latestActivePoint.date)}
+                </>
+              ) : (
+                `No finalized scans in the last ${period} days`
+              )}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {PERIODS.map((d) => (
@@ -1057,11 +1065,52 @@ export default function DashboardPage() {
         : watchlistCoverage.staleItems.length > 0 || watchlistCoverage.neverScannedCount > 0
           ? { label: 'Needs review', tone: 'warning' }
           : { label: 'Monitoring', tone: 'accent' };
+  const coverageTone: PostureTone = !scannerReady
+    ? 'warning'
+    : coverageTrendChip.tone === 'success'
+      ? 'success'
+      : coverageTrendChip.tone === 'warning'
+        ? 'warning'
+        : coverageTrendChip.tone === 'accent'
+          ? 'accent'
+          : 'neutral';
   const activeScans = (stats.attention_scans ?? []).filter(
     (scan) => scan.status === 'pending' || scan.status === 'running'
   );
   const activeScanIds = new Set(activeScans.map((scan) => scan.id));
   const recentResults = (stats.recent_scans ?? []).filter((scan) => !activeScanIds.has(scan.id));
+  const dashboardActivity = stats.activity ?? { images_scanned_today: 0 };
+  const policyFailures = stats.policy_failures ?? { today: 0, last_3_days: 0, last_7_days: 0 };
+  const gitRepositories = stats.git_repositories ?? {
+    total: 0,
+    enabled: 0,
+    healthy: 0,
+    needs_attention: 0,
+    in_progress: 0,
+  };
+  const activityWorkspaceLabel =
+    workScope.kind === 'org' ? 'Organization workspace' : 'Personal workspace';
+  const policyFailureTone: PostureTone = policyFailures.today > 0 ? 'danger' : 'neutral';
+  const gitRepositoryTone: PostureTone =
+    gitRepositories.needs_attention > 0
+      ? 'danger'
+      : gitRepositories.in_progress > 0
+        ? 'accent'
+        : gitRepositories.enabled > 0
+          ? 'success'
+          : 'neutral';
+  const gitRepositoryDetail =
+    gitRepositories.total === 0
+      ? 'No repositories configured'
+      : [
+          `${gitRepositories.healthy} healthy`,
+          gitRepositories.needs_attention > 0
+            ? `${gitRepositories.needs_attention} need attention`
+            : null,
+          gitRepositories.in_progress > 0 ? `${gitRepositories.in_progress} in progress` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
 
   function prepareDrilldown(card: DashboardDrilldownKey) {
     if (card === 'watchlist') {
@@ -1122,6 +1171,30 @@ export default function DashboardPage() {
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <BriefingMetric
+          label="Images scanned today"
+          icon={<PackageIcon size={16} />}
+          value={dashboardActivity.images_scanned_today.toLocaleString()}
+          detail={`${activityWorkspaceLabel} · finalized image targets`}
+          tone={dashboardActivity.images_scanned_today > 0 ? 'accent' : 'neutral'}
+          href="/scans"
+        />
+        <BriefingMetric
+          label="Policy failures today"
+          icon={<AlertCircleIcon size={16} />}
+          value={policyFailures.today.toLocaleString()}
+          detail={`${policyFailures.last_3_days} in last 3 days · ${policyFailures.last_7_days} in last 7 days`}
+          tone={policyFailureTone}
+          href="/scans?status=failed"
+        />
+        <BriefingMetric
+          label="Git repositories"
+          icon={<GitBranchIcon size={16} />}
+          value={gitRepositories.total.toLocaleString()}
+          detail={gitRepositoryDetail}
+          tone={gitRepositoryTone}
+          href="/git-repositories"
+        />
+        <BriefingMetric
           label="Historical severe findings"
           icon={<Shield01Icon size={16} />}
           value={formatCompactNumber(criticalHighCount)}
@@ -1135,7 +1208,7 @@ export default function DashboardPage() {
           icon={<AlertCircleIcon size={16} />}
           value={watchlistAttentionCount.toLocaleString()}
           detail="Current scheduled scans with a policy or scan failure"
-          tone={watchlistAttentionCount > 0 ? 'danger' : 'success'}
+          tone={watchlistAttentionCount > 0 ? 'danger' : 'neutral'}
           href="/watchlist?focus=attention"
         />
         <BriefingMetric
@@ -1143,7 +1216,7 @@ export default function DashboardPage() {
           icon={<Clock01Icon size={16} />}
           value={`${watchlistCoverage.coverage7d}%`}
           detail={`${watchlistCoverage.staleItems.length.toLocaleString()} stale · ${watchlistCoverage.neverScannedCount.toLocaleString()} never scanned`}
-          tone={watchlistCoverage.coverage7d >= 90 && scannerReady ? 'success' : 'warning'}
+          tone={coverageTone}
           trend={coverageTrendChip}
           href={
             watchlistCoverage.staleItems.length > 0

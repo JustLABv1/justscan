@@ -128,6 +128,9 @@ export function DashboardLoadingSkeleton() {
         <DashboardBriefingMetricSkeleton />
         <DashboardBriefingMetricSkeleton />
         <DashboardBriefingMetricSkeleton />
+        <DashboardBriefingMetricSkeleton />
+        <DashboardBriefingMetricSkeleton />
+        <DashboardBriefingMetricSkeleton />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.55fr)]">

@@ -9,6 +9,27 @@ export interface DashboardStats {
   top_images: { image_name: string; count: number }[] | null;
   watchlist_count: number;
   operations: DashboardOperations;
+  activity: DashboardActivity;
+  policy_failures: DashboardPolicyFailures;
+  git_repositories: DashboardGitRepositorySummary;
+}
+
+export interface DashboardActivity {
+  images_scanned_today: number;
+}
+
+export interface DashboardPolicyFailures {
+  today: number;
+  last_3_days: number;
+  last_7_days: number;
+}
+
+export interface DashboardGitRepositorySummary {
+  total: number;
+  enabled: number;
+  healthy: number;
+  needs_attention: number;
+  in_progress: number;
 }
 
 export interface DashboardOperations {

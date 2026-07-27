@@ -100,7 +100,7 @@ func LoadSBOMGraph(ctx context.Context, db *bun.DB, scanID uuid.UUID, focus stri
 	// Keep that inventory usable in the tree and package drawer while making no
 	// claim that its dependency relationships are known.
 	legacyInventory := err == sql.ErrNoRows
-	var components []models.SBOMComponent
+	components := make([]models.SBOMComponent, 0)
 	query := db.NewSelect().Model(&components).Where("scan_id = ?", scanID).OrderExpr("is_root DESC, name, version").Limit(limit + 1)
 	if focusID, err := uuid.Parse(focus); err == nil {
 		query = query.Where("id = ? OR id IN (SELECT to_component_id FROM sbom_dependencies WHERE from_component_id = ?) OR id IN (SELECT from_component_id FROM sbom_dependencies WHERE to_component_id = ?)", focusID, focusID, focusID)
@@ -119,7 +119,7 @@ func LoadSBOMGraph(ctx context.Context, db *bun.DB, scanID uuid.UUID, focus stri
 	for _, component := range components {
 		ids = append(ids, component.ID)
 	}
-	var edges []models.SBOMDependency
+	edges := make([]models.SBOMDependency, 0)
 	if !legacyInventory && len(ids) > 0 {
 		if err := db.NewSelect().Model(&edges).Where("document_id = ? AND from_component_id IN (?) AND to_component_id IN (?)", document.ID, bun.In(ids), bun.In(ids)).Scan(ctx); err != nil {
 			return nil, err

@@ -379,7 +379,7 @@ function BriefingMetric({
       icon={icon}
       tone={statTone}
       variant="stacked"
-      className={className}
+      className={['h-full', className].filter(Boolean).join(' ')}
       valueClassName="text-lg font-semibold tabular-nums"
       valueStyle={{ color: toneStyle.color }}
       hintClassName="text-[11px] leading-4 text-muted"
@@ -498,7 +498,11 @@ function ScanActivityCard({
       <DashboardSectionHeader
         title="Scan activity"
         icon={<Shield01Icon size={16} />}
-        description="Running work and the latest finalized results"
+        description={
+          activeScans.length > 0
+            ? 'Running work and the latest finalized results'
+            : 'Latest finalized results for this workspace'
+        }
         action={
           <Link
             href="/scans"
@@ -509,26 +513,22 @@ function ScanActivityCard({
         }
       />
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <div className="min-w-0">
-          <div className="flex items-center justify-between gap-2 px-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Active</p>
-            <Chip color={activeScans.length > 0 ? 'accent' : 'default'} size="sm" variant="soft">
-              {activeScans.length}
-            </Chip>
-          </div>
-          {activeScans.length > 0 ? (
+      <div className={`mt-4 grid gap-4${activeScans.length > 0 ? ' xl:grid-cols-2' : ''}`}>
+        {activeScans.length > 0 ? (
+          <div className="min-w-0">
+            <div className="flex items-center justify-between gap-2 px-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Active</p>
+              <Chip color="accent" size="sm" variant="soft">
+                {activeScans.length}
+              </Chip>
+            </div>
             <div className="mt-2 space-y-1">
               {activeScans.slice(0, 3).map((scan) => (
                 <RecentActivityRow key={scan.id} scan={scan} />
               ))}
             </div>
-          ) : (
-            <p className="mt-2 rounded-xl border border-surface-border bg-surface-secondary px-3 py-4 text-sm text-muted">
-              No scans are currently running.
-            </p>
-          )}
-        </div>
+          </div>
+        ) : null}
 
         <div className="min-w-0">
           <p className="px-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted">

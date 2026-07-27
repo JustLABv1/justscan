@@ -11,6 +11,7 @@ import {
   listMyOrgInvites,
   listOrgs,
   Org,
+  OrgInvite,
   setWorkScope,
   updateWorkspaceTourState,
   WorkScope,
@@ -22,6 +23,7 @@ import {
   buttonVariants,
   Chip,
   Drawer,
+  Description,
   Dropdown,
   Header,
   Kbd,
@@ -260,6 +262,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const [mounted, setMounted] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [orgs, setOrgs] = useState<Org[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<OrgInvite[]>([]);
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
   const [workScope, setWorkScopeState] = useState<WorkScope>(() => getWorkScope());
   const [workspaceTourCompleted, setWorkspaceTourCompleted] = useState(true);
@@ -431,10 +434,10 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     Promise.allSettled([listOrgs(), listMyOrgInvites()])
       .then(([orgsResult, invitesResult]) => {
         const nextOrgs = orgsResult.status === 'fulfilled' ? orgsResult.value : [];
+        const nextInvites = invitesResult.status === 'fulfilled' ? invitesResult.value : [];
         setOrgs(nextOrgs);
-        setPendingInviteCount(
-          invitesResult.status === 'fulfilled' ? invitesResult.value.length : 0
-        );
+        setPendingInvites(nextInvites);
+        setPendingInviteCount(nextInvites.length);
         const current = getWorkScope();
         if (current.kind !== 'org') {
           return;
@@ -450,6 +453,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       })
       .catch(() => {
         setOrgs([]);
+        setPendingInvites([]);
         setPendingInviteCount(0);
       });
   }, [orgRefreshVersion, pathname]);
@@ -547,7 +551,13 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     return (
       <Dropdown.Menu
         onAction={(key) => {
-          handleScopeChange(key as string);
+          const value = key as string;
+          if (value.startsWith('invite:')) {
+            setMobileNavOpen(false);
+            router.push('/orgs');
+            return;
+          }
+          handleScopeChange(value);
         }}
         selectionMode="single"
         selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
@@ -576,6 +586,30 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </Avatar.Fallback>
                   </Avatar>
                   <Label>{org.name}</Label>
+                </div>
+              </Dropdown.Item>
+            ))}
+          </Dropdown.Section>
+        ) : null}
+        {pendingInvites.length > 0 ? (
+          <Dropdown.Section>
+            <Header>Pending invitations</Header>
+            {pendingInvites.map((invite) => (
+              <Dropdown.Item
+                key={invite.id}
+                id={`invite:${invite.id}`}
+                textValue={`Review invitation to ${invite.org_name || 'organization'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <Avatar className="size-6 rounded-lg" color="warning" variant="soft">
+                    <Avatar.Fallback>
+                      {(invite.org_name || 'O').trim().charAt(0).toUpperCase() || 'O'}
+                    </Avatar.Fallback>
+                  </Avatar>
+                  <div className="flex min-w-0 flex-col">
+                    <Label>{invite.org_name || 'Organization'}</Label>
+                    <Description>Invitation awaiting acceptance · Review and accept</Description>
+                  </div>
                 </div>
               </Dropdown.Item>
             ))}
@@ -627,14 +661,17 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                   <Dropdown>
                   <Dropdown.Trigger
                     id="tour-workspace-switcher"
-                    aria-label={workspaceTitle}
+                    aria-label={`${workspaceTitle}${pendingInviteCount > 0 ? `, ${pendingInviteCount} pending organization invite${pendingInviteCount === 1 ? '' : 's'}` : ''}`}
                     className={`flex w-full items-center rounded-xl bg-surface-secondary p-2 outline-none transition-colors hover:bg-surface-tertiary focus-visible:ring-2 focus-visible:ring-accent ${
                       desktopCollapsed ? 'justify-center' : 'gap-2.5'
                     }`}
                   >
-                    <Avatar className="size-7 shrink-0 rounded-lg" color={activeWorkspaceColor} variant="soft">
-                      <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
-                    </Avatar>
+                    <Badge.Anchor>
+                      <Avatar className="size-7 shrink-0 rounded-lg" color={activeWorkspaceColor} variant="soft">
+                        <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
+                      </Avatar>
+                      {pendingInviteCount > 0 ? <Badge color="warning" size="sm" /> : null}
+                    </Badge.Anchor>
                     {!desktopCollapsed ? (
                       <div className="min-w-0 flex-1 text-left">
                         <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">Workspace</p>
@@ -896,7 +933,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                 }}
                               >
                                 <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                                  <div className="relative shrink-0">
+                                  <Badge.Anchor className="shrink-0">
                                     <Avatar
                                       className="size-8 rounded-xl"
                                       color={activeWorkspaceColor}
@@ -904,7 +941,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                     >
                                       <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
                                     </Avatar>
-                                  </div>
+                                    {pendingInviteCount > 0 ? <Badge color="warning" size="sm" /> : null}
+                                  </Badge.Anchor>
                                   <div className="flex flex-col min-w-0 flex-1">
                                     <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
                                       Workspace

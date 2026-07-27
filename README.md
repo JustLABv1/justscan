@@ -68,7 +68,7 @@ For repositories that combine several deployment mechanisms, add a repository-ow
 ## CLI
 
 The `justscan` CLI submits registry and archive scans to a running JustScan instance. Registry
-pipeline scans return CI-friendly policy verdict exit codes; local Docker/Podman and archive inputs
+pipeline scans return CI-friendly policy verdict exit codes; local Docker/Podman/Apple Container and archive inputs
 are streamed to the instance for remote analysis. It does not include a local scanner. Release
 archives are attached to each JustScan GitHub Release; build it locally with:
 

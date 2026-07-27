@@ -134,7 +134,11 @@ func RunGrypeScanFromArchive(ctx context.Context, archivePath, platform, workerC
 	if platform != "" {
 		args = append(args, "--platform", platform)
 	}
-	args = append(args, "oci-archive:"+archivePath)
+	source := "oci-archive:" + archivePath
+	if info, err := os.Stat(archivePath); err == nil && info.IsDir() {
+		source = "oci-dir:" + archivePath
+	}
+	args = append(args, source)
 
 	cmd := exec.CommandContext(scanCtx, grypePath, args...)
 	cmd.Env = append(os.Environ(), "GRYPE_DB_CACHE_DIR="+cacheDir)

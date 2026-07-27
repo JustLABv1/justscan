@@ -29,6 +29,7 @@ import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
+import { StatCard } from '@/components/ui/stat-card';
 import {
   createGitRepositoryDiscoveryRule,
   createGitRepositoryImageExclusion,
@@ -906,17 +907,14 @@ function MetricCard({
   mono?: boolean;
 }) {
   return (
-    <Card className="h-full">
-      <Card.Header>
-        <Card.Title>{title}</Card.Title>
-      </Card.Header>
-      <Card.Content className="flex flex-1 flex-col">
-        <p className={`truncate text-2xl font-semibold ${mono ? 'font-mono text-sm' : ''}`}>
-          {value}
-        </p>
-        <p className="mt-auto pt-3 text-sm text-foreground/60">{detail}</p>
-      </Card.Content>
-    </Card>
+    <StatCard
+      label={title}
+      value={value}
+      hint={detail}
+      variant="stacked"
+      className="h-full"
+      valueClassName={mono ? 'truncate font-mono text-sm font-semibold' : undefined}
+    />
   );
 }
 

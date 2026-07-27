@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/chart-adapter';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { ChartSkeleton } from '@/components/ui/skeleton';
+import { StatCard } from '@/components/ui/stat-card';
 import { getAdminDashboard } from '@/lib/api/admin';
 import type { AdminDashboard, AdminDashboardVulnerabilityTrendPoint } from '@/lib/api/types/admin';
 import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
@@ -135,15 +136,14 @@ function SummaryTile({
   hintClassName?: string;
 }) {
   return (
-    <Card variant="default" className="h-full border border-divider/70">
-      <Card.Content className="gap-1">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          {label}
-        </p>
-        <p className="text-2xl font-bold tabular-nums tracking-tight">{value}</p>
-        <p className={`text-xs ${hintClassName ?? 'text-muted-foreground'}`}>{hint}</p>
-      </Card.Content>
-    </Card>
+    <StatCard
+      label={label}
+      value={value}
+      hint={hint}
+      hintClassName={hintClassName}
+      variant="stacked"
+      className="h-full"
+    />
   );
 }
 
@@ -507,30 +507,20 @@ export function OverviewTab() {
               </Link>
             </Card.Header>
             <Card.Content className="grid gap-3 sm:grid-cols-2">
-              <Card variant="secondary" className="border border-divider/70">
-                <Card.Content>
-                  <p className="text-xs text-muted-foreground">API traffic</p>
-                  <p className="text-xl font-semibold">
-                    {formatCompact(dashboard.insights.api_requests_24h)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {dashboard.insights.api_error_requests_24h.toLocaleString()} errors ·{' '}
-                    {formatLatency(dashboard.insights.api_p95_ms)} p95
-                  </p>
-                </Card.Content>
-              </Card>
-              <Card variant="secondary" className="border border-divider/70">
-                <Card.Content>
-                  <p className="text-xs text-muted-foreground">xRay traffic</p>
-                  <p className="text-xl font-semibold">
-                    {formatCompact(dashboard.insights.xray_requests_24h)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {dashboard.insights.xray_error_requests_24h.toLocaleString()} errors ·{' '}
-                    {formatLatency(dashboard.insights.api_average_ms)} avg API latency
-                  </p>
-                </Card.Content>
-              </Card>
+              <StatCard
+                label="API traffic"
+                value={formatCompact(dashboard.insights.api_requests_24h)}
+                hint={`${dashboard.insights.api_error_requests_24h.toLocaleString()} errors · ${formatLatency(dashboard.insights.api_p95_ms)} p95`}
+                tone={dashboard.insights.api_error_requests_24h > 0 ? 'warning' : 'success'}
+                variant="stacked"
+              />
+              <StatCard
+                label="xRay traffic"
+                value={formatCompact(dashboard.insights.xray_requests_24h)}
+                hint={`${dashboard.insights.xray_error_requests_24h.toLocaleString()} errors · ${formatLatency(dashboard.insights.api_average_ms)} avg API latency`}
+                tone={dashboard.insights.xray_error_requests_24h > 0 ? 'warning' : 'success'}
+                variant="stacked"
+              />
             </Card.Content>
           </Card>
 
@@ -584,30 +574,31 @@ export function OverviewTab() {
                   {
                     label: 'Healthy',
                     value: dashboard.scanner_health.healthy_workers,
-                    className: 'text-success',
+                    tone: 'success' as const,
                   },
                   {
                     label: 'Stale',
                     value: dashboard.scanner_health.stale_workers,
-                    className: 'text-warning',
+                    tone: 'warning' as const,
                   },
                   {
                     label: 'Errors',
                     value: dashboard.scanner_health.error_workers,
-                    className: 'text-danger',
+                    tone: 'danger' as const,
                   },
                   {
                     label: 'Workers',
                     value: dashboard.scanner_health.total_workers,
-                    className: 'text-primary',
+                    tone: 'accent' as const,
                   },
                 ].map((item) => (
-                  <Card key={item.label} variant="secondary" className="border border-divider/70">
-                    <Card.Content>
-                      <p className="text-xs text-muted-foreground">{item.label}</p>
-                      <p className={`text-xl font-semibold ${item.className}`}>{item.value}</p>
-                    </Card.Content>
-                  </Card>
+                  <StatCard
+                    key={item.label}
+                    label={item.label}
+                    value={item.value}
+                    tone={item.tone}
+                    variant="stacked"
+                  />
                 ))}
               </div>
               <Card variant="secondary" className="border border-divider/70">

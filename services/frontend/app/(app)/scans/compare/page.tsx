@@ -1,6 +1,7 @@
 'use client';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
+import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { compareScans, listScans, Scan, ScanComparison, Vulnerability } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
@@ -251,40 +252,23 @@ function ComparePageInner() {
       {result && (
         <>
           {/* Summary bar */}
-          <div className="grid grid-cols-3 gap-3">
-            <Card className="text-center">
-              <Card.Content>
-                <p className="text-2xl font-bold tabular-nums" style={{ color: '#f87171' }}>
-                  {result.summary.added_count}
-                </p>
-                <p className="text-xs text-zinc-500">New vulnerabilities</p>
-                {(result.summary.added_critical > 0 || result.summary.added_high > 0) && (
-                  <p className="text-xs" style={{ color: '#f87171' }}>
-                    {result.summary.added_critical > 0 &&
-                      `${result.summary.added_critical} critical`}
-                    {result.summary.added_critical > 0 && result.summary.added_high > 0 && ', '}
-                    {result.summary.added_high > 0 && `${result.summary.added_high} high`}
-                  </p>
-                )}
-              </Card.Content>
-            </Card>
-
-            <Card className="text-center">
-              <Card.Content>
-                <p className="text-2xl font-bold tabular-nums" style={{ color: '#34d399' }}>
-                  {result.summary.removed_count}
-                </p>
-                <p className="text-xs text-zinc-500">Resolved vulnerabilities</p>
-              </Card.Content>
-            </Card>
-            <Card className="text-center">
-              <Card.Content>
-                <p className="text-2xl font-bold tabular-nums text-zinc-400">
-                  {result.summary.unchanged_count}
-                </p>
-                <p className="text-xs text-zinc-500">Unchanged</p>
-              </Card.Content>
-            </Card>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <StatCard
+              label="New vulnerabilities"
+              value={result.summary.added_count}
+              hint={
+                result.summary.added_critical > 0 || result.summary.added_high > 0
+                  ? [
+                      result.summary.added_critical > 0 ? `${result.summary.added_critical} critical` : '',
+                      result.summary.added_high > 0 ? `${result.summary.added_high} high` : '',
+                    ].filter(Boolean).join(' · ')
+                  : 'No critical or high findings added'
+              }
+              tone="danger"
+              variant="stacked"
+            />
+            <StatCard label="Resolved vulnerabilities" value={result.summary.removed_count} hint="Removed since the earlier scan" tone="success" variant="stacked" />
+            <StatCard label="Unchanged" value={result.summary.unchanged_count} hint="Present in both scans" variant="stacked" />
           </div>
 
           {/* Added */}

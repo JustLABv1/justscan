@@ -6,6 +6,7 @@ import {
   filterDisclosureBodyClassName,
 } from '@/components/ui/filter-toolbar';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
+import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   getRecentActivityBounds,
@@ -71,30 +72,7 @@ function Metric({
   icon: ReactNode;
   tone?: MetricTone;
 }) {
-  const toneClassName = {
-    default: 'border-transparent',
-    success: 'border-success/35',
-    danger: 'border-danger/40',
-  }[tone];
-  const labelClassName =
-    tone === 'default' ? 'text-muted' : tone === 'success' ? 'text-success' : 'text-danger';
-  const iconClassName =
-    tone === 'default' ? 'text-muted' : tone === 'success' ? 'text-success' : 'text-danger';
-
-  return (
-    <Card className={`min-w-0 px-3 py-2.5 ${toneClassName}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className={`text-xs font-medium ${labelClassName}`}>{label}</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
-          {description ? (
-            <p className="mt-0.5 truncate text-[11px] leading-4 text-muted">{description}</p>
-          ) : null}
-        </div>
-        <div className={`shrink-0 ${iconClassName}`}>{icon}</div>
-      </div>
-    </Card>
-  );
+  return <StatCard label={label} value={value} hint={description} icon={icon} tone={tone} />;
 }
 
 function initialScanFilters(searchParams: { get(name: string): string | null }): ScanFilters {

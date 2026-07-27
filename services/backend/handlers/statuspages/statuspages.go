@@ -24,6 +24,8 @@ import (
 
 var slugPattern = regexp.MustCompile(`[^a-z0-9]+`)
 
+const statusPageHistoryDays = 14
+
 type statusPageTargetPayload struct {
 	ImageName    string `json:"image_name"`
 	ImageTag     string `json:"image_tag"`
@@ -508,12 +510,14 @@ func ViewStatusPageScanHistoryBySlug(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var scans []models.Scan
+		historyStart := time.Now().UTC().AddDate(0, 0, -(statusPageHistoryDays - 1))
 		historyQuery := db.NewSelect().
 			Model(&scans).
 			Where("image_name = ?", scan.ImageName).
 			Where("image_tag = ?", scan.ImageTag).
+			Where("created_at >= ?", historyStart).
 			OrderExpr("created_at DESC").
-			Limit(10)
+			Limit(200)
 		historyQuery = applyStatusPageScanScopeQuery(historyQuery, page, "scan")
 		if err := historyQuery.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan history"})

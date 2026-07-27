@@ -15,10 +15,6 @@ import {
 } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import {
-  filterDisclosureBodyClassName,
-  FilterDisclosureTrigger,
-} from '@/components/ui/filter-toolbar';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageTitle } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -99,6 +95,7 @@ import {
   ListBox,
   Modal,
   Pagination,
+  Popover,
   SearchField,
   Select,
   Table,
@@ -111,7 +108,6 @@ import type { CalendarDate } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
 import {
   ArrowLeft01Icon,
-  ArrowDown01Icon,
   Cancel01Icon,
   CheckmarkCircle02Icon,
   Comment01Icon,
@@ -126,15 +122,8 @@ import {
   ShieldKeyIcon,
 } from 'hugeicons-react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
-
-const EvilRadarChart = dynamic(
-  () =>
-    import('@/components/evilcharts/charts/radar-chart').then((module) => module.EvilRadarChart),
-  { ssr: false }
-);
 
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -164,15 +153,6 @@ const ACTIVE_SCAN_STATUSES = new Set([
   'waiting_for_xray',
 ]);
 
-const VULNERABILITY_SORT_LABELS: Record<VulnerabilityViewSettings['sort_by'], string> = {
-  vuln_id: 'CVE ID',
-  pkg_name: 'Package',
-  severity: 'Severity',
-  cvss_score: 'CVSS',
-  installed_version: 'Installed',
-  fixed_version: 'Fixed In',
-};
-
 function isPersistableSeverityFilter(
   value: ActiveVulnerabilitySeverityFilter
 ): value is VulnerabilityViewSettings['severity'] {
@@ -184,24 +164,6 @@ function isPersistableSeverityFilter(
     value === 'LOW' ||
     value === 'UNKNOWN'
   );
-}
-
-function severityFilterSummaryLabel(value: ActiveVulnerabilitySeverityFilter) {
-  if (value === 'CRITICAL,HIGH') {
-    return 'Critical + High';
-  }
-  return value || 'All severities';
-}
-
-function vulnerabilityViewSummary(settings: ActiveVulnerabilityViewSettings) {
-  const filters = [
-    severityFilterSummaryLabel(settings.severity),
-    settings.min_cvss > 0 ? `CVSS >= ${settings.min_cvss}` : '',
-    settings.has_fix ? 'Has fix' : '',
-    settings.xray_policy_first ? 'Xray policy first' : '',
-    settings.policy_failed_only ? 'Org policy failed only' : '',
-  ].filter(Boolean);
-  return `${VULNERABILITY_SORT_LABELS[settings.sort_by]} ${settings.sort_dir === 'desc' ? 'descending' : 'ascending'} | ${filters.join(' | ')}`;
 }
 
 function vulnerabilityViewSettingsEqual(
@@ -518,11 +480,17 @@ export default function ScanDetailPage() {
   const workScope = useWorkScope();
   const toast = useToast();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const currentUser = getUser() as { id?: string; role?: string } | null;
   const [scan, setScan] = useState<Scan | null>(null);
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [vulnTotal, setVulnTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<ScanTab>('vulns');
+  const [sbomPackageFocus, setSbomPackageFocus] = useState<{
+    packageName: string;
+    version?: string;
+    requestId: number;
+  } | null>(null);
   const [severityFilter, setSeverityFilter] = useState<ActiveVulnerabilitySeverityFilter>('');
   const [pkgFilter, setPkgFilter] = useState('');
   const [pkgInput, setPkgInput] = useState('');
@@ -545,13 +513,6 @@ export default function ScanDetailPage() {
   const [vulnSummary, setVulnSummary] = useState<VulnerabilitySummary | null>(null);
   const [filteredVulnSummaryOverride, setFilteredVulnSummaryOverride] =
     useState<VulnerabilitySummary | null>(null);
-  const [isVulnerabilityRadarCollapsed, setIsVulnerabilityRadarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const userId = getUser()?.id ?? 'anonymous';
-    const savedPreference = window.localStorage.getItem(`justscan:vuln-radar-collapsed:${userId}`);
-    return savedPreference === null ? true : savedPreference === '1';
-  });
-  const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
 
   const [error, setError] = useState('');
   const [allTags, setAllTags] = useState<Tag[]>([]);
@@ -676,13 +637,6 @@ export default function ScanDetailPage() {
     pkgInput.trim().length > 0 ||
     pkgFilter.trim().length > 0 ||
     advancedVulnerabilityFilterCount > 0;
-  const vulnerabilityViewSourceLabel = viewPreference?.has_user_override
-    ? 'My saved default'
-    : viewPreference?.source === 'org'
-      ? 'Organization default'
-      : 'System default';
-  const currentUser = getUser();
-  const radarPreferenceKey = `justscan:vuln-radar-collapsed:${currentUser?.id ?? 'anonymous'}`;
 
   useEffect(() => {
     setRouteContext({
@@ -1702,6 +1656,15 @@ export default function ScanDetailPage() {
     xrayPolicyDetailsModal.open();
   }
 
+  function openPackageInSBOM(vulnerability: Vulnerability) {
+    setSbomPackageFocus((current) => ({
+      packageName: vulnerability.pkg_name,
+      version: vulnerability.installed_version || undefined,
+      requestId: (current?.requestId ?? 0) + 1,
+    }));
+    setActiveTab('sbom');
+  }
+
   if (loading) return <ScanDetailSkeleton />;
 
   if (error)
@@ -1893,14 +1856,6 @@ export default function ScanDetailPage() {
     );
   const vulnPaginationItems = buildPaginationItems(page, totalPages);
 
-  const vulnerabilityRadarData = [
-    { subject: 'Critical', value: vulnSummary?.critical ?? 0 },
-    { subject: 'High', value: vulnSummary?.high ?? 0 },
-    { subject: 'Medium', value: vulnSummary?.medium ?? 0 },
-    { subject: 'Low', value: vulnSummary?.low ?? 0 },
-    { subject: 'Fix Available', value: vulnSummary?.with_fix ?? 0 },
-    { subject: 'Xray Policy', value: vulnSummary?.xray_policy ?? 0 },
-  ];
   const vulnerabilitiesWithFix = vulnSummary?.with_fix ?? 0;
   const xrayPolicyMatches = vulnSummary?.xray_policy ?? 0;
   const scanVulnerabilityTotal =
@@ -2343,209 +2298,188 @@ export default function ScanDetailPage() {
       )}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'sbom' && (
         <SBOMWorkspace
+          key={sbomPackageFocus?.requestId ?? 'default'}
           loadComponents={(query) => getScanSBOM(id, query)}
           loadGraph={(focus) => getScanSBOMGraph(id, focus)}
           loadComponent={(componentId) => getScanSBOMComponent(id, componentId)}
           downloadHref={`/api/v1/scans/${id}/sbom/download`}
+          focusPackage={sbomPackageFocus}
         />
       )}
       {scan.status !== 'pending' && scan.status !== 'running' && activeTab === 'vulns' && (
         <Card className="overflow-hidden">
           <Card.Header className="space-y-4">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-                  Vulnerabilities
-                  {vulnTotal > 0 && (
-                    <span className="text-sm font-normal text-zinc-500 ml-2">
-                      {vulnTotal} found
-                    </span>
-                  )}
-                </h2>
-                <p className="text-[11px] text-zinc-500 mt-1">
-                  {viewSettingsReady
-                    ? `${vulnerabilityViewSourceLabel}: ${vulnerabilityViewSummary(currentVulnerabilityViewSettings)}`
-                    : 'Loading default view...'}
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <h2 className="text-base font-semibold text-foreground">Vulnerability triage</h2>
+                  <span className="text-sm text-muted">
+                    {vulnTotal.toLocaleString()} {vulnTotal === 1 ? 'finding' : 'findings'}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted">
+                  Prioritize material risk, then open a finding for evidence, remediation, and notes.
                 </p>
               </div>
-              <Dropdown>
-                <Button variant="secondary">View settings</Button>
-                <Dropdown.Popover className="min-w-56">
-                  <Dropdown.Menu
-                    onAction={(key) => {
-                      if (key === 'save') void saveVulnerabilityViewPreference();
-                      if (key === 'reset_saved') resetToSavedVulnerabilityView();
-                      if (key === 'reset_default') void resetVulnerabilityViewPreference();
-                    }}
-                  >
-                    <Dropdown.Item
-                      id="save"
-                      isDisabled={
-                        !viewSettingsReady || viewPreferenceSaving || !vulnerabilityViewHasChanges
-                      }
-                      textValue="Save as my default"
-                    >
-                      <Label>
-                        {viewPreferenceSaving && vulnerabilityViewHasChanges
-                          ? 'Saving…'
-                          : 'Save as my default'}
-                      </Label>
-                    </Dropdown.Item>
-                    <Dropdown.Item
-                      id="reset_saved"
-                      isDisabled={
-                        !viewSettingsReady ||
-                        viewPreferenceSaving ||
-                        (!vulnerabilityViewHasChanges && !hasTransientVulnerabilityFilters)
-                      }
-                      textValue="Reset to saved"
-                    >
-                      <Label>Reset to saved</Label>
-                    </Dropdown.Item>
-                    <Dropdown.Item
-                      id="reset_default"
-                      isDisabled={
-                        !viewSettingsReady ||
-                        viewPreferenceSaving ||
-                        !viewPreference?.has_user_override
-                      }
-                      textValue="Reset my default"
-                    >
-                      <Label>Reset my default</Label>
-                    </Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
-            </div>
-
-            <Card className="flex flex-col gap-3 p-3">
-              <div className="w-full overflow-x-auto pb-1">
-                <SegmentedControl
-                  ariaLabel="Severity filters"
-                  className="min-w-max"
-                  options={(
-                    [
-                      {
-                        id: '',
-                        label: 'All',
-                        count:
-                          (scan.critical_count ?? 0) +
-                          (scan.high_count ?? 0) +
-                          (scan.medium_count ?? 0) +
-                          (scan.low_count ?? 0),
-                      },
-                      {
-                        id: 'CRITICAL',
-                        label: 'Critical',
-                        count: scan.critical_count ?? 0,
-                        color: 'rgba(239,68,68,0.15)',
-                        activeColor: '#f87171',
-                        border: 'rgba(239,68,68,0.3)',
-                      },
-                      {
-                        id: 'HIGH',
-                        label: 'High',
-                        count: scan.high_count ?? 0,
-                        color: 'rgba(249,115,22,0.15)',
-                        activeColor: '#fb923c',
-                        border: 'rgba(249,115,22,0.3)',
-                      },
-                      {
-                        id: 'MEDIUM',
-                        label: 'Medium',
-                        count: scan.medium_count ?? 0,
-                        color: 'rgba(234,179,8,0.15)',
-                        activeColor: '#facc15',
-                        border: 'rgba(234,179,8,0.3)',
-                      },
-                      {
-                        id: 'LOW',
-                        label: 'Low',
-                        count: scan.low_count ?? 0,
-                        color: 'rgba(59,130,246,0.15)',
-                        activeColor: '#60a5fa',
-                        border: 'rgba(59,130,246,0.3)',
-                      },
-                    ] as {
-                      id: VulnerabilityViewSettings['severity'];
-                      label: string;
-                      count: number;
-                      color?: string;
-                      activeColor?: string;
-                      border?: string;
-                    }[]
-                  ).map((option) => ({
-                    id: option.id,
-                    label: (
-                      <span className="inline-flex items-center gap-1.5">
-                        <span>{option.label}</span>
-                        {option.count > 0 && (
-                          <span className="text-[11px] font-semibold opacity-70">
-                            {option.count}
-                          </span>
-                        )}
-                      </span>
-                    ),
-                    color: option.color,
-                    activeColor: option.activeColor,
-                    border: option.border,
-                  }))}
-                  value={severityFilter}
-                  onChange={(next) => {
-                    setSeverityFilter(next);
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  onPress={() => {
+                    setSeverityFilter('CRITICAL,HIGH');
                     setPage(1);
                   }}
                   size="sm"
-                  getItemStyle={(option, active) => {
-                    if (!active) {
-                      return undefined;
-                    }
-                    const withPalette = option as {
-                      color?: string;
-                      activeColor?: string;
-                      border?: string;
-                    };
-                    return {
-                      background: withPalette.color ?? 'var(--color-accent-soft)',
-                      color: withPalette.activeColor ?? 'var(--color-accent)',
-                      borderColor: withPalette.border ?? 'var(--color-accent-soft-hover)',
-                    };
+                  variant={severityFilter === 'CRITICAL,HIGH' ? 'primary' : 'danger-soft'}
+                >
+                  {scanCriticalAndHigh} critical + high
+                </Button>
+                <Button
+                  onPress={() => {
+                    setHasFix(!hasFix);
+                    setPage(1);
                   }}
-                />
+                  size="sm"
+                  variant={hasFix ? 'primary' : 'secondary'}
+                >
+                  {vulnerabilitiesWithFix} fixable
+                </Button>
+                <Dropdown>
+                  <Button size="sm" variant="tertiary">
+                    View
+                  </Button>
+                  <Dropdown.Popover className="min-w-56">
+                    <Dropdown.Menu
+                      onAction={(key) => {
+                        if (key === 'save') void saveVulnerabilityViewPreference();
+                        if (key === 'reset_saved') resetToSavedVulnerabilityView();
+                        if (key === 'reset_default') void resetVulnerabilityViewPreference();
+                      }}
+                    >
+                      <Dropdown.Item
+                        id="save"
+                        isDisabled={
+                          !viewSettingsReady || viewPreferenceSaving || !vulnerabilityViewHasChanges
+                        }
+                        textValue="Save as my default"
+                      >
+                        <Label>
+                          {viewPreferenceSaving && vulnerabilityViewHasChanges
+                            ? 'Saving…'
+                            : 'Save as my default'}
+                        </Label>
+                      </Dropdown.Item>
+                      <Dropdown.Item
+                        id="reset_saved"
+                        isDisabled={
+                          !viewSettingsReady ||
+                          viewPreferenceSaving ||
+                          (!vulnerabilityViewHasChanges && !hasTransientVulnerabilityFilters)
+                        }
+                        textValue="Reset to saved"
+                      >
+                        <Label>Reset to saved</Label>
+                      </Dropdown.Item>
+                      <Dropdown.Item
+                        id="reset_default"
+                        isDisabled={
+                          !viewSettingsReady ||
+                          viewPreferenceSaving ||
+                          !viewPreference?.has_user_override
+                        }
+                        textValue="Reset my default"
+                      >
+                        <Label>Reset my default</Label>
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
               </div>
-              <Disclosure
-                isExpanded={advancedFiltersExpanded}
-                onExpandedChange={setAdvancedFiltersExpanded}
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-divider bg-surface-secondary p-3">
+              <Tabs
+                selectedKey={severityFilter || 'all'}
+                onSelectionChange={(key) => {
+                  setSeverityFilter(
+                    String(key) === 'all'
+                      ? ''
+                      : (String(key) as VulnerabilityViewSettings['severity'])
+                  );
+                  setPage(1);
+                }}
+                variant="secondary"
               >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <SearchField
-                    name="scan-vuln-search"
-                    className="min-w-0 flex-1"
-                    variant="secondary"
-                  >
-                    <SearchField.Group>
-                      <SearchField.SearchIcon />
-                      <SearchField.Input
-                        placeholder="Search package…"
-                        value={pkgInput}
-                        onChange={(event: any) => setPkgInput(event.target.value)}
-                      />
-                      <SearchField.ClearButton />
-                    </SearchField.Group>
-                  </SearchField>
-                  <FilterDisclosureTrigger
-                    activeCount={advancedVulnerabilityFilterCount}
-                    label="More filters"
-                  />
-                  {hasActiveVulnerabilityFilters ? (
-                    <Button onPress={clearVulnerabilityFilters} variant="tertiary">
-                      Clear filters
+                <Tabs.ListContainer className="overflow-x-auto">
+                  <Tabs.List aria-label="Filter findings by severity" className="min-w-max">
+                    {[
+                      { id: 'all', label: 'All', count: scanVulnerabilityTotal },
+                      { id: 'CRITICAL', label: 'Critical', count: scan.critical_count ?? 0 },
+                      { id: 'HIGH', label: 'High', count: scan.high_count ?? 0 },
+                      { id: 'MEDIUM', label: 'Medium', count: scan.medium_count ?? 0 },
+                      { id: 'LOW', label: 'Low', count: scan.low_count ?? 0 },
+                    ].map((option) => (
+                      <Tabs.Tab key={option.id} className="whitespace-nowrap" id={option.id}>
+                        {option.label}
+                        <span className="ml-1 text-xs tabular-nums text-muted">{option.count}</span>
+                        <Tabs.Indicator />
+                      </Tabs.Tab>
+                    ))}
+                  </Tabs.List>
+                </Tabs.ListContainer>
+                {['all', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map((tab) => (
+                  <Tabs.Panel key={tab} className="hidden" id={tab}>
+                    {tab}
+                  </Tabs.Panel>
+                ))}
+              </Tabs>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <SearchField
+                  name="scan-vuln-search"
+                  className="min-w-0 flex-1"
+                  variant="primary"
+                >
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input
+                      placeholder="Search package…"
+                      value={pkgInput}
+                      onChange={(event: any) => setPkgInput(event.target.value)}
+                    />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+                <Popover>
+                  <Popover.Trigger>
+                    <Button
+                      className={
+                        advancedVulnerabilityFilterCount > 0
+                          ? undefined
+                          : 'border border-divider bg-surface-tertiary font-medium text-foreground shadow-sm hover:bg-surface'
+                      }
+                      size="sm"
+                      variant={advancedVulnerabilityFilterCount > 0 ? 'primary' : 'secondary'}
+                    >
+                      Filter & sort
+                      {advancedVulnerabilityFilterCount > 0
+                        ? ` (${advancedVulnerabilityFilterCount})`
+                        : ''}
                     </Button>
-                  ) : null}
-                </div>
-                <Disclosure.Content>
-                  <Disclosure.Body className={filterDisclosureBodyClassName}>
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+                  </Popover.Trigger>
+                  <Popover.Content className="w-[min(calc(100vw-2rem),34rem)]" placement="bottom end">
+                    <Popover.Dialog className="space-y-4 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Filter & sort</p>
+                          <p className="mt-1 text-xs text-muted">
+                            Narrow the finding list without losing your place.
+                          </p>
+                        </div>
+                        {hasActiveVulnerabilityFilters ? (
+                          <Button onPress={clearVulnerabilityFilters} size="sm" variant="tertiary">
+                            Reset
+                          </Button>
+                        ) : null}
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <SearchField
                         name="scan-vuln-cve-search"
                         className="min-w-0 w-full"
@@ -2624,7 +2558,7 @@ export default function ScanDetailPage() {
                         className="h-11 w-full bg-surface-secondary"
                         containerClassName="w-full"
                       />
-                      <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:col-span-4 xl:grid-cols-4">
+                      <div className="grid min-w-0 grid-cols-2 gap-2 sm:col-span-2">
                         <Button
                           onPress={() => {
                             setHasFix(!hasFix);
@@ -2669,59 +2603,24 @@ export default function ScanDetailPage() {
                           Policy Failed
                         </Button>
                       </div>
-                    </div>
-                  </Disclosure.Body>
-                </Disclosure.Content>
-              </Disclosure>
-            </Card>
-
-            <Disclosure
-              className="overflow-hidden rounded-xl border border-surface-border bg-surface-secondary"
-              isExpanded={!isVulnerabilityRadarCollapsed}
-              onExpandedChange={(isExpanded) => {
-                const nextCollapsed = !isExpanded;
-                setIsVulnerabilityRadarCollapsed(nextCollapsed);
-                if (typeof window !== 'undefined') {
-                  window.localStorage.setItem(radarPreferenceKey, nextCollapsed ? '1' : '0');
-                }
-              }}
-            >
-              <Disclosure.Heading>
-                <Disclosure.Trigger className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-surface">
-                  <span>
-                    <span className="block text-sm font-medium text-foreground">Insights</span>
-                    <span className="block text-xs text-muted">
-                      Severity and policy distribution for {vulnTotal} filtered results
-                    </span>
-                  </span>
-                  <Disclosure.Indicator className="text-muted">
-                    <ArrowDown01Icon aria-hidden size={16} />
-                  </Disclosure.Indicator>
-                </Disclosure.Trigger>
-              </Disclosure.Heading>
-              <Disclosure.Content>
-                <Disclosure.Body className="border-t border-surface-border p-4">
-                  <EvilRadarChart
-                    data={vulnerabilityRadarData}
-                    className="mx-auto h-[240px] min-h-[240px] w-full max-w-[560px] flex-none"
-                  />
-                </Disclosure.Body>
-              </Disclosure.Content>
-            </Disclosure>
+                      </div>
+                    </Popover.Dialog>
+                  </Popover.Content>
+                </Popover>
+              </div>
+            </div>
           </Card.Header>
 
           <Table variant="secondary">
             <Table.ScrollContainer>
-              <Table.Content aria-label="Scan vulnerabilities" className="min-w-[1120px]">
+              <Table.Content aria-label="Scan vulnerabilities" className="min-w-[880px]">
                 <Table.Header>
                   {(
                     [
-                      { label: 'CVE ID', key: 'vuln_id', align: 'left' },
-                      { label: 'Package', key: 'pkg_name', align: 'left' },
-                      { label: 'Installed', key: 'installed_version', align: 'left' },
-                      { label: 'Fixed In', key: 'fixed_version', align: 'left' },
-                      { label: 'Severity', key: 'severity', align: 'left' },
-                      { label: 'CVSS', key: 'cvss_score', align: 'right' },
+                      { label: 'Finding', key: 'vuln_id', align: 'left' },
+                      { label: 'Affected package', key: 'pkg_name', align: 'left' },
+                      { label: 'Risk', key: 'severity', align: 'left' },
+                      { label: 'Remediation', key: 'fixed_version', align: 'left' },
                     ] as {
                       label: string;
                       key: VulnerabilityViewSettings['sort_by'];
@@ -2758,15 +2657,12 @@ export default function ScanDetailPage() {
                       </Table.Column>
                     );
                   })}
-                  <Table.Column className="text-left">First Seen</Table.Column>
-                  <Table.Column className="text-left">Org Policy</Table.Column>
-                  <Table.Column className="text-left">Xray Policy</Table.Column>
-                  <Table.Column className="text-right">Suppr. & Notes</Table.Column>
+                  <Table.Column className="text-left">Signals & notes</Table.Column>
                 </Table.Header>
                 <Table.Body>
                   {vulnLoading || vulns.length === 0 ? (
                     <Table.Row key="vuln-state" id="vuln-state">
-                      <Table.Cell colSpan={10}>
+                      <Table.Cell colSpan={5}>
                         {vulnLoading ? (
                           <div className="py-12 text-center">
                             <div className="flex justify-center">
@@ -2787,33 +2683,36 @@ export default function ScanDetailPage() {
                       const failedPolicies =
                         orgPolicyFailuresByVuln[normalizeVulnId(v.vuln_id)] ?? [];
                       const hasPolicyFailure = failedPolicies.length > 0;
+                      const matchedXrayPolicies = parseXrayWatchPolicyMatches(v);
+                      const xrayWatchCount = xrayWatchNames(v).length;
+                      const hasXrayPolicySignal =
+                        matchedXrayPolicies.length > 0 ||
+                        xrayWatchCount > 0 ||
+                        Boolean(v.xray_is_blocking);
 
                       return (
                         <Fragment key={v.id}>
                           <Table.Row id={v.id} className="hover:bg-[var(--row-hover)]">
                             <Table.Cell>
                               {v.vuln_id ? (
-                                <div className="flex items-center gap-1.5 flex-wrap">
+                                <div className="flex max-w-[220px] flex-wrap items-center gap-1.5">
                                   <button
                                     type="button"
                                     onClick={() => openVulnerabilityDetails(v)}
-                                    className=" text-xs text-accent hover:text-accent/80 hover:underline transition-colors"
+                                    className="font-mono text-xs font-medium text-accent hover:text-accent/80 hover:underline"
                                   >
                                     {v.vuln_id}
                                   </button>
                                   <SourceBadge source={v.data_source} />
                                   {v.suppression && (
-                                    <span
-                                      className="text-xs font-medium px-1.5 py-0.5 rounded-md capitalize shrink-0"
-                                      style={{
-                                        background: 'rgba(251,146,60,0.12)',
-                                        color: '#fb923c',
-                                        border: '1px solid rgba(251,146,60,0.25)',
-                                      }}
+                                    <Chip
+                                      color="warning"
+                                      size="sm"
                                       title={v.suppression.justification || 'Suppressed'}
+                                      variant="soft"
                                     >
                                       {v.suppression.status.replace(/_/g, ' ')}
-                                    </span>
+                                    </Chip>
                                   )}
                                   {v.suppression && (
                                     <SuppressionSourceBadge source={v.suppression.source} />
@@ -2823,148 +2722,141 @@ export default function ScanDetailPage() {
                                 <span className="text-zinc-400 dark:text-zinc-600">-</span>
                               )}
                             </Table.Cell>
-                            <Table.Cell className=" text-xs text-zinc-700 dark:text-zinc-300">
-                              {v.pkg_name}
-                            </Table.Cell>
-                            <Table.Cell className=" text-xs text-zinc-500">
-                              {v.installed_version}
-                            </Table.Cell>
-                            <Table.Cell className=" text-xs text-emerald-500">
-                              {v.fixed_version || (
-                                <span className="text-zinc-400 dark:text-zinc-700">-</span>
-                              )}
+                            <Table.Cell>
+                              <Button
+                                aria-label={`Open ${v.pkg_name} in the SBOM`}
+                                className="-m-2 h-auto min-w-[180px] flex-col items-start gap-0 px-2 py-1 text-left"
+                                onPress={() => openPackageInSBOM(v)}
+                                variant="ghost"
+                              >
+                                <p className="truncate text-xs font-medium text-foreground" title={v.pkg_name}>
+                                  {v.pkg_name}
+                                </p>
+                                <p className="mt-1 truncate font-mono text-[11px] text-muted" title={v.installed_version}>
+                                  {v.installed_version}
+                                </p>
+                              </Button>
                             </Table.Cell>
                             <Table.Cell>
-                              <SeverityBadge severity={v.severity} />
-                            </Table.Cell>
-                            <Table.Cell className="text-right  text-xs text-zinc-500">
-                              {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
+                              <div className="flex items-center gap-2">
+                                <SeverityBadge severity={v.severity} />
+                                <span className="text-xs tabular-nums text-muted">
+                                  {v.cvss_score ? `CVSS ${v.cvss_score.toFixed(1)}` : 'No CVSS'}
+                                </span>
+                              </div>
                             </Table.Cell>
                             <Table.Cell>
-                              <FirstSeenBadge firstSeenAt={v.first_seen_at} />
-                            </Table.Cell>
-                            <Table.Cell>
-                              {hasPolicyFailure ? (
-                                <Tooltip delay={0}>
-                                  <Tooltip.Trigger className="inline-flex">
-                                    <Chip color="danger" size="sm" variant="soft">
-                                      Policy failed
-                                    </Chip>
-                                  </Tooltip.Trigger>
-                                  <Tooltip.Content placement="top" showArrow>
-                                    <div className="max-w-xs space-y-2 p-0.5">
-                                      {failedPolicies.map((policy) => (
-                                        <div key={policy.name} className="space-y-1">
-                                          <p className="text-xs font-semibold text-zinc-100">
-                                            {policy.name}
-                                          </p>
-                                          {policy.ruleSummaries.length > 0 ? (
-                                            <div className="space-y-0.5">
-                                              {policy.ruleSummaries.map((rule) => (
-                                                <p
-                                                  key={`${policy.name}-${rule}`}
-                                                  className="text-[11px] text-zinc-300"
-                                                >
-                                                  {rule}
-                                                </p>
-                                              ))}
-                                            </div>
-                                          ) : null}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </Tooltip.Content>
-                                </Tooltip>
+                              {v.fixed_version ? (
+                                <div>
+                                  <p className="text-xs font-medium text-success">Update available</p>
+                                  <p className="mt-1 font-mono text-[11px] text-muted">{v.fixed_version}</p>
+                                </div>
                               ) : (
-                                <span className="text-xs text-zinc-400">-</span>
+                                <span className="text-xs text-muted">No fix reported</span>
                               )}
                             </Table.Cell>
                             <Table.Cell>
-                              {(() => {
-                                const policyMatches = parseXrayWatchPolicyMatches(v);
-                                const watchCount = xrayWatchNames(v).length;
-                                const hasDetails =
-                                  policyMatches.length > 0 ||
-                                  watchCount > 0 ||
-                                  !!v.xray_is_blocking;
-                                if (!hasDetails) {
-                                  return <span className="text-xs text-zinc-400">-</span>;
-                                }
-
-                                return (
+                              <div className="flex min-w-[220px] flex-wrap items-center gap-1.5">
+                                <FirstSeenBadge firstSeenAt={v.first_seen_at} />
+                                {hasPolicyFailure ? (
+                                  <Tooltip delay={0}>
+                                    <Tooltip.Trigger className="inline-flex">
+                                      <Chip color="danger" size="sm" variant="soft">
+                                        Org policy failed
+                                      </Chip>
+                                    </Tooltip.Trigger>
+                                    <Tooltip.Content placement="top" showArrow>
+                                      <div className="max-w-xs space-y-2 p-0.5">
+                                        {failedPolicies.map((policy) => (
+                                          <div key={policy.name} className="space-y-1">
+                                            <p className="text-xs font-semibold text-zinc-100">
+                                              {policy.name}
+                                            </p>
+                                            {policy.ruleSummaries.length > 0 ? (
+                                              <div className="space-y-0.5">
+                                                {policy.ruleSummaries.map((rule) => (
+                                                  <p
+                                                    key={`${policy.name}-${rule}`}
+                                                    className="text-[11px] text-zinc-300"
+                                                  >
+                                                    {rule}
+                                                  </p>
+                                                ))}
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </Tooltip.Content>
+                                  </Tooltip>
+                                ) : null}
+                                {hasXrayPolicySignal ? (
                                   <Button
                                     onPress={() => openXrayPolicyDetails(v)}
-                                    className="inline-flex items-center gap-1.5"
+                                    size="sm"
                                     variant="danger-soft"
                                   >
-                                    Details
-                                    <Chip
-                                      className="font-semibold"
-                                      color="danger"
-                                      size="sm"
-                                      variant="soft"
-                                    >
-                                      {policyMatches.length || watchCount}
-                                    </Chip>
+                                    Xray {matchedXrayPolicies.length || xrayWatchCount || 1}
                                   </Button>
-                                );
-                              })()}
-                            </Table.Cell>
-                            <Table.Cell className="text-right">
-                              <Button
-                                onPress={() => {
-                                  setExpandedVuln(expandedVuln === v.id ? null : v.id);
-                                  setCommentText('');
-                                }}
-                                className="inline-flex items-center gap-1 text-zinc-400 dark:text-zinc-500 hover:text-accent transition-colors"
-                                variant="secondary"
-                              >
-                                <Comment01Icon size={15} />
-                                {v.comments && v.comments.length > 0 && (
-                                  <span
-                                    className="text-xs rounded-full px-1.5 py-0.5 font-medium"
-                                    style={{
-                                      background: 'var(--color-accent-soft)',
-                                      color: 'var(--color-accent)',
-                                    }}
-                                  >
-                                    {v.comments.length}
-                                  </span>
-                                )}
-                              </Button>
+                                ) : null}
+                                <Button
+                                  onPress={() => {
+                                    setExpandedVuln(expandedVuln === v.id ? null : v.id);
+                                    setCommentText('');
+                                  }}
+                                  size="sm"
+                                  variant="tertiary"
+                                >
+                                  <Comment01Icon size={15} />
+                                  Review{v.comments?.length ? ` ${v.comments.length}` : ''}
+                                </Button>
+                              </div>
                             </Table.Cell>
                           </Table.Row>
                           {expandedVuln === v.id && (
                             <Table.Row id={`${v.id}-expanded`}>
                               <Table.Cell
-                                colSpan={10}
+                                colSpan={5}
                                 className="p-4"
                                 style={{
                                   borderTop: '1px solid var(--border-subtle)',
                                   background: 'var(--row-hover)',
                                 }}
                               >
-                                <div className="w-full space-y-4 xl:grid xl:grid-cols-12 xl:gap-4 xl:space-y-0">
-                                  {/* Suppression section */}
+                                <Accordion
+                                  className="w-full overflow-hidden rounded-xl border border-divider bg-surface-secondary"
+                                  hideSeparator
+                                  variant="surface"
+                                >
                                   {scan.image_digest && (
-                                    <Card
-                                      className="overflow-hidden xl:col-span-8"
-                                      variant="secondary"
-                                    >
-                                      <Card.Header className="flex-row items-center justify-between gap-3">
-                                        <div className="flex items-center gap-2">
-                                          <ShieldKeyIcon size={13} className="text-zinc-400" />
-                                          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                                            Suppression
+                                    <Accordion.Item id={`suppression-${v.id}`}>
+                                      <Accordion.Heading>
+                                        <Accordion.Trigger className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-tertiary">
+                                          <ShieldKeyIcon className="shrink-0 text-muted" size={16} />
+                                          <span className="min-w-0 flex-1">
+                                            <span className="block text-sm font-medium text-foreground">
+                                              Risk decision
+                                            </span>
+                                            <span className="mt-0.5 block truncate text-xs text-muted">
+                                              {v.suppression
+                                                ? 'An exception is recorded for this finding.'
+                                                : 'No exception recorded.'}
+                                            </span>
                                           </span>
-                                        </div>
-                                        {v.suppression && (
-                                          <Chip color="danger" size="sm" variant="soft">
-                                            {v.suppression.status.replace(/_/g, ' ')}
+                                          <Chip
+                                            color={v.suppression ? 'warning' : 'default'}
+                                            size="sm"
+                                            variant="soft"
+                                          >
+                                            {v.suppression
+                                              ? v.suppression.status.replace(/_/g, ' ')
+                                              : 'None'}
                                           </Chip>
-                                        )}
-                                      </Card.Header>
-                                      <Card.Content className="space-y-3">
+                                          <Accordion.Indicator className="shrink-0 text-muted" />
+                                        </Accordion.Trigger>
+                                      </Accordion.Heading>
+                                      <Accordion.Panel>
+                                        <Accordion.Body className="space-y-3 border-t border-divider p-4">
                                         {v.suppression ? (
                                           <Card variant="default">
                                             <Card.Content className="space-y-3 p-3">
@@ -3247,28 +3139,31 @@ export default function ScanDetailPage() {
                                             </Card.Content>
                                           </Card>
                                         )}
-                                      </Card.Content>
-                                    </Card>
+                                        </Accordion.Body>
+                                      </Accordion.Panel>
+                                    </Accordion.Item>
                                   )}
 
-                                  {/* Notes / Comments */}
-                                  <Card
-                                    className={`overflow-hidden xl:h-full ${scan.image_digest ? 'xl:col-span-4' : 'xl:col-span-12'}`}
-                                    variant="secondary"
-                                  >
-                                    <Card.Header className="flex-row items-center justify-between gap-3">
-                                      <div className="flex items-center gap-2">
-                                        <Comment01Icon size={13} className="text-zinc-400" />
-                                        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                                          Notes
+                                  <Accordion.Item id={`notes-${v.id}`}>
+                                    <Accordion.Heading>
+                                      <Accordion.Trigger className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-tertiary">
+                                        <Comment01Icon className="shrink-0 text-muted" size={16} />
+                                        <span className="min-w-0 flex-1">
+                                          <span className="block text-sm font-medium text-foreground">Notes</span>
+                                          <span className="mt-0.5 block truncate text-xs text-muted">
+                                            {(v.comments?.length ?? 0) > 0
+                                              ? `${v.comments?.length} team note${(v.comments?.length ?? 0) === 1 ? '' : 's'}`
+                                              : 'Capture context for your team.'}
+                                          </span>
                                         </span>
-                                      </div>
-                                      <Chip size="sm" variant="soft">
-                                        {v.comments?.length ?? 0} note
-                                        {(v.comments?.length ?? 0) === 1 ? '' : 's'}
-                                      </Chip>
-                                    </Card.Header>
-                                    <Card.Content className="space-y-3">
+                                        <Chip size="sm" variant="soft">
+                                          {v.comments?.length ?? 0}
+                                        </Chip>
+                                        <Accordion.Indicator className="shrink-0 text-muted" />
+                                      </Accordion.Trigger>
+                                    </Accordion.Heading>
+                                    <Accordion.Panel>
+                                      <Accordion.Body className="space-y-3 border-t border-divider p-4">
                                       {v.comments && v.comments.length > 0 ? (
                                         <div className="space-y-2">
                                           {v.comments.map((c) => (
@@ -3335,9 +3230,10 @@ export default function ScanDetailPage() {
                                           </Button>
                                         </div>
                                       </div>
-                                    </Card.Content>
-                                  </Card>
-                                </div>
+                                      </Accordion.Body>
+                                    </Accordion.Panel>
+                                  </Accordion.Item>
+                                </Accordion>
                               </Table.Cell>
                             </Table.Row>
                           )}

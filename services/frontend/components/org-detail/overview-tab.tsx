@@ -1,6 +1,8 @@
 import { OrgRiskScore, TrendPoint } from '@/lib/api';
 import { Card, Chip, Link } from '@heroui/react';
 
+import { StatCard } from '@/components/ui/stat-card';
+
 import { OrgScanItem, RiskOverviewCard, TrendChart } from './shared';
 
 interface OrgOverviewTabProps {
@@ -21,17 +23,13 @@ function SummaryMetric({
   color?: 'default' | 'danger' | 'warning' | 'success';
 }) {
   return (
-    <Card>
-      <Card.Content className="gap-1">
-        <p className="text-xs font-medium text-muted">{label}</p>
-        <div className="flex items-baseline gap-2">
-          <p className="text-2xl font-semibold tracking-tight">{value}</p>
-          <Chip color={color} size="sm" variant="soft">
-            {detail}
-          </Chip>
-        </div>
-      </Card.Content>
-    </Card>
+    <StatCard
+      label={label}
+      value={value}
+      hint={<Chip color={color} size="sm" variant="soft">{detail}</Chip>}
+      tone={color}
+      variant="stacked"
+    />
   );
 }
 

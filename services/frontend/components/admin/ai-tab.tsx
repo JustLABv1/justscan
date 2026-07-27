@@ -2,6 +2,7 @@
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { StatCard } from '@/components/ui/stat-card';
 import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
@@ -334,34 +335,16 @@ export function AITab() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card>
-          <Card.Content className="space-y-1">
-            <p className="text-xs text-zinc-500">Providers</p>
-            <p className="text-2xl font-semibold">{providers.length}</p>
-            <p className="text-xs text-zinc-500">{enabledCount} enabled</p>
-          </Card.Content>
-        </Card>
-        <Card>
-          <Card.Content className="space-y-1">
-            <p className="text-xs text-zinc-500">Token Health</p>
-            <p className="text-2xl font-semibold">{tokenCount}</p>
-            <p className="text-xs text-zinc-500">with configured credentials</p>
-          </Card.Content>
-        </Card>
-        <Card>
-          <Card.Content className="space-y-1">
-            <p className="text-xs text-zinc-500">AI Availability</p>
-            <p className="text-2xl font-semibold">{settings?.enabled ? 'On' : 'Off'}</p>
-            <p className="text-xs text-zinc-500">assistant request path</p>
-          </Card.Content>
-        </Card>
-        <Card>
-          <Card.Content className="space-y-1">
-            <p className="text-xs text-zinc-500">Default Provider</p>
-            <p className="text-lg font-semibold truncate">{defaultProvider?.label ?? 'None'}</p>
-            <p className="text-xs text-zinc-500 truncate">{defaultProvider?.providerType ?? 'Unset'}</p>
-          </Card.Content>
-        </Card>
+        <StatCard label="Providers" value={providers.length} hint={`${enabledCount} enabled`} variant="stacked" />
+        <StatCard label="Token health" value={tokenCount} hint="With configured credentials" variant="stacked" />
+        <StatCard label="AI availability" value={settings?.enabled ? 'On' : 'Off'} hint="Assistant request path" variant="stacked" />
+        <StatCard
+          label="Default provider"
+          value={defaultProvider?.label ?? 'None'}
+          hint={defaultProvider?.providerType ?? 'Unset'}
+          variant="stacked"
+          valueClassName="truncate text-lg font-semibold tracking-tight"
+        />
       </div>
 
       <Card className="space-y-4">

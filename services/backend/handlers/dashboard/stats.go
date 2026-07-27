@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
@@ -14,14 +15,17 @@ import (
 )
 
 type statsResult struct {
-	TotalScans     int              `json:"total_scans"`
-	StatusCounts   map[string]int   `json:"status_counts"`
-	SeverityTotals map[string]int   `json:"severity_totals"`
-	AttentionScans []models.Scan    `json:"attention_scans"`
-	RecentScans    []models.Scan    `json:"recent_scans"`
-	TopImages      []topImage       `json:"top_images"`
-	WatchlistCount int              `json:"watchlist_count"`
-	Operations     operationsResult `json:"operations"`
+	TotalScans      int                  `json:"total_scans"`
+	StatusCounts    map[string]int       `json:"status_counts"`
+	SeverityTotals  map[string]int       `json:"severity_totals"`
+	AttentionScans  []models.Scan        `json:"attention_scans"`
+	RecentScans     []models.Scan        `json:"recent_scans"`
+	TopImages       []topImage           `json:"top_images"`
+	WatchlistCount  int                  `json:"watchlist_count"`
+	Operations      operationsResult     `json:"operations"`
+	Activity        activityResult       `json:"activity"`
+	PolicyFailures  policyFailures       `json:"policy_failures"`
+	GitRepositories gitRepositorySummary `json:"git_repositories"`
 }
 
 type operationsResult struct {
@@ -36,6 +40,24 @@ type operationsResult struct {
 type topImage struct {
 	ImageName string `json:"image_name"`
 	Count     int    `json:"count"`
+}
+
+type activityResult struct {
+	ImagesScannedToday int `json:"images_scanned_today"`
+}
+
+type policyFailures struct {
+	Today     int `json:"today"`
+	Last3Days int `json:"last_3_days"`
+	Last7Days int `json:"last_7_days"`
+}
+
+type gitRepositorySummary struct {
+	Total          int `json:"total"`
+	Enabled        int `json:"enabled"`
+	Healthy        int `json:"healthy"`
+	NeedsAttention int `json:"needs_attention"`
+	InProgress     int `json:"in_progress"`
 }
 
 const dashboardAttentionScanLimit = 25
@@ -160,6 +182,19 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 
 		// Top images by scan count
 		result.TopImages = topImages(c, ctx, db, userID, isAdmin, accessibleOrgIDs)
+		result.Activity.ImagesScannedToday = imagesScannedSince(c, ctx, db, userID, isAdmin, accessibleOrgIDs, startOfToday())
+		if count, err := loadPolicyIssueCountSince(c, ctx, db, userID, isAdmin, accessibleOrgIDs, startOfToday()); err == nil {
+			result.PolicyFailures.Today = count
+		}
+		if count, err := loadPolicyIssueCountSince(c, ctx, db, userID, isAdmin, accessibleOrgIDs, time.Now().UTC().Add(-72*time.Hour)); err == nil {
+			result.PolicyFailures.Last3Days = count
+		}
+		if count, err := loadPolicyIssueCountSince(c, ctx, db, userID, isAdmin, accessibleOrgIDs, time.Now().UTC().Add(-7*24*time.Hour)); err == nil {
+			result.PolicyFailures.Last7Days = count
+		}
+		if summary, err := summarizeGitRepositories(c, ctx, db, userID, isAdmin, accessibleOrgIDs); err == nil {
+			result.GitRepositories = summary
+		}
 
 		// Watchlist count
 		watchlistQuery := db.NewSelect().TableExpr("watchlist_items").
@@ -171,6 +206,44 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, result)
 	}
+}
+
+func startOfToday() time.Time {
+	now := time.Now().UTC()
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+func imagesScannedSince(c *gin.Context, ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, since time.Time) int {
+	var count int
+	query := db.NewSelect().
+		TableExpr("scans AS scan").
+		ColumnExpr("COUNT(DISTINCT (scan.image_name, scan.image_tag, COALESCE(scan.platform, ''))) AS count").
+		Where("scan.status IN (?)", bun.In([]string{models.ScanStatusCompleted, models.ScanStatusFailed})).
+		Where("COALESCE(scan.completed_at, scan.created_at) >= ?", since)
+	query = authz.ApplyOwnershipVisibility(query, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+	query = authz.ApplyWorkspaceScope(c, query, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
+	if err := query.Scan(ctx, &count); err != nil {
+		return 0
+	}
+	return count
+}
+
+func summarizeGitRepositories(c *gin.Context, ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) (gitRepositorySummary, error) {
+	var summary gitRepositorySummary
+	query := db.NewSelect().
+		TableExpr("git_repositories AS repo").
+		ColumnExpr("COUNT(*) AS total").
+		ColumnExpr("COALESCE(SUM(CASE WHEN repo.enabled THEN 1 ELSE 0 END), 0) AS enabled").
+		ColumnExpr("COALESCE(SUM(CASE WHEN repo.enabled AND run.status = ? THEN 1 ELSE 0 END), 0) AS healthy", models.GitRepositoryRunCompleted).
+		ColumnExpr("COALESCE(SUM(CASE WHEN repo.enabled AND (repo.last_run_id IS NULL OR run.status IN (?)) THEN 1 ELSE 0 END), 0) AS needs_attention", bun.In([]string{models.GitRepositoryRunFailed, models.GitRepositoryRunPartial})).
+		ColumnExpr("COALESCE(SUM(CASE WHEN repo.enabled AND run.status IN (?) THEN 1 ELSE 0 END), 0) AS in_progress", bun.In([]string{models.GitRepositoryRunQueued, models.GitRepositoryRunDiscovering, models.GitRepositoryRunScanning})).
+		Join("LEFT JOIN git_repository_runs AS run ON run.id = repo.last_run_id")
+	query = authz.ApplyOwnershipVisibility(query, "repo", "created_by_id", "owner_user_id", "owner_org_id", "", "", userID, isAdmin, accessibleOrgIDs)
+	query = authz.ApplyWorkspaceScope(c, query, "repo", "owner_user_id", "owner_org_id", "", "", userID)
+	if err := query.Scan(ctx, &summary); err != nil {
+		return gitRepositorySummary{}, err
+	}
+	return summary, nil
 }
 
 func isBlockedByXrayPolicyStatus(status, externalStatus string) bool {
@@ -270,6 +343,52 @@ func loadPolicyIssueCounts(c *gin.Context, ctx context.Context, db *bun.DB, user
 
 	result.total = len(issueScanIDs)
 	return result, nil
+}
+
+func loadPolicyIssueCountSince(c *gin.Context, ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, since time.Time) (int, error) {
+	issueScanIDs := make(map[uuid.UUID]struct{})
+
+	var xrayBlockedScanIDs []uuid.UUID
+	xrayBlockedQuery := db.NewSelect().
+		TableExpr("scans AS scan").
+		Column("scan.id").
+		Where("scan.external_status = ?", models.ScanExternalStatusBlockedByXrayPolicy).
+		Where("COALESCE(scan.completed_at, scan.created_at) >= ?", since)
+	xrayBlockedQuery = authz.ApplyOwnershipVisibility(xrayBlockedQuery, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+	xrayBlockedQuery = authz.ApplyWorkspaceScope(c, xrayBlockedQuery, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
+	if err := xrayBlockedQuery.Scan(ctx, &xrayBlockedScanIDs); err != nil {
+		return 0, err
+	}
+	for _, scanID := range xrayBlockedScanIDs {
+		issueScanIDs[scanID] = struct{}{}
+	}
+
+	var orgPolicyFailedScanIDs []uuid.UUID
+	orgPolicyQuery := db.NewSelect().
+		TableExpr("compliance_results AS cr").
+		ColumnExpr("DISTINCT cr.scan_id").
+		Join("JOIN scans AS scan ON scan.id = cr.scan_id").
+		Where("cr.status = ?", "fail").
+		Where("COALESCE(scan.completed_at, scan.created_at) >= ?", since)
+	orgPolicyQuery = authz.ApplyOwnershipVisibility(orgPolicyQuery, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+	orgPolicyQuery = authz.ApplyWorkspaceScope(c, orgPolicyQuery, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
+	if !isAdmin {
+		if len(accessibleOrgIDs) == 0 {
+			return len(issueScanIDs), nil
+		}
+		orgPolicyQuery = orgPolicyQuery.Where("cr.org_id IN (?)", bun.In(accessibleOrgIDs))
+	}
+	if orgID, scoped := scopedOrgID(c.Query("scope")); scoped {
+		orgPolicyQuery = orgPolicyQuery.Where("cr.org_id = ?", orgID)
+	}
+	if err := orgPolicyQuery.Scan(ctx, &orgPolicyFailedScanIDs); err != nil {
+		return 0, err
+	}
+	for _, scanID := range orgPolicyFailedScanIDs {
+		issueScanIDs[scanID] = struct{}{}
+	}
+
+	return len(issueScanIDs), nil
 }
 
 func latestVisibleScanIDsQuery(c *gin.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, alias string) *bun.SelectQuery {

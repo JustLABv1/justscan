@@ -1,6 +1,7 @@
 'use client';
 
 import { StatusAlert } from '@/components/ui/form-alert';
+import { StatCard } from '@/components/ui/stat-card';
 import { ScannerRuntimePanel } from '@/components/admin/scanner-runtime-panel';
 import { getScannerHealth } from '@/lib/api/dashboard';
 import type { ScannerHealth } from '@/lib/api/types/dashboard';
@@ -67,10 +68,10 @@ export function ScannerTab() {
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <Card><Card.Content><p className="text-xs text-zinc-500">Healthy Workers</p><p className="text-2xl font-semibold text-success">{health.healthy_workers}</p></Card.Content></Card>
-                  <Card><Card.Content><p className="text-xs text-zinc-500">Stale Workers</p><p className="text-2xl font-semibold text-warning">{health.stale_workers}</p></Card.Content></Card>
-                  <Card><Card.Content><p className="text-xs text-zinc-500">Oldest Vuln DB</p><p className="text-2xl font-semibold">{formatDbAge(health.oldest_vuln_db_age_hours)}</p></Card.Content></Card>
-                  <Card><Card.Content><p className="text-xs text-zinc-500">Oldest Java DB</p><p className="text-2xl font-semibold">{formatDbAge(health.oldest_java_db_age_hours)}</p></Card.Content></Card>
+                  <StatCard label="Healthy workers" value={health.healthy_workers} tone="success" variant="stacked" />
+                  <StatCard label="Stale workers" value={health.stale_workers} tone="warning" variant="stacked" />
+                  <StatCard label="Oldest vulnerability DB" value={formatDbAge(health.oldest_vuln_db_age_hours)} variant="stacked" />
+                  <StatCard label="Oldest Java DB" value={formatDbAge(health.oldest_java_db_age_hours)} variant="stacked" />
                 </div>
 
                 <Card variant="secondary">

@@ -23,6 +23,7 @@ import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/u
 import { PageTitle } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
+import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -505,23 +506,7 @@ function ScanOverviewMetric({
   icon: ReactNode;
   tone?: 'default' | 'danger' | 'success';
 }) {
-  const toneClassName = {
-    default: 'border-transparent text-muted',
-    success: 'border-success/35 text-success',
-    danger: 'border-danger/40 text-danger',
-  }[tone];
-
-  return (
-    <Card className={`min-w-0 px-3 py-2.5 ${toneClassName}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-xs font-medium">{label}</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</p>
-        </div>
-        <div className="shrink-0">{icon}</div>
-      </div>
-    </Card>
-  );
+  return <StatCard label={label} value={value} icon={icon} tone={tone} />;
 }
 
 export default function ScanDetailPage() {
@@ -807,18 +792,20 @@ export default function ScanDetailPage() {
       .catch(() => {});
   }, [id, loadScan]);
 
+  const refreshActiveScan = useCallback(() => {
+    void loadScan()
+      .then((nextScan) => {
+        if (nextScan.status === 'completed' || nextScan.status === 'failed') {
+          void getScanCompliance(id)
+            .then(setCompliance)
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, [id, loadScan]);
+
   useConditionalInterval(
-    () => {
-      void loadScan()
-        .then((nextScan) => {
-          if (nextScan.status === 'completed' || nextScan.status === 'failed') {
-            void getScanCompliance(id)
-              .then(setCompliance)
-              .catch(() => {});
-          }
-        })
-        .catch(() => {});
-    },
+    refreshActiveScan,
     scanStatus === 'pending' || scanStatus === 'running',
     3000
   );

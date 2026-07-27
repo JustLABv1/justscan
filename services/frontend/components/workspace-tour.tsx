@@ -8,6 +8,7 @@ import {
   Building04Icon,
   DashboardSquare01Icon,
   EyeIcon,
+  GitBranchIcon,
   GridTableIcon,
   PackageIcon,
   Search01Icon,
@@ -74,6 +75,14 @@ function buildWorkspaceTour(includeAssistant: boolean): Tour[] {
       title: 'Scans',
       content:
         'Scans is where you launch image scans and review historical results. Use Watchlist for day-to-day monitoring of scheduled images.',
+    },
+    {
+      route: '/git-repositories',
+      selector: DEFAULT_STEP_SELECTOR,
+      icon: <GitBranchIcon size={18} />,
+      title: 'Git repositories',
+      content:
+        'Connect Git repositories to discover container images declared in supported manifests. You can scan discovered workloads right away or schedule recurring discovery and scanning.',
     },
     {
       route: '/helm',

@@ -3,7 +3,11 @@
 import { Card } from '@heroui/react';
 import type { CSSProperties, ReactNode } from 'react';
 
-import { SurfaceIcon, type SurfaceIconTone } from '@/components/ui/surface-icon';
+import {
+  SurfaceIcon,
+  type SurfaceIconTone,
+  type SurfaceIconVariant,
+} from '@/components/ui/surface-icon';
 
 type StatCardTone = SurfaceIconTone | 'neutral';
 type StatCardVariant = 'compact' | 'stacked';
@@ -14,6 +18,7 @@ interface StatCardProps {
   hint?: ReactNode;
   icon?: ReactNode;
   iconTone?: SurfaceIconTone;
+  iconVariant?: SurfaceIconVariant;
   tone?: StatCardTone;
   variant?: StatCardVariant;
   aside?: ReactNode;
@@ -37,6 +42,7 @@ export function StatCard({
   hint,
   icon,
   iconTone,
+  iconVariant,
   tone = 'default',
   variant = 'compact',
   aside,
@@ -63,7 +69,14 @@ export function StatCard({
 
   const labelNode = (
     <div className="flex min-w-0 items-center gap-2">
-      {icon ? <SurfaceIcon icon={icon} tone={iconTone ?? resolvedTone} size="sm" /> : null}
+      {icon ? (
+        <SurfaceIcon
+          icon={icon}
+          tone={iconTone ?? resolvedTone}
+          size="sm"
+          variant={iconVariant}
+        />
+      ) : null}
       <p className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-widest text-muted">
         {label}
       </p>

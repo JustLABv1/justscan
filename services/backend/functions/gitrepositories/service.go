@@ -716,6 +716,15 @@ func unresolvedCandidates(candidates []DiscoveryCandidate) int {
 }
 
 func clone(ctx context.Context, repository models.GitRepository, dir string) error {
+	if repository.AuthType != models.GitRepositoryAuthNone {
+		if strings.TrimSpace(repository.Username) == "" {
+			return fmt.Errorf("clone repository: Git username is missing from the connector")
+		}
+		if repository.EncryptedCredential == "" {
+			return fmt.Errorf("clone repository: Git token or password is missing from the connector")
+		}
+	}
+
 	// Run with a blank credential helper so a system/global Git configuration
 	// cannot return stale credentials before JustScan's provider runs.
 	args := []string{"-c", "credential.helper="}
@@ -727,9 +736,8 @@ func clone(ctx context.Context, repository models.GitRepository, dir string) err
 			return fmt.Errorf("decrypt Git credential: %w", err)
 		}
 		secret = decryptedSecret
-		credentialHelper = filepath.Join(filepath.Dir(dir), "justscan-git-credential-helper.sh")
-		helperScript := "#!/bin/sh\ncase \"${1:-}\" in\n  get) printf 'username=%s\\npassword=%s\\n\\n' \"$JUSTSCAN_GIT_USERNAME\" \"$JUSTSCAN_GIT_SECRET\" ;;\nesac\n"
-		if err := os.WriteFile(credentialHelper, []byte(helperScript), 0700); err != nil {
+		credentialHelper, err = createGitCredentialHelper(filepath.Dir(dir))
+		if err != nil {
 			return err
 		}
 		defer os.Remove(credentialHelper)
@@ -753,9 +761,45 @@ func clone(ctx context.Context, repository models.GitRepository, dir string) err
 	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if repository.AuthType != models.GitRepositoryAuthNone {
+			return fmt.Errorf(
+				"clone repository using %s authentication as %q: %s",
+				repository.AuthType,
+				repository.Username,
+				redactGitError(string(output)),
+			)
+		}
 		return fmt.Errorf("clone repository: %s", redactGitError(string(output)))
 	}
 	return nil
+}
+
+func createGitCredentialHelper(dir string) (string, error) {
+	file, err := os.CreateTemp(dir, "justscan-git-credential-helper-*.sh")
+	if err != nil {
+		return "", fmt.Errorf("create Git credential helper: %w", err)
+	}
+	path := file.Name()
+	removeOnError := true
+	defer func() {
+		_ = file.Close()
+		if removeOnError {
+			_ = os.Remove(path)
+		}
+	}()
+
+	helperScript := "#!/bin/sh\ncase \"${1:-}\" in\n  get) printf 'username=%s\\npassword=%s\\n\\n' \"$JUSTSCAN_GIT_USERNAME\" \"$JUSTSCAN_GIT_SECRET\" ;;\nesac\n"
+	if _, err := file.WriteString(helperScript); err != nil {
+		return "", fmt.Errorf("write Git credential helper: %w", err)
+	}
+	if err := file.Chmod(0700); err != nil {
+		return "", fmt.Errorf("secure Git credential helper: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return "", fmt.Errorf("close Git credential helper: %w", err)
+	}
+	removeOnError = false
+	return path, nil
 }
 
 func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {

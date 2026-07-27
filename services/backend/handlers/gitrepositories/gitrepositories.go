@@ -508,6 +508,17 @@ func build(c *gin.Context, db *bun.DB, body repositoryRequest, userID uuid.UUID,
 	if authType != models.GitRepositoryAuthNone && authType != models.GitRepositoryAuthToken && authType != models.GitRepositoryAuthBasic {
 		return nil, fmt.Errorf("invalid authentication type")
 	}
+	username := strings.TrimSpace(body.Username)
+	if authType != models.GitRepositoryAuthNone && username == "" {
+		return nil, fmt.Errorf("Git username is required when authentication is enabled")
+	}
+	credentialConfigured := body.Credential != ""
+	if previous != nil && previous.EncryptedCredential != "" {
+		credentialConfigured = true
+	}
+	if authType != models.GitRepositoryAuthNone && !credentialConfigured {
+		return nil, fmt.Errorf("Git token or password is required when authentication is enabled")
+	}
 	schedule := body.Schedule
 	if schedule == "" {
 		schedule = "0 2 * * *"
@@ -547,7 +558,7 @@ func build(c *gin.Context, db *bun.DB, body repositoryRequest, userID uuid.UUID,
 	if discoveryMode == models.GitRepositoryDiscoveryKustomize && len(entrypoints) == 0 {
 		return nil, fmt.Errorf("Kustomize discovery requires at least one entrypoint")
 	}
-	item := &models.GitRepository{Name: strings.TrimSpace(body.Name), CloneURL: url, Ref: strings.TrimSpace(body.Ref), AuthType: authType, Username: strings.TrimSpace(body.Username), Schedule: schedule, Timezone: timezone, Enabled: body.Enabled, RescanPolicy: policy, DiscoveryMode: discoveryMode, Entrypoints: entrypoints, TagIDs: body.TagIDs, CreatedByID: userID, OwnerType: models.OwnerTypeUser, OwnerUserID: &userID, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	item := &models.GitRepository{Name: strings.TrimSpace(body.Name), CloneURL: url, Ref: strings.TrimSpace(body.Ref), AuthType: authType, Username: username, Schedule: schedule, Timezone: timezone, Enabled: body.Enabled, RescanPolicy: policy, DiscoveryMode: discoveryMode, Entrypoints: entrypoints, TagIDs: body.TagIDs, CreatedByID: userID, OwnerType: models.OwnerTypeUser, OwnerUserID: &userID, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if item.Name == "" {
 		item.Name = url
 	}

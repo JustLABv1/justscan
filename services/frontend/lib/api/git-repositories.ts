@@ -19,6 +19,8 @@ export const validateGitRepository = (data: GitRepositoryInput) => req<{ commit_
 export const listGitRepositoryRuns = (id: string) => req<{ data: GitRepositoryRun[] }>('GET', `/api/v1/git-repositories/${id}/runs`).then((result) => result.data ?? []);
 export const listGitRepositoryLatestImageScans = (id: string) => req<{ data: GitRepositoryLatestImageScan[] }>('GET', `/api/v1/git-repositories/${id}/latest-image-scans`).then((result) => result.data ?? []);
 export const runGitRepository = (id: string, options: { policy?: 'changed' | 'all'; selected_images?: string[] } = {}) => req<GitRepositoryRun>('POST', `/api/v1/git-repositories/${id}/runs`, options);
+export const cancelGitRepositoryRun = (id: string, runId: string) =>
+  req<GitRepositoryRun>('POST', `/api/v1/git-repositories/${id}/runs/${runId}/cancel`, {});
 export const listGitRepositoryImageExclusions = (id: string) => req<{ data: GitRepositoryImageExclusion[] }>('GET', `/api/v1/git-repositories/${id}/image-exclusions`).then((result) => result.data ?? []);
 export const createGitRepositoryImageExclusion = (id: string, full_ref: string) => req<GitRepositoryImageExclusion>('POST', `/api/v1/git-repositories/${id}/image-exclusions`, { full_ref });
 export const deleteGitRepositoryImageExclusion = (id: string, exclusionId: string) => req<{ result: string }>('DELETE', `/api/v1/git-repositories/${id}/image-exclusions/${exclusionId}`);

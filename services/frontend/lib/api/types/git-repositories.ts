@@ -2,7 +2,14 @@ import type { OwnerType } from './common';
 
 export type GitRepositoryRescanPolicy = 'changed' | 'all';
 export type GitRepositoryDiscoveryMode = 'auto' | 'kustomize' | 'manifests';
-export type GitRepositoryRunStatus = 'queued' | 'discovering' | 'scanning' | 'completed' | 'partial' | 'failed';
+export type GitRepositoryRunStatus =
+  | 'queued'
+  | 'discovering'
+  | 'scanning'
+  | 'completed'
+  | 'partial'
+  | 'failed'
+  | 'cancelled';
 
 export interface GitRepository {
   id: string;

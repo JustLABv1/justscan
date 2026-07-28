@@ -20,6 +20,7 @@ func GitRepositories(router *gin.RouterGroup, db *bun.DB) {
 		r.GET("/:id/runs", gitrepositories.ListRuns(db))
 		r.GET("/:id/latest-image-scans", gitrepositories.ListLatestImageScans(db))
 		r.POST("/:id/runs", gitrepositories.CreateRun(db))
+		r.POST("/:id/runs/:runId/cancel", gitrepositories.CancelRun(db))
 		r.GET("/:id/image-exclusions", gitrepositories.ListImageExclusions(db))
 		r.POST("/:id/image-exclusions", gitrepositories.CreateImageExclusion(db))
 		r.DELETE("/:id/image-exclusions/:exclusionId", gitrepositories.DeleteImageExclusion(db))

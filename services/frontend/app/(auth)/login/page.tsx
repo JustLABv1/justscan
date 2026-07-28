@@ -4,6 +4,7 @@ import { AuthCard } from '@/components/auth-card';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { getApiBase } from '@/lib/api/base';
+import { clearAuthReturnUrl, safeReturnUrl, storeAuthReturnUrl } from '@/lib/auth-return-url';
 import {
   getOIDCAvailability,
   listOIDCProviders,
@@ -16,6 +17,11 @@ import { Button, Form } from '@heroui/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+function loginReturnUrl(): string {
+  if (typeof window === 'undefined') return '/scans';
+  return safeReturnUrl(new URLSearchParams(window.location.search).get('returnUrl')) ?? '/scans';
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -55,7 +61,8 @@ export default function LoginPage() {
       const res = await login(email, password);
       setToken(res.token);
       setUser(res.user);
-      router.replace('/scans');
+      clearAuthReturnUrl();
+      router.replace(loginReturnUrl());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -153,6 +160,7 @@ export default function LoginPage() {
                   </svg>
                 }
                 label={provider.display_name}
+                onBeforeNavigate={() => storeAuthReturnUrl(loginReturnUrl())}
               />
             ))}
           </div>

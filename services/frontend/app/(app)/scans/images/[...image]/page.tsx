@@ -95,7 +95,6 @@ function Metric({
     <StatCard
       className="h-full"
       hint={description}
-      hintClassName="text-[11px] leading-4 text-muted"
       icon={icon}
       iconTone="default"
       iconVariant="repository"
@@ -103,7 +102,7 @@ function Metric({
       tone={tone}
       value={value}
       valueClassName="text-lg font-semibold tabular-nums"
-      variant="stacked"
+      variant="compact"
     />
   );
 }
@@ -308,26 +307,24 @@ export default function ImageScansPage() {
         </AlertDialog.Backdrop>
       </AlertDialog>
       {statsLoading ? (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-2">
-          {Array.from({ length: 6 }, (_, index) => (
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
+          {Array.from({ length: 4 }, (_, index) => (
             <Card key={index} className="p-3">
-              <Skeleton className="h-14 rounded-lg" />
+              <Skeleton className="h-10 rounded-lg" />
             </Card>
           ))}
         </div>
       ) : stats ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
           <Metric label="Total scans" value={stats.total_scans} icon={<Shield01Icon size={17} />} />
           <Metric
             label="Completed"
             value={stats.completed_scans}
-            description="Scanner completed successfully"
             icon={<CheckmarkCircle02Icon size={17} />}
           />
           <Metric
             label="Failed executions"
             value={stats.failed_scans}
-            description="Historical runs; not necessarily the latest"
             icon={<UnhappyIcon size={17} />}
             tone={stats.failed_scans > 0 ? 'danger' : 'neutral'}
           />
@@ -351,7 +348,6 @@ export default function ImageScansPage() {
           <Metric
             label="Average duration"
             value={formatDuration(stats.average_duration_ms)}
-            description="Completed runs with timing data"
             icon={<Clock01Icon size={17} />}
           />
         </div>

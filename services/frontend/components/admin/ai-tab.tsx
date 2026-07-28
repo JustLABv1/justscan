@@ -334,15 +334,15 @@ export function AITab() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Providers" value={providers.length} hint={`${enabledCount} enabled`} variant="stacked" />
-        <StatCard label="Token health" value={tokenCount} hint="With configured credentials" variant="stacked" />
-        <StatCard label="AI availability" value={settings?.enabled ? 'On' : 'Off'} hint="Assistant request path" variant="stacked" />
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
+        <StatCard label="Providers" value={providers.length} hint={`${enabledCount} enabled`} variant="compact" />
+        <StatCard label="Token health" value={tokenCount} hint="With configured credentials" variant="compact" />
+        <StatCard label="AI availability" value={settings?.enabled ? 'On' : 'Off'} hint="Assistant request path" variant="compact" />
         <StatCard
           label="Default provider"
           value={defaultProvider?.label ?? 'None'}
           hint={defaultProvider?.providerType ?? 'Unset'}
-          variant="stacked"
+          variant="compact"
           valueClassName="truncate text-lg font-semibold tracking-tight"
         />
       </div>

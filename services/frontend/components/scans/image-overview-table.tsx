@@ -22,12 +22,12 @@ function ImageName({ imageName }: { imageName: string }) {
   const repository = hasHost ? parts.slice(1).join('/') : imageName;
 
   return (
-    <div className="min-w-0 max-w-[32rem]" title={imageName}>
-      <p className="break-all font-mono text-sm font-medium leading-5 text-foreground">
+    <div className="min-w-0 max-w-[40rem]" title={imageName}>
+      <p className="break-words font-mono text-sm font-medium leading-5 text-foreground">
         {repository}
       </p>
       {hasHost ? (
-        <p className="mt-0.5 break-all font-mono text-xs leading-4 text-muted">{host}</p>
+        <p className="mt-0.5 break-words font-mono text-xs leading-4 text-muted">{host}</p>
       ) : null}
     </div>
   );
@@ -51,7 +51,9 @@ export function ImageOverviewTable({
       <Table.ScrollContainer>
         <Table.Content aria-label="Scanned images" className="min-w-[960px] table-auto">
           <Table.Header>
-            <Table.Column isRowHeader>Image</Table.Column>
+            <Table.Column isRowHeader className="w-[30%] min-w-[24rem]">
+              Image
+            </Table.Column>
             <Table.Column>Current health</Table.Column>
             <Table.Column>Findings</Table.Column>
             <Table.Column>Tags &amp; runs</Table.Column>
@@ -89,7 +91,7 @@ export function ImageOverviewTable({
                   const href = imageHref(image.image_name);
                   return (
                     <Table.Row id={image.image_name} className="group">
-                      <Table.Cell>
+                      <Table.Cell className="w-[30%] min-w-[24rem] align-top">
                         <Link
                           href={href}
                           className="block rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent"

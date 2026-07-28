@@ -67,11 +67,11 @@ export function ScannerTab() {
               />
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <StatCard label="Healthy workers" value={health.healthy_workers} tone="success" variant="stacked" />
-                  <StatCard label="Stale workers" value={health.stale_workers} tone="warning" variant="stacked" />
-                  <StatCard label="Oldest vulnerability DB" value={formatDbAge(health.oldest_vuln_db_age_hours)} variant="stacked" />
-                  <StatCard label="Oldest Java DB" value={formatDbAge(health.oldest_java_db_age_hours)} variant="stacked" />
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
+                  <StatCard label="Healthy workers" value={health.healthy_workers} tone="success" variant="compact" />
+                  <StatCard label="Stale workers" value={health.stale_workers} tone={health.stale_workers > 0 ? 'warning' : 'default'} variant="compact" />
+                  <StatCard label="Oldest vulnerability DB" value={formatDbAge(health.oldest_vuln_db_age_hours)} variant="compact" />
+                  <StatCard label="Oldest Java DB" value={formatDbAge(health.oldest_java_db_age_hours)} variant="compact" />
                 </div>
 
                 <Card variant="secondary">

@@ -319,11 +319,11 @@ export function InsightsTab() {
       {section === 'api' && (
         <div className="space-y-4">
           {!apiStatsLoading && apiStats && (
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatCard label="Total requests" value={apiStats.total_requests.toLocaleString()} variant="stacked" />
-              <StatCard label="Error rate" value={apiStats.total_requests > 0 ? `${((apiStats.error_requests / apiStats.total_requests) * 100).toFixed(1)}%` : '0%'} tone={apiStats.error_requests > 0 ? 'warning' : 'success'} variant="stacked" />
-              <StatCard label="Average duration" value={`${apiStats.avg_duration_ms.toFixed(0)} ms`} variant="stacked" />
-              <StatCard label="p95 duration" value={`${apiStats.p95_duration_ms.toFixed(0)} ms`} variant="stacked" />
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
+              <StatCard label="Total requests" value={apiStats.total_requests.toLocaleString()} variant="compact" />
+              <StatCard label="Error rate" value={apiStats.total_requests > 0 ? `${((apiStats.error_requests / apiStats.total_requests) * 100).toFixed(1)}%` : '0%'} tone={apiStats.error_requests > 0 ? 'warning' : 'default'} variant="compact" />
+              <StatCard label="Average duration" value={`${apiStats.avg_duration_ms.toFixed(0)} ms`} variant="compact" />
+              <StatCard label="p95 duration" value={`${apiStats.p95_duration_ms.toFixed(0)} ms`} variant="compact" />
             </div>
           )}
           <Card className="space-y-4">
@@ -532,11 +532,11 @@ export function InsightsTab() {
       {section === 'xray' && (
         <div className="space-y-4">
           {!xrayStatsLoading && xrayStats && (
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatCard label="Total calls" value={xrayStats.total_requests.toLocaleString()} variant="stacked" />
-              <StatCard label="Error rate" value={xrayStats.total_requests > 0 ? `${((xrayStats.error_requests / xrayStats.total_requests) * 100).toFixed(1)}%` : '0%'} tone={xrayStats.error_requests > 0 ? 'warning' : 'success'} variant="stacked" />
-              <StatCard label="Average duration" value={`${xrayStats.avg_duration_ms.toFixed(0)} ms`} variant="stacked" />
-              <StatCard label="p95 duration" value={`${xrayStats.p95_duration_ms.toFixed(0)} ms`} variant="stacked" />
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
+              <StatCard label="Total calls" value={xrayStats.total_requests.toLocaleString()} variant="compact" />
+              <StatCard label="Error rate" value={xrayStats.total_requests > 0 ? `${((xrayStats.error_requests / xrayStats.total_requests) * 100).toFixed(1)}%` : '0%'} tone={xrayStats.error_requests > 0 ? 'warning' : 'default'} variant="compact" />
+              <StatCard label="Average duration" value={`${xrayStats.avg_duration_ms.toFixed(0)} ms`} variant="compact" />
+              <StatCard label="p95 duration" value={`${xrayStats.p95_duration_ms.toFixed(0)} ms`} variant="compact" />
             </div>
           )}
           <Card className="space-y-4">

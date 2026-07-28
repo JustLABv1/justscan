@@ -2,11 +2,13 @@
 
 import { SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import type { ImageOverview } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import { Chip, Table } from '@heroui/react';
-import { ArrowRight01Icon, Shield01Icon } from 'hugeicons-react';
+import { ArrowRight01Icon, Delete01Icon, Shield01Icon } from 'hugeicons-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 function imageHref(imageName: string) {
   return `/scans/images/${imageName.split('/').map(encodeURIComponent).join('/')}`;
@@ -20,9 +22,13 @@ function ImageName({ imageName }: { imageName: string }) {
   const repository = hasHost ? parts.slice(1).join('/') : imageName;
 
   return (
-    <div className="min-w-0" title={imageName}>
-      <p className="truncate font-mono text-sm font-medium text-foreground">{repository}</p>
-      {hasHost ? <p className="mt-0.5 truncate font-mono text-xs text-muted">{host}</p> : null}
+    <div className="min-w-0 max-w-[32rem]" title={imageName}>
+      <p className="break-all font-mono text-sm font-medium leading-5 text-foreground">
+        {repository}
+      </p>
+      {hasHost ? (
+        <p className="mt-0.5 break-all font-mono text-xs leading-4 text-muted">{host}</p>
+      ) : null}
     </div>
   );
 }
@@ -31,24 +37,26 @@ export function ImageOverviewTable({
   images,
   loading,
   hasActiveFilters,
+  onDeleteImage,
 }: {
   images: ImageOverview[];
   loading: boolean;
   hasActiveFilters: boolean;
+  onDeleteImage: (image: ImageOverview) => void;
 }) {
+  const router = useRouter();
+
   return (
     <Table>
       <Table.ScrollContainer>
-        <Table.Content aria-label="Scanned images" className="min-w-[1100px] table-fixed">
+        <Table.Content aria-label="Scanned images" className="min-w-[960px] table-auto">
           <Table.Header>
-            <Table.Column isRowHeader className="w-[240px]">
-              Image
-            </Table.Column>
-            <Table.Column className="w-[280px]">Current health</Table.Column>
-            <Table.Column className="w-[260px]">Findings</Table.Column>
-            <Table.Column className="w-[120px]">Tags &amp; runs</Table.Column>
-            <Table.Column className="w-[240px]">Last scanned</Table.Column>
-            <Table.Column className="w-16">Actions</Table.Column>
+            <Table.Column isRowHeader>Image</Table.Column>
+            <Table.Column>Current health</Table.Column>
+            <Table.Column>Findings</Table.Column>
+            <Table.Column>Tags &amp; runs</Table.Column>
+            <Table.Column>Last scanned</Table.Column>
+            <Table.Column>Actions</Table.Column>
           </Table.Header>
           <Table.Body>
             {loading ? (
@@ -152,14 +160,27 @@ export function ImageOverviewTable({
                           </p>
                         </Link>
                       </Table.Cell>
-                      <Table.Cell>
-                        <Link
-                          aria-label={`Open ${image.image_name}`}
-                          href={href}
-                          className="inline-flex rounded-lg p-2 text-muted transition-colors hover:bg-surface-secondary hover:text-accent"
-                        >
-                          <ArrowRight01Icon size={17} />
-                        </Link>
+                      <Table.Cell onClick={(event) => event.stopPropagation()}>
+                        <div className="flex justify-end">
+                          <RowActionsMenu
+                            label={`Open actions menu for ${image.image_name}`}
+                            items={[
+                              {
+                                id: 'open',
+                                label: 'Open image',
+                                icon: <ArrowRight01Icon size={14} aria-hidden />,
+                                onAction: () => router.push(href),
+                              },
+                              {
+                                id: 'delete',
+                                label: 'Delete image group',
+                                icon: <Delete01Icon size={14} aria-hidden />,
+                                variant: 'danger',
+                                onAction: () => onDeleteImage(image),
+                              },
+                            ]}
+                          />
+                        </div>
                       </Table.Cell>
                     </Table.Row>
                   );

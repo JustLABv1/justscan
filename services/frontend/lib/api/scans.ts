@@ -110,6 +110,18 @@ export const getScanImageStats = (image: string) => {
   return req<ImageStats>('GET', `/api/v1/scans/images/stats?${params}`);
 };
 
+export const deleteScanImageGroup = (image: string) => {
+  const params = new URLSearchParams({ image });
+  appendScope(params);
+  return req<BulkDeleteScansResponse>('DELETE', `/api/v1/scans/images?${params}`);
+};
+
+export const deleteScanArtifactGroup = (image: string, tag: string) => {
+  const params = new URLSearchParams({ image, tag });
+  appendScope(params);
+  return req<BulkDeleteScansResponse>('DELETE', `/api/v1/scans/artifacts?${params}`);
+};
+
 export const getScanQueueSummary = () => {
   const params = new URLSearchParams();
   appendScope(params);

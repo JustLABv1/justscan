@@ -1,6 +1,8 @@
 package scans
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 
 	"justscan-backend/functions/blockedpolicy"
@@ -90,19 +92,45 @@ func DeleteScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		ctx := c.Request.Context()
-
-		// Cascade delete related data
-		db.NewDelete().TableExpr("comments").Where("scan_id = ?", scanID).Exec(ctx)        //nolint:errcheck
-		db.NewDelete().TableExpr("vulnerabilities").Where("scan_id = ?", scanID).Exec(ctx) //nolint:errcheck
-		db.NewDelete().TableExpr("sbom_components").Where("scan_id = ?", scanID).Exec(ctx) //nolint:errcheck
-		db.NewDelete().TableExpr("scan_tags").Where("scan_id = ?", scanID).Exec(ctx)       //nolint:errcheck
-
-		if _, err := db.NewDelete().Model((*models.Scan)(nil)).Where("id = ?", scanID).Exec(ctx); err != nil {
+		if err := db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
+			return deleteScanRecords(ctx, tx, []uuid.UUID{scanID})
+		}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete scan"})
 			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
 	}
+}
+
+func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
+	if len(scanIDs) == 0 {
+		return nil
+	}
+
+	for _, table := range []string{
+		"comments",
+		"vulnerabilities",
+		"sbom_components",
+		"sbom_documents",
+		"scan_tags",
+		"compliance_results",
+		"compliance_history",
+		"org_scans",
+		"scan_manual_findings",
+		"scan_step_logs",
+		"xray_suppressions",
+		"xray_request_logs",
+		"pipeline_scan_requests",
+	} {
+		if _, err := db.NewDelete().TableExpr(table).Where("scan_id IN (?)", bun.In(scanIDs)).Exec(ctx); err != nil {
+			return fmt.Errorf("delete %s: %w", table, err)
+		}
+	}
+
+	_, err := db.NewDelete().Model((*models.Scan)(nil)).Where("id IN (?)", bun.In(scanIDs)).Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("delete scans: %w", err)
+	}
+	return nil
 }

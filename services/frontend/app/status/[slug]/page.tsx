@@ -518,9 +518,11 @@ function FindingsSummary({ item }: { item: StatusPageItem }) {
 
   return (
     <div className="space-y-1.5 tabular-nums">
-      <div className="flex items-baseline gap-2">
+      <div className="flex items-baseline gap-1.5">
         <span className="text-base font-semibold text-foreground">{totalFindings}</span>
         <span className="text-xs text-muted">findings</span>
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
         <span className="text-xs text-danger">{item.critical_count} critical</span>
         <span className="text-xs text-warning">{item.high_count} high</span>
       </div>
@@ -558,7 +560,7 @@ function MobileImageStatusCard({
           <div className="min-w-0">
             <Link
               href={`/scans/details/${item.latest_scan_id}`}
-              className="block max-w-full truncate text-left text-sm font-semibold text-foreground hover:underline"
+              className="block break-words text-left text-sm font-semibold text-foreground hover:underline"
             >
               {item.image_name}
             </Link>
@@ -874,7 +876,7 @@ function StatusItemHistoryModal({
                     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
                       Scan history
                     </p>
-                    <Drawer.Heading className="mt-1 truncate font-mono text-sm font-semibold text-foreground sm:text-base">
+                    <Drawer.Heading className="mt-1 break-words font-mono text-sm font-semibold text-foreground sm:text-base">
                       {item?.image_name ?? 'Loading image'}
                     </Drawer.Heading>
                     {item ? (
@@ -1737,14 +1739,14 @@ export default function PublicStatusPage() {
                           className="hover:bg-surface-secondary"
                         >
                           <Table.Cell>
-                            <div className="flex max-w-[420px] items-start gap-3">
+                            <div className="flex max-w-[40rem] items-start gap-3">
                               <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
                                 <PackageIcon size={15} aria-hidden />
                               </span>
                               <div className="min-w-0">
                                 <Link
                                   href={`/scans/details/${item.latest_scan_id}`}
-                                  className="block max-w-full truncate text-left text-sm font-semibold text-foreground hover:underline"
+                                  className="block break-words text-left text-sm font-semibold text-foreground hover:underline"
                                 >
                                   {item.image_name}
                                 </Link>

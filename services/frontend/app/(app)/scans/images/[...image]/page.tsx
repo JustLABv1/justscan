@@ -14,13 +14,17 @@ import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
+  deleteScanArtifactGroup,
+  deleteScanImageGroup,
   getScanImageStats,
   listScanArtifacts,
   type ArtifactSummary,
   type ImageStats,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { useToast } from '@/components/toast';
 import {
+  AlertDialog,
   Button,
   Card,
   Disclosure,
@@ -34,6 +38,7 @@ import {
   ArrowLeft01Icon,
   CheckmarkCircle02Icon,
   Clock01Icon,
+  Delete01Icon,
   GitCompareIcon,
   Shield01Icon,
   UnhappyIcon,
@@ -42,6 +47,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 type MetricTone = 'default' | 'danger' | 'success';
+
+type PendingGroupDelete = { kind: 'image' } | { kind: 'tag'; artifact: ArtifactSummary };
 
 const STATUS_OPTIONS = [
   { id: '', label: 'Any state' },
@@ -84,9 +91,7 @@ function Metric({
   icon: ReactNode;
   tone?: MetricTone;
 }) {
-  return (
-    <StatCard label={label} value={value} hint={description} icon={icon} tone={tone} />
-  );
+  return <StatCard label={label} value={value} hint={description} icon={icon} tone={tone} />;
 }
 
 export default function ImageScansPage() {
@@ -108,6 +113,10 @@ export default function ImageScansPage() {
   const [range, setRange] = useState<'' | RecentActivityRange>('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedScans, setSelectedScans] = useState<Set<string>>(new Set());
+  const [pendingDelete, setPendingDelete] = useState<PendingGroupDelete | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const toast = useToast();
   const bounds = useMemo(() => (range ? getRecentActivityBounds(range) : null), [range]);
   const filterCount = [policy, range].filter(Boolean).length;
   const hasFilters = Boolean(query || status || critical || policy || range);
@@ -136,7 +145,7 @@ export default function ImageScansPage() {
           cancelled = true;
         };
       }),
-    [imageName, scopeKey]
+    [imageName, refreshKey, scopeKey]
   );
 
   useEffect(
@@ -176,8 +185,36 @@ export default function ImageScansPage() {
           cancelled = true;
         };
       }),
-    [bounds?.from, bounds?.to, critical, imageName, policy, query, scopeKey, status]
+    [bounds?.from, bounds?.to, critical, imageName, policy, query, refreshKey, scopeKey, status]
   );
+
+  async function confirmDeleteGroup() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      const result =
+        pendingDelete.kind === 'image'
+          ? await deleteScanImageGroup(imageName)
+          : await deleteScanArtifactGroup(imageName, pendingDelete.artifact.image_tag);
+      toast.success(
+        pendingDelete.kind === 'image'
+          ? `Deleted ${result.deleted} scan${result.deleted === 1 ? '' : 's'} and all tags`
+          : `Deleted ${result.deleted} scan${result.deleted === 1 ? '' : 's'} for ${pendingDelete.artifact.image_tag}`
+      );
+      setPendingDelete(null);
+      setSelectedScans(new Set());
+      setExpanded(new Set());
+      if (pendingDelete.kind === 'image' || (!hasFilters && total === 1)) {
+        router.replace('/scans');
+      } else {
+        setRefreshKey((current) => current + 1);
+      }
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : 'Failed to delete scan group');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   if (!imageName)
     return (
@@ -194,12 +231,68 @@ export default function ImageScansPage() {
         description="Tag-level scan history and health for this image. Statistics cover all visible history."
         breadcrumbs={[{ label: 'Scans', href: '/scans' }, { label: imageName }]}
         actions={
-          <Button onPress={() => router.push('/scans')} variant="secondary">
-            <ArrowLeft01Icon size={16} />
-            All images
-          </Button>
+          <>
+            <Button onPress={() => router.push('/scans')} variant="secondary">
+              <ArrowLeft01Icon size={16} />
+              All images
+            </Button>
+            <Button onPress={() => setPendingDelete({ kind: 'image' })} variant="danger">
+              <Delete01Icon size={16} />
+              Delete image
+            </Button>
+          </>
         }
       />
+      <AlertDialog
+        isOpen={Boolean(pendingDelete)}
+        onOpenChange={(isOpen) => {
+          if (!isOpen && !deleting) setPendingDelete(null);
+        }}
+      >
+        <AlertDialog.Backdrop variant="blur">
+          <AlertDialog.Container placement="center">
+            <AlertDialog.Dialog className="sm:max-w-[440px]">
+              <AlertDialog.CloseTrigger />
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="danger" />
+                <AlertDialog.Heading>
+                  {pendingDelete?.kind === 'image'
+                    ? 'Delete image scan group?'
+                    : 'Delete tag scan history?'}
+                </AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body>
+                <p className="text-sm leading-6 text-muted">
+                  {pendingDelete?.kind === 'image' ? (
+                    <>
+                      This removes <strong>{imageName}</strong>, including every tag and scan run in
+                      this workspace. This cannot be undone.
+                    </>
+                  ) : (
+                    <>
+                      This removes <strong>{pendingDelete?.artifact.image_tag}</strong> and all{' '}
+                      {pendingDelete?.artifact.scan_count ?? 0} of its historical scan runs. This
+                      cannot be undone.
+                    </>
+                  )}
+                </p>
+              </AlertDialog.Body>
+              <AlertDialog.Footer>
+                <Button isDisabled={deleting} slot="close" variant="tertiary">
+                  Cancel
+                </Button>
+                <Button
+                  isPending={deleting}
+                  onPress={() => void confirmDeleteGroup()}
+                  variant="danger"
+                >
+                  Delete
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
       {statsLoading ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-2">
           {Array.from({ length: 6 }, (_, index) => (
@@ -417,6 +510,7 @@ export default function ImageScansPage() {
           loading={loading}
           onCancel={() => {}}
           onDelete={() => {}}
+          onDeleteArtifact={(artifact) => setPendingDelete({ kind: 'tag', artifact })}
           onRetry={() => {}}
           onExpandedChange={setExpanded}
           onSelectedScansChange={setSelectedScans}

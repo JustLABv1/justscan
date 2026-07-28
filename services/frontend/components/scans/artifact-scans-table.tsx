@@ -46,6 +46,7 @@ type ArtifactScansTableProps = {
   loading: boolean;
   onCancel: (scanId: string, artifactKey: string) => Promise<void> | void;
   onDelete: (scanId: string, artifactKey: string) => Promise<void> | void;
+  onDeleteArtifact?: (artifact: ArtifactSummary) => void;
   onRetry: (scanId: string, artifactKey: string) => Promise<void> | void;
   onExpandedChange: (next: Set<string>) => void;
   onSelectedScansChange: Dispatch<SetStateAction<Set<string>>>;
@@ -81,7 +82,7 @@ function ArtifactReference({
   const reference = `${imageName}:${imageTag}`;
 
   return (
-    <div className="min-w-0" title={reference}>
+    <div className="min-w-0 max-w-[32rem]" title={reference}>
       <p className="break-all font-mono text-sm font-medium leading-5 text-zinc-800 dark:text-zinc-100">
         {hideImageName ? (
           <span>{imageTag}</span>
@@ -448,6 +449,7 @@ export function ArtifactScansTable({
   loading,
   onCancel,
   onDelete,
+  onDeleteArtifact,
   onRetry,
   onExpandedChange,
   onSelectedScansChange,
@@ -549,7 +551,7 @@ export function ArtifactScansTable({
       <Table.ScrollContainer>
         <Table.Content
           aria-label="Latest scans by image and tag"
-          className="min-w-[980px]"
+          className={hideImageName ? 'min-w-[760px] table-auto' : 'min-w-[980px] table-auto'}
           expandedKeys={expandedKeys}
           treeColumn="expander"
           onExpandedChange={setExpandedKeys}
@@ -749,30 +751,41 @@ export function ArtifactScansTable({
                                     },
                                   ]
                                 : []),
-                              ...(allowMutationActions
+                              ...(onDeleteArtifact
                                 ? [
                                     {
-                                      id: 'share-workspace',
-                                      label: 'Share with workspace',
-                                      icon: <Shield01Icon size={14} aria-hidden />,
-                                      onAction: () => onShareToWorkspace([artifact.latest_scan_id]),
-                                    },
-                                    {
-                                      id: 'transfer-workspace',
-                                      label: 'Transfer ownership',
-                                      icon: <ArrowRight01Icon size={14} aria-hidden />,
-                                      onAction: () =>
-                                        onTransferToWorkspace([artifact.latest_scan_id]),
-                                    },
-                                    {
-                                      id: 'delete',
-                                      label: 'Delete latest scan',
+                                      id: 'delete-artifact',
+                                      label: 'Delete tag history',
                                       icon: <Delete01Icon size={14} aria-hidden />,
                                       variant: 'danger' as const,
-                                      onAction: () => onDelete(artifact.latest_scan_id, key),
+                                      onAction: () => onDeleteArtifact(artifact),
                                     },
                                   ]
-                                : []),
+                                : allowMutationActions
+                                  ? [
+                                      {
+                                        id: 'share-workspace',
+                                        label: 'Share with workspace',
+                                        icon: <Shield01Icon size={14} aria-hidden />,
+                                        onAction: () =>
+                                          onShareToWorkspace([artifact.latest_scan_id]),
+                                      },
+                                      {
+                                        id: 'transfer-workspace',
+                                        label: 'Transfer ownership',
+                                        icon: <ArrowRight01Icon size={14} aria-hidden />,
+                                        onAction: () =>
+                                          onTransferToWorkspace([artifact.latest_scan_id]),
+                                      },
+                                      {
+                                        id: 'delete',
+                                        label: 'Delete latest scan',
+                                        icon: <Delete01Icon size={14} aria-hidden />,
+                                        variant: 'danger' as const,
+                                        onAction: () => onDelete(artifact.latest_scan_id, key),
+                                      },
+                                    ]
+                                  : []),
                             ]}
                           />
                         </div>

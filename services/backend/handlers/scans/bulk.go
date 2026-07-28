@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"justscan-backend/functions/audit"
-	"justscan-backend/functions/auth"
 	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
@@ -28,8 +27,13 @@ func BulkDeleteScans(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Parse and validate all UUIDs first to prevent injection
-		ids := make([]interface{}, 0, len(req.IDs))
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+
+		// Parse and validate all UUIDs first to prevent injection.
+		ids := make([]uuid.UUID, 0, len(req.IDs))
 		for _, raw := range req.IDs {
 			id, err := uuid.Parse(raw)
 			if err != nil {
@@ -39,22 +43,32 @@ func BulkDeleteScans(db *bun.DB) gin.HandlerFunc {
 			ids = append(ids, id)
 		}
 
-		res, err := db.NewDelete().
-			Model((*models.Scan)(nil)).
-			Where("id IN (?)", bun.In(ids)).
-			Exec(c.Request.Context())
-		if err != nil {
+		var scans []models.Scan
+		if err := db.NewSelect().Model(&scans).Where("id IN (?)", bun.In(ids)).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scans"})
+			return
+		}
+		if len(scans) != len(ids) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
+			return
+		}
+		for index := range scans {
+			if !canWriteScan(c.Request.Context(), db, &scans[index], userID, isAdmin) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
+				return
+			}
+		}
+
+		if err := db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
+			return deleteScanRecords(ctx, tx, ids)
+		}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete scans"})
 			return
 		}
-
-		affected, _ := res.RowsAffected()
-
-		userID, _ := auth.GetUserIDFromToken(c.GetHeader("Authorization"))
 		go audit.Write(context.Background(), db, userID.String(), "scan.bulk_delete",
-			fmt.Sprintf("Bulk deleted %d scans", affected))
+			fmt.Sprintf("Bulk deleted %d scans", len(ids)))
 
-		c.JSON(http.StatusOK, gin.H{"deleted": affected})
+		c.JSON(http.StatusOK, gin.H{"deleted": len(ids)})
 	}
 }
 

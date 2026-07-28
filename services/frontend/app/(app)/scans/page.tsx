@@ -13,9 +13,11 @@ import {
   RECENT_ACTIVITY_RANGE_OPTIONS,
   type RecentActivityRange,
 } from '@/components/scans/recent-activity';
-import { listScanImages, type ImageOverview } from '@/lib/api';
+import { deleteScanImageGroup, listScanImages, type ImageOverview } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { useToast } from '@/components/toast';
 import {
+  AlertDialog,
   Button,
   Card,
   Disclosure,
@@ -105,9 +107,13 @@ function ScansPageContent() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<ImageOverview | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [page, setPage] = useState(() => Math.max(1, Number(searchParams.get('page') ?? '1')));
   const [filters, updateFilters] = useReducer(scanFiltersReducer, searchParams, initialScanFilters);
   const { query, status, critical, policy, range, sort } = filters;
+  const toast = useToast();
 
   const bounds = useMemo(() => (range ? getRecentActivityBounds(range) : null), [range]);
   const activeFilters = Boolean(query || status || critical || policy || range || sort);
@@ -174,11 +180,32 @@ function ScansPageContent() {
           cancelled = true;
         };
       }),
-    [bounds?.from, bounds?.to, critical, page, policy, query, scopeKey, sort, status]
+    [bounds?.from, bounds?.to, critical, page, policy, query, refreshKey, scopeKey, sort, status]
   );
 
   function clearFilters() {
     updateFilters('reset');
+  }
+
+  async function confirmDeleteImage() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      const result = await deleteScanImageGroup(pendingDelete.image_name);
+      toast.success(
+        `Deleted ${result.deleted} scan${result.deleted === 1 ? '' : 's'} and all image tags`
+      );
+      setPendingDelete(null);
+      if (images.length === 1 && page > 1) {
+        setPage((current) => current - 1);
+      } else {
+        setRefreshKey((current) => current + 1);
+      }
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : 'Failed to delete scan group');
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -199,6 +226,43 @@ function ScansPageContent() {
           </>
         }
       />
+      <AlertDialog
+        isOpen={Boolean(pendingDelete)}
+        onOpenChange={(isOpen) => {
+          if (!isOpen && !deleting) setPendingDelete(null);
+        }}
+      >
+        <AlertDialog.Backdrop variant="blur">
+          <AlertDialog.Container placement="center">
+            <AlertDialog.Dialog className="sm:max-w-[440px]">
+              <AlertDialog.CloseTrigger />
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="danger" />
+                <AlertDialog.Heading>Delete image scan group?</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body>
+                <p className="text-sm leading-6 text-muted">
+                  This removes <strong>{pendingDelete?.image_name}</strong>, including all{' '}
+                  {pendingDelete?.tag_count ?? 0} tags and {pendingDelete?.scan_count ?? 0} scan
+                  runs in this workspace. This cannot be undone.
+                </p>
+              </AlertDialog.Body>
+              <AlertDialog.Footer>
+                <Button isDisabled={deleting} slot="close" variant="tertiary">
+                  Cancel
+                </Button>
+                <Button
+                  isPending={deleting}
+                  onPress={() => void confirmDeleteImage()}
+                  variant="danger"
+                >
+                  Delete image group
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-2">
         <Metric
           description="Current filter scope"
@@ -379,7 +443,12 @@ function ScansPageContent() {
       </Card>
       {error ? <Card className="border-danger/40 p-4 text-sm text-danger">{error}</Card> : null}
       <Card className="overflow-hidden">
-        <ImageOverviewTable images={images} loading={loading} hasActiveFilters={activeFilters} />
+        <ImageOverviewTable
+          hasActiveFilters={activeFilters}
+          images={images}
+          loading={loading}
+          onDeleteImage={setPendingDelete}
+        />
       </Card>
       {total > 0 ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -56,7 +56,9 @@ export function ImageOverviewTable({
             </Table.Column>
             <Table.Column>Current health</Table.Column>
             <Table.Column>Findings</Table.Column>
-            <Table.Column>Tags &amp; runs</Table.Column>
+            <Table.Column className="w-[7.5rem] min-w-[7.5rem] whitespace-nowrap">
+              Tags &amp; runs
+            </Table.Column>
             <Table.Column>Last scanned</Table.Column>
             <Table.Column>Actions</Table.Column>
           </Table.Header>
@@ -134,15 +136,15 @@ export function ImageOverviewTable({
                           <SevCount count={image.health_low_count} level="low" />
                         </Link>
                       </Table.Cell>
-                      <Table.Cell>
+                      <Table.Cell className="w-[7.5rem] min-w-[7.5rem] whitespace-nowrap">
                         <Link
                           href={href}
                           className="block rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary"
                         >
-                          <p className="text-sm font-medium">
+                          <p className="whitespace-nowrap text-sm font-medium">
                             {image.tag_count} tag{image.tag_count === 1 ? '' : 's'}
                           </p>
-                          <p className="mt-1 text-xs text-muted">
+                          <p className="mt-1 whitespace-nowrap text-xs text-muted">
                             {image.scan_count} run{image.scan_count === 1 ? '' : 's'}
                           </p>
                         </Link>

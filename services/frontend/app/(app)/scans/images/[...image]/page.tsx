@@ -307,7 +307,7 @@ export default function ImageScansPage() {
         </AlertDialog.Backdrop>
       </AlertDialog>
       {statsLoading ? (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {Array.from({ length: 4 }, (_, index) => (
             <Card key={index} className="p-3">
               <Skeleton className="h-10 rounded-lg" />
@@ -315,7 +315,7 @@ export default function ImageScansPage() {
           ))}
         </div>
       ) : stats ? (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           <Metric label="Total scans" value={stats.total_scans} icon={<Shield01Icon size={17} />} />
           <Metric
             label="Completed"

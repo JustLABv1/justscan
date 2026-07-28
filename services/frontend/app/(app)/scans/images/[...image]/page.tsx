@@ -46,7 +46,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
-type MetricTone = 'default' | 'danger' | 'success';
+type MetricTone = 'neutral' | 'danger';
 
 type PendingGroupDelete = { kind: 'image' } | { kind: 'tag'; artifact: ArtifactSummary };
 
@@ -83,7 +83,7 @@ function Metric({
   value,
   description,
   icon,
-  tone = 'default',
+  tone = 'neutral',
 }: {
   label: string;
   value: string | number;
@@ -91,7 +91,21 @@ function Metric({
   icon: ReactNode;
   tone?: MetricTone;
 }) {
-  return <StatCard label={label} value={value} hint={description} icon={icon} tone={tone} />;
+  return (
+    <StatCard
+      className="h-full"
+      hint={description}
+      hintClassName="text-[11px] leading-4 text-muted"
+      icon={icon}
+      iconTone="default"
+      iconVariant="repository"
+      label={label}
+      tone={tone}
+      value={value}
+      valueClassName="text-lg font-semibold tabular-nums"
+      variant="stacked"
+    />
+  );
 }
 
 export default function ImageScansPage() {
@@ -302,37 +316,35 @@ export default function ImageScansPage() {
           ))}
         </div>
       ) : stats ? (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-2">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <Metric label="Total scans" value={stats.total_scans} icon={<Shield01Icon size={17} />} />
           <Metric
             label="Completed"
             value={stats.completed_scans}
             description="Scanner completed successfully"
             icon={<CheckmarkCircle02Icon size={17} />}
-            tone="success"
           />
           <Metric
             label="Failed executions"
             value={stats.failed_scans}
             description="Historical runs; not necessarily the latest"
             icon={<UnhappyIcon size={17} />}
-            tone="danger"
+            tone={stats.failed_scans > 0 ? 'danger' : 'neutral'}
           />
-          {stats.policy_available ? (
+          {stats.policy_available && stats.policy_evaluated_scans > 0 ? (
             <>
               <Metric
                 label="Policy passed"
                 value={stats.policy_passed_scans}
                 description={`${stats.policy_evaluated_scans} evaluated`}
                 icon={<CheckmarkCircle02Icon size={17} />}
-                tone="success"
               />
               <Metric
                 label="Policy failed"
                 value={stats.policy_failed_scans}
                 description={`${stats.policy_evaluated_scans} evaluated`}
                 icon={<Shield01Icon size={17} />}
-                tone="danger"
+                tone={stats.policy_failed_scans > 0 ? 'danger' : 'neutral'}
               />
             </>
           ) : null}

@@ -27,6 +27,7 @@ const (
 	GitRepositoryRunCompleted   = "completed"
 	GitRepositoryRunPartial     = "partial"
 	GitRepositoryRunFailed      = "failed"
+	GitRepositoryRunCancelled   = "cancelled"
 
 	GitRepositoryCandidateUnresolved   = "unresolved"
 	GitRepositoryCandidateAutoAccepted = "auto_accepted"

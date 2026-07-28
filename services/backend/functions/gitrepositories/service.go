@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -34,6 +35,8 @@ const (
 	cloneTimeout           = 2 * time.Minute
 	maxManifestBytes int64 = 5 * 1024 * 1024
 )
+
+var ErrRunNotCancellable = errors.New("repository run is not active")
 
 type ImageLocation struct {
 	File      string `json:"file"`
@@ -202,6 +205,92 @@ func CreateRun(ctx context.Context, repositoryID uuid.UUID, trigger, policy stri
 	return run, nil
 }
 
+// CancelRun stops a repository run and any pending or running child scans. A
+// worker may still finish an in-flight repository clone, but it checks the run
+// state before it creates or dispatches more scans.
+func CancelRun(ctx context.Context, db *bun.DB, repositoryID, runID uuid.UUID) (*models.GitRepositoryRun, error) {
+	var run models.GitRepositoryRun
+	if err := db.NewSelect().Model(&run).Where("id = ? AND repository_id = ?", runID, repositoryID).Scan(ctx); err != nil {
+		return nil, err
+	}
+	activeStatuses := []string{models.GitRepositoryRunQueued, models.GitRepositoryRunDiscovering, models.GitRepositoryRunScanning}
+	if !containsRunStatus(activeStatuses, run.Status) {
+		return nil, ErrRunNotCancellable
+	}
+
+	now := time.Now()
+	result, err := db.NewUpdate().Model((*models.GitRepositoryRun)(nil)).
+		Set("status = ?", models.GitRepositoryRunCancelled).
+		Set("error_message = ?", "Cancelled by user").
+		Set("completed_at = ?", now).
+		Where("id = ?", runID).
+		Where("status IN (?)", bun.In(activeStatuses)).
+		Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if affected, err := result.RowsAffected(); err != nil || affected == 0 {
+		return nil, ErrRunNotCancellable
+	}
+
+	var scans []models.Scan
+	if err := db.NewSelect().Model(&scans).
+		Where("git_repository_run_id = ?", runID).
+		Where("status IN (?)", bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
+		Scan(ctx); err != nil {
+		return nil, err
+	}
+	for _, scan := range scans {
+		scanner.CancelScan(scan.ID)
+	}
+	if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
+		Set("status = ?", models.ScanStatusCancelled).
+		Set("current_step = ?", models.ScanStepCancelled).
+		Set("error_message = ?", "Cancelled with repository run").
+		Set("completed_at = ?", now).
+		Set("last_progress_at = ?", now).
+		Where("git_repository_run_id = ?", runID).
+		Where("status IN (?)", bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
+		Exec(ctx); err != nil {
+		return nil, err
+	}
+	if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
+		Set("external_status = ?", models.ScanStatusCancelled).
+		Where("git_repository_run_id = ?", runID).
+		Where("scan_provider = ?", models.ScanProviderArtifactoryXray).
+		Where("status = ?", models.ScanStatusCancelled).
+		Exec(ctx); err != nil {
+		return nil, err
+	}
+	for _, scan := range scans {
+		if err := scanner.MarkScanCancelled(ctx, db, scan.ID, "Cancelled with repository run"); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := db.NewUpdate().Table("git_repository_run_images").
+		Set("state = ?", models.ScanStatusCancelled).
+		Where("run_id = ?", runID).
+		Where("scan_id IS NULL").
+		Where("state IN (?)", bun.In([]string{"discovered", "queued"})).
+		Exec(ctx); err != nil {
+		return nil, err
+	}
+
+	run.Status = models.GitRepositoryRunCancelled
+	run.ErrorMessage = "Cancelled by user"
+	run.CompletedAt = &now
+	return &run, nil
+}
+
+func containsRunStatus(statuses []string, status string) bool {
+	for _, candidate := range statuses {
+		if candidate == status {
+			return true
+		}
+	}
+	return false
+}
+
 // CreateDiscovery performs a persisted dry run. It clones and inspects the
 // repository, but never creates or dispatches image scans.
 func CreateDiscovery(ctx context.Context, repositoryID uuid.UUID) (*models.GitRepositoryRun, []DiscoveredImage, error) {
@@ -295,22 +384,42 @@ func processRun(runID uuid.UUID) {
 	if err := db.NewSelect().Model(&run).Where("id = ?", runID).Scan(ctx); err != nil {
 		return
 	}
+	if run.Status == models.GitRepositoryRunCancelled {
+		return
+	}
 	var repository models.GitRepository
 	if err := db.NewSelect().Model(&repository).Where("id = ?", run.RepositoryID).Scan(ctx); err != nil {
 		failRun(ctx, db, &run, err)
 		return
 	}
 	now := time.Now()
+	result, err := db.NewUpdate().Model((*models.GitRepositoryRun)(nil)).
+		Set("status = ?", models.GitRepositoryRunDiscovering).
+		Set("started_at = ?", now).
+		Where("id = ?", run.ID).
+		Where("status IN (?)", bun.In([]string{models.GitRepositoryRunQueued, models.GitRepositoryRunDiscovering})).
+		Exec(ctx)
+	if err != nil {
+		return
+	}
+	if affected, err := result.RowsAffected(); err != nil || affected == 0 {
+		return
+	}
 	run.Status, run.StartedAt = models.GitRepositoryRunDiscovering, &now
-	db.NewUpdate().Model(&run).Column("status", "started_at").Where("id = ?", run.ID).Exec(ctx) //nolint:errcheck
 	images, candidates, commitSHA, err := DiscoverReview(ctx, repository)
 	if err != nil {
 		failRun(ctx, db, &run, err)
 		return
 	}
+	if runCancelled(ctx, db, run.ID) {
+		return
+	}
 	images = requestedDiscoveredImages(images, run.RequestedImages)
 	run.CommitSHA, run.TargetCount, run.ImageCount, run.UnresolvedCount = commitSHA, len(uniqueTargetFiles(images)), len(images), unresolvedCandidates(candidates)
 	for _, candidate := range candidates {
+		if runCancelled(ctx, db, run.ID) {
+			return
+		}
 		row := &models.GitRepositoryRunCandidate{RunID: run.ID, Path: candidate.Path, DetectedType: candidate.DetectedType, Confidence: candidate.Confidence, Evidence: candidate.Evidence, Status: candidate.Status, RuleID: candidate.RuleID, CreatedAt: time.Now()}
 		if _, err := db.NewInsert().Model(row).Exec(ctx); err != nil {
 			failRun(ctx, db, &run, err)
@@ -321,6 +430,9 @@ func processRun(runID uuid.UUID) {
 	excluded := excludedImageRefs(ctx, db, repository.ID)
 	created := 0
 	for _, image := range images {
+		if runCancelled(ctx, db, run.ID) {
+			return
+		}
 		stateName := "discovered"
 		if excluded[image.FullRef] {
 			row := &models.GitRepositoryRunImage{RunID: run.ID, FullRef: image.FullRef, ImageName: image.ImageName, ImageTag: image.ImageTag, Locations: models.JSONObject{"items": image.Locations}, State: "excluded", CreatedAt: time.Now()}
@@ -359,10 +471,21 @@ func processRun(runID uuid.UUID) {
 		}); err != nil {
 			continue
 		}
+		if runCancelled(ctx, db, run.ID) {
+			cancelRepositoryRunScan(ctx, db, scan.ID)
+			return
+		}
 		created++
 		if err := scanner.DispatchScan(ctx, db, scan, envVars, ""); err != nil {
-			scanner.MarkScanFailed(ctx, db, scan.ID, err.Error())
+			if runCancelled(ctx, db, run.ID) {
+				cancelRepositoryRunScan(ctx, db, scan.ID)
+			} else {
+				scanner.MarkScanFailed(ctx, db, scan.ID, err.Error())
+			}
 		} //nolint:errcheck
+	}
+	if runCancelled(ctx, db, run.ID) {
+		return
 	}
 	run.ScanCount, run.Status = created, models.GitRepositoryRunScanning
 	db.NewUpdate().Model(&run).Column("commit_sha", "target_count", "image_count", "unresolved_count", "scan_count", "status").Where("id = ?", run.ID).Exec(ctx) //nolint:errcheck
@@ -370,6 +493,28 @@ func processRun(runID uuid.UUID) {
 	if created == 0 {
 		reconcileRun(ctx, db, run.ID)
 	}
+}
+
+func runCancelled(ctx context.Context, db *bun.DB, runID uuid.UUID) bool {
+	var status string
+	if err := db.NewSelect().Model((*models.GitRepositoryRun)(nil)).Column("status").Where("id = ?", runID).Scan(ctx, &status); err != nil {
+		return false
+	}
+	return status == models.GitRepositoryRunCancelled
+}
+
+func cancelRepositoryRunScan(ctx context.Context, db *bun.DB, scanID uuid.UUID) {
+	now := time.Now()
+	_, _ = db.NewUpdate().Model((*models.Scan)(nil)).
+		Set("status = ?", models.ScanStatusCancelled).
+		Set("current_step = ?", models.ScanStepCancelled).
+		Set("error_message = ?", "Cancelled with repository run").
+		Set("completed_at = ?", now).
+		Set("last_progress_at = ?", now).
+		Where("id = ?", scanID).
+		Where("status IN (?)", bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
+		Exec(ctx)
+	_ = scanner.MarkScanCancelled(ctx, db, scanID, "Cancelled with repository run")
 }
 
 func createScan(ctx context.Context, db *bun.DB, repository models.GitRepository, runID uuid.UUID, image DiscoveredImage) (*models.Scan, []string, error) {
@@ -407,7 +552,11 @@ func attachScanTags(ctx context.Context, tx bun.Tx, scanID uuid.UUID, ids []stri
 func failRun(ctx context.Context, db *bun.DB, run *models.GitRepositoryRun, err error) {
 	now := time.Now()
 	run.Status, run.ErrorMessage, run.CompletedAt = models.GitRepositoryRunFailed, err.Error(), &now
-	db.NewUpdate().Model(run).Column("status", "error_message", "completed_at").Where("id = ?", run.ID).Exec(ctx)
+	db.NewUpdate().Model(run).
+		Column("status", "error_message", "completed_at").
+		Where("id = ?", run.ID).
+		Where("status != ?", models.GitRepositoryRunCancelled).
+		Exec(ctx)
 }
 
 func previousRefs(ctx context.Context, db *bun.DB, repositoryID, currentRunID uuid.UUID) map[string]bool {

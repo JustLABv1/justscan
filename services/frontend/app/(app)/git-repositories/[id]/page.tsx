@@ -7,6 +7,7 @@ import {
   Checkbox,
   Chip,
   Description,
+  Dropdown,
   Label,
   ListBox,
   Modal,
@@ -16,11 +17,12 @@ import {
   useOverlayState,
 } from '@heroui/react';
 import {
-  ArrowLeft01Icon,
+  Cancel01Icon,
   Clock01Icon,
   Download01Icon,
   Folder01Icon,
   GitBranchIcon,
+  MoreVerticalIcon,
   PackageIcon,
   Search01Icon,
   Settings02Icon,
@@ -28,12 +30,14 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
 import {
+  cancelGitRepositoryRun,
   createGitRepositoryDiscoveryRule,
   createGitRepositoryImageExclusion,
   deleteGitRepositoryImageExclusion,
@@ -96,9 +100,11 @@ export default function GitRepositoryDetailPage() {
   const [loading, setLoading] = useState(true);
   const [discovering, setDiscovering] = useState(false);
   const [ignoringCandidates, setIgnoringCandidates] = useState(false);
-  const [startingScan, setStartingScan] = useState(false);
-  const [updatingImageExclusions, setUpdatingImageExclusions] = useState(false);
-  const { success, error } = useToast();
+	const [startingScan, setStartingScan] = useState(false);
+	const [cancellingRun, setCancellingRun] = useState(false);
+	const [updatingImageExclusions, setUpdatingImageExclusions] = useState(false);
+	const { success, error } = useToast();
+	const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,9 +137,10 @@ export default function GitRepositoryDetailPage() {
 
   useEffect(() => deferEffect(() => void load()), [load]);
 
-  const hasActiveRun = runs.some((run) =>
+  const activeRun = runs.find((run) =>
     ['queued', 'discovering', 'scanning'].includes(run.status)
   );
+  const hasActiveRun = Boolean(activeRun);
 
   useEffect(() => {
     if (!hasActiveRun) return;
@@ -302,6 +309,29 @@ export default function GitRepositoryDetailPage() {
       error(caught instanceof Error ? caught.message : 'Could not start repository scan.');
     } finally {
       setStartingScan(false);
+	  }
+	}
+
+  async function cancelActiveRun() {
+    if (!activeRun) return;
+    const confirmed = await confirm({
+      title: 'Cancel repository scan?',
+      message:
+        'This stops the repository run and cancels any queued or running image scans. Completed scans remain available.',
+      confirmLabel: 'Cancel scan',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    setCancellingRun(true);
+    try {
+      const cancelled = await cancelGitRepositoryRun(id, activeRun.id);
+      setRuns((current) => current.map((run) => (run.id === cancelled.id ? cancelled : run)));
+      setLatestImageScans(await listGitRepositoryLatestImageScans(id));
+      success('Repository scan cancelled.');
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not cancel repository scan.');
+    } finally {
+      setCancellingRun(false);
     }
   }
 
@@ -428,20 +458,64 @@ export default function GitRepositoryDetailPage() {
         ]}
         description={`${repository.clone_url} · ${repository.ref}${repository.owner_type === 'org' ? ' · Scans appear in the organization workspace.' : ''}`}
         actions={
-          <>
-            <Button onPress={() => router.push('/git-repositories')} variant="tertiary">
-              <ArrowLeft01Icon size={16} /> All repositories
-            </Button>
-            <Button onPress={() => void exportRules()} variant="secondary">
-              <Download01Icon size={16} /> Export .justscan.yaml
-            </Button>
-            <Button isPending={startingScan} onPress={() => void startScan()} variant="secondary">
-              Start full scan
-            </Button>
-            <Button isPending={discovering} onPress={() => void discover()}>
-              <Search01Icon size={16} /> Dry run discovery
-            </Button>
-          </>
+          <div className="flex items-center gap-2">
+            {activeRun ? (
+              <Button
+                isPending={cancellingRun}
+                onPress={() => void cancelActiveRun()}
+                variant="danger"
+              >
+                <Cancel01Icon size={16} /> Cancel active scan
+              </Button>
+            ) : (
+              <Button isPending={discovering} onPress={() => void discover()}>
+                <Search01Icon size={16} /> Dry run discovery
+              </Button>
+            )}
+            <Dropdown>
+              <Dropdown.Trigger>
+                <Button aria-label="Open repository actions" isIconOnly variant="secondary">
+                  <MoreVerticalIcon size={16} />
+                </Button>
+              </Dropdown.Trigger>
+              <Dropdown.Popover className="min-w-[220px]" placement="bottom end">
+                <Dropdown.Menu
+                  onAction={(key) => {
+                    if (key === 'scan-all' && !hasActiveRun) void startScan();
+                    if (key === 'discover' && !hasActiveRun) void discover();
+                    if (key === 'export') void exportRules();
+                  }}
+                >
+                  <Dropdown.Item
+                    id="scan-all"
+                    isDisabled={hasActiveRun || startingScan}
+                    textValue="Start full scan"
+                  >
+                    <div className="flex items-center gap-2">
+                      <GitBranchIcon size={14} />
+                      <Label>Start full scan</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    id="discover"
+                    isDisabled={hasActiveRun || discovering}
+                    textValue="Dry run discovery"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Search01Icon size={14} />
+                      <Label>Dry run discovery</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item id="export" textValue="Export .justscan.yaml">
+                    <div className="flex items-center gap-2">
+                      <Download01Icon size={14} />
+                      <Label>Export .justscan.yaml</Label>
+                    </div>
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
+          </div>
         }
       />
 
@@ -964,8 +1038,9 @@ export default function GitRepositoryDetailPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+      {confirmDialog}
     </PageContainer>
-  );
+	);
 }
 
 function MetricCard({

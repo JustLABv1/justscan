@@ -197,6 +197,30 @@ func CreateRun(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
+func CancelRun(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok || !requireEdit(c, db, item) {
+			return
+		}
+		runID, err := uuid.Parse(c.Param("runId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid run ID"})
+			return
+		}
+		run, err := gitservice.CancelRun(c.Request.Context(), db, item.ID, runID)
+		if err != nil {
+			if err == gitservice.ErrRunNotCancellable {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to cancel repository run"})
+			return
+		}
+		c.JSON(http.StatusOK, run)
+	}
+}
+
 func ListImageExclusions(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		item, ok := load(c, db)

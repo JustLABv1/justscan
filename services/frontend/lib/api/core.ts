@@ -1,4 +1,5 @@
 import { clearToken, clearUser, getToken } from './auth-store';
+import { loginUrlForCurrentLocation } from '@/lib/auth-return-url';
 import { getApiBase } from './base';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
@@ -57,7 +58,7 @@ export async function req<T>(method: string, path: string, body?: unknown): Prom
     clearToken();
     clearUser();
     if (typeof window !== 'undefined') {
-      window.location.href = '/login';
+      window.location.href = loginUrlForCurrentLocation();
     }
     throw new Error('Session expired. Please log in again.');
   }
@@ -80,7 +81,7 @@ export async function reqForm<T>(method: string, path: string, body: FormData): 
     clearToken();
     clearUser();
     if (typeof window !== 'undefined') {
-      window.location.href = '/login';
+      window.location.href = loginUrlForCurrentLocation();
     }
     throw new Error('Session expired. Please log in again.');
   }

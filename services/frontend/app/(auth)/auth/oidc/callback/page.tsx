@@ -2,6 +2,7 @@
 import { Logo } from '@/components/logo';
 import { getApiBase } from '@/lib/api/base';
 import { setToken, setUser } from '@/lib/api';
+import { consumeAuthReturnUrl } from '@/lib/auth-return-url';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -47,7 +48,7 @@ export default function OIDCCallbackPage() {
       .then((data) => {
         setToken(token);
         setUser(data.user ?? data);
-        router.replace('/scans');
+        router.replace(consumeAuthReturnUrl() ?? '/scans');
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : 'Login failed. Please try again.');

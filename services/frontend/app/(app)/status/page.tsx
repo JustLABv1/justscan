@@ -23,6 +23,8 @@ import {
   getTokenType,
   getUser,
   getWorkScope,
+  GitRepository,
+  listGitRepositories,
   listStatusPages,
   listStatusPageShares,
   listStatusPageTargetOptions,
@@ -43,15 +45,18 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Chip,
+  Description,
   Input,
   Label,
   ListBox,
   Modal,
+  Radio,
+  RadioGroup,
   SearchField,
   Select,
   Spinner,
-  Switch,
   Table,
   TextArea,
   useOverlayState,
@@ -62,6 +67,7 @@ import {
   PencilEdit01Icon,
   PlusSignIcon,
   Shield01Icon,
+  Tick02Icon,
 } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -72,6 +78,9 @@ const fieldLabelCls = fieldLabelClassName;
 
 const visibilityOptions: Array<StatusPage['visibility']> = ['private', 'authenticated', 'public'];
 const updateLevelOptions = ['info', 'maintenance', 'incident'] as const;
+const statusPageSteps = ['Details', 'Sources', 'Configure', 'Review'] as const;
+type TrackingMode = 'git' | 'images' | 'mixed';
+type ImageScopeMode = 'all' | 'exact' | 'pattern';
 const exactSelectionBadgeStyle = {
   background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
   border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
@@ -103,6 +112,18 @@ function matchesPattern(regex: RegExp, option: StatusPageTargetOption) {
 }
 
 function describeScope(page: StatusPage) {
+  const gitSourceCount = page.git_repository_sources?.length ?? 0;
+  if (gitSourceCount > 0) {
+    const gitScope = `${gitSourceCount} Git ${gitSourceCount === 1 ? 'repository' : 'repositories'}`;
+    if (
+      page.include_all_tags ||
+      (page.image_patterns ?? []).length > 0 ||
+      (page.targets ?? []).length > 0
+    ) {
+      return `${gitScope} + image scope`;
+    }
+    return gitScope;
+  }
   if (page.include_all_tags) {
     return 'All image tags';
   }
@@ -124,20 +145,25 @@ export default function StatusPagesPage() {
   const { orgs, orgNamesById } = useOrgDirectory();
   const [pages, setPages] = useState<StatusPage[]>([]);
   const [targetOptions, setTargetOptions] = useState<StatusPageTargetOption[]>([]);
+  const [gitRepositories, setGitRepositories] = useState<GitRepository[]>([]);
+  const [selectedGitRepositoryIds, setSelectedGitRepositoryIds] = useState<string[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<StatusPage | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formStep, setFormStep] = useState(0);
+  const [trackingMode, setTrackingMode] = useState<TrackingMode>('images');
+  const [imageScopeMode, setImageScopeMode] = useState<ImageScopeMode>('exact');
   const [formError, setFormError] = useState('');
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
   const [visibility, setVisibility] = useState<StatusPage['visibility']>('private');
-  const [includeAllTags, setIncludeAllTags] = useState(false);
   const [staleAfterHours, setStaleAfterHours] = useState('72');
   const [selectedTargetKeys, setSelectedTargetKeys] = useState<Set<string>>(new Set());
   const [targetQuery, setTargetQuery] = useState('');
+  const [gitRepositoryQuery, setGitRepositoryQuery] = useState('');
   const [imagePatternText, setImagePatternText] = useState('');
   const [updateTitle, setUpdateTitle] = useState('');
   const [updateBody, setUpdateBody] = useState('');
@@ -221,6 +247,20 @@ export default function StatusPagesPage() {
     };
   }, [scopeKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void listGitRepositories()
+      .then((repositories) => {
+        if (!cancelled) setGitRepositories(repositories);
+      })
+      .catch(() => {
+        if (!cancelled) setGitRepositories([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scopeKey]);
+
   const selectedTargets = useMemo(() => {
     const keys = Array.from(selectedTargetKeys).map(String);
     return keys
@@ -282,7 +322,7 @@ export default function StatusPagesPage() {
     const regexes = parsedImagePatterns.flatMap((pattern) =>
       pattern.regex ? [pattern.regex] : []
     );
-    if (includeAllTags || regexes.length === 0) {
+    if (imageScopeMode === 'all' || regexes.length === 0) {
       return [];
     }
 
@@ -292,9 +332,37 @@ export default function StatusPagesPage() {
       }
       return regexes.some((regex) => matchesPattern(regex, option));
     });
-  }, [includeAllTags, parsedImagePatterns, selectedTargetKeys, targetOptions]);
+  }, [imageScopeMode, parsedImagePatterns, selectedTargetKeys, targetOptions]);
 
-  const scopeIsValid = includeAllTags || selectedTargets.length > 0 || imagePatterns.length > 0;
+  const filteredGitRepositories = useMemo(() => {
+    const query = gitRepositoryQuery.trim().toLowerCase();
+    return gitRepositories.filter(
+      (repository) =>
+        !query ||
+        repository.name.toLowerCase().includes(query) ||
+        repository.clone_url.toLowerCase().includes(query)
+    );
+  }, [gitRepositories, gitRepositoryQuery]);
+
+  const selectedGitRepositoryIdSet = useMemo(
+    () => new Set(selectedGitRepositoryIds),
+    [selectedGitRepositoryIds]
+  );
+
+  const includesGitSources = trackingMode === 'git' || trackingMode === 'mixed';
+  const includesImageScope = trackingMode === 'images' || trackingMode === 'mixed';
+  const scopeIsValid =
+    (includesGitSources && selectedGitRepositoryIds.length > 0) ||
+    (includesImageScope &&
+      (imageScopeMode === 'all' ||
+        (imageScopeMode === 'exact' && selectedTargets.length > 0) ||
+        (imageScopeMode === 'pattern' && imagePatterns.length > 0)));
+  const canAdvanceStatusPageStep =
+    formStep === 0
+      ? name.trim().length > 0
+      : formStep === 2
+        ? scopeIsValid && invalidImagePatterns.length === 0
+        : true;
 
   function canManageStatusPage(page: StatusPage) {
     if (isPlatformAdmin) return true;
@@ -408,13 +476,17 @@ export default function StatusPagesPage() {
 
   function resetForm() {
     setEditing(null);
+    setFormStep(0);
+    setTrackingMode('images');
+    setImageScopeMode('exact');
     setName('');
     setSlug('');
     setDescription('');
     setVisibility('private');
-    setIncludeAllTags(false);
     setStaleAfterHours('72');
     setSelectedTargetKeys(new Set());
+    setSelectedGitRepositoryIds([]);
+    setGitRepositoryQuery('');
     setTargetQuery('');
     setImagePatternText('');
     setUpdateTitle('');
@@ -438,12 +510,30 @@ export default function StatusPagesPage() {
       setSlug(full.page.slug);
       setDescription(full.page.description ?? '');
       setVisibility(full.page.visibility);
-      setIncludeAllTags(full.page.include_all_tags);
+      const hasGitSources = (full.page.git_repository_sources?.length ?? 0) > 0;
+      const hasImageScope =
+        full.page.include_all_tags ||
+        (full.page.targets?.length ?? 0) > 0 ||
+        (full.page.image_patterns?.length ?? 0) > 0;
+      setTrackingMode(hasGitSources && hasImageScope ? 'mixed' : hasGitSources ? 'git' : 'images');
+      setImageScopeMode(
+        full.page.include_all_tags
+          ? 'all'
+          : (full.page.image_patterns?.length ?? 0) > 0
+            ? 'pattern'
+            : 'exact'
+      );
+      setFormStep(0);
       setStaleAfterHours(String(full.page.stale_after_hours));
       setSelectedTargetKeys(
         new Set(
           (full.page.targets ?? []).map((target) => `${target.image_name}:${target.image_tag}`)
         )
+      );
+      setSelectedGitRepositoryIds(
+        (full.page.git_repository_sources ?? [])
+          .sort((a, b) => a.display_order - b.display_order)
+          .map((source) => source.repository_id)
       );
       setTargetQuery('');
       setImagePatternText((full.page.image_patterns ?? []).join('\n'));
@@ -476,8 +566,9 @@ export default function StatusPagesPage() {
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    if (editing ? !canManageStatusPage(editing) : !canMutateActiveScope) return;
     event.preventDefault();
+    if (formStep !== statusPageSteps.length - 1) return;
+    if (editing ? !canManageStatusPage(editing) : !canMutateActiveScope) return;
     setSaving(true);
     setFormError('');
 
@@ -495,10 +586,16 @@ export default function StatusPagesPage() {
             const currentScope = getWorkScope();
             return currentScope.kind === 'org' ? { org_id: currentScope.orgId } : {};
           })()),
-      include_all_tags: includeAllTags,
-      image_patterns: imagePatterns,
+      include_all_tags: includesImageScope && imageScopeMode === 'all',
+      image_patterns: includesImageScope && imageScopeMode === 'pattern' ? imagePatterns : [],
       stale_after_hours: Number(staleAfterHours) || 72,
-      targets: selectedTargets,
+      targets: includesImageScope && imageScopeMode === 'exact' ? selectedTargets : [],
+      git_repository_sources: includesGitSources
+        ? selectedGitRepositoryIds.map((repository_id, index) => ({
+            repository_id,
+            display_order: index + 1,
+          }))
+        : [],
       updates:
         trimmedUpdateTitle || trimmedUpdateBody
           ? [{ title: trimmedUpdateTitle, body: trimmedUpdateBody, level: updateLevel }]
@@ -719,7 +816,7 @@ export default function StatusPagesPage() {
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
-          <Modal.Container size="cover" placement="center">
+          <Modal.Container size="lg" placement="center">
             <Modal.Dialog>
               <Modal.Header>
                 <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
@@ -728,8 +825,8 @@ export default function StatusPagesPage() {
                 <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
               </Modal.Header>
 
-              <Modal.Body className="min-h-0 overflow-y-auto overscroll-contain py-5">
-                <form id="status-page-form" onSubmit={handleSubmit} className="space-y-4">
+              <Modal.Body className="min-h-0 overflow-y-auto overscroll-contain py-6">
+                <form id="status-page-form" onSubmit={handleSubmit} className="space-y-6">
                   {formError && (
                     <Alert status="danger">
                       <Alert.Indicator />
@@ -738,497 +835,793 @@ export default function StatusPagesPage() {
                       </Alert.Content>
                     </Alert>
                   )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                    <div className="space-y-1.5">
-                      <Label className={fieldLabelCls}>Name</Label>
-                      <Input
-                        className={fieldCls + ' bg-surface-secondary'}
-                        placeholder="Production Containers"
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        required
-                      />
+                  <div
+                    className="space-y-4"
+                    aria-label={`Step ${formStep + 1} of ${statusPageSteps.length}`}
+                  >
+                    <div className="text-xs">
+                      <span className="font-medium text-muted">
+                        Step {formStep + 1} of {statusPageSteps.length}
+                      </span>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className={fieldLabelCls}>Slug</Label>
-                      <Input
-                        className={fieldCls + ' bg-surface-secondary'}
-                        placeholder="production-containers"
-                        value={slug}
-                        onChange={(event) => setSlug(event.target.value)}
+                    <ol className="relative grid grid-cols-4">
+                      <span
+                        aria-hidden
+                        className="absolute left-[12.5%] right-[12.5%] top-3 h-px"
+                        style={{ backgroundColor: 'var(--divider)' }}
                       />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className={fieldLabelCls}>Description</Label>
-                    <TextArea
-                      className={textareaCls + ' bg-surface-secondary'}
-                      placeholder="Share current security and scan freshness for externally visible workloads."
-                      value={description}
-                      onChange={(event) => setDescription(event.target.value)}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <Select
-                      value={visibility}
-                      onChange={(value) => setVisibility(String(value) as StatusPage['visibility'])}
-                      className="w-full"
-                      placeholder="Select visibility"
-                    >
-                      <Label className={fieldLabelCls}>Visibility</Label>
-                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          {visibilityOptions.map((option) => (
-                            <ListBox.Item id={option} key={option} textValue={option}>
-                              {option}
-                              <ListBox.ItemIndicator />
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                    <div className="space-y-1.5">
-                      <Label className={fieldLabelCls}>Stale After Hours</Label>
-                      <Input
-                        className={fieldCls + ' bg-surface-secondary'}
-                        value={staleAfterHours}
-                        onChange={(event) => setStaleAfterHours(event.target.value)}
-                        inputMode="numeric"
+                      <span
+                        aria-hidden
+                        className="absolute left-[12.5%] top-3 h-0.5"
+                        style={{
+                          width: `${(formStep / (statusPageSteps.length - 1)) * 75}%`,
+                          backgroundColor: 'var(--accent)',
+                        }}
                       />
-                    </div>
+                      {statusPageSteps.map((step, index) => (
+                        <li key={step} className="relative min-w-0 text-center">
+                          <span
+                            className={`mx-auto flex size-6 items-center justify-center rounded-full border-2 text-xs font-semibold ${index > formStep ? 'border-default-300 bg-surface text-default-500' : ''}`}
+                            style={
+                              index < formStep
+                                ? {
+                                    borderColor: 'var(--accent)',
+                                    backgroundColor: 'var(--accent)',
+                                    color: 'white',
+                                  }
+                                : index === formStep
+                                  ? { borderColor: 'var(--accent)', color: 'var(--accent)' }
+                                  : undefined
+                            }
+                          >
+                            {index < formStep ? (
+                              <Tick02Icon size={14} strokeWidth={2.5} aria-hidden />
+                            ) : (
+                              index + 1
+                            )}
+                          </span>
+                          <span
+                            className={`mt-1 block truncate text-[11px] ${index === formStep ? 'font-semibold text-foreground' : 'text-muted'}`}
+                          >
+                            {step}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
                   </div>
-
-                  <div className="space-y-1.5">
-                    <Label className={fieldLabelCls}>Image Tag Scope</Label>
-                    <Card className="px-4 py-3 bg-surface-secondary">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <Switch isSelected={includeAllTags} onChange={setIncludeAllTags}>
-                          <Switch.Content>
-                            <Switch.Control>
-                              <Switch.Thumb />
-                            </Switch.Control>
-                            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                              Include all image tags
-                            </span>
-                            <p className="text-xs text-zinc-500">
-                              Ignore the manual selection list and publish every tracked image tag
-                              on this page.
-                            </p>
-                          </Switch.Content>
-                        </Switch>
-                        <Chip color={includeAllTags ? 'accent' : 'default'} variant="soft">
-                          {includeAllTags ? 'On' : 'Off'}
-                        </Chip>
+                  {formStep === 0 && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                        <div className="space-y-1.5">
+                          <Label className={fieldLabelCls}>Name</Label>
+                          <Input
+                            className={fieldCls + ' bg-surface-secondary'}
+                            placeholder="Production Containers"
+                            value={name}
+                            onChange={(event) => setName(event.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className={fieldLabelCls}>Slug</Label>
+                          <Input
+                            className={fieldCls + ' bg-surface-secondary'}
+                            placeholder="production-containers"
+                            value={slug}
+                            onChange={(event) => setSlug(event.target.value)}
+                          />
+                        </div>
                       </div>
-                    </Card>
-                  </div>
 
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.95fr)]">
-                    <Card
-                      className={`space-y-3 bg-surface-secondary p-4${includeAllTags ? ' opacity-50' : ''}`}
-                    >
+                      <div className="space-y-1.5">
+                        <Label className={fieldLabelCls}>Description</Label>
+                        <TextArea
+                          className={textareaCls + ' bg-surface-secondary'}
+                          placeholder="Share current security and scan freshness for externally visible workloads."
+                          value={description}
+                          onChange={(event) => setDescription(event.target.value)}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                        <Select
+                          value={visibility}
+                          onChange={(value) =>
+                            setVisibility(String(value) as StatusPage['visibility'])
+                          }
+                          className="w-full"
+                          placeholder="Select visibility"
+                        >
+                          <Label className={fieldLabelCls}>Visibility</Label>
+                          <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {visibilityOptions.map((option) => (
+                                <ListBox.Item id={option} key={option} textValue={option}>
+                                  {option}
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                        <div className="space-y-1.5">
+                          <Label className={fieldLabelCls}>Stale After Hours</Label>
+                          <Input
+                            className={fieldCls + ' bg-surface-secondary'}
+                            value={staleAfterHours}
+                            onChange={(event) => setStaleAfterHours(event.target.value)}
+                            inputMode="numeric"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {formStep === 1 && (
+                    <div className="space-y-6">
+                      <div className="space-y-1.5">
+                        <p className="text-base font-semibold text-foreground">
+                          What should this page follow?
+                        </p>
+                        <p className="mt-1 text-sm text-muted">
+                          Choose the source first. You’ll only see the configuration it needs next.
+                        </p>
+                      </div>
+                      <RadioGroup
+                        aria-label="Status page source type"
+                        value={trackingMode}
+                        onChange={(value) => setTrackingMode(String(value) as TrackingMode)}
+                        variant="secondary"
+                      >
+                        <div className="grid gap-3 md:grid-cols-3">
+                          {(
+                            [
+                              [
+                                'git',
+                                'Git repositories',
+                                'Yes — follow the current images discovered in Git.',
+                              ],
+                              [
+                                'images',
+                                'Specific image scope',
+                                'No — choose image tags, a pattern, or all tracked images.',
+                              ],
+                              [
+                                'mixed',
+                                'Both',
+                                'Combine Git discovery with a small fixed image scope.',
+                              ],
+                            ] as const
+                          ).map(([mode, title, detail]) => (
+                            <Radio
+                              key={mode}
+                              value={mode}
+                              className="group relative flex h-full min-h-28 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-surface-hovered data-[selected=true]:border-accent data-[selected=true]:bg-accent/5"
+                            >
+                              <Radio.Control className="absolute right-3 top-3">
+                                <Radio.Indicator />
+                              </Radio.Control>
+                              <Radio.Content className="flex min-w-0 flex-col items-start gap-1 pr-7">
+                                <Label className="block text-sm font-semibold text-foreground">
+                                  {title}
+                                </Label>
+                                <Description className="mt-1 block break-words text-xs leading-5 text-muted">
+                                  {detail}
+                                </Description>
+                              </Radio.Content>
+                            </Radio>
+                          ))}
+                        </div>
+                      </RadioGroup>
+                      {(trackingMode === 'images' || trackingMode === 'mixed') && (
+                        <div className="space-y-4 border-t border-divider pt-6">
+                          <p className="text-sm font-semibold text-foreground">
+                            Do you want to manually choose every image?
+                          </p>
+                          <RadioGroup
+                            aria-label="Image selection method"
+                            value={imageScopeMode}
+                            onChange={(value) => setImageScopeMode(String(value) as ImageScopeMode)}
+                            variant="secondary"
+                          >
+                            <div className="grid gap-3 md:grid-cols-3">
+                              {(
+                                [
+                                  ['exact', 'Yes, select tags', 'Pick individual image tags.'],
+                                  ['pattern', 'No, use a pattern', 'Match tags with a regex.'],
+                                  ['all', 'No, include all', 'Publish every tracked image tag.'],
+                                ] as const
+                              ).map(([mode, title, detail]) => (
+                                <Radio
+                                  key={mode}
+                                  value={mode}
+                                  className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-surface-hovered data-[selected=true]:border-accent data-[selected=true]:bg-accent/5"
+                                >
+                                  <Radio.Control className="absolute right-3 top-3">
+                                    <Radio.Indicator />
+                                  </Radio.Control>
+                                  <Radio.Content className="flex min-w-0 flex-col items-start gap-1 pr-7">
+                                    <Label className="block text-sm font-semibold text-foreground">
+                                      {title}
+                                    </Label>
+                                    <Description className="mt-1 block break-words text-xs leading-5 text-muted">
+                                      {detail}
+                                    </Description>
+                                  </Radio.Content>
+                                </Radio>
+                              ))}
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {formStep === 2 && includesGitSources && (
+                    <section className="space-y-3" aria-labelledby="git-repository-sources-heading">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-                            Exact Image Tags
+                          <p
+                            id="git-repository-sources-heading"
+                            className="text-sm font-semibold text-foreground"
+                          >
+                            Repositories to follow
                           </p>
-                          <p className="mt-1 text-xs leading-5 text-zinc-500">
-                            Pick individual `image:tag` entries for a tightly curated page.
+                          <p className="mt-1 text-xs text-muted">
+                            Use the latest completed discovery from each repository.
                           </p>
                         </div>
-                        <Chip color="accent" variant="soft">
-                          {selectedTargets.length} selected
+                        <Chip
+                          color={selectedGitRepositoryIds.length > 0 ? 'accent' : 'default'}
+                          variant="soft"
+                        >
+                          {selectedGitRepositoryIds.length} selected
                         </Chip>
                       </div>
 
-                      <Input
-                        className={`${fieldCls} font-mono`}
-                        placeholder="Filter by image, tag, or status"
-                        value={targetQuery}
-                        onChange={(event) => setTargetQuery(event.target.value)}
-                        disabled={includeAllTags}
-                      />
+                      <SearchField className={fieldCls}>
+                        <SearchField.Group>
+                          <SearchField.SearchIcon />
+                          <SearchField.Input
+                            value={gitRepositoryQuery}
+                            onChange={(event) => setGitRepositoryQuery(event.target.value)}
+                            placeholder="Search repositories"
+                          />
+                          <SearchField.ClearButton />
+                        </SearchField.Group>
+                      </SearchField>
 
-                      <Card className="overflow-hidden">
-                        {loadingOptions ? (
-                          <p className="p-4 text-sm text-zinc-500">Loading image tags…</p>
-                        ) : filteredTargetOptions.length === 0 ? (
-                          <p className="px-4 py-8 text-sm text-zinc-500">
-                            {targetQuery.trim()
-                              ? 'No image tags match the current filter.'
-                              : 'No tracked image tags are available yet.'}
+                      <div className="max-h-52 divide-y divide-divider overflow-y-auto rounded-xl border border-divider bg-surface">
+                        {filteredGitRepositories.length === 0 ? (
+                          <p className="p-4 text-sm text-muted">
+                            No accessible Git repositories match this search.
                           </p>
                         ) : (
-                          <div className="max-h-80 overflow-y-auto divide-y">
-                            {filteredTargetOptions.map((option) => {
-                              const isSelected = selectedTargetKeys.has(option.id);
-                              return (
-                                <label
-                                  key={option.id}
-                                  className="flex items-start gap-3 p-3 cursor-pointer transition-colors"
-                                  style={
-                                    isSelected
-                                      ? {
-                                          background:
-                                            'color-mix(in srgb, var(--accent) 9%, transparent)',
-                                        }
-                                      : undefined
-                                  }
-                                >
-                                  <span
-                                    className="relative mt-1 flex size-4 shrink-0 items-center justify-center rounded border transition-colors"
-                                    style={
-                                      isSelected
-                                        ? {
-                                            borderColor: 'var(--accent)',
-                                            background: 'var(--accent)',
-                                          }
-                                        : { borderColor: 'rgba(113,113,122,0.4)' }
-                                    }
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      disabled={includeAllTags}
-                                      className="absolute inset-0 cursor-pointer opacity-0"
-                                      onChange={(e) => {
-                                        const checked = e.target.checked;
-                                        setSelectedTargetKeys((current) => {
-                                          const next = new Set(current);
-                                          if (checked) {
-                                            next.add(option.id);
-                                          } else {
-                                            next.delete(option.id);
-                                          }
-                                          return next;
-                                        });
-                                      }}
-                                    />
-                                    {isSelected && (
-                                      <svg
-                                        className="size-3 text-white pointer-events-none"
-                                        viewBox="0 0 12 12"
-                                        fill="none"
-                                      >
-                                        <path
-                                          d="M2.5 6l2.5 2.5 4.5-5"
-                                          stroke="currentColor"
-                                          strokeWidth="1.5"
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                        />
-                                      </svg>
-                                    )}
-                                  </span>
+                          filteredGitRepositories.map((repository) => {
+                            const selected = selectedGitRepositoryIdSet.has(repository.id);
+                            const checkboxId = `git-repository-${repository.id}`;
 
-                                  <span className="min-w-0 flex-1 text-left">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <p className="font-mono text-sm break-all text-zinc-800 dark:text-zinc-100">
-                                        {option.label}
-                                      </p>
-                                      <span
-                                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
-                                        style={
-                                          option.latest_status === 'failed'
-                                            ? {
-                                                background: 'rgba(239,68,68,0.12)',
-                                                color: '#f87171',
-                                              }
-                                            : option.latest_status === 'completed'
-                                              ? {
-                                                  background: 'rgba(34,197,94,0.12)',
-                                                  color: '#4ade80',
-                                                }
-                                              : {
-                                                  background: 'rgba(59,130,246,0.12)',
-                                                  color: '#93c5fd',
-                                                }
-                                        }
-                                      >
-                                        {option.latest_status}
-                                      </span>
-                                    </div>
-                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                                      <span>Seen {timeAgo(option.observed_at)}</span>
-                                      <span
-                                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                                        style={{
-                                          background: 'rgba(239,68,68,0.1)',
-                                          color: '#f87171',
-                                        }}
-                                      >
-                                        C {option.critical_count}
-                                      </span>
-                                      <span
-                                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                                        style={{
-                                          background: 'rgba(249,115,22,0.1)',
-                                          color: '#fb923c',
-                                        }}
-                                      >
-                                        H {option.high_count}
-                                      </span>
-                                    </div>
+                            return (
+                              <Checkbox
+                                id={checkboxId}
+                                key={repository.id}
+                                isSelected={selected}
+                                onChange={(checked) =>
+                                  setSelectedGitRepositoryIds((current) =>
+                                    checked
+                                      ? [...current, repository.id]
+                                      : current.filter((id) => id !== repository.id)
+                                  )
+                                }
+                                variant="secondary"
+                                className="w-full gap-0 bg-surface transition-colors data-[selected=true]:bg-accent/5"
+                              >
+                                <Checkbox.Content className="flex w-full min-w-0 items-start justify-start gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hovered">
+                                  <Checkbox.Control className="mt-0.5">
+                                    <Checkbox.Indicator />
+                                  </Checkbox.Control>
+                                  <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+                                    <Label
+                                      htmlFor={checkboxId}
+                                      className="block w-full truncate text-sm font-medium text-foreground"
+                                    >
+                                      {repository.name}
+                                    </Label>
+                                    <Description className="block w-full truncate text-xs text-muted">
+                                      {repository.ref}
+                                    </Description>
                                   </span>
-                                </label>
-                              );
-                            })}
-                          </div>
+                                </Checkbox.Content>
+                              </Checkbox>
+                            );
+                          })
                         )}
-                      </Card>
-                    </Card>
-
-                    <Card
-                      className={`space-y-3 bg-surface-secondary p-4${includeAllTags ? ' opacity-50' : ''}`}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-                            Regex Include Patterns
-                          </p>
-                          <p className="mt-1 text-xs leading-5 text-zinc-500">
-                            One RE2-compatible regex per line. Patterns match against `image:tag`,
-                            image name, and tag.
-                          </p>
-                        </div>
-                        <Chip color="accent" variant="soft">
-                          {imagePatterns.length} active
-                        </Chip>
                       </div>
+                    </section>
+                  )}
 
-                      <TextArea
-                        className={`${textareaCls} min-h-40 font-mono`}
-                        placeholder={`^ghcr\\.io/acme/.+:prod-.*$\n^nginx$\n^.*:stable$`}
-                        value={imagePatternText}
-                        onChange={(event) => setImagePatternText(event.target.value)}
-                        disabled={includeAllTags}
-                      />
+                  {formStep === 2 && includesImageScope && (
+                    <>
+                      {imageScopeMode === 'all' ? (
+                        <Card className="bg-surface-secondary p-4">
+                          <p className="text-sm font-semibold text-foreground">
+                            All tracked image tags
+                          </p>
+                          <p className="mt-1 text-xs text-muted">
+                            New tracked images will appear on this page automatically.
+                          </p>
+                        </Card>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.95fr)]">
+                          <Card
+                            className={`space-y-3 bg-surface-secondary p-4${imageScopeMode !== 'exact' ? ' hidden' : ''}`}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                                  Exact Image Tags
+                                </p>
+                                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                                  Pick individual `image:tag` entries for a tightly curated page.
+                                </p>
+                              </div>
+                              <Chip color="accent" variant="soft">
+                                {selectedTargets.length} selected
+                              </Chip>
+                            </div>
 
-                      <p className="text-xs leading-5 text-zinc-500">
-                        Use regex when the scope is tag-driven or too large to maintain manually.
-                        Invalid patterns block save.
+                            <Input
+                              className={`${fieldCls} font-mono`}
+                              placeholder="Filter by image, tag, or status"
+                              value={targetQuery}
+                              onChange={(event) => setTargetQuery(event.target.value)}
+                            />
+
+                            <Card className="overflow-hidden">
+                              {loadingOptions ? (
+                                <p className="p-4 text-sm text-zinc-500">Loading image tags…</p>
+                              ) : filteredTargetOptions.length === 0 ? (
+                                <p className="px-4 py-8 text-sm text-zinc-500">
+                                  {targetQuery.trim()
+                                    ? 'No image tags match the current filter.'
+                                    : 'No tracked image tags are available yet.'}
+                                </p>
+                              ) : (
+                                <div className="max-h-80 overflow-y-auto divide-y">
+                                  {filteredTargetOptions.map((option) => {
+                                    const isSelected = selectedTargetKeys.has(option.id);
+                                    return (
+                                      <label
+                                        key={option.id}
+                                        className="flex items-start gap-3 p-3 cursor-pointer transition-colors"
+                                        style={
+                                          isSelected
+                                            ? {
+                                                background:
+                                                  'color-mix(in srgb, var(--accent) 9%, transparent)',
+                                              }
+                                            : undefined
+                                        }
+                                      >
+                                        <span
+                                          className="relative mt-1 flex size-4 shrink-0 items-center justify-center rounded border transition-colors"
+                                          style={
+                                            isSelected
+                                              ? {
+                                                  borderColor: 'var(--accent)',
+                                                  background: 'var(--accent)',
+                                                }
+                                              : { borderColor: 'rgba(113,113,122,0.4)' }
+                                          }
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            className="absolute inset-0 cursor-pointer opacity-0"
+                                            onChange={(e) => {
+                                              const checked = e.target.checked;
+                                              setSelectedTargetKeys((current) => {
+                                                const next = new Set(current);
+                                                if (checked) {
+                                                  next.add(option.id);
+                                                } else {
+                                                  next.delete(option.id);
+                                                }
+                                                return next;
+                                              });
+                                            }}
+                                          />
+                                          {isSelected && (
+                                            <svg
+                                              className="size-3 text-white pointer-events-none"
+                                              viewBox="0 0 12 12"
+                                              fill="none"
+                                            >
+                                              <path
+                                                d="M2.5 6l2.5 2.5 4.5-5"
+                                                stroke="currentColor"
+                                                strokeWidth="1.5"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                              />
+                                            </svg>
+                                          )}
+                                        </span>
+
+                                        <span className="min-w-0 flex-1 text-left">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <p className="font-mono text-sm break-all text-zinc-800 dark:text-zinc-100">
+                                              {option.label}
+                                            </p>
+                                            <span
+                                              className="rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
+                                              style={
+                                                option.latest_status === 'failed'
+                                                  ? {
+                                                      background: 'rgba(239,68,68,0.12)',
+                                                      color: '#f87171',
+                                                    }
+                                                  : option.latest_status === 'completed'
+                                                    ? {
+                                                        background: 'rgba(34,197,94,0.12)',
+                                                        color: '#4ade80',
+                                                      }
+                                                    : {
+                                                        background: 'rgba(59,130,246,0.12)',
+                                                        color: '#93c5fd',
+                                                      }
+                                              }
+                                            >
+                                              {option.latest_status}
+                                            </span>
+                                          </div>
+                                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                                            <span>Seen {timeAgo(option.observed_at)}</span>
+                                            <span
+                                              className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                              style={{
+                                                background: 'rgba(239,68,68,0.1)',
+                                                color: '#f87171',
+                                              }}
+                                            >
+                                              C {option.critical_count}
+                                            </span>
+                                            <span
+                                              className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                              style={{
+                                                background: 'rgba(249,115,22,0.1)',
+                                                color: '#fb923c',
+                                              }}
+                                            >
+                                              H {option.high_count}
+                                            </span>
+                                          </div>
+                                        </span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </Card>
+                          </Card>
+
+                          <Card
+                            className={`space-y-3 bg-surface-secondary p-4${imageScopeMode !== 'pattern' ? ' hidden' : ''}`}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                                  Regex Include Patterns
+                                </p>
+                                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                                  One RE2-compatible regex per line. Patterns match against
+                                  `image:tag`, image name, and tag.
+                                </p>
+                              </div>
+                              <Chip color="accent" variant="soft">
+                                {imagePatterns.length} active
+                              </Chip>
+                            </div>
+
+                            <TextArea
+                              className={`${textareaCls} min-h-40 font-mono`}
+                              placeholder={`^ghcr\\.io/acme/.+:prod-.*$\n^nginx$\n^.*:stable$`}
+                              value={imagePatternText}
+                              onChange={(event) => setImagePatternText(event.target.value)}
+                            />
+
+                            <p className="text-xs leading-5 text-zinc-500">
+                              Use regex when the scope is tag-driven or too large to maintain
+                              manually. Invalid patterns block save.
+                            </p>
+
+                            {invalidImagePatterns.length > 0 && (
+                              <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-400">
+                                {invalidImagePatterns.map((pattern) => (
+                                  <p key={pattern.pattern} className="font-mono break-all">
+                                    {pattern.pattern}: {pattern.error}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+
+                            <Card>
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                                  Preview
+                                </p>
+                                <Chip color="accent" variant="soft">
+                                  {regexMatchedOptions.length} matching
+                                </Chip>
+                              </div>
+
+                              {imagePatterns.length === 0 ? (
+                                <p className="mt-3 text-xs leading-5 text-zinc-500">
+                                  Add a pattern to preview the tracked tags it would include.
+                                </p>
+                              ) : regexMatchedOptions.length === 0 ? (
+                                <p className="mt-3 text-xs leading-5 text-zinc-500">
+                                  Current patterns do not match any tracked image tags outside your
+                                  exact selections.
+                                </p>
+                              ) : (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {regexMatchedOptions.slice(0, 10).map((option) => (
+                                    <span
+                                      key={option.id}
+                                      className="rounded-full px-2.5 py-1 text-xs font-mono"
+                                      style={{
+                                        background: 'rgba(59,130,246,0.12)',
+                                        border: '1px solid rgba(59,130,246,0.2)',
+                                        color: '#93c5fd',
+                                      }}
+                                    >
+                                      {option.label}
+                                    </span>
+                                  ))}
+                                  {regexMatchedOptions.length > 10 && (
+                                    <span
+                                      className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500"
+                                      style={{
+                                        background: 'var(--status-pill-bg)',
+                                        border: '1px solid var(--surface-border)',
+                                      }}
+                                    >
+                                      +{regexMatchedOptions.length - 10} more
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </Card>
+                          </Card>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {formStep === 3 && (
+                    <>
+                      <Card className="bg-surface-secondary p-4">
+                        <p className="text-base font-semibold text-foreground">Ready to publish?</p>
+                        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                          <div>
+                            <dt className="text-muted">Visibility</dt>
+                            <dd className="mt-1 font-medium capitalize">{visibility}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted">Freshness</dt>
+                            <dd className="mt-1 font-medium">{staleAfterHours || 72} hours</dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted">Git sources</dt>
+                            <dd className="mt-1 font-medium">
+                              {includesGitSources
+                                ? selectedGitRepositoryIds.length
+                                : 'Not included'}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted">Image scope</dt>
+                            <dd className="mt-1 font-medium">
+                              {includesImageScope
+                                ? imageScopeMode === 'all'
+                                  ? 'All tracked tags'
+                                  : imageScopeMode === 'exact'
+                                    ? `${selectedTargets.length} selected tags`
+                                    : `${imagePatterns.length} regex patterns`
+                                : 'Not included'}
+                            </dd>
+                          </div>
+                        </dl>
+                      </Card>
+                      <p className="text-xs text-zinc-500">
+                        Choose one or more exact `image:tag` entries, add regex include patterns, or
+                        enable “Include all image tags”.
                       </p>
 
-                      {invalidImagePatterns.length > 0 && (
-                        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-400">
-                          {invalidImagePatterns.map((pattern) => (
-                            <p key={pattern.pattern} className="font-mono break-all">
-                              {pattern.pattern}: {pattern.error}
+                      {includesImageScope && imageScopeMode !== 'all' && (
+                        <Card className="bg-surface-secondary">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                                Publish Scope
+                              </p>
+                              <p className="mt-1 text-xs text-zinc-500">
+                                {selectedTargets.length} exact tag
+                                {selectedTargets.length === 1 ? '' : 's'} and {imagePatterns.length}{' '}
+                                regex pattern{imagePatterns.length === 1 ? '' : 's'} configured.
+                              </p>
+                            </div>
+                          </div>
+
+                          {selectedTargets.length > 0 && (
+                            <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
+                              <div className="flex flex-wrap gap-2">
+                                {selectedTargets.slice(0, 12).map((target) => (
+                                  <Chip
+                                    key={`${target.image_name}:${target.image_tag}`}
+                                    color="accent"
+                                    variant="soft"
+                                  >
+                                    {target.image_name}:{target.image_tag}
+                                  </Chip>
+                                ))}
+                                {selectedTargets.length > 12 && (
+                                  <span
+                                    className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500"
+                                    style={{
+                                      background: 'var(--status-pill-bg)',
+                                      border: '1px solid var(--surface-border)',
+                                    }}
+                                  >
+                                    +{selectedTargets.length - 12} more exact tags
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {imagePatterns.length > 0 && (
+                            <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
+                              <div className="flex flex-wrap gap-2">
+                                {imagePatterns.map((pattern) => (
+                                  <span
+                                    key={pattern}
+                                    className="rounded-full px-2.5 py-1 text-xs font-mono"
+                                    style={{
+                                      background: 'rgba(59,130,246,0.12)',
+                                      border: '1px solid rgba(59,130,246,0.2)',
+                                      color: '#93c5fd',
+                                    }}
+                                  >
+                                    {pattern}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {selectedTargets.length === 0 && imagePatterns.length === 0 && (
+                            <p className="text-xs leading-5 text-zinc-500">
+                              Selections and regex matches will appear here without changing the
+                              modal height.
                             </p>
-                          ))}
-                        </div>
+                          )}
+                        </Card>
                       )}
 
-                      <Card>
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                            Preview
+                      {includesImageScope &&
+                        imageScopeMode !== 'all' &&
+                        !loadingOptions &&
+                        !scopeIsValid && (
+                          <p className="text-xs text-red-400">
+                            Select at least one exact image tag or add a regex include pattern.
                           </p>
-                          <Chip color="accent" variant="soft">
-                            {regexMatchedOptions.length} matching
-                          </Chip>
-                        </div>
-
-                        {imagePatterns.length === 0 ? (
-                          <p className="mt-3 text-xs leading-5 text-zinc-500">
-                            Add a pattern to preview the tracked tags it would include.
-                          </p>
-                        ) : regexMatchedOptions.length === 0 ? (
-                          <p className="mt-3 text-xs leading-5 text-zinc-500">
-                            Current patterns do not match any tracked image tags outside your exact
-                            selections.
-                          </p>
-                        ) : (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {regexMatchedOptions.slice(0, 10).map((option) => (
-                              <span
-                                key={option.id}
-                                className="rounded-full px-2.5 py-1 text-xs font-mono"
-                                style={{
-                                  background: 'rgba(59,130,246,0.12)',
-                                  border: '1px solid rgba(59,130,246,0.2)',
-                                  color: '#93c5fd',
-                                }}
-                              >
-                                {option.label}
-                              </span>
-                            ))}
-                            {regexMatchedOptions.length > 10 && (
-                              <span
-                                className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500"
-                                style={{
-                                  background: 'var(--status-pill-bg)',
-                                  border: '1px solid var(--surface-border)',
-                                }}
-                              >
-                                +{regexMatchedOptions.length - 10} more
-                              </span>
-                            )}
-                          </div>
                         )}
-                      </Card>
-                    </Card>
-                  </div>
 
-                  <p className="text-xs text-zinc-500">
-                    Choose one or more exact `image:tag` entries, add regex include patterns, or
-                    enable “Include all image tags”.
-                  </p>
-
-                  {!includeAllTags && (
-                    <Card className="bg-surface-secondary">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-                            Publish Scope
-                          </p>
-                          <p className="mt-1 text-xs text-zinc-500">
-                            {selectedTargets.length} exact tag
-                            {selectedTargets.length === 1 ? '' : 's'} and {imagePatterns.length}{' '}
-                            regex pattern{imagePatterns.length === 1 ? '' : 's'} configured.
-                          </p>
+                      <div className="grid grid-cols-1 p-2 md:grid-cols-2 gap-4 items-start">
+                        <div className="space-y-1.5">
+                          <Label className={fieldLabelCls}>Active Banner Title (optional)</Label>
+                          <Input
+                            className={fieldCls + ' bg-surface-secondary'}
+                            value={updateTitle}
+                            onChange={(event) => setUpdateTitle(event.target.value)}
+                            placeholder="Database refresh in progress"
+                          />
                         </div>
+                        <Select
+                          value={updateLevel}
+                          onChange={(value) =>
+                            setUpdateLevel(String(value) as (typeof updateLevelOptions)[number])
+                          }
+                          className="w-full"
+                          placeholder="Select a banner level"
+                        >
+                          <Label className={fieldLabelCls}>Banner Level</Label>
+                          <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {updateLevelOptions.map((option) => (
+                                <ListBox.Item id={option} key={option} textValue={option}>
+                                  {option}
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
                       </div>
 
-                      {selectedTargets.length > 0 && (
-                        <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
-                          <div className="flex flex-wrap gap-2">
-                            {selectedTargets.slice(0, 12).map((target) => (
-                              <Chip
-                                key={`${target.image_name}:${target.image_tag}`}
-                                color="accent"
-                                variant="soft"
-                              >
-                                {target.image_name}:{target.image_tag}
-                              </Chip>
-                            ))}
-                            {selectedTargets.length > 12 && (
-                              <span
-                                className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500"
-                                style={{
-                                  background: 'var(--status-pill-bg)',
-                                  border: '1px solid var(--surface-border)',
-                                }}
-                              >
-                                +{selectedTargets.length - 12} more exact tags
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {imagePatterns.length > 0 && (
-                        <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
-                          <div className="flex flex-wrap gap-2">
-                            {imagePatterns.map((pattern) => (
-                              <span
-                                key={pattern}
-                                className="rounded-full px-2.5 py-1 text-xs font-mono"
-                                style={{
-                                  background: 'rgba(59,130,246,0.12)',
-                                  border: '1px solid rgba(59,130,246,0.2)',
-                                  color: '#93c5fd',
-                                }}
-                              >
-                                {pattern}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedTargets.length === 0 && imagePatterns.length === 0 && (
-                        <p className="text-xs leading-5 text-zinc-500">
-                          Selections and regex matches will appear here without changing the modal
-                          height.
-                        </p>
-                      )}
-                    </Card>
+                      <div className="space-y-1.5 p-2">
+                        <Label className={fieldLabelCls}>Active Banner Message</Label>
+                        <TextArea
+                          className={textareaCls + ' bg-surface-secondary'}
+                          value={updateBody}
+                          onChange={(event) => setUpdateBody(event.target.value)}
+                          placeholder="We are re-scanning images after a registry credential rotation. Short-lived stale states are expected."
+                        />
+                      </div>
+                    </>
                   )}
-
-                  {!includeAllTags && !loadingOptions && !scopeIsValid && (
-                    <p className="text-xs text-red-400">
-                      Select at least one exact image tag or add a regex include pattern.
-                    </p>
-                  )}
-
-                  <div className="grid grid-cols-1 p-2 md:grid-cols-2 gap-4 items-start">
-                    <div className="space-y-1.5">
-                      <Label className={fieldLabelCls}>Active Banner Title (optional)</Label>
-                      <Input
-                        className={fieldCls + ' bg-surface-secondary'}
-                        value={updateTitle}
-                        onChange={(event) => setUpdateTitle(event.target.value)}
-                        placeholder="Database refresh in progress"
-                      />
-                    </div>
-                    <Select
-                      value={updateLevel}
-                      onChange={(value) =>
-                        setUpdateLevel(String(value) as (typeof updateLevelOptions)[number])
-                      }
-                      className="w-full"
-                      placeholder="Select a banner level"
-                    >
-                      <Label className={fieldLabelCls}>Banner Level</Label>
-                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          {updateLevelOptions.map((option) => (
-                            <ListBox.Item id={option} key={option} textValue={option}>
-                              {option}
-                              <ListBox.ItemIndicator />
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5 p-2">
-                    <Label className={fieldLabelCls}>Active Banner Message</Label>
-                    <TextArea
-                      className={textareaCls + ' bg-surface-secondary'}
-                      value={updateBody}
-                      onChange={(event) => setUpdateBody(event.target.value)}
-                      placeholder="We are re-scanning images after a registry credential rotation. Short-lived stale states are expected."
-                    />
-                  </div>
                 </form>
               </Modal.Body>
 
               <Modal.Footer
-                className="px-6 py-4 flex gap-3 justify-end"
+                className="flex items-center justify-between gap-3 px-6 py-4"
                 style={{ borderTop: '1px solid var(--border-subtle)' }}
               >
-                <Button variant="secondary" onPress={modal.close}>
+                <Button
+                  type="button"
+                  variant="tertiary"
+                  className="text-muted"
+                  onPress={modal.close}
+                >
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  form="status-page-form"
-                  isDisabled={
-                    saving ||
-                    invalidImagePatterns.length > 0 ||
-                    !scopeIsValid ||
-                    (editing ? !canManageStatusPage(editing) : !canMutateActiveScope)
-                  }
-                  className="btn-primary"
-                >
-                  {saving && (
-                    <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="flex items-center gap-2">
+                  {formStep > 0 ? (
+                    <Button
+                      type="button"
+                      variant="tertiary"
+                      className="text-foreground"
+                      onPress={() => setFormStep((step) => step - 1)}
+                    >
+                      Back
+                    </Button>
+                  ) : null}
+                  {formStep < statusPageSteps.length - 1 ? (
+                    <Button
+                      type="button"
+                      isDisabled={!canAdvanceStatusPageStep}
+                      onPress={() => setFormStep((step) => step + 1)}
+                    >
+                      Continue
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      form="status-page-form"
+                      isDisabled={
+                        saving ||
+                        !scopeIsValid ||
+                        (editing ? !canManageStatusPage(editing) : !canMutateActiveScope)
+                      }
+                      className="btn-primary"
+                    >
+                      {saving && (
+                        <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      )}
+                      {editing ? 'Save status page' : 'Create status page'}
+                    </Button>
                   )}
-                  {editing ? 'Save' : 'Create'}
-                </Button>
+                </div>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

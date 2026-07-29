@@ -1,9 +1,12 @@
 package statuspages
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"sort"
@@ -32,6 +35,11 @@ type statusPageTargetPayload struct {
 	DisplayOrder int    `json:"display_order"`
 }
 
+type statusPageGitRepositorySourcePayload struct {
+	RepositoryID string `json:"repository_id" binding:"required"`
+	DisplayOrder int    `json:"display_order"`
+}
+
 type statusPageUpdatePayload struct {
 	Title       string     `json:"title"`
 	Body        string     `json:"body"`
@@ -41,16 +49,17 @@ type statusPageUpdatePayload struct {
 }
 
 type statusPagePayload struct {
-	Name            string                    `json:"name" binding:"required"`
-	Slug            string                    `json:"slug"`
-	Description     string                    `json:"description"`
-	Visibility      string                    `json:"visibility" binding:"required"`
-	OrgID           string                    `json:"org_id"`
-	IncludeAllTags  bool                      `json:"include_all_tags"`
-	ImagePatterns   []string                  `json:"image_patterns"`
-	StaleAfterHours int                       `json:"stale_after_hours"`
-	Targets         []statusPageTargetPayload `json:"targets"`
-	Updates         []statusPageUpdatePayload `json:"updates"`
+	Name                 string                                 `json:"name" binding:"required"`
+	Slug                 string                                 `json:"slug"`
+	Description          string                                 `json:"description"`
+	Visibility           string                                 `json:"visibility" binding:"required"`
+	OrgID                string                                 `json:"org_id"`
+	IncludeAllTags       bool                                   `json:"include_all_tags"`
+	ImagePatterns        []string                               `json:"image_patterns"`
+	StaleAfterHours      int                                    `json:"stale_after_hours"`
+	Targets              []statusPageTargetPayload              `json:"targets"`
+	GitRepositorySources []statusPageGitRepositorySourcePayload `json:"git_repository_sources"`
+	Updates              []statusPageUpdatePayload              `json:"updates"`
 }
 
 type StatusPageItem struct {
@@ -79,10 +88,32 @@ type StatusPageItem struct {
 	ObservedAt            time.Time                    `json:"observed_at"`
 	PreviousScanAt        *time.Time                   `json:"previous_scan_at,omitempty"`
 	DisplayOrder          int                          `json:"display_order"`
+	SourceType            string                       `json:"source_type,omitempty"`
+	SourceRepositoryID    string                       `json:"source_repository_id,omitempty"`
+	SourceRepositoryName  string                       `json:"source_repository_name,omitempty"`
+	SourceRunID           string                       `json:"source_run_id,omitempty"`
+	FullRef               string                       `json:"full_ref,omitempty"`
+	DiscoveryState        string                       `json:"discovery_state,omitempty"`
 	DeltaCriticalCount    *int                         `json:"delta_critical_count,omitempty"`
 	DeltaHighCount        *int                         `json:"delta_high_count,omitempty"`
 	DeltaMediumCount      *int                         `json:"delta_medium_count,omitempty"`
 	DeltaLowCount         *int                         `json:"delta_low_count,omitempty"`
+}
+
+const statusPageItemStatusUnscanned = "unscanned"
+
+type StatusPageGitRepositorySourceHealth struct {
+	RepositoryID    string     `json:"repository_id"`
+	RepositoryName  string     `json:"repository_name"`
+	DisplayOrder    int        `json:"display_order"`
+	Status          string     `json:"status"`
+	LatestRunID     string     `json:"latest_run_id,omitempty"`
+	LatestRunStatus string     `json:"latest_run_status,omitempty"`
+	SnapshotRunID   string     `json:"snapshot_run_id,omitempty"`
+	CommitSHA       string     `json:"commit_sha,omitempty"`
+	CompletedAt     *time.Time `json:"completed_at,omitempty"`
+	ImageCount      int        `json:"image_count"`
+	ErrorMessage    string     `json:"error_message,omitempty"`
 }
 
 type statusPageScanSummary struct {
@@ -108,15 +139,16 @@ type statusPageScanSummary struct {
 }
 
 type statusPageResponse struct {
-	Page  *models.StatusPage        `json:"page"`
-	Items []StatusPageItem          `json:"items"`
-	Info  map[string]any            `json:"info,omitempty"`
-	Meta  map[string]int64          `json:"meta,omitempty"`
-	Now   time.Time                 `json:"now"`
-	Links map[string]string         `json:"links,omitempty"`
-	Extra map[string][]string       `json:"extra,omitempty"`
-	Flags map[string]bool           `json:"flags,omitempty"`
-	Stats map[string]map[string]int `json:"stats,omitempty"`
+	Page                 *models.StatusPage                    `json:"page"`
+	Items                []StatusPageItem                      `json:"items"`
+	GitRepositorySources []StatusPageGitRepositorySourceHealth `json:"git_repository_sources,omitempty"`
+	Info                 map[string]any                        `json:"info,omitempty"`
+	Meta                 map[string]int64                      `json:"meta,omitempty"`
+	Now                  time.Time                             `json:"now"`
+	Links                map[string]string                     `json:"links,omitempty"`
+	Extra                map[string][]string                   `json:"extra,omitempty"`
+	Flags                map[string]bool                       `json:"flags,omitempty"`
+	Stats                map[string]map[string]int             `json:"stats,omitempty"`
 }
 
 func ListStatusPages(db *bun.DB) gin.HandlerFunc {
@@ -127,7 +159,7 @@ func ListStatusPages(db *bun.DB) gin.HandlerFunc {
 		}
 
 		var pages []models.StatusPage
-		q := db.NewSelect().Model(&pages).OrderExpr("updated_at DESC")
+		q := db.NewSelect().Model(&pages).Relation("GitRepositorySources").OrderExpr("updated_at DESC")
 		if !isAdmin {
 			q = authz.ApplyOwnershipVisibility(q, "status_page", "", "owner_user_id", "owner_org_id", "org_status_pages", "status_page_id", userID, isAdmin, accessibleOrgIDs)
 		}
@@ -154,7 +186,7 @@ func CreateStatusPage(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		page, targets, updates, err := buildStatusPageModels(body, userID)
+		page, targets, sources, updates, err := buildStatusPageModels(body, userID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -165,6 +197,10 @@ func CreateStatusPage(db *bun.DB) gin.HandlerFunc {
 			page.OwnerType = models.OwnerTypeOrg
 			page.OwnerUserID = nil
 			page.OwnerOrgID = &orgID
+		}
+		if err := validateStatusPageGitRepositorySources(c.Request.Context(), db, page, sources); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 
 		err = db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
@@ -178,6 +214,11 @@ func CreateStatusPage(db *bun.DB) gin.HandlerFunc {
 			}
 			if len(targets) > 0 {
 				if _, err := tx.NewInsert().Model(&targets).Exec(ctx); err != nil {
+					return err
+				}
+			}
+			if len(sources) > 0 {
+				if _, err := tx.NewInsert().Model(&sources).Exec(ctx); err != nil {
 					return err
 				}
 			}
@@ -195,6 +236,7 @@ func CreateStatusPage(db *bun.DB) gin.HandlerFunc {
 		}
 
 		page.Targets = targets
+		page.GitRepositorySources = sources
 		page.Updates = updates
 		c.JSON(http.StatusCreated, page)
 	}
@@ -213,7 +255,12 @@ func GetStatusPage(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, statusPageResponse{Page: page, Items: items, Now: time.Now().UTC()})
+		sources, err := loadStatusPageGitRepositoryHealth(c.Request.Context(), db, page)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load Git repository source health"})
+			return
+		}
+		c.JSON(http.StatusOK, statusPageResponse{Page: page, Items: items, GitRepositorySources: sources, Now: time.Now().UTC()})
 	}
 }
 
@@ -230,12 +277,16 @@ func UpdateStatusPage(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		updated, targets, updates, err := buildStatusPageModels(body, userID)
+		updated, targets, sources, updates, err := buildStatusPageModels(body, userID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		rebindStatusPageRelations(page.ID, targets, updates)
+		rebindStatusPageRelations(page.ID, targets, sources, updates)
+		if err := validateStatusPageGitRepositorySources(c.Request.Context(), db, page, sources); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		page.Name = updated.Name
 		page.Slug = updated.Slug
@@ -262,6 +313,14 @@ func UpdateStatusPage(db *bun.DB) gin.HandlerFunc {
 					return err
 				}
 			}
+			if _, err := tx.NewDelete().Model((*models.StatusPageGitRepositorySource)(nil)).Where("page_id = ?", page.ID).Exec(ctx); err != nil {
+				return err
+			}
+			if len(sources) > 0 {
+				if _, err := tx.NewInsert().Model(&sources).Exec(ctx); err != nil {
+					return err
+				}
+			}
 
 			if _, err := tx.NewDelete().Model((*models.StatusPageUpdate)(nil)).Where("page_id = ?", page.ID).Exec(ctx); err != nil {
 				return err
@@ -281,14 +340,18 @@ func UpdateStatusPage(db *bun.DB) gin.HandlerFunc {
 		}
 
 		page.Targets = targets
+		page.GitRepositorySources = sources
 		page.Updates = updates
 		c.JSON(http.StatusOK, page)
 	}
 }
 
-func rebindStatusPageRelations(pageID uuid.UUID, targets []models.StatusPageTarget, updates []models.StatusPageUpdate) {
+func rebindStatusPageRelations(pageID uuid.UUID, targets []models.StatusPageTarget, sources []models.StatusPageGitRepositorySource, updates []models.StatusPageUpdate) {
 	for index := range targets {
 		targets[index].PageID = pageID
+	}
+	for index := range sources {
+		sources[index].PageID = pageID
 	}
 	for index := range updates {
 		updates[index].PageID = pageID
@@ -427,6 +490,28 @@ func TransferStatusPageOwnership(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "status page not found"})
 			return
 		}
+		rawBody, err := c.GetRawData()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+		var transferBody struct {
+			OrgID string `json:"org_id"`
+		}
+		if err := json.Unmarshal(rawBody, &transferBody); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+		targetOrgID, err := uuid.Parse(strings.TrimSpace(transferBody.OrgID))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+			return
+		}
+		if err := validateStatusPageGitRepositorySourcesForOwner(c.Request.Context(), db, page.ID, models.OwnerTypeOrg, nil, &targetOrgID); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.Request.Body = io.NopCloser(bytes.NewReader(rawBody))
 		if _, ok := resourceownership.TransferOrgOwnedResource(c, db, resourceownership.TransferParams{
 			ResourceID: page.ID, OwnerType: page.OwnerType, OwnerOrgID: page.OwnerOrgID,
 			ResourceTable: "status_pages", LinkTable: "org_status_pages", LinkResourceColumn: "status_page_id",
@@ -451,7 +536,12 @@ func ViewStatusPageBySlug(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, statusPageResponse{Page: page, Items: items, Now: time.Now().UTC()})
+		sources, err := loadStatusPageGitRepositoryHealth(c.Request.Context(), db, page)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load Git repository source health"})
+			return
+		}
+		c.JSON(http.StatusOK, statusPageResponse{Page: page, Items: items, GitRepositorySources: sources, Now: time.Now().UTC()})
 	}
 }
 
@@ -519,6 +609,12 @@ func ViewStatusPageScanHistoryBySlug(db *bun.DB) gin.HandlerFunc {
 			OrderExpr("created_at DESC").
 			Limit(200)
 		historyQuery = applyStatusPageScanScopeQuery(historyQuery, page, "scan")
+		if trackedByGitRepositorySource, err := gitRepositorySourceIncludesScan(c.Request.Context(), db, page, scan.ID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate Git repository scan history"})
+			return
+		} else if trackedByGitRepositorySource {
+			historyQuery = historyQuery.Where(gitRepositorySourceCurrentScanWhere(page, "scan"))
+		}
 		if err := historyQuery.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan history"})
 			return
@@ -738,6 +834,13 @@ func hydratePageRelations(c *gin.Context, db *bun.DB, page *models.StatusPage, a
 		Scan(c.Request.Context()); err != nil {
 		return err
 	}
+	if err := db.NewSelect().Model(&page.GitRepositorySources).
+		Relation("Repository").
+		Where("status_page_git_repository_source.page_id = ?", page.ID).
+		OrderExpr("status_page_git_repository_source.display_order ASC").
+		Scan(c.Request.Context()); err != nil {
+		return err
+	}
 
 	q := db.NewSelect().Model(&page.Updates).Where("page_id = ?", page.ID).OrderExpr("created_at DESC")
 	if activeOnly {
@@ -752,6 +855,28 @@ func loadStatusPageItems(c *gin.Context, db *bun.DB, page *models.StatusPage) ([
 	if err := hydratePageRelations(c, db, page, true); err != nil {
 		return nil, err
 	}
+	staticItems, err := loadStaticStatusPageItems(c, db, page)
+	if err != nil {
+		return nil, err
+	}
+	gitItems, err := loadGitRepositoryStatusPageItems(c.Request.Context(), db, page)
+	if err != nil {
+		return nil, err
+	}
+	for index := range gitItems {
+		gitItems[index].DisplayOrder = index + 1
+	}
+	for index := range staticItems {
+		staticItems[index].DisplayOrder = len(gitItems) + index + 1
+	}
+	items := append(gitItems, staticItems...)
+	if items == nil {
+		return []StatusPageItem{}, nil
+	}
+	return items, nil
+}
+
+func loadStaticStatusPageItems(c *gin.Context, db *bun.DB, page *models.StatusPage) ([]StatusPageItem, error) {
 
 	if !page.IncludeAllTags && len(page.Targets) == 0 && len(page.ImagePatterns) == 0 {
 		return []StatusPageItem{}, nil
@@ -1009,6 +1134,161 @@ ORDER BY l.image_name ASC, l.image_tag ASC`
 	return items, nil
 }
 
+func latestGitRepositorySnapshotRun(ctx context.Context, db *bun.DB, repositoryID uuid.UUID) (*models.GitRepositoryRun, error) {
+	run := &models.GitRepositoryRun{}
+	err := db.NewSelect().Model(run).
+		Where("repository_id = ?", repositoryID).
+		Where("status IN (?)", bun.In([]string{models.GitRepositoryRunCompleted, models.GitRepositoryRunPartial})).
+		OrderExpr("COALESCE(completed_at, created_at) DESC").
+		Limit(1).Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return run, err
+}
+
+func loadGitRepositoryStatusPageItems(ctx context.Context, db *bun.DB, page *models.StatusPage) ([]StatusPageItem, error) {
+	now := time.Now().UTC()
+	items := make([]StatusPageItem, 0)
+	for _, source := range page.GitRepositorySources {
+		if source.Repository == nil {
+			continue
+		}
+		snapshot, err := latestGitRepositorySnapshotRun(ctx, db, source.RepositoryID)
+		if err != nil || snapshot == nil {
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+		var images []models.GitRepositoryRunImage
+		if err := db.NewSelect().Model(&images).Where("run_id = ?", snapshot.ID).Where("state != ?", "excluded").OrderExpr("full_ref ASC").Scan(ctx); err != nil {
+			return nil, err
+		}
+		for _, image := range images {
+			item := StatusPageItem{
+				ImageName: image.ImageName, ImageTag: image.ImageTag, FullRef: image.FullRef,
+				SourceType: "git_repository", SourceRepositoryID: source.RepositoryID.String(),
+				SourceRepositoryName: source.Repository.Name, SourceRunID: snapshot.ID.String(), DiscoveryState: image.State,
+				ObservedAt: snapshot.CreatedAt, FreshnessHours: int64(now.Sub(snapshot.CreatedAt).Hours()),
+			}
+			if snapshot.CompletedAt != nil {
+				item.ObservedAt = *snapshot.CompletedAt
+				item.FreshnessHours = int64(now.Sub(*snapshot.CompletedAt).Hours())
+			}
+			scanID := image.ScanID
+			if scanID == nil {
+				var previousID uuid.UUID
+				err := db.NewSelect().TableExpr("git_repository_run_images AS ri").
+					ColumnExpr("ri.scan_id").Join("JOIN git_repository_runs AS r ON r.id = ri.run_id").
+					Where("r.repository_id = ?", source.RepositoryID).Where("ri.full_ref = ?", image.FullRef).
+					Where("ri.scan_id IS NOT NULL").OrderExpr("ri.created_at DESC").Limit(1).Scan(ctx, &previousID)
+				if err == nil {
+					scanID = &previousID
+				} else if err != sql.ErrNoRows {
+					return nil, err
+				}
+			}
+			if scanID == nil {
+				if image.State == "failed" {
+					item.ScanStatus, item.Status, item.ErrorMessage = models.ScanStatusFailed, "failed", "The image scan could not be created during repository discovery."
+				} else {
+					markStatusPageItemUnscanned(&item)
+				}
+				items = append(items, item)
+				continue
+			}
+			scan := &models.Scan{}
+			if err := db.NewSelect().Model(scan).Where("id = ?", *scanID).Scan(ctx); err != nil {
+				if err == sql.ErrNoRows {
+					markStatusPageItemUnscanned(&item)
+					items = append(items, item)
+					continue
+				}
+				return nil, err
+			}
+			item.LatestScanID, item.ScanStatus, item.ExternalStatus, item.ScanProvider, item.CurrentStep, item.ErrorMessage = scan.ID.String(), scan.Status, scan.ExternalStatus, scan.ScanProvider, scan.CurrentStep, scan.ErrorMessage
+			item.StartedAt, item.CriticalCount, item.HighCount, item.MediumCount, item.LowCount = scan.StartedAt, scan.CriticalCount, scan.HighCount, scan.MediumCount, scan.LowCount
+			if scan.CompletedAt != nil {
+				item.ObservedAt = *scan.CompletedAt
+				item.FreshnessHours = int64(now.Sub(*scan.CompletedAt).Hours())
+			}
+			item.Status = deriveStatus(page.StaleAfterHours, item)
+			if item.ExternalStatus == models.ScanExternalStatusBlockedByXrayPolicy {
+				item.BlockedPolicyDetails = scan.BlockedPolicyDetails
+			}
+			items = append(items, item)
+		}
+	}
+	ids := make([]uuid.UUID, 0, len(items))
+	for _, item := range items {
+		if id, err := uuid.Parse(item.LatestScanID); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	statuses, err := loadStatusPageComplianceStatuses(ctx, db, page, ids)
+	if err != nil {
+		return nil, err
+	}
+	for index := range items {
+		if id, err := uuid.Parse(items[index].LatestScanID); err == nil {
+			items[index].ComplianceStatus = statuses[id]
+		}
+	}
+	return items, nil
+}
+
+func markStatusPageItemUnscanned(item *StatusPageItem) {
+	item.ScanStatus = ""
+	item.Status = statusPageItemStatusUnscanned
+}
+
+func loadStatusPageGitRepositoryHealth(ctx context.Context, db *bun.DB, page *models.StatusPage) ([]StatusPageGitRepositorySourceHealth, error) {
+	health := make([]StatusPageGitRepositorySourceHealth, 0, len(page.GitRepositorySources))
+	now := time.Now().UTC()
+	for _, source := range page.GitRepositorySources {
+		if source.Repository == nil {
+			continue
+		}
+		entry := StatusPageGitRepositorySourceHealth{RepositoryID: source.RepositoryID.String(), RepositoryName: source.Repository.Name, DisplayOrder: source.DisplayOrder, Status: "not_run"}
+		latest := &models.GitRepositoryRun{}
+		err := db.NewSelect().Model(latest).Where("repository_id = ?", source.RepositoryID).OrderExpr("created_at DESC").Limit(1).Scan(ctx)
+		if err != nil && err != sql.ErrNoRows {
+			return nil, err
+		}
+		latestMissing := err == sql.ErrNoRows
+		if err == nil {
+			entry.LatestRunID, entry.LatestRunStatus = latest.ID.String(), latest.Status
+		}
+		snapshot, err := latestGitRepositorySnapshotRun(ctx, db, source.RepositoryID)
+		if err != nil {
+			return nil, err
+		}
+		if snapshot != nil {
+			entry.SnapshotRunID, entry.CommitSHA, entry.CompletedAt, entry.ImageCount = snapshot.ID.String(), snapshot.CommitSHA, snapshot.CompletedAt, snapshot.ImageCount
+			if entry.CompletedAt == nil {
+				entry.CompletedAt = &snapshot.CreatedAt
+			}
+		}
+		switch {
+		case latestMissing:
+			entry.Status = "not_run"
+		case latest.Status == models.GitRepositoryRunFailed || latest.Status == models.GitRepositoryRunCancelled:
+			entry.Status = latest.Status
+		case latest.Status == models.GitRepositoryRunPartial:
+			entry.Status = "partial"
+		case latest.Status == models.GitRepositoryRunQueued || latest.Status == models.GitRepositoryRunDiscovering || latest.Status == models.GitRepositoryRunScanning:
+			entry.Status = latest.Status
+		case entry.CompletedAt != nil && page.StaleAfterHours > 0 && now.Sub(*entry.CompletedAt) >= time.Duration(page.StaleAfterHours)*time.Hour:
+			entry.Status = "stale"
+		default:
+			entry.Status = "healthy"
+		}
+		health = append(health, entry)
+	}
+	return health, nil
+}
+
 func deriveStatus(staleAfterHours int, item StatusPageItem) string {
 	if item.ScanStatus == models.ScanStatusFailed && item.ExternalStatus == models.ScanExternalStatusBlockedByXrayPolicy {
 		return models.ScanExternalStatusBlockedByXrayPolicy
@@ -1052,10 +1332,36 @@ func loadTrackedScanForPage(c *gin.Context, db *bun.DB, page *models.StatusPage,
 		return nil, err
 	}
 	if !tracked {
+		tracked, err = gitRepositorySourceIncludesScan(c.Request.Context(), db, page, scan.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !tracked {
 		return nil, fmt.Errorf("status page item not found")
 	}
 
 	return scan, nil
+}
+
+func gitRepositorySourceCurrentScanWhere(page *models.StatusPage, scanAlias string) string {
+	return fmt.Sprintf(`EXISTS (
+		SELECT 1 FROM status_page_git_repository_sources source
+		JOIN git_repository_runs snapshot ON snapshot.repository_id = source.repository_id
+		JOIN git_repository_run_images current_image ON current_image.run_id = snapshot.id AND current_image.state != 'excluded'
+		JOIN git_repository_run_images linked_image ON linked_image.full_ref = current_image.full_ref
+		JOIN git_repository_runs linked_run ON linked_run.id = linked_image.run_id AND linked_run.repository_id = source.repository_id
+		WHERE source.page_id = '%s' AND snapshot.status IN ('completed', 'partial')
+		AND snapshot.id = (SELECT latest_snapshot.id FROM git_repository_runs latest_snapshot WHERE latest_snapshot.repository_id = source.repository_id AND latest_snapshot.status IN ('completed', 'partial') ORDER BY COALESCE(latest_snapshot.completed_at, latest_snapshot.created_at) DESC LIMIT 1)
+		AND linked_image.scan_id = %s.id
+	)`, page.ID.String(), scanAlias)
+}
+
+func gitRepositorySourceIncludesScan(ctx context.Context, db *bun.DB, page *models.StatusPage, scanID uuid.UUID) (bool, error) {
+	if len(page.GitRepositorySources) == 0 {
+		return false, nil
+	}
+	return db.NewSelect().TableExpr("scans AS scan").Where("scan.id = ?", scanID).Where(gitRepositorySourceCurrentScanWhere(page, "scan")).Exists(ctx)
 }
 
 func statusPageIncludesImage(page *models.StatusPage, imageName, imageTag string) (bool, error) {
@@ -1158,15 +1464,15 @@ func loadStatusPageComplianceStatuses(
 	return statuses, nil
 }
 
-func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.StatusPage, []models.StatusPageTarget, []models.StatusPageUpdate, error) {
+func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.StatusPage, []models.StatusPageTarget, []models.StatusPageGitRepositorySource, []models.StatusPageUpdate, error) {
 	visibility := strings.TrimSpace(strings.ToLower(body.Visibility))
 	if visibility != models.StatusPageVisibilityPrivate && visibility != models.StatusPageVisibilityPublic && visibility != models.StatusPageVisibilityAuthenticated {
-		return nil, nil, nil, fmt.Errorf("visibility must be 'private', 'public', or 'authenticated'")
+		return nil, nil, nil, nil, fmt.Errorf("visibility must be 'private', 'public', or 'authenticated'")
 	}
 
 	name := strings.TrimSpace(body.Name)
 	if name == "" {
-		return nil, nil, nil, fmt.Errorf("name is required")
+		return nil, nil, nil, nil, fmt.Errorf("name is required")
 	}
 
 	slug := normalizeSlug(body.Slug)
@@ -1174,7 +1480,7 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 		slug = normalizeSlug(name)
 	}
 	if slug == "" {
-		return nil, nil, nil, fmt.Errorf("slug must contain at least one alphanumeric character")
+		return nil, nil, nil, nil, fmt.Errorf("slug must contain at least one alphanumeric character")
 	}
 
 	staleAfterHours := body.StaleAfterHours
@@ -1184,7 +1490,7 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 
 	imagePatterns, err := normalizeStatusPagePatterns(body.ImagePatterns)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	now := time.Now().UTC()
@@ -1210,7 +1516,7 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 		imageName := strings.TrimSpace(target.ImageName)
 		imageTag := strings.TrimSpace(target.ImageTag)
 		if imageName == "" || imageTag == "" {
-			return nil, nil, nil, fmt.Errorf("each target requires image_name and image_tag")
+			return nil, nil, nil, nil, fmt.Errorf("each target requires image_name and image_tag")
 		}
 		key := imageName + "::" + imageTag
 		if _, exists := seenTargets[key]; exists {
@@ -1230,8 +1536,25 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 			CreatedAt:    now,
 		})
 	}
-	if !page.IncludeAllTags && len(targets) == 0 && len(imagePatterns) == 0 {
-		return nil, nil, nil, fmt.Errorf("at least one exact target or image regex is required when include_all_tags is false")
+	sources := make([]models.StatusPageGitRepositorySource, 0, len(body.GitRepositorySources))
+	seenSources := make(map[uuid.UUID]struct{}, len(body.GitRepositorySources))
+	for index, source := range body.GitRepositorySources {
+		repositoryID, err := uuid.Parse(strings.TrimSpace(source.RepositoryID))
+		if err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("each Git repository source requires a valid repository_id")
+		}
+		if _, exists := seenSources[repositoryID]; exists {
+			continue
+		}
+		seenSources[repositoryID] = struct{}{}
+		displayOrder := source.DisplayOrder
+		if displayOrder == 0 {
+			displayOrder = index + 1
+		}
+		sources = append(sources, models.StatusPageGitRepositorySource{ID: uuid.New(), PageID: pageID, RepositoryID: repositoryID, DisplayOrder: displayOrder, CreatedAt: now})
+	}
+	if !page.IncludeAllTags && len(targets) == 0 && len(imagePatterns) == 0 && len(sources) == 0 {
+		return nil, nil, nil, nil, fmt.Errorf("add an exact target, image regex, Git repository source, or enable include all tags")
 	}
 
 	updates := make([]models.StatusPageUpdate, 0, len(body.Updates))
@@ -1243,7 +1566,7 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 			level = "info"
 		}
 		if level != "info" && level != "maintenance" && level != "incident" {
-			return nil, nil, nil, fmt.Errorf("update level must be 'info', 'maintenance', or 'incident'")
+			return nil, nil, nil, nil, fmt.Errorf("update level must be 'info', 'maintenance', or 'incident'")
 		}
 		if title == "" && body == "" {
 			continue
@@ -1265,7 +1588,31 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 		})
 	}
 
-	return page, targets, updates, nil
+	return page, targets, sources, updates, nil
+}
+
+func validateStatusPageGitRepositorySources(ctx context.Context, db *bun.DB, page *models.StatusPage, sources []models.StatusPageGitRepositorySource) error {
+	for _, source := range sources {
+		repository := &models.GitRepository{}
+		if err := db.NewSelect().Model(repository).Where("id = ?", source.RepositoryID).Scan(ctx); err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("Git repository source not found")
+			}
+			return err
+		}
+		if repository.OwnerType != page.OwnerType || (page.OwnerOrgID != nil && (repository.OwnerOrgID == nil || *repository.OwnerOrgID != *page.OwnerOrgID)) || (page.OwnerUserID != nil && (repository.OwnerUserID == nil || *repository.OwnerUserID != *page.OwnerUserID)) {
+			return fmt.Errorf("Git repository source must have the same owner as the status page")
+		}
+	}
+	return nil
+}
+
+func validateStatusPageGitRepositorySourcesForOwner(ctx context.Context, db *bun.DB, pageID uuid.UUID, ownerType string, ownerUserID, ownerOrgID *uuid.UUID) error {
+	var sources []models.StatusPageGitRepositorySource
+	if err := db.NewSelect().Model(&sources).Relation("Repository").Where("status_page_git_repository_source.page_id = ?", pageID).Scan(ctx); err != nil {
+		return err
+	}
+	return validateStatusPageGitRepositorySources(ctx, db, &models.StatusPage{OwnerType: ownerType, OwnerUserID: ownerUserID, OwnerOrgID: ownerOrgID}, sources)
 }
 
 func defaultStatusPageUpdateTitle(level string) string {

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"justscan-backend/config"
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
@@ -696,15 +697,24 @@ func DiscoverReview(ctx context.Context, repository models.GitRepository) ([]Dis
 	if err != nil {
 		return nil, nil, strings.TrimSpace(commit), err
 	}
+	managedImages, err := discoverManagedHelmSources(ctx, dir, repository)
+	if err != nil {
+		return nil, nil, strings.TrimSpace(commit), err
+	}
+	images = mergeDiscoveredImages(images, managedImages)
+	managedSources, err := loadHelmSources(ctx, repository.ID)
+	if err != nil {
+		return nil, nil, strings.TrimSpace(commit), err
+	}
 	if !configured && len(rules) > 0 {
-		if resolved, err := discoverRuleSources(ctx, dir, rules); err == nil {
+		if resolved, err := discoverRuleSources(ctx, dir, rules, repository); err == nil {
 			images = mergeDiscoveredImages(images, resolved)
 		}
 	}
 	if configured {
 		rules = nil // A committed repository configuration takes precedence over UI rules.
 	}
-	return images, findDiscoveryCandidates(dir, rules, configuration), strings.TrimSpace(commit), nil
+	return images, findDiscoveryCandidates(dir, rules, configuration, managedSources), strings.TrimSpace(commit), nil
 }
 
 func loadDiscoveryRules(ctx context.Context, repositoryID uuid.UUID) []models.GitRepositoryDiscoveryRule {
@@ -721,7 +731,85 @@ func loadDiscoveryRules(ctx context.Context, repositoryID uuid.UUID) []models.Gi
 	return rules
 }
 
-func discoverRuleSources(ctx context.Context, root string, rules []models.GitRepositoryDiscoveryRule) ([]DiscoveredImage, error) {
+func loadHelmSources(ctx context.Context, repositoryID uuid.UUID) ([]models.GitRepositoryHelmSource, error) {
+	state.Lock()
+	db := state.db
+	state.Unlock()
+	if db == nil {
+		return nil, nil
+	}
+	var sources []models.GitRepositoryHelmSource
+	if err := db.NewSelect().Model(&sources).Where("repository_id = ?", repositoryID).OrderExpr("created_at ASC").Scan(ctx); err != nil {
+		return nil, err
+	}
+	return sources, nil
+}
+
+// Managed Helm sources are deliberately independent of repository-owned
+// .justscan.yaml configuration: connector IDs and encrypted credentials cannot
+// be committed safely, and an external chart can complement local sources.
+func discoverManagedHelmSources(ctx context.Context, repositoryRoot string, repository models.GitRepository) ([]DiscoveredImage, error) {
+	sources, err := loadHelmSources(ctx, repository.ID)
+	if err != nil || len(sources) == 0 {
+		return nil, err
+	}
+	state.Lock()
+	db := state.db
+	state.Unlock()
+	byRef := map[string]*DiscoveredImage{}
+	for _, source := range sources {
+		chartRoot := repositoryRoot
+		chartLabel := relativePath(repositoryRoot, filepath.Join(repositoryRoot, source.ChartPath))
+		var removeChartRoot func()
+		switch source.SourceType {
+		case "local":
+			chartLabel = relativePath(repositoryRoot, filepath.Join(repositoryRoot, source.ChartPath))
+		case "repository", "url":
+			chartRepository, err := managedHelmChartRepository(ctx, db, source)
+			if err != nil {
+				return nil, err
+			}
+			chartRoot, err = os.MkdirTemp("", "justscan-git-chart-*")
+			if err != nil {
+				return nil, err
+			}
+			removeChartRoot = func() { _ = os.RemoveAll(chartRoot) }
+			cloneCtx, cancel := context.WithTimeout(ctx, cloneTimeout)
+			err = clone(cloneCtx, chartRepository, chartRoot)
+			cancel()
+			if err != nil {
+				removeChartRoot()
+				return nil, fmt.Errorf("clone Helm chart source: %w", err)
+			}
+			chartLabel = fmt.Sprintf("%s@%s:%s", chartRepository.Name, chartRepository.Ref, filepath.ToSlash(source.ChartPath))
+		default:
+			return nil, fmt.Errorf("unsupported managed Helm source type %q", source.SourceType)
+		}
+		if removeChartRoot != nil {
+			defer removeChartRoot()
+		}
+		if err := appendHelmChartFromRoots(ctx, repositoryRoot, chartRoot, byRef, justScanSource{Chart: source.ChartPath, Values: source.Values, ReleaseName: source.ReleaseName}, chartLabel, repository); err != nil {
+			return nil, fmt.Errorf("managed Helm source %s: %w", source.ChartPath, err)
+		}
+	}
+	return sortedDiscoveredImages(byRef), nil
+}
+
+func managedHelmChartRepository(ctx context.Context, db *bun.DB, source models.GitRepositoryHelmSource) (models.GitRepository, error) {
+	if source.SourceType == "url" {
+		return models.GitRepository{CloneURL: source.CloneURL, Ref: source.Ref, AuthType: source.AuthType, Username: source.Username, EncryptedCredential: source.EncryptedCredential, Name: source.CloneURL}, nil
+	}
+	if source.ChartRepositoryID == nil || db == nil {
+		return models.GitRepository{}, fmt.Errorf("linked chart repository is unavailable")
+	}
+	var repository models.GitRepository
+	if err := db.NewSelect().Model(&repository).Where("id = ?", *source.ChartRepositoryID).Scan(ctx); err != nil {
+		return models.GitRepository{}, fmt.Errorf("linked chart repository is unavailable")
+	}
+	return repository, nil
+}
+
+func discoverRuleSources(ctx context.Context, root string, rules []models.GitRepositoryDiscoveryRule, repository models.GitRepository) ([]DiscoveredImage, error) {
 	configuration := justScanConfig{Version: 1}
 	for _, rule := range rules {
 		if rule.Resolution == "ignore" {
@@ -741,7 +829,7 @@ func discoverRuleSources(ctx context.Context, root string, rules []models.GitRep
 	if len(configuration.Discovery.Sources) == 0 {
 		return nil, nil
 	}
-	return discoverConfiguredSources(ctx, root, configuration)
+	return discoverConfiguredSources(ctx, root, configuration, repository)
 }
 
 func mergeDiscoveredImages(groups ...[]DiscoveredImage) []DiscoveredImage {
@@ -761,7 +849,7 @@ func mergeDiscoveredImages(groups ...[]DiscoveredImage) []DiscoveredImage {
 	return sortedDiscoveredImages(byRef)
 }
 
-func findDiscoveryCandidates(root string, rules []models.GitRepositoryDiscoveryRule, configuration justScanConfig) []DiscoveryCandidate {
+func findDiscoveryCandidates(root string, rules []models.GitRepositoryDiscoveryRule, configuration justScanConfig, helmSources []models.GitRepositoryHelmSource) []DiscoveryCandidate {
 	result := []DiscoveryCandidate{}
 	consumedValues := kustomizeValuesFiles(root)
 	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
@@ -796,6 +884,14 @@ func findDiscoveryCandidates(root string, rules []models.GitRepositoryDiscoveryR
 			break
 		}
 		if candidate.Status == models.GitRepositoryCandidateUnresolved {
+			for _, source := range helmSources {
+				if containsSourceValue(source.Values, candidate.Path) {
+					candidate.Status = models.GitRepositoryCandidateResolved
+					break
+				}
+			}
+		}
+		if candidate.Status == models.GitRepositoryCandidateUnresolved {
 			for _, rule := range configuration.Discovery.Rules {
 				if rule.Match != candidate.Path {
 					continue
@@ -813,6 +909,15 @@ func findDiscoveryCandidates(root string, rules []models.GitRepositoryDiscoveryR
 	})
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return result
+}
+
+func containsSourceValue(values []string, path string) bool {
+	for _, value := range values {
+		if filepath.ToSlash(strings.TrimSpace(value)) == path {
+			return true
+		}
+	}
+	return false
 }
 
 func chartFilename(path string) string {
@@ -994,7 +1099,7 @@ func discoverRepository(ctx context.Context, root string, repository models.GitR
 	if repositoryConfig, configured, err := loadJustScanConfig(root); err != nil {
 		return nil, err
 	} else if configured {
-		return discoverConfiguredSources(ctx, root, repositoryConfig)
+		return discoverConfiguredSources(ctx, root, repositoryConfig, repository)
 	}
 	mode := repository.DiscoveryMode
 	if mode == "" {
@@ -1040,7 +1145,7 @@ func loadJustScanConfig(root string) (justScanConfig, bool, error) {
 	return justScanConfig{}, false, nil
 }
 
-func discoverConfiguredSources(ctx context.Context, root string, configuration justScanConfig) ([]DiscoveredImage, error) {
+func discoverConfiguredSources(ctx context.Context, root string, configuration justScanConfig, repository models.GitRepository) ([]DiscoveredImage, error) {
 	byRef := map[string]*DiscoveredImage{}
 	sources := append([]justScanSource{}, configuration.Discovery.Sources...)
 	for _, rule := range configuration.Discovery.Rules {
@@ -1085,7 +1190,7 @@ func discoverConfiguredSources(ctx context.Context, root string, configuration j
 				return nil, fmt.Errorf(".justscan.yaml source %d (manifests): %w", index+1, err)
 			}
 		case "helm":
-			if err := appendHelmChart(ctx, root, byRef, source); err != nil {
+			if err := appendHelmChartFromRoots(ctx, root, root, byRef, source, "", repository); err != nil {
 				return nil, fmt.Errorf(".justscan.yaml source %d (helm): %w", index+1, err)
 			}
 		default:
@@ -1237,7 +1342,11 @@ func appendManifestFile(root string, byRef map[string]*DiscoveredImage, path str
 }
 
 func appendHelmChart(ctx context.Context, root string, byRef map[string]*DiscoveredImage, source justScanSource) error {
-	chart, err := resolveRepositoryPath(root, source.Chart)
+	return appendHelmChartFromRoots(ctx, root, root, byRef, source, "", models.GitRepository{})
+}
+
+func appendHelmChartFromRoots(ctx context.Context, valuesRoot, chartRoot string, byRef map[string]*DiscoveredImage, source justScanSource, chartLabel string, repository models.GitRepository) error {
+	chart, err := resolveRepositoryPath(chartRoot, source.Chart)
 	if err != nil {
 		return fmt.Errorf("chart: %w", err)
 	}
@@ -1249,30 +1358,288 @@ func appendHelmChart(ctx context.Context, root string, byRef map[string]*Discove
 		releaseName = filepath.Base(chart)
 	}
 	args := []string{"template", releaseName, chart}
-	target := "Helm chart " + relativePath(root, chart)
+	if chartLabel == "" {
+		chartLabel = relativePath(chartRoot, chart)
+	}
+	target := "Helm chart " + chartLabel
 	for _, configuredValue := range source.Values {
-		valueFile, err := resolveRepositoryPath(root, configuredValue)
+		valueFile, err := resolveRepositoryPath(valuesRoot, configuredValue)
 		if err != nil {
 			return fmt.Errorf("values: %w", err)
 		}
 		args = append(args, "--values", valueFile)
 		// Values are applied in order, so the final file is the most useful
 		// deployment entrypoint to show in the discovery tree.
-		target = "Helm values " + relativePath(root, valueFile)
+		target = "Helm values " + relativePath(valuesRoot, valueFile)
 	}
 	temporaryHelmHome, err := os.MkdirTemp("", "justscan-helm-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(temporaryHelmHome)
+	helmEnv, err := helmEnvironment(ctx, temporaryHelmHome, chart, repository)
+	if err != nil {
+		return err
+	}
+	dependencyCommand := exec.CommandContext(ctx, "helm", "dependency", "build", chart)
+	dependencyCommand.Env = helmEnv
+	if output, err := dependencyCommand.CombinedOutput(); err != nil {
+		return fmt.Errorf("resolve chart dependencies for %s: %s", chartLabel, strings.TrimSpace(string(output)))
+	}
 	command := exec.CommandContext(ctx, "helm", args...)
-	command.Env = append(os.Environ(), "HELM_CONFIG_HOME="+temporaryHelmHome, "HELM_CACHE_HOME="+filepath.Join(temporaryHelmHome, "cache"), "HELM_DATA_HOME="+filepath.Join(temporaryHelmHome, "data"))
+	command.Env = helmEnv
 	output, err := command.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("render chart %s: %s", relativePath(root, chart), strings.TrimSpace(string(output)))
+		return fmt.Errorf("render chart %s: %s", chartLabel, strings.TrimSpace(string(output)))
 	}
 	appendManifestImages(byRef, output, "(rendered)", target)
 	return nil
+}
+
+type helmDependencyFile struct {
+	Dependencies []helmDependency `yaml:"dependencies"`
+}
+
+type helmDependency struct {
+	Repository string `yaml:"repository"`
+}
+
+// helmEnvironment isolates Helm's state for every render. It also logs into
+// registries owned by the same workspace before Helm resolves OCI or HTTP
+// dependencies declared in Chart.yaml.
+func helmEnvironment(ctx context.Context, home, chart string, repository models.GitRepository) ([]string, error) {
+	environment := append(os.Environ(),
+		"HELM_CONFIG_HOME="+home,
+		"HELM_CACHE_HOME="+filepath.Join(home, "cache"),
+		"HELM_DATA_HOME="+filepath.Join(home, "data"),
+		"HELM_REGISTRY_CONFIG="+filepath.Join(home, "registry.json"),
+		"HELM_REPOSITORY_CONFIG="+filepath.Join(home, "repositories.yaml"),
+	)
+	content, err := os.ReadFile(filepath.Join(chart, "Chart.yaml"))
+	if err != nil {
+		return nil, fmt.Errorf("read Chart.yaml: %w", err)
+	}
+	var metadata helmDependencyFile
+	if err := yaml.Unmarshal(content, &metadata); err != nil {
+		return nil, fmt.Errorf("parse Chart.yaml: %w", err)
+	}
+	if len(metadata.Dependencies) == 0 {
+		return environment, nil
+	}
+	state.Lock()
+	db := state.db
+	state.Unlock()
+	if db == nil {
+		return environment, nil
+	}
+	var registries []models.Registry
+	if err := db.NewSelect().Model(&registries).OrderExpr("created_at DESC").Scan(ctx); err != nil {
+		return nil, fmt.Errorf("load Helm dependency registries: %w", err)
+	}
+	configuredHosts := map[string]bool{}
+	ociRegistries := []helmRegistryCredential{}
+	httpRepositories := []helmRepositoryCredential{}
+	for _, dependency := range metadata.Dependencies {
+		endpoint := strings.TrimSpace(dependency.Repository)
+		host := helmRepositoryHost(endpoint)
+		if host == "" || configuredHosts[host] {
+			continue
+		}
+		registry, err := matchingHelmRegistry(ctx, db, registries, repository, host, endpoint)
+		if err != nil {
+			return nil, err
+		}
+		if registry == nil || registry.AuthType == "" || registry.AuthType == models.RegistryAuthNone {
+			continue
+		}
+		if registry.AuthType == models.RegistryAuthAWSECR {
+			return nil, fmt.Errorf("Helm dependency registry %q uses unsupported aws_ecr authentication", host)
+		}
+		secret, err := crypto.Decrypt(crypto.KeyFromString(config.Config.Encryption.Key), registry.Password)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt Helm dependency credentials for %q: %w", host, err)
+		}
+		if strings.HasPrefix(endpoint, "oci://") {
+			ociRegistries = append(ociRegistries, helmRegistryCredential{
+				Host:     host,
+				AuthType: registry.AuthType,
+				Username: registry.Username,
+				Password: secret,
+			})
+		} else {
+			if registry.AuthType == models.RegistryAuthToken {
+				return nil, fmt.Errorf("Helm HTTP dependency registry %q uses unsupported bearer-token authentication", host)
+			}
+			httpRepositories = append(httpRepositories, helmRepositoryCredential{Name: "justscan-" + strings.ReplaceAll(host, ".", "-"), URL: endpoint, Username: helmBasicUsername(registry), Password: secret})
+		}
+		configuredHosts[host] = true
+	}
+	if len(ociRegistries) > 0 {
+		if err := writeHelmRegistryCredentials(home, ociRegistries); err != nil {
+			return nil, err
+		}
+	}
+	if len(httpRepositories) > 0 {
+		if err := writeHelmRepositoryCredentials(home, httpRepositories); err != nil {
+			return nil, err
+		}
+	}
+	return environment, nil
+}
+
+func helmBasicUsername(registry *models.Registry) string {
+	if registry != nil && registry.Username != "" {
+		return registry.Username
+	}
+	return "token"
+}
+
+type helmRegistryCredential struct {
+	Host     string
+	AuthType string
+	Username string
+	Password string
+}
+
+// helmRegistryFile follows Docker's registry config format, which Helm and
+// ORAS both use. A token paired with a username is an access token used as the
+// Basic-auth password (the flow required by Artifactory). A token without a
+// username remains a direct Bearer registry token.
+type helmRegistryFile struct {
+	Auths map[string]helmRegistryAuth `json:"auths"`
+}
+
+type helmRegistryAuth struct {
+	Auth          string `json:"auth,omitempty"`
+	RegistryToken string `json:"registrytoken,omitempty"`
+}
+
+func writeHelmRegistryCredentials(home string, registries []helmRegistryCredential) error {
+	if err := os.MkdirAll(home, 0700); err != nil {
+		return fmt.Errorf("create Helm registry configuration: %w", err)
+	}
+	configuration := helmRegistryFile{Auths: make(map[string]helmRegistryAuth, len(registries))}
+	for _, registry := range registries {
+		if registry.AuthType == models.RegistryAuthToken {
+			if registry.Username == "" {
+				configuration.Auths[registry.Host] = helmRegistryAuth{RegistryToken: registry.Password}
+				continue
+			}
+			configuration.Auths[registry.Host] = helmRegistryAuth{
+				Auth: base64.StdEncoding.EncodeToString([]byte(registry.Username + ":" + registry.Password)),
+			}
+			continue
+		}
+		username := registry.Username
+		if username == "" {
+			username = "token"
+		}
+		configuration.Auths[registry.Host] = helmRegistryAuth{
+			Auth: base64.StdEncoding.EncodeToString([]byte(username + ":" + registry.Password)),
+		}
+	}
+	content, err := json.Marshal(configuration)
+	if err != nil {
+		return fmt.Errorf("encode Helm registry configuration: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "registry.json"), content, 0600); err != nil {
+		return fmt.Errorf("write Helm registry configuration: %w", err)
+	}
+	return nil
+}
+
+type helmRepositoryCredential struct {
+	Name     string `yaml:"name"`
+	URL      string `yaml:"url"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
+type helmRepositoryFile struct {
+	APIVersion   string                     `yaml:"apiVersion"`
+	Generated    time.Time                  `yaml:"generated"`
+	Repositories []helmRepositoryCredential `yaml:"repositories"`
+}
+
+func writeHelmRepositoryCredentials(home string, repositories []helmRepositoryCredential) error {
+	if err := os.MkdirAll(home, 0700); err != nil {
+		return fmt.Errorf("create Helm dependency configuration: %w", err)
+	}
+	content, err := yaml.Marshal(helmRepositoryFile{APIVersion: "v1", Generated: time.Now().UTC(), Repositories: repositories})
+	if err != nil {
+		return fmt.Errorf("encode Helm dependency configuration: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "repositories.yaml"), content, 0600); err != nil {
+		return fmt.Errorf("write Helm dependency configuration: %w", err)
+	}
+	return nil
+}
+
+func helmRepositoryHost(repository string) string {
+	trimmed := strings.TrimPrefix(strings.TrimSpace(repository), "oci://")
+	if parsed, err := url.Parse(trimmed); err == nil && parsed.Hostname() != "" {
+		return parsed.Hostname()
+	}
+	if index := strings.Index(trimmed, "/"); index >= 0 {
+		trimmed = trimmed[:index]
+	}
+	return strings.TrimSpace(trimmed)
+}
+
+func matchingHelmRegistry(ctx context.Context, db *bun.DB, registries []models.Registry, repository models.GitRepository, host, endpoint string) (*models.Registry, error) {
+	dependencyPath := helmRepositoryPath(endpoint)
+	var best *models.Registry
+	bestScore := -1
+	for index := range registries {
+		registry := &registries[index]
+		if helmRepositoryHost(registry.URL) != host {
+			continue
+		}
+		allowed, err := registryBelongsToRepository(ctx, db, registry, repository)
+		if err != nil {
+			return nil, err
+		}
+		if allowed {
+			score := helmRegistryMatchScore(dependencyPath, helmRepositoryPath(registry.URL))
+			if score > bestScore {
+				best = registry
+				bestScore = score
+			}
+		}
+	}
+	return best, nil
+}
+
+func helmRegistryMatchScore(dependencyPath, registryPath string) int {
+	if registryPath == "" {
+		return 1
+	}
+	if dependencyPath == registryPath || strings.HasPrefix(dependencyPath, registryPath+"/") {
+		return 1000 + len(registryPath)
+	}
+	return 0
+}
+
+func helmRepositoryPath(repository string) string {
+	trimmed := strings.TrimSpace(repository)
+	if parsed, err := url.Parse(trimmed); err == nil && parsed.Hostname() != "" {
+		return strings.Trim(parsed.Path, "/")
+	}
+	trimmed = strings.TrimPrefix(trimmed, "oci://")
+	if index := strings.Index(trimmed, "/"); index >= 0 {
+		return strings.Trim(trimmed[index+1:], "/")
+	}
+	return ""
+}
+
+func registryBelongsToRepository(ctx context.Context, db *bun.DB, registry *models.Registry, repository models.GitRepository) (bool, error) {
+	if registry.OwnerType == models.OwnerTypeSystem {
+		return true, nil
+	}
+	if repository.OwnerOrgID != nil {
+		return authz.CanOrgAccessRegistry(ctx, db, *repository.OwnerOrgID, registry)
+	}
+	return repository.OwnerUserID != nil && registry.OwnerUserID != nil && *registry.OwnerUserID == *repository.OwnerUserID, nil
 }
 
 func renderKustomization(target string) ([]byte, error) {

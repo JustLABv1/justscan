@@ -3,13 +3,7 @@ import type { OwnerType } from './common';
 export type GitRepositoryRescanPolicy = 'changed' | 'all';
 export type GitRepositoryDiscoveryMode = 'auto' | 'kustomize' | 'manifests';
 export type GitRepositoryRunStatus =
-  | 'queued'
-  | 'discovering'
-  | 'scanning'
-  | 'completed'
-  | 'partial'
-  | 'failed'
-  | 'cancelled';
+  'queued' | 'discovering' | 'scanning' | 'completed' | 'partial' | 'failed' | 'cancelled';
 
 export interface GitRepository {
   id: string;
@@ -83,11 +77,50 @@ export interface GitRepositoryDiscoveryRule {
   created_at: string;
 }
 
+export type GitRepositoryHelmSourceType = 'local' | 'repository' | 'url';
+
+export interface GitRepositoryHelmSource {
+  id: string;
+  repository_id: string;
+  source_type: GitRepositoryHelmSourceType;
+  chart_repository_id?: string | null;
+  clone_url?: string;
+  ref: string;
+  auth_type: 'none' | 'token' | 'basic';
+  username: string;
+  credential_configured: boolean;
+  chart_path: string;
+  values: string[];
+  release_name: string;
+  created_at: string;
+}
+
+export interface GitRepositoryHelmSourceInput {
+  source_type: GitRepositoryHelmSourceType;
+  chart_repository_id?: string;
+  clone_url?: string;
+  ref?: string;
+  auth_type?: 'none' | 'token' | 'basic';
+  username?: string;
+  credential?: string;
+  chart_path: string;
+  values: string[];
+  release_name?: string;
+}
+
 export interface GitDiscoveredImage {
   full_ref: string;
   image_name: string;
   image_tag: string;
-  locations: Array<{ file: string; target?: string; document: number; kind?: string; name?: string; namespace?: string; path: string }>;
+  locations: Array<{
+    file: string;
+    target?: string;
+    document: number;
+    kind?: string;
+    name?: string;
+    namespace?: string;
+    path: string;
+  }>;
 }
 
 export interface GitRepositoryRunImage {

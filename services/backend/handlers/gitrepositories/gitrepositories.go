@@ -38,6 +38,19 @@ type repositoryRequest struct {
 	OrgID         string   `json:"org_id"`
 }
 
+type helmSourceRequest struct {
+	SourceType        string   `json:"source_type"`
+	ChartRepositoryID string   `json:"chart_repository_id"`
+	CloneURL          string   `json:"clone_url"`
+	Ref               string   `json:"ref"`
+	AuthType          string   `json:"auth_type"`
+	Username          string   `json:"username"`
+	Credential        string   `json:"credential"`
+	ChartPath         string   `json:"chart_path"`
+	Values            []string `json:"values"`
+	ReleaseName       string   `json:"release_name"`
+}
+
 func List(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, admin, ok := authz.RequireRequestUser(c, db)
@@ -491,6 +504,234 @@ func ExportRules(db *bun.DB) gin.HandlerFunc {
 		}
 		c.JSON(http.StatusOK, gin.H{"yaml": string(output)})
 	}
+}
+
+func ListHelmSources(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok {
+			return
+		}
+		var sources []models.GitRepositoryHelmSource
+		if err := db.NewSelect().Model(&sources).Where("repository_id = ?", item.ID).OrderExpr("created_at ASC").Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load Helm sources"})
+			return
+		}
+		redactHelmSources(sources)
+		c.JSON(http.StatusOK, gin.H{"data": sources})
+	}
+}
+
+func CreateHelmSource(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok || !requireEdit(c, db, item) {
+			return
+		}
+		var body helmSourceRequest
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		userID, _, _ := authz.RequireRequestUser(c, db)
+		source, err := buildHelmSource(c, db, item, body, userID, nil)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if _, err := db.NewInsert().Model(source).Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save Helm source"})
+			return
+		}
+		redactHelmSource(source)
+		c.JSON(http.StatusCreated, source)
+	}
+}
+
+func UpdateHelmSource(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok || !requireEdit(c, db, item) {
+			return
+		}
+		sourceID, err := uuid.Parse(c.Param("sourceId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Helm source ID"})
+			return
+		}
+		var existing models.GitRepositoryHelmSource
+		if err := db.NewSelect().Model(&existing).Where("id = ? AND repository_id = ?", sourceID, item.ID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Helm source not found"})
+			return
+		}
+		var body helmSourceRequest
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		source, err := buildHelmSource(c, db, item, body, existing.CreatedByID, &existing)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		source.ID, source.CreatedAt = existing.ID, existing.CreatedAt
+		if _, err := db.NewUpdate().Model(source).Where("id = ?", source.ID).Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update Helm source"})
+			return
+		}
+		redactHelmSource(source)
+		c.JSON(http.StatusOK, source)
+	}
+}
+
+func DeleteHelmSource(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok || !requireEdit(c, db, item) {
+			return
+		}
+		sourceID, err := uuid.Parse(c.Param("sourceId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Helm source ID"})
+			return
+		}
+		if _, err := db.NewDelete().Model((*models.GitRepositoryHelmSource)(nil)).Where("id = ? AND repository_id = ?", sourceID, item.ID).Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete Helm source"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
+	}
+}
+
+func buildHelmSource(c *gin.Context, db *bun.DB, repository *models.GitRepository, body helmSourceRequest, userID uuid.UUID, previous *models.GitRepositoryHelmSource) (*models.GitRepositoryHelmSource, error) {
+	sourceType := strings.TrimSpace(body.SourceType)
+	if sourceType == "" {
+		sourceType = "local"
+	}
+	if sourceType != "local" && sourceType != "repository" && sourceType != "url" {
+		return nil, fmt.Errorf("invalid Helm source type")
+	}
+	chartPath, err := relativeRepositoryPath(body.ChartPath, "chart_path")
+	if err != nil {
+		return nil, err
+	}
+	values := make([]string, 0, len(body.Values))
+	for _, value := range body.Values {
+		path, err := relativeRepositoryPath(value, "values")
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, path)
+	}
+	source := &models.GitRepositoryHelmSource{
+		RepositoryID: repository.ID, SourceType: sourceType, ChartPath: chartPath, Values: values,
+		ReleaseName: strings.TrimSpace(body.ReleaseName), CreatedByID: userID, UpdatedAt: time.Now(),
+		AuthType: models.GitRepositoryAuthNone, Ref: "HEAD",
+	}
+	if previous != nil {
+		source.CreatedAt, source.EncryptedCredential = previous.CreatedAt, previous.EncryptedCredential
+	}
+	switch sourceType {
+	case "local":
+		source.EncryptedCredential = ""
+		return source, nil
+	case "repository":
+		source.EncryptedCredential = ""
+		chartRepositoryID, err := uuid.Parse(strings.TrimSpace(body.ChartRepositoryID))
+		if err != nil {
+			return nil, fmt.Errorf("a registered chart repository is required")
+		}
+		if chartRepositoryID == repository.ID {
+			return nil, fmt.Errorf("use a local Helm source for this repository")
+		}
+		var chartRepository models.GitRepository
+		if err := db.NewSelect().Model(&chartRepository).Where("id = ?", chartRepositoryID).Scan(c.Request.Context()); err != nil {
+			return nil, fmt.Errorf("chart repository not found")
+		}
+		if !sameRepositoryOwner(repository, &chartRepository) {
+			return nil, fmt.Errorf("chart repository must belong to the same workspace")
+		}
+		source.ChartRepositoryID, source.Ref = &chartRepositoryID, chartRepository.Ref
+		return source, nil
+	case "url":
+		cloneURL := strings.TrimSpace(body.CloneURL)
+		if err := validateSourceCloneURL(cloneURL); err != nil {
+			return nil, err
+		}
+		authType := strings.TrimSpace(body.AuthType)
+		if authType == "" {
+			authType = models.GitRepositoryAuthNone
+		}
+		if authType != models.GitRepositoryAuthNone && authType != models.GitRepositoryAuthToken && authType != models.GitRepositoryAuthBasic {
+			return nil, fmt.Errorf("invalid authentication type")
+		}
+		username := strings.TrimSpace(body.Username)
+		if authType != models.GitRepositoryAuthNone && username == "" {
+			return nil, fmt.Errorf("Git username is required when authentication is enabled")
+		}
+		credential := body.Credential
+		if authType == models.GitRepositoryAuthToken {
+			credential = strings.TrimSpace(credential)
+		}
+		if authType != models.GitRepositoryAuthNone && credential == "" && source.EncryptedCredential == "" {
+			return nil, fmt.Errorf("Git token or password is required when authentication is enabled")
+		}
+		source.CloneURL, source.Ref, source.AuthType, source.Username = cloneURL, strings.TrimSpace(body.Ref), authType, username
+		if source.Ref == "" {
+			source.Ref = "HEAD"
+		}
+		if credential != "" {
+			encrypted, err := crypto.Encrypt(crypto.KeyFromString(config.Config.Encryption.Key), credential)
+			if err != nil {
+				return nil, err
+			}
+			source.EncryptedCredential = encrypted
+		}
+		if authType == models.GitRepositoryAuthNone {
+			source.EncryptedCredential = ""
+		}
+		return source, nil
+	}
+	return nil, fmt.Errorf("invalid Helm source")
+}
+
+func relativeRepositoryPath(value, field string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || filepath.IsAbs(value) || strings.HasPrefix(filepath.Clean(value), "..") {
+		return "", fmt.Errorf("%s must be a relative repository path", field)
+	}
+	return filepath.ToSlash(value), nil
+}
+
+func validateSourceCloneURL(value string) error {
+	if !strings.HasPrefix(value, "https://") && !strings.HasPrefix(value, "http://") {
+		return fmt.Errorf("chart repository URL must use http:// or https://")
+	}
+	if strings.Contains(strings.TrimPrefix(strings.TrimPrefix(value, "https://"), "http://"), "@") {
+		return fmt.Errorf("chart repository URL must not contain credentials")
+	}
+	return nil
+}
+
+func sameRepositoryOwner(left, right *models.GitRepository) bool {
+	if left == nil || right == nil || left.OwnerType != right.OwnerType {
+		return false
+	}
+	if left.OwnerOrgID != nil || right.OwnerOrgID != nil {
+		return left.OwnerOrgID != nil && right.OwnerOrgID != nil && *left.OwnerOrgID == *right.OwnerOrgID
+	}
+	return left.OwnerUserID != nil && right.OwnerUserID != nil && *left.OwnerUserID == *right.OwnerUserID
+}
+
+func redactHelmSources(sources []models.GitRepositoryHelmSource) {
+	for index := range sources {
+		redactHelmSource(&sources[index])
+	}
+}
+
+func redactHelmSource(source *models.GitRepositoryHelmSource) {
+	source.CredentialConfigured = source.EncryptedCredential != ""
+	source.EncryptedCredential = ""
 }
 
 func requireEdit(c *gin.Context, db *bun.DB, item *models.GitRepository) bool {

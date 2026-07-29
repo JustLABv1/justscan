@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"justscan-backend/config"
+	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
 )
@@ -66,5 +67,42 @@ func TestBuildStoresCompleteGitAuthentication(t *testing.T) {
 	}
 	if item.EncryptedCredential == "" {
 		t.Fatal("credential was not encrypted and stored")
+	}
+}
+
+func TestBuildHelmSourceStoresDirectCredentialsAndRestrictsPaths(t *testing.T) {
+	previousConfig := config.Config
+	config.Config = &config.RestfulConf{Encryption: config.EncryptionConf{Key: "helm-source-test-encryption-key"}}
+	defer func() { config.Config = previousConfig }()
+
+	ownerID := uuid.New()
+	repository := &models.GitRepository{ID: uuid.New(), OwnerType: models.OwnerTypeUser, OwnerUserID: &ownerID}
+	source, err := buildHelmSource(nil, nil, repository, helmSourceRequest{
+		SourceType: "url", CloneURL: "https://git.example.com/team/chart.git", Ref: "main",
+		AuthType: "token", Username: "git-user", Credential: "secret", ChartPath: "apps/chart",
+		Values: []string{"envs/dev/chart/values.yaml"},
+	}, ownerID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source.EncryptedCredential == "" || source.ChartPath != "apps/chart" || source.Ref != "main" {
+		t.Fatalf("unexpected Helm source: %#v", source)
+	}
+	_, err = buildHelmSource(nil, nil, repository, helmSourceRequest{SourceType: "local", ChartPath: "../chart"}, ownerID, nil)
+	if err == nil || !strings.Contains(err.Error(), "relative repository path") {
+		t.Fatalf("unsafe chart path error = %v", err)
+	}
+}
+
+func TestSameRepositoryOwnerRejectsCrossWorkspaceLinks(t *testing.T) {
+	first, second := uuid.New(), uuid.New()
+	left := &models.GitRepository{OwnerType: models.OwnerTypeUser, OwnerUserID: &first}
+	right := &models.GitRepository{OwnerType: models.OwnerTypeUser, OwnerUserID: &second}
+	if sameRepositoryOwner(left, right) {
+		t.Fatal("repositories with different users must not be linked")
+	}
+	right.OwnerUserID = &first
+	if !sameRepositoryOwner(left, right) {
+		t.Fatal("repositories in the same user workspace should be linkable")
 	}
 }

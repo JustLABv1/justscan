@@ -6,3 +6,13 @@ description: Deliver security events and publish a focused view of scan health.
 Create notification channels and rules at the personal or organization level, then use the delivery log and queue view to diagnose failures. Test a channel before depending on it for a production alert.
 
 Status pages expose a controlled set of image health signals. Choose the intended visibility, select the targets, set freshness expectations, and share or transfer the page using the same ownership controls as other resources.
+
+## Git repository sources
+
+A status page can also follow one or more Git repositories. This is useful for GitOps deployments where image tags or digests change frequently: JustScan uses the non-excluded image inventory from each repository’s latest completed or partial discovery run, so new references appear automatically and removed references stop appearing.
+
+The page keeps the last successful image snapshot when a newer run fails or is cancelled. Repository health is shown separately from the image rows, including in-progress, partial, failed, cancelled, and stale discovery runs. The existing **Stale after hours** setting applies to both image freshness and the repository’s last successful discovery.
+
+Git sources must have the same owner as the status page: personal pages can use the owner’s repositories, and organization pages can use repositories owned by that organization. A status page may mix Git sources with fixed image targets, regex scopes, or the all-tags option.
+
+Public pages show safe repository names and run metadata only. Clone URLs, credentials, and raw discovery errors are never published.

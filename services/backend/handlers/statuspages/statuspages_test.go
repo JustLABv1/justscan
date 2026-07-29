@@ -10,7 +10,7 @@ import (
 )
 
 func TestBuildStatusPageModelsAcceptsRegexScope(t *testing.T) {
-	page, targets, updates, err := buildStatusPageModels(statusPagePayload{
+	page, targets, sources, updates, err := buildStatusPageModels(statusPagePayload{
 		Name:           "Production",
 		Visibility:     models.StatusPageVisibilityPublic,
 		ImagePatterns:  []string{`^ghcr\.io/acme/.+:prod-.*$`},
@@ -22,6 +22,9 @@ func TestBuildStatusPageModelsAcceptsRegexScope(t *testing.T) {
 	if len(targets) != 0 {
 		t.Fatalf("expected no exact targets, got %d", len(targets))
 	}
+	if len(sources) != 0 {
+		t.Fatalf("expected no Git sources, got %d", len(sources))
+	}
 	if len(updates) != 0 {
 		t.Fatalf("expected no updates, got %d", len(updates))
 	}
@@ -31,7 +34,7 @@ func TestBuildStatusPageModelsAcceptsRegexScope(t *testing.T) {
 }
 
 func TestBuildStatusPageModelsRejectsInvalidRegex(t *testing.T) {
-	_, _, _, err := buildStatusPageModels(statusPagePayload{
+	_, _, _, _, err := buildStatusPageModels(statusPagePayload{
 		Name:          "Production",
 		Visibility:    models.StatusPageVisibilityPrivate,
 		ImagePatterns: []string{"("},
@@ -41,6 +44,26 @@ func TestBuildStatusPageModelsRejectsInvalidRegex(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid image regex") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBuildStatusPageModelsAcceptsGitRepositorySourceWithoutFixedTargets(t *testing.T) {
+	repositoryID := uuid.New()
+	_, targets, sources, _, err := buildStatusPageModels(statusPagePayload{
+		Name:       "GitOps production",
+		Visibility: models.StatusPageVisibilityAuthenticated,
+		GitRepositorySources: []statusPageGitRepositorySourcePayload{{
+			RepositoryID: repositoryID.String(),
+		}},
+	}, uuid.New())
+	if err != nil {
+		t.Fatalf("buildStatusPageModels returned error: %v", err)
+	}
+	if len(targets) != 0 || len(sources) != 1 {
+		t.Fatalf("expected one source and no targets, got %d sources and %d targets", len(sources), len(targets))
+	}
+	if sources[0].RepositoryID != repositoryID || sources[0].DisplayOrder != 1 {
+		t.Fatalf("unexpected Git source: %#v", sources[0])
 	}
 }
 
@@ -76,6 +99,19 @@ func TestDeriveStatusKeepsRunningState(t *testing.T) {
 	status := deriveStatus(72, StatusPageItem{ScanStatus: models.ScanStatusRunning})
 	if status != models.ScanStatusRunning {
 		t.Fatalf("expected running status, got %q", status)
+	}
+}
+
+func TestMarkStatusPageItemUnscannedDoesNotImplyAnActiveScan(t *testing.T) {
+	item := StatusPageItem{ScanStatus: models.ScanStatusPending, Status: models.ScanStatusPending}
+
+	markStatusPageItemUnscanned(&item)
+
+	if item.Status != statusPageItemStatusUnscanned {
+		t.Fatalf("expected status %q, got %q", statusPageItemStatusUnscanned, item.Status)
+	}
+	if item.ScanStatus != "" {
+		t.Fatalf("expected no scan status for unscanned item, got %q", item.ScanStatus)
 	}
 }
 
@@ -134,7 +170,7 @@ func TestRebindStatusPageRelationsUsesExistingPageID(t *testing.T) {
 	userID := uuid.New()
 	existingPageID := uuid.New()
 
-	_, targets, updates, err := buildStatusPageModels(statusPagePayload{
+	_, targets, sources, updates, err := buildStatusPageModels(statusPagePayload{
 		Name:           "Production",
 		Visibility:     models.StatusPageVisibilityPublic,
 		IncludeAllTags: false,
@@ -162,7 +198,7 @@ func TestRebindStatusPageRelationsUsesExistingPageID(t *testing.T) {
 		t.Fatal("expected buildStatusPageModels to use a fresh page ID before rebinding")
 	}
 
-	rebindStatusPageRelations(existingPageID, targets, updates)
+	rebindStatusPageRelations(existingPageID, targets, sources, updates)
 
 	if targets[0].PageID != existingPageID {
 		t.Fatalf("expected target page_id %s, got %s", existingPageID, targets[0].PageID)

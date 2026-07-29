@@ -10,6 +10,28 @@ export interface StatusPageTarget {
   created_at?: string;
 }
 
+export interface StatusPageGitRepositorySource {
+  id?: string;
+  page_id?: string;
+  repository_id: string;
+  display_order: number;
+  created_at?: string;
+  repository?: { id: string; name: string };
+}
+
+export interface StatusPageGitRepositorySourceHealth {
+  repository_id: string;
+  repository_name: string;
+  display_order: number;
+  status: string;
+  latest_run_id?: string;
+  latest_run_status?: string;
+  snapshot_run_id?: string;
+  commit_sha?: string;
+  completed_at?: string;
+  image_count: number;
+}
+
 export interface StatusPageUpdate {
   id?: string;
   page_id?: string;
@@ -39,6 +61,7 @@ export interface StatusPage {
   updated_at: string;
   targets?: StatusPageTarget[];
   updates?: StatusPageUpdate[];
+  git_repository_sources?: StatusPageGitRepositorySource[];
 }
 
 export interface StatusPageItem {
@@ -71,6 +94,12 @@ export interface StatusPageItem {
   observed_at: string;
   previous_scan_at?: string;
   display_order: number;
+  source_type?: 'git_repository';
+  source_repository_id?: string;
+  source_repository_name?: string;
+  source_run_id?: string;
+  full_ref?: string;
+  discovery_state?: string;
 }
 
 export interface StatusPageScanSummary {
@@ -98,6 +127,7 @@ export interface StatusPageScanSummary {
 export interface StatusPageResponse {
   page: StatusPage;
   items: StatusPageItem[];
+  git_repository_sources?: StatusPageGitRepositorySourceHealth[];
   now: string;
 }
 
@@ -111,6 +141,7 @@ export interface StatusPagePayload {
   image_patterns?: string[];
   stale_after_hours: number;
   targets: StatusPageTarget[];
+  git_repository_sources?: StatusPageGitRepositorySource[];
   updates?: StatusPageUpdate[];
 }
 

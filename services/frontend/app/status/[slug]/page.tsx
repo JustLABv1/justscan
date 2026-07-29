@@ -62,8 +62,9 @@ const STATUS_PRIORITY: Record<string, number> = {
   queued_in_xray: 3,
   running: 4,
   pending: 5,
-  healthy: 6,
-  cancelled: 7,
+  unscanned: 6,
+  healthy: 7,
+  cancelled: 8,
 };
 const STATUS_COLOR: Record<string, string> = {
   healthy: '#22c55e',
@@ -78,6 +79,7 @@ const STATUS_COLOR: Record<string, string> = {
   warming_cache: '#fb923c',
   indexing_artifact: '#f97316',
   queued_in_xray: '#f59e0b',
+  unscanned: '#71717a',
 };
 const ACTIVE_SCAN_STATUSES = new Set([
   'running',
@@ -140,6 +142,9 @@ function getFindingTotal(
 }
 
 function getPresentationStatus(item: StatusPageItem) {
+  // Older servers represented Git-discovered images without a scan as pending.
+  // A missing scan ID proves that no scan is queued or running yet.
+  if (!item.latest_scan_id) return 'unscanned';
   return item.status === 'running' || item.status === 'pending'
     ? getEffectiveScanStatus(item.scan_status, item.external_status)
     : item.status;
@@ -1363,10 +1368,14 @@ export default function PublicStatusPage() {
     );
   }
 
-  const issueCount = summary.issues;
+  const sourceIssueCount = (data.git_repository_sources ?? []).filter((source) =>
+    ['failed', 'cancelled', 'partial', 'stale'].includes(source.status)
+  ).length;
+  const issueCount = summary.issues + sourceIssueCount;
   const policyFailureCount = summary.policyFailed;
   const exposedCount = (summary.exposure.high_risk ?? 0) + (summary.exposure.findings_present ?? 0);
   const runningCount = summary.scanning;
+  const unscannedCount = summary.operations.unscanned ?? 0;
   const healthyCount = summary.healthy;
   const activeIncidentCount = activeUpdates.filter((update) => update.level === 'incident').length;
   const activeMaintenanceCount = activeUpdates.filter(
@@ -1384,7 +1393,7 @@ export default function PublicStatusPage() {
         ? {
             label: 'Investigating Issues',
             color: STATUS_COLOR.failed,
-            description: `${summary.operations.failed ?? 0} scan failed, ${summary.operations.blocked_by_xray_policy ?? 0} Xray blocked, ${policyFailureCount} org policy failed, and ${summary.operations.stale ?? 0} stale snapshot${issueCount === 1 ? '' : 's'} currently need attention.`,
+            description: `${summary.operations.failed ?? 0} scan failed, ${summary.operations.blocked_by_xray_policy ?? 0} Xray blocked, ${policyFailureCount} org policy failed, ${summary.operations.stale ?? 0} stale snapshot${issueCount === 1 ? '' : 's'}, and ${sourceIssueCount} Git source${sourceIssueCount === 1 ? '' : 's'} currently need attention.`,
           }
         : activeMaintenanceCount > 0
           ? {
@@ -1404,12 +1413,18 @@ export default function PublicStatusPage() {
                   color: STATUS_COLOR.running,
                   description: `${runningCount} scan${runningCount === 1 ? '' : 's'} are still processing, but there are no current operational failures on tracked services.`,
                 }
-              : {
-                  label: 'All Systems Operational',
-                  color: STATUS_COLOR.healthy,
-                  description:
-                    'Every tracked service is healthy in the latest snapshot and no known findings are currently present.',
-                };
+              : unscannedCount > 0
+                ? {
+                    label: 'Awaiting First Scan',
+                    color: STATUS_COLOR.unscanned,
+                    description: `${unscannedCount} discovered image${unscannedCount === 1 ? ' has' : 's have'} not been scanned yet.`,
+                  }
+                : {
+                    label: 'All Systems Operational',
+                    color: STATUS_COLOR.healthy,
+                    description:
+                      'Every tracked service is healthy in the latest snapshot and no known findings are currently present.',
+                  };
   const headerDescription = data.page.description?.trim() ?? '';
   const showHeaderDescription =
     headerDescription.length > 0 &&
@@ -1514,6 +1529,44 @@ export default function PublicStatusPage() {
           ]}
           onSelect={selectMetricFilter}
         />
+
+        {(data.git_repository_sources?.length ?? 0) > 0 ? (
+          <Card
+            className="border border-divider/70 bg-surface/70 p-4 shadow-sm"
+            variant="secondary"
+          >
+            <div className="flex items-center gap-2">
+              <Shield01Icon size={16} className="text-muted" aria-hidden />
+              <h2 className="text-sm font-semibold text-foreground">Git repository health</h2>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {data.git_repository_sources?.map((source) => (
+                <div
+                  key={source.repository_id}
+                  className="rounded-xl border border-divider/70 bg-surface-secondary/50 p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 truncate text-sm font-medium text-foreground">
+                      {source.repository_name}
+                    </p>
+                    <StatusBadge status={source.status} />
+                  </div>
+                  <p className="mt-2 text-xs text-muted">
+                    {source.image_count} current image{source.image_count === 1 ? '' : 's'} ·{' '}
+                    {source.completed_at
+                      ? `last good run ${timeAgo(source.completed_at)}`
+                      : 'No successful run yet'}
+                  </p>
+                  {source.commit_sha ? (
+                    <p className="mt-1 truncate font-mono text-[11px] text-muted">
+                      {source.commit_sha}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
 
         <ActiveStatusUpdates updates={activeUpdates} />
 
@@ -1744,15 +1797,26 @@ export default function PublicStatusPage() {
                                 <PackageIcon size={15} aria-hidden />
                               </span>
                               <div className="min-w-0">
-                                <Link
-                                  href={`/scans/details/${item.latest_scan_id}`}
-                                  className="block break-words text-left text-sm font-semibold text-foreground hover:underline"
-                                >
-                                  {item.image_name}
-                                </Link>
+                                {item.latest_scan_id ? (
+                                  <Link
+                                    href={`/scans/details/${item.latest_scan_id}`}
+                                    className="block break-words text-left text-sm font-semibold text-foreground hover:underline"
+                                  >
+                                    {item.image_name}
+                                  </Link>
+                                ) : (
+                                  <p className="break-words text-left text-sm font-semibold text-foreground">
+                                    {item.image_name}
+                                  </p>
+                                )}
                                 <p className="mt-0.5 truncate font-mono text-[11px] text-muted">
                                   {item.image_tag}
                                 </p>
+                                {item.source_repository_name ? (
+                                  <p className="mt-1 truncate text-[11px] text-muted">
+                                    {item.source_repository_name}
+                                  </p>
+                                ) : null}
                               </div>
                             </div>
                           </Table.Cell>

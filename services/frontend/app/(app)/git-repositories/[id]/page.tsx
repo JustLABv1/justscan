@@ -103,7 +103,9 @@ function HelmCredentialSelect({
             <ListBox.Item id={credential.id} key={credential.id} textValue={credential.name}>
               <div className="flex min-w-0 flex-col items-start gap-0.5">
                 <Label>{credential.name}</Label>
-                <Description className="!block break-all">{credential.protocol.toUpperCase()} · {credential.url}</Description>
+                <Description className="!block break-all">
+                  {credential.protocol.toUpperCase()} · {credential.url}
+                </Description>
               </div>
               <ListBox.ItemIndicator />
             </ListBox.Item>
@@ -160,7 +162,9 @@ export default function GitRepositoryDetailPage() {
   const [imageSearch, setImageSearch] = useState('');
   const [helmSources, setHelmSources] = useState<GitRepositoryHelmSource[]>([]);
   const [availableRepositories, setAvailableRepositories] = useState<GitRepository[]>([]);
-  const [availableHelmCredentials, setAvailableHelmCredentials] = useState<HelmRegistryCredential[]>([]);
+  const [availableHelmCredentials, setAvailableHelmCredentials] = useState<
+    HelmRegistryCredential[]
+  >([]);
   const [editingHelmSource, setEditingHelmSource] = useState<GitRepositoryHelmSource | null>(null);
   const [selectedCandidateIDs, setSelectedCandidateIDs] = useState<Set<string>>(new Set());
   const [selectedImageRefs, setSelectedImageRefs] = useState<Set<string>>(new Set());
@@ -354,7 +358,9 @@ export default function GitRepositoryDetailPage() {
     setChartAuthType(source?.auth_type ?? 'none');
     setChartUsername(source?.username ?? '');
     setChartCredential('');
-    setHelmRegistryCredentialID(source?.helm_registry_credential_id ?? (source?.dependency_registry_id ? null : null));
+    setHelmRegistryCredentialID(
+      source?.helm_registry_credential_id ?? (source?.dependency_registry_id ? null : null)
+    );
     helmCredentialSelectionTouched.current = false;
     setChart(source?.chart_path ?? '');
     setValues(source?.values.join('\n') ?? '');
@@ -629,7 +635,8 @@ export default function GitRepositoryDetailPage() {
   );
   const normalizedImageSearch = imageSearch.trim().toLowerCase();
   const filteredPreviewImages = previewImages.filter(
-    (image) => !normalizedImageSearch || image.full_ref.toLowerCase().includes(normalizedImageSearch)
+    (image) =>
+      !normalizedImageSearch || image.full_ref.toLowerCase().includes(normalizedImageSearch)
   );
   const selectableImages = previewImages.filter((image) => !exclusionByRef.has(image.full_ref));
   const filteredSelectableImages = filteredPreviewImages.filter(
@@ -773,7 +780,7 @@ export default function GitRepositoryDetailPage() {
       </div>
 
       <Card className="overflow-hidden">
-        <Card.Header className="!flex-row items-start justify-between gap-4 border-b border-divider/70">
+        <Card.Header className="!flex-row items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
               <PackageIcon size={17} />
@@ -805,69 +812,82 @@ export default function GitRepositoryDetailPage() {
                 <Accordion.Body className="space-y-3 px-5 pb-5">
                   {helmSources.length === 0 ? (
                     <p className="text-sm text-muted">
-                      Add a source when a chart lives outside this repository or needs explicit Helm values.
+                      Add a source when a chart lives outside this repository or needs explicit Helm
+                      values.
                     </p>
                   ) : (
                     helmSources.map((source) => {
-              const credential = source.helm_registry_credential_id
-                ? helmCredentialByID.get(source.helm_registry_credential_id)
-                : null;
-              return (
-                <div
-                  key={source.id}
-                  className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-3"
-                >
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <code className="text-xs font-medium text-foreground">{source.chart_path}</code>
-                    <Chip size="sm" variant="soft">
-                      {source.source_type === 'local'
-                        ? 'This repository'
-                        : source.source_type === 'repository'
-                          ? 'Registered repository'
-                          : 'Direct Git URL'}
-                    </Chip>
-                  </div>
-                  <p className="text-xs text-muted">
-                    {source.values.length > 0
-                      ? `Values: ${source.values.join(', ')}`
-                      : 'Chart defaults only'}
-                    {source.release_name ? ` · Release: ${source.release_name}` : ''}
-                  </p>
-                  <div className="text-xs text-muted">
-                    <p>
-                      Dependency credentials: {credential?.name ??
-                        (source.dependency_registry_id ? 'Legacy image registry' : 'Automatic matching')}
-                    </p>
-                    {credential ? (
-                      <p className="mt-0.5 break-all text-muted/80">{credential.protocol.toUpperCase()} · {credential.url}</p>
-                    ) : null}
-                    {source.dependency_registry_id ? <p className="mt-1 text-warning">Legacy registry link — edit and select a Helm credential to migrate it.</p> : null}
-                  </div>
-                  {source.source_type === 'url' ? (
-                    <p className="truncate text-xs text-muted">
-                      {source.clone_url} · {source.ref}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button
-                    size="sm"
-                    variant="tertiary"
-                    onPress={() => void openHelmSourceEditor(source)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="danger-soft"
-                    onPress={() => void removeHelmSource(source)}
-                  >
-                    Remove
-                  </Button>
-                </div>
-                </div>
-              );
+                      const credential = source.helm_registry_credential_id
+                        ? helmCredentialByID.get(source.helm_registry_credential_id)
+                        : null;
+                      return (
+                        <div
+                          key={source.id}
+                          className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-3"
+                        >
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <code className="text-xs font-medium text-foreground">
+                                {source.chart_path}
+                              </code>
+                              <Chip size="sm" variant="soft">
+                                {source.source_type === 'local'
+                                  ? 'This repository'
+                                  : source.source_type === 'repository'
+                                    ? 'Registered repository'
+                                    : 'Direct Git URL'}
+                              </Chip>
+                            </div>
+                            <p className="text-xs text-muted">
+                              {source.values.length > 0
+                                ? `Values: ${source.values.join(', ')}`
+                                : 'Chart defaults only'}
+                              {source.release_name ? ` · Release: ${source.release_name}` : ''}
+                            </p>
+                            <div className="text-xs text-muted">
+                              <p>
+                                Dependency credentials:{' '}
+                                {credential?.name ??
+                                  (source.dependency_registry_id
+                                    ? 'Legacy image registry'
+                                    : 'Automatic matching')}
+                              </p>
+                              {credential ? (
+                                <p className="mt-0.5 break-all text-muted/80">
+                                  {credential.protocol.toUpperCase()} · {credential.url}
+                                </p>
+                              ) : null}
+                              {source.dependency_registry_id ? (
+                                <p className="mt-1 text-warning">
+                                  Legacy registry link — edit and select a Helm credential to
+                                  migrate it.
+                                </p>
+                              ) : null}
+                            </div>
+                            {source.source_type === 'url' ? (
+                              <p className="truncate text-xs text-muted">
+                                {source.clone_url} · {source.ref}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <Button
+                              size="sm"
+                              variant="tertiary"
+                              onPress={() => void openHelmSourceEditor(source)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="danger-soft"
+                              onPress={() => void removeHelmSource(source)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      );
                     })
                   )}
                 </Accordion.Body>
@@ -995,7 +1015,7 @@ export default function GitRepositoryDetailPage() {
             </Card>
           ) : null}
           <Card className="overflow-hidden">
-            <Card.Header className="!flex-row items-start justify-between gap-4 border-b border-divider/70">
+            <Card.Header className="!flex-row items-start justify-between gap-4">
               <div className="flex min-w-0 items-start gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
                   <PackageIcon size={17} />
@@ -1055,7 +1075,10 @@ export default function GitRepositoryDetailPage() {
                       <Label>Select all scan-enabled images</Label>
                       <Description>
                         {filteredSelectableImages.length}
-                        {normalizedImageSearch ? ` of ${selectableImages.length} matching` : ''} ready to add to a scan
+                        {normalizedImageSearch
+                          ? ` of ${selectableImages.length} matching`
+                          : ''}{' '}
+                        ready to add to a scan
                       </Description>
                     </div>
                   </Checkbox.Content>
@@ -1473,7 +1496,10 @@ export default function GitRepositoryDetailPage() {
                     <HelmCredentialSelect
                       credentials={availableHelmCredentials}
                       value={helmRegistryCredentialID ?? ''}
-                      onChange={(value) => { helmCredentialSelectionTouched.current = true; setHelmRegistryCredentialID(value || null); }}
+                      onChange={(value) => {
+                        helmCredentialSelectionTouched.current = true;
+                        setHelmRegistryCredentialID(value || null);
+                      }}
                     />
                     <FormField
                       label="Chart path"
@@ -1621,7 +1647,10 @@ export default function GitRepositoryDetailPage() {
                 <HelmCredentialSelect
                   credentials={availableHelmCredentials}
                   value={helmRegistryCredentialID ?? ''}
-                  onChange={(value) => { helmCredentialSelectionTouched.current = true; setHelmRegistryCredentialID(value || null); }}
+                  onChange={(value) => {
+                    helmCredentialSelectionTouched.current = true;
+                    setHelmRegistryCredentialID(value || null);
+                  }}
                 />
                 <FormField
                   label="Chart path"

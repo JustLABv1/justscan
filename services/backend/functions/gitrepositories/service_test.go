@@ -293,7 +293,7 @@ func TestAppendHelmChartFromExternalRootUsesDeploymentValues(t *testing.T) {
 	byRef := map[string]*DiscoveredImage{}
 	err := appendHelmChartFromRoots(context.Background(), deploymentRoot, chartRoot, byRef, justScanSource{
 		Chart: "apps/demo", Values: []string{"envs/dev/demo/values.yaml"},
-	}, "chart-repository@main:apps/demo", models.GitRepository{})
+	}, "chart-repository@main:apps/demo", models.GitRepository{}, nil)
 	if err != nil {
 		t.Fatalf("appendHelmChartFromRoots() error = %v", err)
 	}

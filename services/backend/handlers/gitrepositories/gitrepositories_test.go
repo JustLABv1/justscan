@@ -106,3 +106,26 @@ func TestSameRepositoryOwnerRejectsCrossWorkspaceLinks(t *testing.T) {
 		t.Fatal("repositories in the same user workspace should be linkable")
 	}
 }
+
+func TestRegistryAvailableToRepositoryRequiresCompatibleUserOwner(t *testing.T) {
+	first, second := uuid.New(), uuid.New()
+	repository := &models.GitRepository{OwnerType: models.OwnerTypeUser, OwnerUserID: &first}
+	registry := &models.Registry{OwnerType: models.OwnerTypeUser, OwnerUserID: &second}
+
+	allowed, err := registryAvailableToRepository(nil, nil, repository, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allowed {
+		t.Fatal("registry from another user workspace should not be selectable")
+	}
+
+	registry.OwnerUserID = &first
+	allowed, err = registryAvailableToRepository(nil, nil, repository, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !allowed {
+		t.Fatal("registry from the repository user workspace should be selectable")
+	}
+}

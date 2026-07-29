@@ -58,6 +58,8 @@ Kustomize rendering enables its built-in Helm support, so `helmCharts`, `valuesF
 
 The repository page can also store a Helm source outside `.justscan.yaml`. Choose a local chart, another registered Git repository in the same workspace, or a direct HTTPS Git URL. Direct-source credentials are encrypted at rest; values files always remain paths in the deployment repository. Managed sources are rendered alongside `.justscan.yaml`, because connector IDs and credentials cannot be exported safely.
 
+Each managed source may select a JustScan registry for Helm dependency credentials. The default automatically matches dependency hosts to accessible registries. An explicit selection takes precedence for dependencies on the selected registry's host, which makes credential choice deterministic when multiple registry resources use the same upstream host.
+
 ## Setup-infra example
 
 For the `setup-infra` layout, add this at the repository root:

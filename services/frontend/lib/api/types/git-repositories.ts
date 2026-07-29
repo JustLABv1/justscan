@@ -84,6 +84,7 @@ export interface GitRepositoryHelmSource {
   repository_id: string;
   source_type: GitRepositoryHelmSourceType;
   chart_repository_id?: string | null;
+  dependency_registry_id?: string | null;
   clone_url?: string;
   ref: string;
   auth_type: 'none' | 'token' | 'basic';
@@ -98,6 +99,7 @@ export interface GitRepositoryHelmSource {
 export interface GitRepositoryHelmSourceInput {
   source_type: GitRepositoryHelmSourceType;
   chart_repository_id?: string;
+  dependency_registry_id?: string;
   clone_url?: string;
   ref?: string;
   auth_type?: 'none' | 'token' | 'basic';

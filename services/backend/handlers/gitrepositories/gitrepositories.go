@@ -39,16 +39,17 @@ type repositoryRequest struct {
 }
 
 type helmSourceRequest struct {
-	SourceType        string   `json:"source_type"`
-	ChartRepositoryID string   `json:"chart_repository_id"`
-	CloneURL          string   `json:"clone_url"`
-	Ref               string   `json:"ref"`
-	AuthType          string   `json:"auth_type"`
-	Username          string   `json:"username"`
-	Credential        string   `json:"credential"`
-	ChartPath         string   `json:"chart_path"`
-	Values            []string `json:"values"`
-	ReleaseName       string   `json:"release_name"`
+	SourceType           string   `json:"source_type"`
+	ChartRepositoryID    string   `json:"chart_repository_id"`
+	DependencyRegistryID string   `json:"dependency_registry_id"`
+	CloneURL             string   `json:"clone_url"`
+	Ref                  string   `json:"ref"`
+	AuthType             string   `json:"auth_type"`
+	Username             string   `json:"username"`
+	Credential           string   `json:"credential"`
+	ChartPath            string   `json:"chart_path"`
+	Values               []string `json:"values"`
+	ReleaseName          string   `json:"release_name"`
 }
 
 func List(db *bun.DB) gin.HandlerFunc {
@@ -631,6 +632,30 @@ func buildHelmSource(c *gin.Context, db *bun.DB, repository *models.GitRepositor
 	if previous != nil {
 		source.CreatedAt, source.EncryptedCredential = previous.CreatedAt, previous.EncryptedCredential
 	}
+	if value := strings.TrimSpace(body.DependencyRegistryID); value != "" {
+		registryID, err := uuid.Parse(value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid dependency registry")
+		}
+		var registry models.Registry
+		if err := db.NewSelect().Model(&registry).Where("id = ?", registryID).Scan(c.Request.Context()); err != nil {
+			return nil, fmt.Errorf("dependency registry not found")
+		}
+		allowed, err := registryAvailableToRepository(c, db, repository, &registry)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, fmt.Errorf("dependency registry must be available to the same workspace")
+		}
+		if registry.AuthType == models.RegistryAuthNone {
+			return nil, fmt.Errorf("dependency registry must have credentials configured")
+		}
+		if registry.AuthType == models.RegistryAuthAWSECR {
+			return nil, fmt.Errorf("AWS ECR authentication is not supported for Helm dependencies")
+		}
+		source.DependencyRegistryID = &registryID
+	}
 	switch sourceType {
 	case "local":
 		source.EncryptedCredential = ""
@@ -693,6 +718,16 @@ func buildHelmSource(c *gin.Context, db *bun.DB, repository *models.GitRepositor
 		return source, nil
 	}
 	return nil, fmt.Errorf("invalid Helm source")
+}
+
+func registryAvailableToRepository(c *gin.Context, db *bun.DB, repository *models.GitRepository, registry *models.Registry) (bool, error) {
+	if registry.OwnerType == models.OwnerTypeSystem {
+		return true, nil
+	}
+	if repository.OwnerOrgID != nil {
+		return authz.CanOrgAccessRegistry(c.Request.Context(), db, *repository.OwnerOrgID, registry)
+	}
+	return repository.OwnerUserID != nil && registry.OwnerUserID != nil && *repository.OwnerUserID == *registry.OwnerUserID, nil
 }
 
 func relativeRepositoryPath(value, field string) (string, error) {

@@ -11,6 +11,7 @@ import {
   Label,
   ListBox,
   Modal,
+  SearchField,
   Select,
   Spinner,
   TextArea,
@@ -48,22 +49,24 @@ import {
   exportGitRepositoryDiscoveryRules,
   getGitRepository,
   getGitRepositoryRun,
+  listGitRepositories,
   listGitRepositoryCandidates,
-  listGitRepositoryImageExclusions,
   listGitRepositoryHelmSources,
+  listGitRepositoryImageExclusions,
   listGitRepositoryLatestImageScans,
   listGitRepositoryRuns,
-  listGitRepositories,
+  listRegistries,
   runGitRepository,
+  updateGitRepositoryHelmSource,
   type GitRepository,
-  type GitRepositoryImageExclusion,
   type GitRepositoryHelmSource,
   type GitRepositoryHelmSourceInput,
+  type GitRepositoryImageExclusion,
   type GitRepositoryLatestImageScan,
   type GitRepositoryRun,
   type GitRepositoryRunCandidate,
   type GitRepositoryRunImage,
-  updateGitRepositoryHelmSource,
+  type Registry,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -71,6 +74,49 @@ import { fullDate, timeAgo } from '@/lib/time';
 type Preview = { run: GitRepositoryRun; images: GitRepositoryRunImage[] };
 
 type HelmSourceMode = 'local' | 'repository' | 'url';
+
+function DependencyRegistrySelect({
+  registries,
+  value,
+  onChange,
+}: {
+  registries: Registry[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Select
+      aria-label="Helm dependency registry"
+      value={value || 'automatic'}
+      onChange={(nextValue) => onChange(nextValue === 'automatic' ? '' : String(nextValue))}
+      variant="secondary"
+    >
+      <Label>Helm dependency credentials</Label>
+      <Select.Trigger>
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          <ListBox.Item id="automatic">Automatic matching</ListBox.Item>
+          {registries.map((registry) => (
+            <ListBox.Item id={registry.id} key={registry.id} textValue={registry.name}>
+              <div className="flex min-w-0 flex-col items-start gap-0.5">
+                <Label>{registry.name}</Label>
+                <Description className="!block break-all">{registry.url}</Description>
+              </div>
+              <ListBox.ItemIndicator />
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+      <Description>
+        Select the JustScan registry whose credentials Helm should use for matching dependency
+        hosts.
+      </Description>
+    </Select>
+  );
+}
 
 function locationsFor(image: GitRepositoryRunImage) {
   return image.locations?.items ?? [];
@@ -110,8 +156,11 @@ export default function GitRepositoryDetailPage() {
   const [chartUsername, setChartUsername] = useState('');
   const [chartCredential, setChartCredential] = useState('');
   const [releaseName, setReleaseName] = useState('');
+  const [dependencyRegistryID, setDependencyRegistryID] = useState('');
+  const [imageSearch, setImageSearch] = useState('');
   const [helmSources, setHelmSources] = useState<GitRepositoryHelmSource[]>([]);
   const [availableRepositories, setAvailableRepositories] = useState<GitRepository[]>([]);
+  const [availableRegistries, setAvailableRegistries] = useState<Registry[]>([]);
   const [editingHelmSource, setEditingHelmSource] = useState<GitRepositoryHelmSource | null>(null);
   const [selectedCandidateIDs, setSelectedCandidateIDs] = useState<Set<string>>(new Set());
   const [selectedImageRefs, setSelectedImageRefs] = useState<Set<string>>(new Set());
@@ -132,19 +181,27 @@ export default function GitRepositoryDetailPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextRepository, nextRuns, nextExclusions, nextLatestImageScans, nextHelmSources] =
-        await Promise.all([
-          getGitRepository(id),
-          listGitRepositoryRuns(id),
-          listGitRepositoryImageExclusions(id),
-          listGitRepositoryLatestImageScans(id),
-          listGitRepositoryHelmSources(id),
-        ]);
+      const [
+        nextRepository,
+        nextRuns,
+        nextExclusions,
+        nextLatestImageScans,
+        nextHelmSources,
+        nextRegistries,
+      ] = await Promise.all([
+        getGitRepository(id),
+        listGitRepositoryRuns(id),
+        listGitRepositoryImageExclusions(id),
+        listGitRepositoryLatestImageScans(id),
+        listGitRepositoryHelmSources(id),
+        listRegistries().catch(() => []),
+      ]);
       setRepository(nextRepository);
       setRuns(nextRuns);
       setImageExclusions(nextExclusions);
       setLatestImageScans(nextLatestImageScans);
       setHelmSources(nextHelmSources);
+      setAvailableRegistries(nextRegistries);
       const latestDryRun = nextRuns.find((run) => run.trigger === 'dry_run');
       if (latestDryRun) {
         const [nextPreview, nextCandidates] = await Promise.all([
@@ -219,9 +276,13 @@ export default function GitRepositoryDetailPage() {
     setChartAuthType('none');
     setChartUsername('');
     setChartCredential('');
+    setDependencyRegistryID('');
     setReleaseName('');
-    void listGitRepositories()
-      .then(setAvailableRepositories)
+    void Promise.all([listGitRepositories(), listRegistries().catch(() => [])])
+      .then(([nextRepositories, nextRegistries]) => {
+        setAvailableRepositories(nextRepositories);
+        setAvailableRegistries(nextRegistries);
+      })
       .catch(() => undefined);
     reviewOverlay.open();
   }
@@ -267,6 +328,7 @@ export default function GitRepositoryDetailPage() {
         .map((value) => value.trim())
         .filter(Boolean),
       release_name: releaseName.trim(),
+      dependency_registry_id: dependencyRegistryID || undefined,
     };
     if (helmSourceType === 'repository') source.chart_repository_id = chartRepositoryID;
     if (helmSourceType === 'url') {
@@ -288,11 +350,17 @@ export default function GitRepositoryDetailPage() {
     setChartAuthType(source?.auth_type ?? 'none');
     setChartUsername(source?.username ?? '');
     setChartCredential('');
+    setDependencyRegistryID(source?.dependency_registry_id ?? '');
     setChart(source?.chart_path ?? '');
     setValues(source?.values.join('\n') ?? '');
     setReleaseName(source?.release_name ?? '');
     try {
-      setAvailableRepositories(await listGitRepositories());
+      const [nextRepositories, nextRegistries] = await Promise.all([
+        listGitRepositories(),
+        listRegistries().catch(() => []),
+      ]);
+      setAvailableRepositories(nextRepositories);
+      setAvailableRegistries(nextRegistries);
       helmSourceOverlay.open();
     } catch (caught) {
       error(caught instanceof Error ? caught.message : 'Could not load chart repositories.');
@@ -386,9 +454,14 @@ export default function GitRepositoryDetailPage() {
   }
 
   function toggleAllImages(isSelected: boolean) {
-    setSelectedImageRefs(
-      isSelected ? new Set(selectableImages.map((image) => image.full_ref)) : new Set()
-    );
+    setSelectedImageRefs((current) => {
+      const next = new Set(current);
+      for (const image of filteredSelectableImages) {
+        if (isSelected) next.add(image.full_ref);
+        else next.delete(image.full_ref);
+      }
+      return next;
+    });
   }
 
   async function ignoreSelectedCandidates() {
@@ -545,7 +618,28 @@ export default function GitRepositoryDetailPage() {
     }
     return result;
   }, [availableRepositories, id]);
+  const selectableDependencyRegistries = useMemo(
+    () =>
+      availableRegistries.filter(
+        (registry) => registry.auth_type === 'basic' || registry.auth_type === 'token'
+      ),
+    [availableRegistries]
+  );
+  const registryByID = useMemo(
+    () => new Map(availableRegistries.map((registry) => [registry.id, registry])),
+    [availableRegistries]
+  );
+  const normalizedImageSearch = imageSearch.trim().toLowerCase();
+  const filteredPreviewImages = previewImages.filter(
+    (image) => !normalizedImageSearch || image.full_ref.toLowerCase().includes(normalizedImageSearch)
+  );
   const selectableImages = previewImages.filter((image) => !exclusionByRef.has(image.full_ref));
+  const filteredSelectableImages = filteredPreviewImages.filter(
+    (image) => !exclusionByRef.has(image.full_ref)
+  );
+  const selectedFilteredImageCount = filteredSelectableImages.filter((image) =>
+    selectedImageRefs.has(image.full_ref)
+  ).length;
   const pendingCandidates = candidates.filter((candidate) => candidate.status === 'unresolved');
   const handledCandidates = candidates
     .filter((candidate) => candidate.status !== 'unresolved')
@@ -697,17 +791,34 @@ export default function GitRepositoryDetailPage() {
             Add Helm source
           </Button>
         </Card.Header>
-        <Card.Content className="space-y-3">
-          {helmSources.length === 0 ? (
-            <p className="text-sm text-muted">
-              Add a source when a chart lives outside this repository or needs explicit Helm values.
-            </p>
-          ) : (
-            helmSources.map((source) => (
-              <div
-                key={source.id}
-                className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-3"
-              >
+        <Card.Content className="p-0">
+          <Accordion hideSeparator variant="surface">
+            <Accordion.Item id="managed-helm-sources">
+              <Accordion.Heading>
+                <Accordion.Trigger className="px-5 py-3 hover:bg-surface-secondary">
+                  <span className="text-sm font-medium">Configured sources</span>
+                  <Chip size="sm" variant="soft">
+                    {helmSources.length}
+                  </Chip>
+                  <Accordion.Indicator />
+                </Accordion.Trigger>
+              </Accordion.Heading>
+              <Accordion.Panel>
+                <Accordion.Body className="space-y-3 px-5 pb-5">
+                  {helmSources.length === 0 ? (
+                    <p className="text-sm text-muted">
+                      Add a source when a chart lives outside this repository or needs explicit Helm values.
+                    </p>
+                  ) : (
+                    helmSources.map((source) => {
+              const dependencyRegistry = source.dependency_registry_id
+                ? registryByID.get(source.dependency_registry_id)
+                : null;
+              return (
+                <div
+                  key={source.id}
+                  className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-3"
+                >
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <code className="text-xs font-medium text-foreground">{source.chart_path}</code>
@@ -725,6 +836,16 @@ export default function GitRepositoryDetailPage() {
                       : 'Chart defaults only'}
                     {source.release_name ? ` · Release: ${source.release_name}` : ''}
                   </p>
+                  <div className="text-xs text-muted">
+                    <p>
+                      Dependency credentials:{' '}
+                      {dependencyRegistry?.name ??
+                        (source.dependency_registry_id ? 'Selected registry' : 'Automatic matching')}
+                    </p>
+                    {dependencyRegistry ? (
+                      <p className="mt-0.5 break-all text-muted/80">{dependencyRegistry.url}</p>
+                    ) : null}
+                  </div>
                   {source.source_type === 'url' ? (
                     <p className="truncate text-xs text-muted">
                       {source.clone_url} · {source.ref}
@@ -734,22 +855,27 @@ export default function GitRepositoryDetailPage() {
                 <div className="flex shrink-0 gap-2">
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="tertiary"
                     onPress={() => void openHelmSourceEditor(source)}
                   >
                     Edit
                   </Button>
                   <Button
                     size="sm"
-                    variant="tertiary"
+                    variant="danger-soft"
                     onPress={() => void removeHelmSource(source)}
                   >
                     Remove
                   </Button>
                 </div>
-              </div>
-            ))
-          )}
+                </div>
+              );
+                    })
+                  )}
+                </Accordion.Body>
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
         </Card.Content>
       </Card>
 
@@ -894,15 +1020,31 @@ export default function GitRepositoryDetailPage() {
               </div>
             </Card.Header>
             <Card.Content className="p-0">
-              <div className="m-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-2.5">
+              <div className="m-4 mb-0">
+                <SearchField
+                  aria-label="Search discovered images"
+                  className="w-full sm:max-w-md"
+                  value={imageSearch}
+                  onChange={setImageSearch}
+                  variant="secondary"
+                >
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input placeholder="Search image name, tag, or digest" />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+              </div>
+              <div className="m-4 flex flex-wrap items-end gap-4 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-2.5">
                 <Checkbox
-                  isDisabled={selectableImages.length === 0}
+                  isDisabled={filteredSelectableImages.length === 0}
                   isIndeterminate={
-                    selectedImageRefs.size > 0 && selectedImageRefs.size < selectableImages.length
+                    selectedFilteredImageCount > 0 &&
+                    selectedFilteredImageCount < filteredSelectableImages.length
                   }
                   isSelected={
-                    selectableImages.length > 0 &&
-                    selectedImageRefs.size === selectableImages.length
+                    filteredSelectableImages.length > 0 &&
+                    selectedFilteredImageCount === filteredSelectableImages.length
                   }
                   onChange={toggleAllImages}
                   variant="secondary"
@@ -913,11 +1055,14 @@ export default function GitRepositoryDetailPage() {
                     </Checkbox.Control>
                     <div className="flex flex-col gap-0.5">
                       <Label>Select all scan-enabled images</Label>
-                      <Description>{selectableImages.length} ready to add to a scan</Description>
+                      <Description>
+                        {filteredSelectableImages.length}
+                        {normalizedImageSearch ? ` of ${selectableImages.length} matching` : ''} ready to add to a scan
+                      </Description>
                     </div>
                   </Checkbox.Content>
                 </Checkbox>
-                <div className="flex flex-wrap gap-2">
+                <div className="ml-auto flex shrink-0 flex-wrap gap-2">
                   <Button
                     isDisabled={selectedImageRefs.size === 0}
                     isPending={startingScan}
@@ -939,7 +1084,7 @@ export default function GitRepositoryDetailPage() {
                 </div>
               </div>
               <div className="border-t border-divider/70">
-                {previewImages.map((image) => {
+                {filteredPreviewImages.map((image) => {
                   const locations = locationsFor(image);
                   const exclusion = exclusionByRef.get(image.full_ref);
                   const latestScan = latestScanByRef.get(image.full_ref);
@@ -1068,6 +1213,11 @@ export default function GitRepositoryDetailPage() {
                     </div>
                   );
                 })}
+                {filteredPreviewImages.length === 0 ? (
+                  <p className="px-4 py-8 text-center text-sm text-muted">
+                    No discovered images match “{imageSearch}”.
+                  </p>
+                ) : null}
               </div>
             </Card.Content>
           </Card>
@@ -1322,6 +1472,11 @@ export default function GitRepositoryDetailPage() {
                         ) : null}
                       </>
                     ) : null}
+                    <DependencyRegistrySelect
+                      registries={selectableDependencyRegistries}
+                      value={dependencyRegistryID}
+                      onChange={setDependencyRegistryID}
+                    />
                     <FormField
                       label="Chart path"
                       value={chart}
@@ -1465,6 +1620,11 @@ export default function GitRepositoryDetailPage() {
                     ) : null}
                   </>
                 ) : null}
+                <DependencyRegistrySelect
+                  registries={selectableDependencyRegistries}
+                  value={dependencyRegistryID}
+                  onChange={setDependencyRegistryID}
+                />
                 <FormField
                   label="Chart path"
                   value={chart}

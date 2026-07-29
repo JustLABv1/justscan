@@ -123,6 +123,7 @@ type GitRepositoryHelmSource struct {
 	RepositoryID         uuid.UUID  `bun:"repository_id,type:uuid,notnull" json:"repository_id"`
 	SourceType           string     `bun:"source_type,type:text,notnull" json:"source_type"`
 	ChartRepositoryID    *uuid.UUID `bun:"chart_repository_id,type:uuid" json:"chart_repository_id,omitempty"`
+	DependencyRegistryID *uuid.UUID `bun:"dependency_registry_id,type:uuid" json:"dependency_registry_id,omitempty"`
 	CloneURL             string     `bun:"clone_url,type:text,notnull,default:''" json:"clone_url,omitempty"`
 	Ref                  string     `bun:"ref,type:text,notnull,default:'HEAD'" json:"ref"`
 	AuthType             string     `bun:"auth_type,type:text,notnull,default:'none'" json:"auth_type"`

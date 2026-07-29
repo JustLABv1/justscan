@@ -788,7 +788,7 @@ func discoverManagedHelmSources(ctx context.Context, repositoryRoot string, repo
 		if removeChartRoot != nil {
 			defer removeChartRoot()
 		}
-		if err := appendHelmChartFromRoots(ctx, repositoryRoot, chartRoot, byRef, justScanSource{Chart: source.ChartPath, Values: source.Values, ReleaseName: source.ReleaseName}, chartLabel, repository); err != nil {
+		if err := appendHelmChartFromRoots(ctx, repositoryRoot, chartRoot, byRef, justScanSource{Chart: source.ChartPath, Values: source.Values, ReleaseName: source.ReleaseName}, chartLabel, repository, source.DependencyRegistryID); err != nil {
 			return nil, fmt.Errorf("managed Helm source %s: %w", source.ChartPath, err)
 		}
 	}
@@ -1190,7 +1190,7 @@ func discoverConfiguredSources(ctx context.Context, root string, configuration j
 				return nil, fmt.Errorf(".justscan.yaml source %d (manifests): %w", index+1, err)
 			}
 		case "helm":
-			if err := appendHelmChartFromRoots(ctx, root, root, byRef, source, "", repository); err != nil {
+			if err := appendHelmChartFromRoots(ctx, root, root, byRef, source, "", repository, nil); err != nil {
 				return nil, fmt.Errorf(".justscan.yaml source %d (helm): %w", index+1, err)
 			}
 		default:
@@ -1342,10 +1342,10 @@ func appendManifestFile(root string, byRef map[string]*DiscoveredImage, path str
 }
 
 func appendHelmChart(ctx context.Context, root string, byRef map[string]*DiscoveredImage, source justScanSource) error {
-	return appendHelmChartFromRoots(ctx, root, root, byRef, source, "", models.GitRepository{})
+	return appendHelmChartFromRoots(ctx, root, root, byRef, source, "", models.GitRepository{}, nil)
 }
 
-func appendHelmChartFromRoots(ctx context.Context, valuesRoot, chartRoot string, byRef map[string]*DiscoveredImage, source justScanSource, chartLabel string, repository models.GitRepository) error {
+func appendHelmChartFromRoots(ctx context.Context, valuesRoot, chartRoot string, byRef map[string]*DiscoveredImage, source justScanSource, chartLabel string, repository models.GitRepository, dependencyRegistryID *uuid.UUID) error {
 	chart, err := resolveRepositoryPath(chartRoot, source.Chart)
 	if err != nil {
 		return fmt.Errorf("chart: %w", err)
@@ -1377,7 +1377,7 @@ func appendHelmChartFromRoots(ctx context.Context, valuesRoot, chartRoot string,
 		return err
 	}
 	defer os.RemoveAll(temporaryHelmHome)
-	helmEnv, err := helmEnvironment(ctx, temporaryHelmHome, chart, repository)
+	helmEnv, err := helmEnvironment(ctx, temporaryHelmHome, chart, repository, dependencyRegistryID)
 	if err != nil {
 		return err
 	}
@@ -1407,7 +1407,7 @@ type helmDependency struct {
 // helmEnvironment isolates Helm's state for every render. It also logs into
 // registries owned by the same workspace before Helm resolves OCI or HTTP
 // dependencies declared in Chart.yaml.
-func helmEnvironment(ctx context.Context, home, chart string, repository models.GitRepository) ([]string, error) {
+func helmEnvironment(ctx context.Context, home, chart string, repository models.GitRepository, dependencyRegistryID *uuid.UUID) ([]string, error) {
 	environment := append(os.Environ(),
 		"HELM_CONFIG_HOME="+home,
 		"HELM_CACHE_HOME="+filepath.Join(home, "cache"),
@@ -1436,18 +1436,44 @@ func helmEnvironment(ctx context.Context, home, chart string, repository models.
 	if err := db.NewSelect().Model(&registries).OrderExpr("created_at DESC").Scan(ctx); err != nil {
 		return nil, fmt.Errorf("load Helm dependency registries: %w", err)
 	}
+	var selectedRegistry *models.Registry
+	if dependencyRegistryID != nil {
+		for index := range registries {
+			if registries[index].ID == *dependencyRegistryID {
+				selectedRegistry = &registries[index]
+				break
+			}
+		}
+		if selectedRegistry == nil {
+			return nil, fmt.Errorf("selected Helm dependency registry is unavailable")
+		}
+		allowed, err := registryBelongsToRepository(ctx, db, selectedRegistry, repository)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, fmt.Errorf("selected Helm dependency registry is not available to this workspace")
+		}
+	}
 	configuredHosts := map[string]bool{}
 	ociRegistries := []helmRegistryCredential{}
 	httpRepositories := []helmRepositoryCredential{}
+	selectedRegistryMatched := false
 	for _, dependency := range metadata.Dependencies {
 		endpoint := strings.TrimSpace(dependency.Repository)
 		host := helmRepositoryHost(endpoint)
 		if host == "" || configuredHosts[host] {
 			continue
 		}
-		registry, err := matchingHelmRegistry(ctx, db, registries, repository, host, endpoint)
-		if err != nil {
-			return nil, err
+		var registry *models.Registry
+		if selectedRegistry != nil && helmRepositoryHost(selectedRegistry.URL) == host {
+			registry = selectedRegistry
+			selectedRegistryMatched = true
+		} else {
+			registry, err = matchingHelmRegistry(ctx, db, registries, repository, host, endpoint)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if registry == nil || registry.AuthType == "" || registry.AuthType == models.RegistryAuthNone {
 			continue
@@ -1473,6 +1499,12 @@ func helmEnvironment(ctx context.Context, home, chart string, repository models.
 			httpRepositories = append(httpRepositories, helmRepositoryCredential{Name: "justscan-" + strings.ReplaceAll(host, ".", "-"), URL: endpoint, Username: helmBasicUsername(registry), Password: secret})
 		}
 		configuredHosts[host] = true
+	}
+	if selectedRegistry != nil && !selectedRegistryMatched {
+		return nil, fmt.Errorf(
+			"selected Helm dependency registry %q does not match any dependency host in Chart.yaml",
+			selectedRegistry.Name,
+		)
 	}
 	if len(ociRegistries) > 0 {
 		if err := writeHelmRegistryCredentials(home, ociRegistries); err != nil {

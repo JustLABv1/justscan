@@ -1,8 +1,8 @@
 'use client';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
-import { FormField } from '@/components/ui/form-field';
 import { StatusAlert } from '@/components/ui/form-alert';
+import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, heroTextAreaClassName } from '@/components/ui/form-styles';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import type {
@@ -338,7 +338,12 @@ function summarizeRule(rule: NotificationRule, channels: NotificationChannel[]) 
   return `${rule.event_types.join(', ')} • ${channelNames || 'No channels'} • ${conditions}`;
 }
 
-export function NotificationManager({ basePath, heading, description, canManage = true }: NotificationManagerProps) {
+export function NotificationManager({
+  basePath,
+  heading,
+  description,
+  canManage = true,
+}: NotificationManagerProps) {
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [rules, setRules] = useState<NotificationRule[]>([]);
   const [deliveries, setDeliveries] = useState<NotificationDelivery[]>([]);
@@ -683,34 +688,38 @@ export function NotificationManager({ basePath, heading, description, canManage 
                       </Table.Cell>
                       <Table.Cell>
                         <div className="flex justify-end">
-                          {canManage ? <RowActionsMenu
-                            label={`Open actions for ${channel.name}`}
-                            items={[
-                              {
-                                id: 'edit-channel',
-                                label: 'Edit channel',
-                                icon: <Setting07Icon size={14} />,
-                                onAction: () => openEditChannel(channel),
-                              },
-                              {
-                                id: 'test-channel',
-                                label: 'Send test',
-                                icon: <Notification01Icon size={14} />,
-                                onAction: () => {
-                                  void handleTestChannel(channel);
+                          {canManage ? (
+                            <RowActionsMenu
+                              label={`Open actions for ${channel.name}`}
+                              items={[
+                                {
+                                  id: 'edit-channel',
+                                  label: 'Edit channel',
+                                  icon: <Setting07Icon size={14} />,
+                                  onAction: () => openEditChannel(channel),
                                 },
-                              },
-                              {
-                                id: 'delete-channel',
-                                label: 'Delete channel',
-                                icon: <Delete01Icon size={14} />,
-                                variant: 'danger',
-                                onAction: () => {
-                                  void handleDeleteChannel(channel);
+                                {
+                                  id: 'test-channel',
+                                  label: 'Send test',
+                                  icon: <Notification01Icon size={14} />,
+                                  onAction: () => {
+                                    void handleTestChannel(channel);
+                                  },
                                 },
-                              },
-                            ]}
-                          /> : <span className="text-xs text-muted">Read only</span>}
+                                {
+                                  id: 'delete-channel',
+                                  label: 'Delete channel',
+                                  icon: <Delete01Icon size={14} />,
+                                  variant: 'danger',
+                                  onAction: () => {
+                                    void handleDeleteChannel(channel);
+                                  },
+                                },
+                              ]}
+                            />
+                          ) : (
+                            <span className="text-xs text-muted">Read only</span>
+                          )}
                         </div>
                       </Table.Cell>
                     </Table.Row>
@@ -766,26 +775,28 @@ export function NotificationManager({ basePath, heading, description, canManage 
                         </p>
                       </div>
                       <div className="flex">
-                        {canManage ? <RowActionsMenu
-                          label={`Open actions for ${rule.name}`}
-                          items={[
-                            {
-                              id: 'edit-rule',
-                              label: 'Edit rule',
-                              icon: <Setting07Icon size={14} />,
-                              onAction: () => openEditRule(rule),
-                            },
-                            {
-                              id: 'delete-rule',
-                              label: 'Delete rule',
-                              icon: <Delete01Icon size={14} />,
-                              variant: 'danger',
-                              onAction: () => {
-                                void handleDeleteRule(rule);
+                        {canManage ? (
+                          <RowActionsMenu
+                            label={`Open actions for ${rule.name}`}
+                            items={[
+                              {
+                                id: 'edit-rule',
+                                label: 'Edit rule',
+                                icon: <Setting07Icon size={14} />,
+                                onAction: () => openEditRule(rule),
                               },
-                            },
-                          ]}
-                        /> : null}
+                              {
+                                id: 'delete-rule',
+                                label: 'Delete rule',
+                                icon: <Delete01Icon size={14} />,
+                                variant: 'danger',
+                                onAction: () => {
+                                  void handleDeleteRule(rule);
+                                },
+                              },
+                            ]}
+                          />
+                        ) : null}
                       </div>
                     </div>
                   </Card.Content>
@@ -850,7 +861,8 @@ export function NotificationManager({ basePath, heading, description, canManage 
                       </Table.Cell>
                       <Table.Cell>
                         <div className="flex justify-end">
-                          {canManage && (job.status === 'dead_letter' || job.status === 'failed') ? (
+                          {canManage &&
+                          (job.status === 'dead_letter' || job.status === 'failed') ? (
                             <RowActionsMenu
                               label={`Open actions for ${job.rule_name ?? 'notification job'}`}
                               items={[
@@ -1397,7 +1409,7 @@ export function NotificationManager({ basePath, heading, description, canManage 
                                 ),
                               }))
                             }
-                            variant="secondary"
+                            variant="primary"
                           >
                             <Select.Trigger className={heroSelectTriggerClassName}>
                               <span className="truncate">
@@ -1432,7 +1444,7 @@ export function NotificationManager({ basePath, heading, description, canManage 
                                 ),
                               }))
                             }
-                            variant="secondary"
+                            variant="primary"
                           >
                             <Select.Trigger className={heroSelectTriggerClassName}>
                               <span className="truncate">
@@ -1475,6 +1487,7 @@ export function NotificationManager({ basePath, heading, description, canManage 
                               conditionValuePlaceholders[condition.field] ??
                               'Value or comma-separated values'
                             }
+                            variant="primary"
                           />
 
                           <div className="flex items-center justify-end">

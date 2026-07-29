@@ -330,14 +330,15 @@ func ListLatestImageScans(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		var scans []struct {
-			FullRef   string    `bun:"full_ref" json:"full_ref"`
-			ScanID    uuid.UUID `bun:"scan_id" json:"scan_id"`
-			Status    string    `bun:"status" json:"status"`
-			CreatedAt time.Time `bun:"created_at" json:"created_at"`
+			FullRef        string    `bun:"full_ref" json:"full_ref"`
+			ScanID         uuid.UUID `bun:"scan_id" json:"scan_id"`
+			Status         string    `bun:"status" json:"status"`
+			ExternalStatus string    `bun:"external_status" json:"external_status"`
+			CreatedAt      time.Time `bun:"created_at" json:"created_at"`
 		}
 		if err := db.NewSelect().
 			TableExpr("git_repository_run_images AS ri").
-			ColumnExpr("DISTINCT ON (ri.full_ref) ri.full_ref, s.id AS scan_id, s.status, s.created_at").
+			ColumnExpr("DISTINCT ON (ri.full_ref) ri.full_ref, s.id AS scan_id, s.status, s.external_status, s.created_at").
 			Join("JOIN git_repository_runs AS r ON r.id = ri.run_id").
 			Join("JOIN scans AS s ON s.id = ri.scan_id").
 			Where("r.repository_id = ?", item.ID).

@@ -32,6 +32,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
@@ -789,14 +790,12 @@ export default function GitRepositoryDetailPage() {
                                 </Chip>
                               ) : null}
                               {latestScan ? (
-                                <Chip
-                                  className="shrink-0"
-                                  color={latestScan.status === 'failed' ? 'danger' : latestScan.status === 'completed' ? 'success' : 'accent'}
-                                  size="sm"
-                                  variant="soft"
-                                >
-                                  {latestScan.status}
-                                </Chip>
+                                <span className="shrink-0">
+                                  <StatusBadge
+                                    status={latestScan.status}
+                                    externalStatus={latestScan.external_status}
+                                  />
+                                </span>
                               ) : null}
                               <Accordion.Indicator className="shrink-0" />
                             </Accordion.Trigger>

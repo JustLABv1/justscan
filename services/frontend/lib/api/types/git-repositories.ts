@@ -105,5 +105,6 @@ export interface GitRepositoryLatestImageScan {
   full_ref: string;
   scan_id: string;
   status: string;
+  external_status?: string;
   created_at: string;
 }

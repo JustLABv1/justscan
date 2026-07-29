@@ -52,13 +52,13 @@ Kustomize rendering enables its built-in Helm support, so `helmCharts`, `valuesF
 
 ### `helm` source
 
-`chart` is required and must be a repository-relative local Helm chart directory. `values` is optional and is applied in order. Before rendering, JustScan runs `helm dependency build` inside the short-lived clone, so `Chart.lock` is honored and downloaded dependencies are never written back to Git. OCI and HTTP dependency credentials are taken from a matching registry in the same workspace (or a system registry).
+`chart` is required and must be a repository-relative local Helm chart directory. `values` is optional and is applied in order. Before rendering, JustScan runs `helm dependency build` inside the short-lived clone, so `Chart.lock` is honored and downloaded dependencies are never written back to Git. OCI and HTTP dependency credentials are taken from the dedicated Helm registry credential resource in the same workspace.
 
 ### Managed Helm sources
 
 The repository page can also store a Helm source outside `.justscan.yaml`. Choose a local chart, another registered Git repository in the same workspace, or a direct HTTPS Git URL. Direct-source credentials are encrypted at rest; values files always remain paths in the deployment repository. Managed sources are rendered alongside `.justscan.yaml`, because connector IDs and credentials cannot be exported safely.
 
-Each managed source may select a JustScan registry for Helm dependency credentials. The default automatically matches dependency hosts to accessible registries. An explicit selection takes precedence for dependencies on the selected registry's host, which makes credential choice deterministic when multiple registry resources use the same upstream host.
+Each managed source may select a dedicated Helm registry credential. The default automatically matches protocol, host, and repository path to accessible Helm credentials. An explicit selection takes precedence for matching dependencies, which makes credential choice deterministic when multiple credentials use the same upstream host. Existing `dependency_registry_id` links remain a legacy compatibility path only; new sources never resolve normal image registries.
 
 ## Setup-infra example
 

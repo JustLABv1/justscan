@@ -39,17 +39,18 @@ type repositoryRequest struct {
 }
 
 type helmSourceRequest struct {
-	SourceType           string   `json:"source_type"`
-	ChartRepositoryID    string   `json:"chart_repository_id"`
-	DependencyRegistryID string   `json:"dependency_registry_id"`
-	CloneURL             string   `json:"clone_url"`
-	Ref                  string   `json:"ref"`
-	AuthType             string   `json:"auth_type"`
-	Username             string   `json:"username"`
-	Credential           string   `json:"credential"`
-	ChartPath            string   `json:"chart_path"`
-	Values               []string `json:"values"`
-	ReleaseName          string   `json:"release_name"`
+	SourceType               string   `json:"source_type"`
+	ChartRepositoryID        string   `json:"chart_repository_id"`
+	HelmRegistryCredentialID *string  `json:"helm_registry_credential_id"`
+	DependencyRegistryID     string   `json:"dependency_registry_id"`
+	CloneURL                 string   `json:"clone_url"`
+	Ref                      string   `json:"ref"`
+	AuthType                 string   `json:"auth_type"`
+	Username                 string   `json:"username"`
+	Credential               string   `json:"credential"`
+	ChartPath                string   `json:"chart_path"`
+	Values                   []string `json:"values"`
+	ReleaseName              string   `json:"release_name"`
 }
 
 func List(db *bun.DB) gin.HandlerFunc {
@@ -631,8 +632,28 @@ func buildHelmSource(c *gin.Context, db *bun.DB, repository *models.GitRepositor
 	}
 	if previous != nil {
 		source.CreatedAt, source.EncryptedCredential = previous.CreatedAt, previous.EncryptedCredential
+		source.DependencyRegistryID, source.HelmRegistryCredentialID = previous.DependencyRegistryID, previous.HelmRegistryCredentialID
+	}
+	if body.HelmRegistryCredentialID != nil {
+		value := strings.TrimSpace(*body.HelmRegistryCredentialID)
+		if value == "" {
+			source.HelmRegistryCredentialID, source.DependencyRegistryID = nil, nil
+		} else {
+			credentialID, err := uuid.Parse(value)
+			if err != nil {
+				return nil, fmt.Errorf("invalid Helm registry credential")
+			}
+			credential, err := authz.LoadHelmRegistryCredentialForRepository(c.Request.Context(), db, *repository, credentialID)
+			if err != nil || credential == nil {
+				return nil, fmt.Errorf("Helm registry credential must be available to the same workspace")
+			}
+			source.HelmRegistryCredentialID, source.DependencyRegistryID = &credentialID, nil
+		}
 	}
 	if value := strings.TrimSpace(body.DependencyRegistryID); value != "" {
+		if source.HelmRegistryCredentialID != nil {
+			return nil, fmt.Errorf("use Helm registry credentials for new dependency configuration")
+		}
 		registryID, err := uuid.Parse(value)
 		if err != nil {
 			return nil, fmt.Errorf("invalid dependency registry")

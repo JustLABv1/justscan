@@ -73,14 +73,14 @@ Create a managed Helm source with:
 
 Before rendering a managed or repository-owned Helm chart, JustScan runs `helm dependency build` in an isolated working directory. `Chart.lock` is honored when present. OCI and HTTP dependencies from `Chart.yaml` are downloaded for that render only; no dependency archive, lock file, or credential is written back to Git.
 
-For private OCI or HTTP dependencies, create a JustScan registry with credentials that have pull permission. Artifactory OCI access tokens require the Artifactory username and access token together.
+For private OCI or HTTP dependencies, create a **Helm registry credential** with pull permission. It is separate from a JustScan image registry, so it never appears in image scanning flows. Artifactory OCI access tokens use the Artifactory username and access token together.
 
 In a managed source, **Helm dependency credentials** has two modes:
 
-- **Automatic matching:** JustScan selects an accessible registry that matches the dependency host. When several registry entries use the same host, the closest repository-path match is preferred.
-- **A selected registry:** choose a specific JustScan registry to make credential selection deterministic. It takes precedence for dependencies on that registry's host. This is useful when one Artifactory host has separate credentials or permissions for different Helm repositories.
+- **Automatic matching:** JustScan selects an accessible Helm credential matching protocol, host, and repository path. Equal matches require an explicit choice.
+- **A selected credential:** choose a specific Helm credential to make credential selection deterministic. It takes precedence for matching dependencies. This is useful when one Artifactory host has separate credentials or permissions for different Helm repositories.
 
-Only registries in the deployment repository's workspace can be selected. For organization-owned repositories, share the registry with that organization first.
+Only Helm credentials in the deployment repository's workspace can be selected. For organization-owned repositories, share the credential with that organization first. See [Helm registry credentials](./helm-registry-credentials).
 
 ### Dependency authentication failures
 

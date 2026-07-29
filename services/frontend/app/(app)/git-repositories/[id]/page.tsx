@@ -29,7 +29,7 @@ import {
   Settings02Icon,
 } from 'hugeicons-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
@@ -55,7 +55,7 @@ import {
   listGitRepositoryImageExclusions,
   listGitRepositoryLatestImageScans,
   listGitRepositoryRuns,
-  listRegistries,
+  listHelmRegistryCredentials,
   runGitRepository,
   updateGitRepositoryHelmSource,
   type GitRepository,
@@ -66,7 +66,7 @@ import {
   type GitRepositoryRun,
   type GitRepositoryRunCandidate,
   type GitRepositoryRunImage,
-  type Registry,
+  type HelmRegistryCredential,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -75,23 +75,23 @@ type Preview = { run: GitRepositoryRun; images: GitRepositoryRunImage[] };
 
 type HelmSourceMode = 'local' | 'repository' | 'url';
 
-function DependencyRegistrySelect({
-  registries,
+function HelmCredentialSelect({
+  credentials,
   value,
   onChange,
 }: {
-  registries: Registry[];
+  credentials: HelmRegistryCredential[];
   value: string;
   onChange: (value: string) => void;
 }) {
   return (
     <Select
-      aria-label="Helm dependency registry"
+      aria-label="Helm registry credential"
       value={value || 'automatic'}
       onChange={(nextValue) => onChange(nextValue === 'automatic' ? '' : String(nextValue))}
       variant="secondary"
     >
-      <Label>Helm dependency credentials</Label>
+      <Label>Helm registry credential</Label>
       <Select.Trigger>
         <Select.Value />
         <Select.Indicator />
@@ -99,11 +99,11 @@ function DependencyRegistrySelect({
       <Select.Popover>
         <ListBox>
           <ListBox.Item id="automatic">Automatic matching</ListBox.Item>
-          {registries.map((registry) => (
-            <ListBox.Item id={registry.id} key={registry.id} textValue={registry.name}>
+          {credentials.map((credential) => (
+            <ListBox.Item id={credential.id} key={credential.id} textValue={credential.name}>
               <div className="flex min-w-0 flex-col items-start gap-0.5">
-                <Label>{registry.name}</Label>
-                <Description className="!block break-all">{registry.url}</Description>
+                <Label>{credential.name}</Label>
+                <Description className="!block break-all">{credential.protocol.toUpperCase()} · {credential.url}</Description>
               </div>
               <ListBox.ItemIndicator />
             </ListBox.Item>
@@ -111,8 +111,7 @@ function DependencyRegistrySelect({
         </ListBox>
       </Select.Popover>
       <Description>
-        Select the JustScan registry whose credentials Helm should use for matching dependency
-        hosts.
+        Select a Helm-only credential, or use automatic matching. Image registries are never used.
       </Description>
     </Select>
   );
@@ -156,11 +155,12 @@ export default function GitRepositoryDetailPage() {
   const [chartUsername, setChartUsername] = useState('');
   const [chartCredential, setChartCredential] = useState('');
   const [releaseName, setReleaseName] = useState('');
-  const [dependencyRegistryID, setDependencyRegistryID] = useState('');
+  const [helmRegistryCredentialID, setHelmRegistryCredentialID] = useState<string | null>(null);
+  const helmCredentialSelectionTouched = useRef(false);
   const [imageSearch, setImageSearch] = useState('');
   const [helmSources, setHelmSources] = useState<GitRepositoryHelmSource[]>([]);
   const [availableRepositories, setAvailableRepositories] = useState<GitRepository[]>([]);
-  const [availableRegistries, setAvailableRegistries] = useState<Registry[]>([]);
+  const [availableHelmCredentials, setAvailableHelmCredentials] = useState<HelmRegistryCredential[]>([]);
   const [editingHelmSource, setEditingHelmSource] = useState<GitRepositoryHelmSource | null>(null);
   const [selectedCandidateIDs, setSelectedCandidateIDs] = useState<Set<string>>(new Set());
   const [selectedImageRefs, setSelectedImageRefs] = useState<Set<string>>(new Set());
@@ -187,21 +187,21 @@ export default function GitRepositoryDetailPage() {
         nextExclusions,
         nextLatestImageScans,
         nextHelmSources,
-        nextRegistries,
+        nextCredentials,
       ] = await Promise.all([
         getGitRepository(id),
         listGitRepositoryRuns(id),
         listGitRepositoryImageExclusions(id),
         listGitRepositoryLatestImageScans(id),
         listGitRepositoryHelmSources(id),
-        listRegistries().catch(() => []),
+        listHelmRegistryCredentials().catch(() => []),
       ]);
       setRepository(nextRepository);
       setRuns(nextRuns);
       setImageExclusions(nextExclusions);
       setLatestImageScans(nextLatestImageScans);
       setHelmSources(nextHelmSources);
-      setAvailableRegistries(nextRegistries);
+      setAvailableHelmCredentials(nextCredentials);
       const latestDryRun = nextRuns.find((run) => run.trigger === 'dry_run');
       if (latestDryRun) {
         const [nextPreview, nextCandidates] = await Promise.all([
@@ -276,12 +276,13 @@ export default function GitRepositoryDetailPage() {
     setChartAuthType('none');
     setChartUsername('');
     setChartCredential('');
-    setDependencyRegistryID('');
+    setHelmRegistryCredentialID(null);
+    helmCredentialSelectionTouched.current = false;
     setReleaseName('');
-    void Promise.all([listGitRepositories(), listRegistries().catch(() => [])])
-      .then(([nextRepositories, nextRegistries]) => {
+    void Promise.all([listGitRepositories(), listHelmRegistryCredentials().catch(() => [])])
+      .then(([nextRepositories, nextCredentials]) => {
         setAvailableRepositories(nextRepositories);
-        setAvailableRegistries(nextRegistries);
+        setAvailableHelmCredentials(nextCredentials);
       })
       .catch(() => undefined);
     reviewOverlay.open();
@@ -328,7 +329,10 @@ export default function GitRepositoryDetailPage() {
         .map((value) => value.trim())
         .filter(Boolean),
       release_name: releaseName.trim(),
-      dependency_registry_id: dependencyRegistryID || undefined,
+      helm_registry_credential_id:
+        editingHelmSource?.dependency_registry_id && !helmCredentialSelectionTouched.current
+          ? undefined
+          : helmRegistryCredentialID,
     };
     if (helmSourceType === 'repository') source.chart_repository_id = chartRepositoryID;
     if (helmSourceType === 'url') {
@@ -350,17 +354,18 @@ export default function GitRepositoryDetailPage() {
     setChartAuthType(source?.auth_type ?? 'none');
     setChartUsername(source?.username ?? '');
     setChartCredential('');
-    setDependencyRegistryID(source?.dependency_registry_id ?? '');
+    setHelmRegistryCredentialID(source?.helm_registry_credential_id ?? (source?.dependency_registry_id ? null : null));
+    helmCredentialSelectionTouched.current = false;
     setChart(source?.chart_path ?? '');
     setValues(source?.values.join('\n') ?? '');
     setReleaseName(source?.release_name ?? '');
     try {
-      const [nextRepositories, nextRegistries] = await Promise.all([
+      const [nextRepositories, nextCredentials] = await Promise.all([
         listGitRepositories(),
-        listRegistries().catch(() => []),
+        listHelmRegistryCredentials().catch(() => []),
       ]);
       setAvailableRepositories(nextRepositories);
-      setAvailableRegistries(nextRegistries);
+      setAvailableHelmCredentials(nextCredentials);
       helmSourceOverlay.open();
     } catch (caught) {
       error(caught instanceof Error ? caught.message : 'Could not load chart repositories.');
@@ -618,16 +623,9 @@ export default function GitRepositoryDetailPage() {
     }
     return result;
   }, [availableRepositories, id]);
-  const selectableDependencyRegistries = useMemo(
-    () =>
-      availableRegistries.filter(
-        (registry) => registry.auth_type === 'basic' || registry.auth_type === 'token'
-      ),
-    [availableRegistries]
-  );
-  const registryByID = useMemo(
-    () => new Map(availableRegistries.map((registry) => [registry.id, registry])),
-    [availableRegistries]
+  const helmCredentialByID = useMemo(
+    () => new Map(availableHelmCredentials.map((credential) => [credential.id, credential])),
+    [availableHelmCredentials]
   );
   const normalizedImageSearch = imageSearch.trim().toLowerCase();
   const filteredPreviewImages = previewImages.filter(
@@ -811,8 +809,8 @@ export default function GitRepositoryDetailPage() {
                     </p>
                   ) : (
                     helmSources.map((source) => {
-              const dependencyRegistry = source.dependency_registry_id
-                ? registryByID.get(source.dependency_registry_id)
+              const credential = source.helm_registry_credential_id
+                ? helmCredentialByID.get(source.helm_registry_credential_id)
                 : null;
               return (
                 <div
@@ -838,13 +836,13 @@ export default function GitRepositoryDetailPage() {
                   </p>
                   <div className="text-xs text-muted">
                     <p>
-                      Dependency credentials:{' '}
-                      {dependencyRegistry?.name ??
-                        (source.dependency_registry_id ? 'Selected registry' : 'Automatic matching')}
+                      Dependency credentials: {credential?.name ??
+                        (source.dependency_registry_id ? 'Legacy image registry' : 'Automatic matching')}
                     </p>
-                    {dependencyRegistry ? (
-                      <p className="mt-0.5 break-all text-muted/80">{dependencyRegistry.url}</p>
+                    {credential ? (
+                      <p className="mt-0.5 break-all text-muted/80">{credential.protocol.toUpperCase()} · {credential.url}</p>
                     ) : null}
+                    {source.dependency_registry_id ? <p className="mt-1 text-warning">Legacy registry link — edit and select a Helm credential to migrate it.</p> : null}
                   </div>
                   {source.source_type === 'url' ? (
                     <p className="truncate text-xs text-muted">
@@ -1472,10 +1470,10 @@ export default function GitRepositoryDetailPage() {
                         ) : null}
                       </>
                     ) : null}
-                    <DependencyRegistrySelect
-                      registries={selectableDependencyRegistries}
-                      value={dependencyRegistryID}
-                      onChange={setDependencyRegistryID}
+                    <HelmCredentialSelect
+                      credentials={availableHelmCredentials}
+                      value={helmRegistryCredentialID ?? ''}
+                      onChange={(value) => { helmCredentialSelectionTouched.current = true; setHelmRegistryCredentialID(value || null); }}
                     />
                     <FormField
                       label="Chart path"
@@ -1620,10 +1618,10 @@ export default function GitRepositoryDetailPage() {
                     ) : null}
                   </>
                 ) : null}
-                <DependencyRegistrySelect
-                  registries={selectableDependencyRegistries}
-                  value={dependencyRegistryID}
-                  onChange={setDependencyRegistryID}
+                <HelmCredentialSelect
+                  credentials={availableHelmCredentials}
+                  value={helmRegistryCredentialID ?? ''}
+                  onChange={(value) => { helmCredentialSelectionTouched.current = true; setHelmRegistryCredentialID(value || null); }}
                 />
                 <FormField
                   label="Chart path"

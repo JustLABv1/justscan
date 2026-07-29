@@ -788,7 +788,7 @@ func discoverManagedHelmSources(ctx context.Context, repositoryRoot string, repo
 		if removeChartRoot != nil {
 			defer removeChartRoot()
 		}
-		if err := appendHelmChartFromRoots(ctx, repositoryRoot, chartRoot, byRef, justScanSource{Chart: source.ChartPath, Values: source.Values, ReleaseName: source.ReleaseName}, chartLabel, repository, source.DependencyRegistryID); err != nil {
+		if err := appendHelmChartFromRoots(ctx, repositoryRoot, chartRoot, byRef, justScanSource{Chart: source.ChartPath, Values: source.Values, ReleaseName: source.ReleaseName}, chartLabel, repository, source.DependencyRegistryID, source.HelmRegistryCredentialID); err != nil {
 			return nil, fmt.Errorf("managed Helm source %s: %w", source.ChartPath, err)
 		}
 	}
@@ -1190,7 +1190,7 @@ func discoverConfiguredSources(ctx context.Context, root string, configuration j
 				return nil, fmt.Errorf(".justscan.yaml source %d (manifests): %w", index+1, err)
 			}
 		case "helm":
-			if err := appendHelmChartFromRoots(ctx, root, root, byRef, source, "", repository, nil); err != nil {
+			if err := appendHelmChartFromRoots(ctx, root, root, byRef, source, "", repository, nil, nil); err != nil {
 				return nil, fmt.Errorf(".justscan.yaml source %d (helm): %w", index+1, err)
 			}
 		default:
@@ -1342,10 +1342,14 @@ func appendManifestFile(root string, byRef map[string]*DiscoveredImage, path str
 }
 
 func appendHelmChart(ctx context.Context, root string, byRef map[string]*DiscoveredImage, source justScanSource) error {
-	return appendHelmChartFromRoots(ctx, root, root, byRef, source, "", models.GitRepository{}, nil)
+	return appendHelmChartFromRoots(ctx, root, root, byRef, source, "", models.GitRepository{}, nil, nil)
 }
 
-func appendHelmChartFromRoots(ctx context.Context, valuesRoot, chartRoot string, byRef map[string]*DiscoveredImage, source justScanSource, chartLabel string, repository models.GitRepository, dependencyRegistryID *uuid.UUID) error {
+func appendHelmChartFromRoots(ctx context.Context, valuesRoot, chartRoot string, byRef map[string]*DiscoveredImage, source justScanSource, chartLabel string, repository models.GitRepository, dependencyRegistryID *uuid.UUID, helmCredentialIDs ...*uuid.UUID) error {
+	var helmRegistryCredentialID *uuid.UUID
+	if len(helmCredentialIDs) > 0 {
+		helmRegistryCredentialID = helmCredentialIDs[0]
+	}
 	chart, err := resolveRepositoryPath(chartRoot, source.Chart)
 	if err != nil {
 		return fmt.Errorf("chart: %w", err)
@@ -1377,7 +1381,7 @@ func appendHelmChartFromRoots(ctx context.Context, valuesRoot, chartRoot string,
 		return err
 	}
 	defer os.RemoveAll(temporaryHelmHome)
-	helmEnv, err := helmEnvironment(ctx, temporaryHelmHome, chart, repository, dependencyRegistryID)
+	helmEnv, err := helmEnvironment(ctx, temporaryHelmHome, chart, repository, dependencyRegistryID, helmRegistryCredentialID)
 	if err != nil {
 		return err
 	}
@@ -1407,7 +1411,7 @@ type helmDependency struct {
 // helmEnvironment isolates Helm's state for every render. It also logs into
 // registries owned by the same workspace before Helm resolves OCI or HTTP
 // dependencies declared in Chart.yaml.
-func helmEnvironment(ctx context.Context, home, chart string, repository models.GitRepository, dependencyRegistryID *uuid.UUID) ([]string, error) {
+func helmEnvironment(ctx context.Context, home, chart string, repository models.GitRepository, dependencyRegistryID, helmRegistryCredentialID *uuid.UUID) ([]string, error) {
 	environment := append(os.Environ(),
 		"HELM_CONFIG_HOME="+home,
 		"HELM_CACHE_HOME="+filepath.Join(home, "cache"),
@@ -1432,12 +1436,37 @@ func helmEnvironment(ctx context.Context, home, chart string, repository models.
 	if db == nil {
 		return environment, nil
 	}
-	var registries []models.Registry
-	if err := db.NewSelect().Model(&registries).OrderExpr("created_at DESC").Scan(ctx); err != nil {
-		return nil, fmt.Errorf("load Helm dependency registries: %w", err)
+	var credentials []models.HelmRegistryCredential
+	if err := db.NewSelect().Model(&credentials).OrderExpr("created_at DESC").Scan(ctx); err != nil {
+		return nil, fmt.Errorf("load Helm registry credentials: %w", err)
 	}
+	var registries []models.Registry
 	var selectedRegistry *models.Registry
+	var selectedCredential *models.HelmRegistryCredential
+	if helmRegistryCredentialID != nil {
+		for index := range credentials {
+			if credentials[index].ID == *helmRegistryCredentialID {
+				selectedCredential = &credentials[index]
+				break
+			}
+		}
+		if selectedCredential == nil {
+			return nil, fmt.Errorf("selected Helm registry credential is unavailable")
+		}
+		allowed, err := authz.HelmRegistryCredentialBelongsToRepository(ctx, db, &repository, selectedCredential)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, fmt.Errorf("selected Helm registry credential is not available to this workspace")
+		}
+	}
+	// Legacy normal registries are intentionally loaded only for an existing
+	// explicit link. New automatic matching never consults them.
 	if dependencyRegistryID != nil {
+		if err := db.NewSelect().Model(&registries).OrderExpr("created_at DESC").Scan(ctx); err != nil {
+			return nil, fmt.Errorf("load legacy Helm dependency registry: %w", err)
+		}
 		for index := range registries {
 			if registries[index].ID == *dependencyRegistryID {
 				selectedRegistry = &registries[index]
@@ -1469,11 +1498,27 @@ func helmEnvironment(ctx context.Context, home, chart string, repository models.
 		if selectedRegistry != nil && helmRepositoryHost(selectedRegistry.URL) == host {
 			registry = selectedRegistry
 			selectedRegistryMatched = true
-		} else {
-			registry, err = matchingHelmRegistry(ctx, db, registries, repository, host, endpoint)
+		} else if selectedCredential == nil {
+			// Kept for compatibility only; there is no normal-registry fallback.
+			registry = nil
+		}
+		credential, credentialErr := matchingHelmCredential(ctx, db, credentials, repository, endpoint, selectedCredential)
+		if credentialErr != nil {
+			return nil, credentialErr
+		}
+		if credential != nil {
+			selectedRegistryMatched = selectedRegistryMatched || selectedCredential != nil
+			secret, err := crypto.Decrypt(crypto.KeyFromString(config.Config.Encryption.Key), credential.EncryptedSecret)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("decrypt Helm dependency credential for %q: %w", host, err)
 			}
+			if credential.Protocol == models.HelmRegistryProtocolOCI {
+				ociRegistries = append(ociRegistries, helmRegistryCredential{Host: host, Username: credential.Username, Password: secret, Bearer: credential.AuthType == models.HelmRegistryAuthBearerToken})
+			} else {
+				httpRepositories = append(httpRepositories, helmRepositoryCredential{Name: "justscan-" + strings.ReplaceAll(host, ".", "-"), URL: endpoint, Username: credential.Username, Password: secret})
+			}
+			configuredHosts[host] = true
+			continue
 		}
 		if registry == nil || registry.AuthType == "" || registry.AuthType == models.RegistryAuthNone {
 			continue
@@ -1488,9 +1533,9 @@ func helmEnvironment(ctx context.Context, home, chart string, repository models.
 		if strings.HasPrefix(endpoint, "oci://") {
 			ociRegistries = append(ociRegistries, helmRegistryCredential{
 				Host:     host,
-				AuthType: registry.AuthType,
 				Username: registry.Username,
 				Password: secret,
+				Bearer:   registry.AuthType == models.RegistryAuthToken && registry.Username == "",
 			})
 		} else {
 			if registry.AuthType == models.RegistryAuthToken {
@@ -1500,10 +1545,9 @@ func helmEnvironment(ctx context.Context, home, chart string, repository models.
 		}
 		configuredHosts[host] = true
 	}
-	if selectedRegistry != nil && !selectedRegistryMatched {
+	if (selectedRegistry != nil || selectedCredential != nil) && !selectedRegistryMatched {
 		return nil, fmt.Errorf(
-			"selected Helm dependency registry %q does not match any dependency host in Chart.yaml",
-			selectedRegistry.Name,
+			"selected Helm dependency credential does not match any dependency endpoint in Chart.yaml",
 		)
 	}
 	if len(ociRegistries) > 0 {
@@ -1528,9 +1572,10 @@ func helmBasicUsername(registry *models.Registry) string {
 
 type helmRegistryCredential struct {
 	Host     string
-	AuthType string
+	AuthType string // retained for compatibility with existing renderer tests
 	Username string
 	Password string
+	Bearer   bool
 }
 
 // helmRegistryFile follows Docker's registry config format, which Helm and
@@ -1552,14 +1597,8 @@ func writeHelmRegistryCredentials(home string, registries []helmRegistryCredenti
 	}
 	configuration := helmRegistryFile{Auths: make(map[string]helmRegistryAuth, len(registries))}
 	for _, registry := range registries {
-		if registry.AuthType == models.RegistryAuthToken {
-			if registry.Username == "" {
-				configuration.Auths[registry.Host] = helmRegistryAuth{RegistryToken: registry.Password}
-				continue
-			}
-			configuration.Auths[registry.Host] = helmRegistryAuth{
-				Auth: base64.StdEncoding.EncodeToString([]byte(registry.Username + ":" + registry.Password)),
-			}
+		if registry.Bearer || (registry.AuthType == models.RegistryAuthToken && registry.Username == "") {
+			configuration.Auths[registry.Host] = helmRegistryAuth{RegistryToken: registry.Password}
 			continue
 		}
 		username := registry.Username
@@ -1637,6 +1676,48 @@ func matchingHelmRegistry(ctx context.Context, db *bun.DB, registries []models.R
 				best = registry
 				bestScore = score
 			}
+		}
+	}
+	return best, nil
+}
+
+// matchingHelmCredential resolves only the dedicated Helm credential resource.
+// A tie is unsafe: the user must choose the intended credential explicitly.
+func matchingHelmCredential(ctx context.Context, db *bun.DB, credentials []models.HelmRegistryCredential, repository models.GitRepository, endpoint string, selected *models.HelmRegistryCredential) (*models.HelmRegistryCredential, error) {
+	protocol := models.HelmRegistryProtocolHTTP
+	if strings.HasPrefix(strings.TrimSpace(endpoint), "oci://") {
+		protocol = models.HelmRegistryProtocolOCI
+	}
+	if selected != nil {
+		if selected.Protocol == protocol && helmRepositoryHost(selected.URL) == helmRepositoryHost(endpoint) && helmRegistryMatchScore(helmRepositoryPath(endpoint), helmRepositoryPath(selected.URL)) > 0 {
+			return selected, nil
+		}
+		return nil, nil
+	}
+	dependencyPath, host := helmRepositoryPath(endpoint), helmRepositoryHost(endpoint)
+	var best *models.HelmRegistryCredential
+	bestScore := -1
+	for index := range credentials {
+		credential := &credentials[index]
+		if credential.Protocol != protocol || helmRepositoryHost(credential.URL) != host {
+			continue
+		}
+		allowed, err := authz.HelmRegistryCredentialBelongsToRepository(ctx, db, &repository, credential)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			continue
+		}
+		score := helmRegistryMatchScore(dependencyPath, helmRepositoryPath(credential.URL))
+		if score <= 0 {
+			continue
+		}
+		if score == bestScore {
+			return nil, fmt.Errorf("multiple Helm registry credentials match %q; select one on the Helm source", endpoint)
+		}
+		if score > bestScore {
+			best, bestScore = credential, score
 		}
 	}
 	return best, nil

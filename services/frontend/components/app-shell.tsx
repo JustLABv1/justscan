@@ -130,6 +130,7 @@ const navGroups = [
     label: 'Workspace setup',
     items: [
       { href: '/registries', label: 'Registries', Icon: ServerStack01Icon },
+      { href: '/helm-registry-credentials', label: 'Helm credentials', Icon: Key01Icon },
       { href: '/tags', label: 'Tags', Icon: Tag01Icon },
       { href: '/orgs', label: 'Organizations', Icon: Building04Icon },
     ],

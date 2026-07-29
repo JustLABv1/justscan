@@ -1,4 +1,4 @@
 {
   "title": "Scan and analyze",
-  "pages": ["scan-lifecycle", "images-and-archives", "helm", "gitops", "registries-and-xray", "findings-and-sbom", "watchlists-and-vuln-kb"]
+  "pages": ["scan-lifecycle", "images-and-archives", "helm", "gitops", "helm-registry-credentials", "registries-and-xray", "findings-and-sbom", "watchlists-and-vuln-kb"]
 }

@@ -6,6 +6,13 @@ import (
 	"justscan-backend/pkg/models"
 )
 
+func TestBuildImageRefUsesAtSeparatorForDigest(t *testing.T) {
+	imageRef := buildImageRef("cloud.de/docker-remote/n8nio/n8n", "sha256:584f")
+	if imageRef != "cloud.de/docker-remote/n8nio/n8n@sha256:584f" {
+		t.Fatalf("expected digest reference to use @, got %q", imageRef)
+	}
+}
+
 func TestNormalizeScanTargetWithXrayRepository_DefaultRepoApplied(t *testing.T) {
 	registry := &models.Registry{
 		URL:            "https://registry.example.com",

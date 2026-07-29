@@ -3,13 +3,15 @@ title: GitOps repository discovery
 description: Discover deployment images from Kustomize, Helm, and plain Kubernetes manifests.
 ---
 
-Connect a Git repository in the application, validate access, then run discovery before scheduling scans. A dry run discovers candidates only; it never queues scans.
+Connect a Git repository in the application, validate access, then run discovery before scheduling scans. A dry run renders the configured deployment inputs and discovers images only; it never queues scans.
 
 ## Discovery modes
 
 - **Auto** detects unreferenced Kustomize roots and falls back to Kubernetes workload manifests.
 - **Kustomize entrypoints** renders only operator-selected repository paths.
 - **Plain Kubernetes manifests** extracts images from `containers`, `initContainers`, and `ephemeralContainers`.
+
+After a dry run, review discovered images, select the ones that should be tracked, then create scans. Excluded images remain visible in the review so their deployment context is retained without scheduling future scans.
 
 ## Repository-owned configuration
 
@@ -33,4 +35,55 @@ discovery:
 
 - A `kustomize` source accepts a discovery `root` or explicit `paths` to `kustomization.yaml` files.
 - A `manifests` source requires `paths` to plain Kubernetes YAML files or directories.
-- A `helm` source requires a local chart directory. Dependencies must already be present in the repository because JustScan does not update them during discovery.
+- A `helm` source requires a chart directory in the same repository. JustScan resolves declared chart dependencies in an isolated temporary directory before rendering; it never writes them back to Git.
+
+## Managed Helm sources
+
+Use **Managed Helm sources** on a Git repository page when the chart and its deployment values do not live together. These source definitions are stored in JustScan rather than `.justscan.yaml`, so connector IDs and credentials never need to be committed to Git.
+
+For each source, choose one of these chart locations:
+
+- **This repository:** a chart path in the deployment repository.
+- **Registered Git repository:** another JustScan Git connector in the same workspace.
+- **Direct Git URL:** an HTTPS Git URL. Optional credentials are encrypted at rest and are never returned by the API.
+
+The **chart path** is always relative to the selected chart source. **Values files** are always relative to the deployment repository and are applied in the listed order. This lets one shared application chart be rendered with environment-specific values from repositories such as `envs/prod/app/values.yaml`.
+
+Managed sources run alongside repository-owned `.justscan.yaml` sources. Editing a managed source does not modify the checked-out repository.
+
+### External chart example
+
+Suppose the deployment repository contains an environment values file while the chart is elsewhere:
+
+```text
+deployment repository: envs/ki/dev/litellm/values.yaml
+chart repository:      apps/litellm
+```
+
+Create a managed Helm source with:
+
+| Field          | Value                                                           |
+| -------------- | --------------------------------------------------------------- |
+| Chart location | This repository or the external chart connector, as appropriate |
+| Chart path     | `apps/litellm`                                                  |
+| Values files   | `envs/ki/dev/litellm/values.yaml`                               |
+| Release name   | `litellm`                                                       |
+
+## Helm dependencies and private registries
+
+Before rendering a managed or repository-owned Helm chart, JustScan runs `helm dependency build` in an isolated working directory. `Chart.lock` is honored when present. OCI and HTTP dependencies from `Chart.yaml` are downloaded for that render only; no dependency archive, lock file, or credential is written back to Git.
+
+For private OCI or HTTP dependencies, create a JustScan registry with credentials that have pull permission. Artifactory OCI access tokens require the Artifactory username and access token together.
+
+In a managed source, **Helm dependency credentials** has two modes:
+
+- **Automatic matching:** JustScan selects an accessible registry that matches the dependency host. When several registry entries use the same host, the closest repository-path match is preferred.
+- **A selected registry:** choose a specific JustScan registry to make credential selection deterministic. It takes precedence for dependencies on that registry's host. This is useful when one Artifactory host has separate credentials or permissions for different Helm repositories.
+
+Only registries in the deployment repository's workspace can be selected. For organization-owned repositories, share the registry with that organization first.
+
+### Dependency authentication failures
+
+- **401 Unauthorized:** the registry did not accept the configured credential. Check the registry username and token, and use the registry URL host used by `oci://` in `Chart.yaml`.
+- **403 Forbidden:** authentication succeeded, but the credential lacks pull access to the dependency repository or chart version. Grant read permission to the chart repository, or select a different registry credential on the managed source.
+- **Selected registry does not match a dependency host:** select a registry with the same host as the `oci://` or HTTP dependency URL, or use automatic matching.

@@ -106,7 +106,12 @@ const ORG_TABS = [
   {
     id: 'integrations',
     label: 'CI/CD & CLI',
-    description: 'Set up the JustScan CLI, automated CI/CD scanning, and notifications.',
+    description: 'Set up the JustScan CLI and automated CI/CD scanning.',
+  },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    description: 'Configure organization notification channels, rules, and delivery status.',
   },
 ] as const;
 
@@ -118,7 +123,6 @@ const LEGACY_ORG_TABS: Record<string, OrgTabId> = {
   team: 'access',
   members: 'access',
   tokens: 'access',
-  notifications: 'integrations',
   'ci-cd': 'integrations',
 };
 
@@ -230,17 +234,20 @@ export default function OrgDetailPage() {
   }, [orgVulnerabilityViewSettings]);
 
   const requestedTab = searchParams.get('tab');
-  const normalizedTab = requestedTab ? LEGACY_ORG_TABS[requestedTab] || requestedTab : 'overview';
+  const requestedSection = searchParams.get('section');
+  const normalizedTab =
+    requestedTab === 'integrations' && requestedSection === 'notifications'
+      ? 'notifications'
+      : requestedTab
+        ? LEGACY_ORG_TABS[requestedTab] || requestedTab
+        : 'overview';
   const activeTab = (ORG_TABS.find((tab) => tab.id === normalizedTab)?.id ??
     'overview') as OrgTabId;
-  const requestedSection = searchParams.get('section');
   const activeSection =
     activeTab === 'access'
       ? 'members'
       : activeTab === 'integrations'
-        ? requestedSection === 'notifications'
-          ? 'notifications'
-          : 'ci-cd'
+        ? 'ci-cd'
         : null;
 
   function openInviteModal() {
@@ -590,7 +597,7 @@ export default function OrgDetailPage() {
             />
           </div>
         )}
-        {activeTab === 'integrations' && activeSection === 'notifications' && (
+        {activeTab === 'notifications' && (
           <NotificationManager
             basePath={`/api/v1/orgs/${id}/notifications`}
             heading="Organization Notifications"

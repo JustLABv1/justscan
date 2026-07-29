@@ -112,6 +112,33 @@ type GitRepositoryDiscoveryRule struct {
 	UpdatedAt    time.Time  `bun:"updated_at,type:timestamptz" json:"updated_at"`
 }
 
+// GitRepositoryHelmSource describes a Helm chart that contributes workloads to
+// a deployment repository. The chart may live in the deployment repository,
+// another registered Git connector, or a separately configured HTTPS Git URL.
+// Direct-source credentials are encrypted and never returned in API responses.
+type GitRepositoryHelmSource struct {
+	bun.BaseModel `bun:"table:git_repository_helm_sources"`
+
+	ID                       uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	RepositoryID             uuid.UUID  `bun:"repository_id,type:uuid,notnull" json:"repository_id"`
+	SourceType               string     `bun:"source_type,type:text,notnull" json:"source_type"`
+	ChartRepositoryID        *uuid.UUID `bun:"chart_repository_id,type:uuid" json:"chart_repository_id,omitempty"`
+	HelmRegistryCredentialID *uuid.UUID `bun:"helm_registry_credential_id,type:uuid" json:"helm_registry_credential_id,omitempty"`
+	DependencyRegistryID     *uuid.UUID `bun:"dependency_registry_id,type:uuid" json:"dependency_registry_id,omitempty"`
+	CloneURL                 string     `bun:"clone_url,type:text,notnull,default:''" json:"clone_url,omitempty"`
+	Ref                      string     `bun:"ref,type:text,notnull,default:'HEAD'" json:"ref"`
+	AuthType                 string     `bun:"auth_type,type:text,notnull,default:'none'" json:"auth_type"`
+	Username                 string     `bun:"username,type:text,notnull,default:''" json:"username"`
+	EncryptedCredential      string     `bun:"encrypted_credential,type:text,notnull,default:''" json:"-"`
+	CredentialConfigured     bool       `bun:"-" json:"credential_configured"`
+	ChartPath                string     `bun:"chart_path,type:text,notnull" json:"chart_path"`
+	Values                   []string   `bun:"values,type:jsonb,notnull,default:'[]'" json:"values"`
+	ReleaseName              string     `bun:"release_name,type:text,notnull,default:''" json:"release_name"`
+	CreatedByID              uuid.UUID  `bun:"created_by_id,type:uuid,notnull" json:"created_by_id"`
+	CreatedAt                time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	UpdatedAt                time.Time  `bun:"updated_at,type:timestamptz" json:"updated_at"`
+}
+
 type GitRepositoryRunCandidate struct {
 	bun.BaseModel `bun:"table:git_repository_run_candidates"`
 

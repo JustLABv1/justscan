@@ -197,7 +197,8 @@ func processScan(job ScanJob, cacheDir string) {
 		return
 	}
 
-	log.Infof("Worker: starting scan %s for %s:%s", scanID, scan.ImageName, scan.ImageTag)
+	imageRef := buildImageRef(scan.ImageName, scan.ImageTag)
+	log.Infof("Worker: starting scan %s for %s", scanID, imageRef)
 
 	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
 		recordScanStepOutput(ctx, db, scanID, "Worker started and handed off to the Xray provider flow.")
@@ -269,7 +270,7 @@ func processScan(job ScanJob, cacheDir string) {
 		recordScanStepOutput(ctx, db, scanID, "Scanning uploaded OCI archive input with Trivy.")
 		trivyOut, trivyVersion, err = RunScanFromArchive(ctx, job.ArchivePath, job.Platform, cacheDir)
 	} else {
-		recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Scanning registry image %s:%s with Trivy.", scan.ImageName, scan.ImageTag))
+		recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Scanning registry image %s with Trivy.", imageRef))
 		trivyOut, trivyVersion, err = RunScanWithRegistryRetry(ctx, db, scan, job.EnvVars, job.Platform, cacheDir)
 	}
 	stopHeartbeat()
@@ -305,7 +306,7 @@ func processScan(job ScanJob, cacheDir string) {
 			recordScanStepOutput(ctx, db, scanID, "Scanning uploaded OCI archive input with Grype.")
 			grypeOut, version, grypeErr = RunGrypeScanFromArchive(ctx, job.ArchivePath, job.Platform, cacheDir)
 		} else {
-			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Scanning registry image %s:%s with Grype.", scan.ImageName, scan.ImageTag))
+			recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Scanning registry image %s with Grype.", imageRef))
 			grypeOut, version, grypeErr = RunGrypeScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
 		}
 		stopHeartbeat()
@@ -374,7 +375,7 @@ func processScan(job ScanJob, cacheDir string) {
 		recordScanStepOutput(ctx, db, scanID, "Collecting SBOM components from the uploaded OCI archive.")
 		sbomOut, sbomErr = RunSBOMScanFromArchive(ctx, job.ArchivePath, job.Platform, cacheDir)
 	} else {
-		recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Collecting SBOM components from %s:%s.", scan.ImageName, scan.ImageTag))
+		recordScanStepOutput(ctx, db, scanID, fmt.Sprintf("Collecting SBOM components from %s.", imageRef))
 		sbomOut, sbomErr = RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, job.EnvVars, job.Platform, cacheDir)
 	}
 	stopHeartbeat()
@@ -509,7 +510,7 @@ func applyAutoTags(db *bun.DB, scan *models.Scan) {
 		return
 	}
 
-	imageFull := scan.ImageName + ":" + scan.ImageTag
+	imageFull := buildImageRef(scan.ImageName, scan.ImageTag)
 
 	for _, rule := range rules {
 		if matchesPattern(rule.Pattern, scan.ImageName) || matchesPattern(rule.Pattern, imageFull) {

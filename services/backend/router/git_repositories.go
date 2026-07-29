@@ -31,5 +31,9 @@ func GitRepositories(router *gin.RouterGroup, db *bun.DB) {
 		r.POST("/:id/discovery-rules", gitrepositories.CreateRule(db))
 		r.DELETE("/:id/discovery-rules/:ruleId", gitrepositories.DeleteRule(db))
 		r.GET("/:id/discovery-rules/export", gitrepositories.ExportRules(db))
+		r.GET("/:id/helm-sources", gitrepositories.ListHelmSources(db))
+		r.POST("/:id/helm-sources", gitrepositories.CreateHelmSource(db))
+		r.PUT("/:id/helm-sources/:sourceId", gitrepositories.UpdateHelmSource(db))
+		r.DELETE("/:id/helm-sources/:sourceId", gitrepositories.DeleteHelmSource(db))
 	}
 }

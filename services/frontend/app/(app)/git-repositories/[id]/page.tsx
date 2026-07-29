@@ -11,6 +11,7 @@ import {
   Label,
   ListBox,
   Modal,
+  SearchField,
   Select,
   Spinner,
   TextArea,
@@ -28,10 +29,11 @@ import {
   Settings02Icon,
 } from 'hugeicons-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
+import { StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
@@ -39,28 +41,81 @@ import { StatCard } from '@/components/ui/stat-card';
 import {
   cancelGitRepositoryRun,
   createGitRepositoryDiscoveryRule,
+  createGitRepositoryHelmSource,
   createGitRepositoryImageExclusion,
+  deleteGitRepositoryHelmSource,
   deleteGitRepositoryImageExclusion,
   discoverGitRepository,
   exportGitRepositoryDiscoveryRules,
   getGitRepository,
   getGitRepositoryRun,
+  listGitRepositories,
   listGitRepositoryCandidates,
+  listGitRepositoryHelmSources,
   listGitRepositoryImageExclusions,
   listGitRepositoryLatestImageScans,
   listGitRepositoryRuns,
+  listHelmRegistryCredentials,
   runGitRepository,
+  updateGitRepositoryHelmSource,
   type GitRepository,
+  type GitRepositoryHelmSource,
+  type GitRepositoryHelmSourceInput,
   type GitRepositoryImageExclusion,
   type GitRepositoryLatestImageScan,
   type GitRepositoryRun,
   type GitRepositoryRunCandidate,
   type GitRepositoryRunImage,
+  type HelmRegistryCredential,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 
 type Preview = { run: GitRepositoryRun; images: GitRepositoryRunImage[] };
+
+type HelmSourceMode = 'local' | 'repository' | 'url';
+
+function HelmCredentialSelect({
+  credentials,
+  value,
+  onChange,
+}: {
+  credentials: HelmRegistryCredential[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Select
+      aria-label="Helm registry credential"
+      value={value || 'automatic'}
+      onChange={(nextValue) => onChange(nextValue === 'automatic' ? '' : String(nextValue))}
+      variant="secondary"
+    >
+      <Label>Helm registry credential</Label>
+      <Select.Trigger>
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          <ListBox.Item id="automatic">Automatic matching</ListBox.Item>
+          {credentials.map((credential) => (
+            <ListBox.Item id={credential.id} key={credential.id} textValue={credential.name}>
+              <div className="flex min-w-0 flex-col items-start gap-0.5">
+                <Label>{credential.name}</Label>
+                <Description className="!block break-all">{credential.protocol.toUpperCase()} · {credential.url}</Description>
+              </div>
+              <ListBox.ItemIndicator />
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+      <Description>
+        Select a Helm-only credential, or use automatic matching. Image registries are never used.
+      </Description>
+    </Select>
+  );
+}
 
 function locationsFor(image: GitRepositoryRunImage) {
   return image.locations?.items ?? [];
@@ -92,33 +147,61 @@ export default function GitRepositoryDetailPage() {
   );
   const [chart, setChart] = useState('');
   const [values, setValues] = useState('');
+  const [helmSourceType, setHelmSourceType] = useState<HelmSourceMode>('local');
+  const [chartRepositoryID, setChartRepositoryID] = useState('');
+  const [chartCloneURL, setChartCloneURL] = useState('');
+  const [chartRef, setChartRef] = useState('HEAD');
+  const [chartAuthType, setChartAuthType] = useState<'none' | 'token' | 'basic'>('none');
+  const [chartUsername, setChartUsername] = useState('');
+  const [chartCredential, setChartCredential] = useState('');
+  const [releaseName, setReleaseName] = useState('');
+  const [helmRegistryCredentialID, setHelmRegistryCredentialID] = useState<string | null>(null);
+  const helmCredentialSelectionTouched = useRef(false);
+  const [imageSearch, setImageSearch] = useState('');
+  const [helmSources, setHelmSources] = useState<GitRepositoryHelmSource[]>([]);
+  const [availableRepositories, setAvailableRepositories] = useState<GitRepository[]>([]);
+  const [availableHelmCredentials, setAvailableHelmCredentials] = useState<HelmRegistryCredential[]>([]);
+  const [editingHelmSource, setEditingHelmSource] = useState<GitRepositoryHelmSource | null>(null);
   const [selectedCandidateIDs, setSelectedCandidateIDs] = useState<Set<string>>(new Set());
   const [selectedImageRefs, setSelectedImageRefs] = useState<Set<string>>(new Set());
   const [imageExclusions, setImageExclusions] = useState<GitRepositoryImageExclusion[]>([]);
   const [latestImageScans, setLatestImageScans] = useState<GitRepositoryLatestImageScan[]>([]);
   const reviewOverlay = useOverlayState();
+  const helmSourceOverlay = useOverlayState();
   const [loading, setLoading] = useState(true);
   const [discovering, setDiscovering] = useState(false);
   const [ignoringCandidates, setIgnoringCandidates] = useState(false);
-	const [startingScan, setStartingScan] = useState(false);
-	const [cancellingRun, setCancellingRun] = useState(false);
-	const [updatingImageExclusions, setUpdatingImageExclusions] = useState(false);
-	const { success, error } = useToast();
-	const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const [startingScan, setStartingScan] = useState(false);
+  const [cancellingRun, setCancellingRun] = useState(false);
+  const [updatingImageExclusions, setUpdatingImageExclusions] = useState(false);
+  const [savingHelmSource, setSavingHelmSource] = useState(false);
+  const { success, error } = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextRepository, nextRuns, nextExclusions, nextLatestImageScans] = await Promise.all([
+      const [
+        nextRepository,
+        nextRuns,
+        nextExclusions,
+        nextLatestImageScans,
+        nextHelmSources,
+        nextCredentials,
+      ] = await Promise.all([
         getGitRepository(id),
         listGitRepositoryRuns(id),
         listGitRepositoryImageExclusions(id),
         listGitRepositoryLatestImageScans(id),
+        listGitRepositoryHelmSources(id),
+        listHelmRegistryCredentials().catch(() => []),
       ]);
       setRepository(nextRepository);
       setRuns(nextRuns);
       setImageExclusions(nextExclusions);
       setLatestImageScans(nextLatestImageScans);
+      setHelmSources(nextHelmSources);
+      setAvailableHelmCredentials(nextCredentials);
       const latestDryRun = nextRuns.find((run) => run.trigger === 'dry_run');
       if (latestDryRun) {
         const [nextPreview, nextCandidates] = await Promise.all([
@@ -137,9 +220,7 @@ export default function GitRepositoryDetailPage() {
 
   useEffect(() => deferEffect(() => void load()), [load]);
 
-  const activeRun = runs.find((run) =>
-    ['queued', 'discovering', 'scanning'].includes(run.status)
-  );
+  const activeRun = runs.find((run) => ['queued', 'discovering', 'scanning'].includes(run.status));
   const hasActiveRun = Boolean(activeRun);
 
   useEffect(() => {
@@ -188,6 +269,22 @@ export default function GitRepositoryDetailPage() {
     setResolution(candidate.detected_type.startsWith('helm') ? 'helm' : 'manifests');
     setChart('');
     setValues(candidate.detected_type === 'helm_values' ? candidate.path : '');
+    setHelmSourceType('local');
+    setChartRepositoryID('');
+    setChartCloneURL('');
+    setChartRef('HEAD');
+    setChartAuthType('none');
+    setChartUsername('');
+    setChartCredential('');
+    setHelmRegistryCredentialID(null);
+    helmCredentialSelectionTouched.current = false;
+    setReleaseName('');
+    void Promise.all([listGitRepositories(), listHelmRegistryCredentials().catch(() => [])])
+      .then(([nextRepositories, nextCredentials]) => {
+        setAvailableRepositories(nextRepositories);
+        setAvailableHelmCredentials(nextCredentials);
+      })
+      .catch(() => undefined);
     reviewOverlay.open();
   }
 
@@ -198,28 +295,128 @@ export default function GitRepositoryDetailPage() {
       return;
     }
     const config =
-      resolution === 'helm'
-        ? {
-            chart,
-            values: values
-              .split('\n')
-              .map((value) => value.trim())
-              .filter(Boolean),
-          }
-        : resolution === 'kustomize' || resolution === 'manifests'
-          ? { paths: [reviewing.path] }
-          : {};
+      resolution === 'kustomize' || resolution === 'manifests' ? { paths: [reviewing.path] } : {};
     try {
-      await createGitRepositoryDiscoveryRule(id, {
-        path_pattern: reviewing.path,
-        resolution,
-        config,
-      });
+      if (resolution === 'helm') {
+        const source = helmSourcePayload();
+        await createGitRepositoryHelmSource(id, source);
+        setHelmSources(await listGitRepositoryHelmSources(id));
+      } else {
+        await createGitRepositoryDiscoveryRule(id, {
+          path_pattern: reviewing.path,
+          resolution,
+          config,
+        });
+      }
       reviewOverlay.close();
-      success('Discovery rule saved. Running a new dry discovery.');
+      success(
+        resolution === 'helm'
+          ? 'Helm source saved. Running a new dry discovery.'
+          : 'Discovery rule saved. Running a new dry discovery.'
+      );
       await discover();
     } catch (caught) {
       error(caught instanceof Error ? caught.message : 'Could not save discovery rule.');
+    }
+  }
+
+  function helmSourcePayload(): GitRepositoryHelmSourceInput {
+    const source: GitRepositoryHelmSourceInput = {
+      source_type: helmSourceType,
+      chart_path: chart.trim(),
+      values: values
+        .split('\n')
+        .map((value) => value.trim())
+        .filter(Boolean),
+      release_name: releaseName.trim(),
+      helm_registry_credential_id:
+        editingHelmSource?.dependency_registry_id && !helmCredentialSelectionTouched.current
+          ? undefined
+          : helmRegistryCredentialID,
+    };
+    if (helmSourceType === 'repository') source.chart_repository_id = chartRepositoryID;
+    if (helmSourceType === 'url') {
+      source.clone_url = chartCloneURL.trim();
+      source.ref = chartRef.trim() || 'HEAD';
+      source.auth_type = chartAuthType;
+      source.username = chartUsername.trim();
+      if (chartCredential) source.credential = chartCredential;
+    }
+    return source;
+  }
+
+  async function openHelmSourceEditor(source?: GitRepositoryHelmSource) {
+    setEditingHelmSource(source ?? null);
+    setHelmSourceType(source?.source_type ?? 'local');
+    setChartRepositoryID(source?.chart_repository_id ?? '');
+    setChartCloneURL(source?.clone_url ?? '');
+    setChartRef(source?.ref ?? 'HEAD');
+    setChartAuthType(source?.auth_type ?? 'none');
+    setChartUsername(source?.username ?? '');
+    setChartCredential('');
+    setHelmRegistryCredentialID(source?.helm_registry_credential_id ?? (source?.dependency_registry_id ? null : null));
+    helmCredentialSelectionTouched.current = false;
+    setChart(source?.chart_path ?? '');
+    setValues(source?.values.join('\n') ?? '');
+    setReleaseName(source?.release_name ?? '');
+    try {
+      const [nextRepositories, nextCredentials] = await Promise.all([
+        listGitRepositories(),
+        listHelmRegistryCredentials().catch(() => []),
+      ]);
+      setAvailableRepositories(nextRepositories);
+      setAvailableHelmCredentials(nextCredentials);
+      helmSourceOverlay.open();
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not load chart repositories.');
+    }
+  }
+
+  async function saveHelmSource() {
+    if (!chart.trim()) {
+      error('Enter the Helm chart path before saving this source.');
+      return;
+    }
+    if (helmSourceType === 'repository' && !chartRepositoryID) {
+      error('Select the registered chart repository.');
+      return;
+    }
+    if (helmSourceType === 'url' && !chartCloneURL.trim()) {
+      error('Enter the chart repository URL.');
+      return;
+    }
+    setSavingHelmSource(true);
+    try {
+      const source = helmSourcePayload();
+      if (editingHelmSource) {
+        await updateGitRepositoryHelmSource(id, editingHelmSource.id, source);
+      } else {
+        await createGitRepositoryHelmSource(id, source);
+      }
+      setHelmSources(await listGitRepositoryHelmSources(id));
+      helmSourceOverlay.close();
+      success('Helm source saved. Run a dry discovery to apply it.');
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not save Helm source.');
+    } finally {
+      setSavingHelmSource(false);
+    }
+  }
+
+  async function removeHelmSource(source: GitRepositoryHelmSource) {
+    const confirmed = await confirm({
+      title: 'Remove Helm source?',
+      message: `This stops discovering workloads rendered by ${source.chart_path}.`,
+      confirmLabel: 'Remove source',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await deleteGitRepositoryHelmSource(id, source.id);
+      setHelmSources((current) => current.filter((item) => item.id !== source.id));
+      success('Helm source removed.');
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not remove Helm source.');
     }
   }
 
@@ -262,9 +459,14 @@ export default function GitRepositoryDetailPage() {
   }
 
   function toggleAllImages(isSelected: boolean) {
-    setSelectedImageRefs(
-      isSelected ? new Set(selectableImages.map((image) => image.full_ref)) : new Set()
-    );
+    setSelectedImageRefs((current) => {
+      const next = new Set(current);
+      for (const image of filteredSelectableImages) {
+        if (isSelected) next.add(image.full_ref);
+        else next.delete(image.full_ref);
+      }
+      return next;
+    });
   }
 
   async function ignoreSelectedCandidates() {
@@ -309,8 +511,8 @@ export default function GitRepositoryDetailPage() {
       error(caught instanceof Error ? caught.message : 'Could not start repository scan.');
     } finally {
       setStartingScan(false);
-	  }
-	}
+    }
+  }
 
   async function cancelActiveRun() {
     if (!activeRun) return;
@@ -414,7 +616,28 @@ export default function GitRepositoryDetailPage() {
     () => new Map(latestImageScans.map((scan) => [scan.full_ref, scan])),
     [latestImageScans]
   );
+  const selectableChartRepositories = useMemo(() => {
+    const result: GitRepository[] = [];
+    for (const item of availableRepositories) {
+      if (item.id !== id) result.push(item);
+    }
+    return result;
+  }, [availableRepositories, id]);
+  const helmCredentialByID = useMemo(
+    () => new Map(availableHelmCredentials.map((credential) => [credential.id, credential])),
+    [availableHelmCredentials]
+  );
+  const normalizedImageSearch = imageSearch.trim().toLowerCase();
+  const filteredPreviewImages = previewImages.filter(
+    (image) => !normalizedImageSearch || image.full_ref.toLowerCase().includes(normalizedImageSearch)
+  );
   const selectableImages = previewImages.filter((image) => !exclusionByRef.has(image.full_ref));
+  const filteredSelectableImages = filteredPreviewImages.filter(
+    (image) => !exclusionByRef.has(image.full_ref)
+  );
+  const selectedFilteredImageCount = filteredSelectableImages.filter((image) =>
+    selectedImageRefs.has(image.full_ref)
+  ).length;
   const pendingCandidates = candidates.filter((candidate) => candidate.status === 'unresolved');
   const handledCandidates = candidates
     .filter((candidate) => candidate.status !== 'unresolved')
@@ -549,6 +772,111 @@ export default function GitRepositoryDetailPage() {
         />
       </div>
 
+      <Card className="overflow-hidden">
+        <Card.Header className="!flex-row items-start justify-between gap-4 border-b border-divider/70">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+              <PackageIcon size={17} />
+            </span>
+            <div className="min-w-0">
+              <Card.Title>Managed Helm sources</Card.Title>
+              <Card.Description>
+                Render local or external Git charts with values from this deployment repository.
+              </Card.Description>
+            </div>
+          </div>
+          <Button size="sm" variant="secondary" onPress={() => void openHelmSourceEditor()}>
+            Add Helm source
+          </Button>
+        </Card.Header>
+        <Card.Content className="p-0">
+          <Accordion hideSeparator variant="surface">
+            <Accordion.Item id="managed-helm-sources">
+              <Accordion.Heading>
+                <Accordion.Trigger className="px-5 py-3 hover:bg-surface-secondary">
+                  <span className="text-sm font-medium">Configured sources</span>
+                  <Chip size="sm" variant="soft">
+                    {helmSources.length}
+                  </Chip>
+                  <Accordion.Indicator />
+                </Accordion.Trigger>
+              </Accordion.Heading>
+              <Accordion.Panel>
+                <Accordion.Body className="space-y-3 px-5 pb-5">
+                  {helmSources.length === 0 ? (
+                    <p className="text-sm text-muted">
+                      Add a source when a chart lives outside this repository or needs explicit Helm values.
+                    </p>
+                  ) : (
+                    helmSources.map((source) => {
+              const credential = source.helm_registry_credential_id
+                ? helmCredentialByID.get(source.helm_registry_credential_id)
+                : null;
+              return (
+                <div
+                  key={source.id}
+                  className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-3"
+                >
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <code className="text-xs font-medium text-foreground">{source.chart_path}</code>
+                    <Chip size="sm" variant="soft">
+                      {source.source_type === 'local'
+                        ? 'This repository'
+                        : source.source_type === 'repository'
+                          ? 'Registered repository'
+                          : 'Direct Git URL'}
+                    </Chip>
+                  </div>
+                  <p className="text-xs text-muted">
+                    {source.values.length > 0
+                      ? `Values: ${source.values.join(', ')}`
+                      : 'Chart defaults only'}
+                    {source.release_name ? ` · Release: ${source.release_name}` : ''}
+                  </p>
+                  <div className="text-xs text-muted">
+                    <p>
+                      Dependency credentials: {credential?.name ??
+                        (source.dependency_registry_id ? 'Legacy image registry' : 'Automatic matching')}
+                    </p>
+                    {credential ? (
+                      <p className="mt-0.5 break-all text-muted/80">{credential.protocol.toUpperCase()} · {credential.url}</p>
+                    ) : null}
+                    {source.dependency_registry_id ? <p className="mt-1 text-warning">Legacy registry link — edit and select a Helm credential to migrate it.</p> : null}
+                  </div>
+                  {source.source_type === 'url' ? (
+                    <p className="truncate text-xs text-muted">
+                      {source.clone_url} · {source.ref}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    onPress={() => void openHelmSourceEditor(source)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger-soft"
+                    onPress={() => void removeHelmSource(source)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+                </div>
+              );
+                    })
+                  )}
+                </Accordion.Body>
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        </Card.Content>
+      </Card>
+
       {!preview ? (
         <EmptyState
           icon={<Search01Icon />}
@@ -675,7 +1003,8 @@ export default function GitRepositoryDetailPage() {
                 <div className="min-w-0">
                   <Card.Title>Discovered images</Card.Title>
                   <Card.Description>
-                    Review the images found in this dry run, then scan only the workloads you want to track.
+                    Review the images found in this dry run, then scan only the workloads you want
+                    to track.
                   </Card.Description>
                 </div>
               </div>
@@ -689,15 +1018,31 @@ export default function GitRepositoryDetailPage() {
               </div>
             </Card.Header>
             <Card.Content className="p-0">
-              <div className="m-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-2.5">
+              <div className="m-4 mb-0">
+                <SearchField
+                  aria-label="Search discovered images"
+                  className="w-full sm:max-w-md"
+                  value={imageSearch}
+                  onChange={setImageSearch}
+                  variant="secondary"
+                >
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input placeholder="Search image name, tag, or digest" />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+              </div>
+              <div className="m-4 flex flex-wrap items-end gap-4 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-2.5">
                 <Checkbox
-                  isDisabled={selectableImages.length === 0}
+                  isDisabled={filteredSelectableImages.length === 0}
                   isIndeterminate={
-                    selectedImageRefs.size > 0 && selectedImageRefs.size < selectableImages.length
+                    selectedFilteredImageCount > 0 &&
+                    selectedFilteredImageCount < filteredSelectableImages.length
                   }
                   isSelected={
-                    selectableImages.length > 0 &&
-                    selectedImageRefs.size === selectableImages.length
+                    filteredSelectableImages.length > 0 &&
+                    selectedFilteredImageCount === filteredSelectableImages.length
                   }
                   onChange={toggleAllImages}
                   variant="secondary"
@@ -709,12 +1054,13 @@ export default function GitRepositoryDetailPage() {
                     <div className="flex flex-col gap-0.5">
                       <Label>Select all scan-enabled images</Label>
                       <Description>
-                        {selectableImages.length} ready to add to a scan
+                        {filteredSelectableImages.length}
+                        {normalizedImageSearch ? ` of ${selectableImages.length} matching` : ''} ready to add to a scan
                       </Description>
                     </div>
                   </Checkbox.Content>
                 </Checkbox>
-                <div className="flex flex-wrap gap-2">
+                <div className="ml-auto flex shrink-0 flex-wrap gap-2">
                   <Button
                     isDisabled={selectedImageRefs.size === 0}
                     isPending={startingScan}
@@ -736,7 +1082,7 @@ export default function GitRepositoryDetailPage() {
                 </div>
               </div>
               <div className="border-t border-divider/70">
-                {previewImages.map((image) => {
+                {filteredPreviewImages.map((image) => {
                   const locations = locationsFor(image);
                   const exclusion = exclusionByRef.get(image.full_ref);
                   const latestScan = latestScanByRef.get(image.full_ref);
@@ -773,7 +1119,8 @@ export default function GitRepositoryDetailPage() {
                                   </code>
                                   <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
                                     <span>
-                                      {locations.length} deployment {locations.length === 1 ? 'location' : 'locations'}
+                                      {locations.length} deployment{' '}
+                                      {locations.length === 1 ? 'location' : 'locations'}
                                     </span>
                                     {latestScan ? (
                                       <span>Last scanned {timeAgo(latestScan.created_at)}</span>
@@ -789,14 +1136,12 @@ export default function GitRepositoryDetailPage() {
                                 </Chip>
                               ) : null}
                               {latestScan ? (
-                                <Chip
-                                  className="shrink-0"
-                                  color={latestScan.status === 'failed' ? 'danger' : latestScan.status === 'completed' ? 'success' : 'accent'}
-                                  size="sm"
-                                  variant="soft"
-                                >
-                                  {latestScan.status}
-                                </Chip>
+                                <span className="shrink-0">
+                                  <StatusBadge
+                                    status={latestScan.status}
+                                    externalStatus={latestScan.external_status}
+                                  />
+                                </span>
                               ) : null}
                               <Accordion.Indicator className="shrink-0" />
                             </Accordion.Trigger>
@@ -813,7 +1158,9 @@ export default function GitRepositoryDetailPage() {
                                     className="rounded-lg border border-divider/70 bg-surface-secondary px-3 py-2.5 text-xs"
                                   >
                                     <p className="truncate font-mono text-foreground">
-                                      {location.target ? `Rendered from ${location.target}` : location.file}
+                                      {location.target
+                                        ? `Rendered from ${location.target}`
+                                        : location.file}
                                     </p>
                                     <p className="mt-1 truncate text-muted">{location.path}</p>
                                     <p className="mt-1.5 text-muted">
@@ -829,7 +1176,9 @@ export default function GitRepositoryDetailPage() {
                                   className="mt-3"
                                   size="sm"
                                   variant="secondary"
-                                  onPress={() => router.push(`/scans/details/${latestScan.scan_id}`)}
+                                  onPress={() =>
+                                    router.push(`/scans/details/${latestScan.scan_id}`)
+                                  }
                                 >
                                   Open latest scan · {timeAgo(latestScan.created_at)}
                                 </Button>
@@ -862,6 +1211,11 @@ export default function GitRepositoryDetailPage() {
                     </div>
                   );
                 })}
+                {filteredPreviewImages.length === 0 ? (
+                  <p className="px-4 py-8 text-center text-sm text-muted">
+                    No discovered images match “{imageSearch}”.
+                  </p>
+                ) : null}
               </div>
             </Card.Content>
           </Card>
@@ -875,7 +1229,9 @@ export default function GitRepositoryDetailPage() {
                         <Folder01Icon size={17} />
                       </span>
                       <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-foreground">Repository tree</span>
+                        <span className="block text-sm font-semibold text-foreground">
+                          Repository tree
+                        </span>
                         <span className="mt-0.5 block truncate text-xs text-muted">
                           {repository.discovery_mode === 'manifests'
                             ? 'Source manifests and their detected image references'
@@ -964,13 +1320,23 @@ export default function GitRepositoryDetailPage() {
                 </Chip>
                 <Chip
                   className="ml-2"
-                  color={run.status === 'failed' ? 'danger' : run.status === 'completed' ? 'success' : run.status === 'partial' ? 'warning' : 'accent'}
+                  color={
+                    run.status === 'failed'
+                      ? 'danger'
+                      : run.status === 'completed'
+                        ? 'success'
+                        : run.status === 'partial'
+                          ? 'warning'
+                          : 'accent'
+                  }
                   size="sm"
                   variant="soft"
                 >
                   {run.status}
                 </Chip>
-                <span className="ml-2">{run.image_count} images · {run.scan_count} scans</span>
+                <span className="ml-2">
+                  {run.image_count} images · {run.scan_count} scans
+                </span>
               </div>
               <span className="text-foreground/60">{timeAgo(run.created_at)}</span>
             </div>
@@ -1009,11 +1375,111 @@ export default function GitRepositoryDetailPage() {
                 </Select>
                 {resolution === 'helm' ? (
                   <>
+                    <Select
+                      aria-label="Chart location"
+                      value={helmSourceType}
+                      onChange={(value) => setHelmSourceType(String(value) as HelmSourceMode)}
+                      variant="secondary"
+                    >
+                      <Label>Chart location</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="local">This repository</ListBox.Item>
+                          <ListBox.Item id="repository">Registered Git repository</ListBox.Item>
+                          <ListBox.Item id="url">Direct Git URL</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    {helmSourceType === 'repository' ? (
+                      <Select
+                        aria-label="Chart repository"
+                        value={chartRepositoryID || null}
+                        onChange={(value) => setChartRepositoryID(String(value ?? ''))}
+                        placeholder="Select a repository"
+                        variant="secondary"
+                      >
+                        <Label>Registered chart repository</Label>
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            {selectableChartRepositories.map((item) => (
+                              <ListBox.Item id={item.id} key={item.id}>
+                                {item.name}
+                              </ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                    ) : null}
+                    {helmSourceType === 'url' ? (
+                      <>
+                        <FormField
+                          label="Chart repository URL"
+                          value={chartCloneURL}
+                          onChange={(event) => setChartCloneURL(event.target.value)}
+                          placeholder="https://git.example.com/team/chart.git"
+                        />
+                        <FormField
+                          label="Chart repository ref"
+                          value={chartRef}
+                          onChange={(event) => setChartRef(event.target.value)}
+                          placeholder="main"
+                        />
+                        <Select
+                          aria-label="Chart repository authentication"
+                          value={chartAuthType}
+                          onChange={(value) =>
+                            setChartAuthType(String(value) as typeof chartAuthType)
+                          }
+                          variant="secondary"
+                        >
+                          <Label>Chart repository authentication</Label>
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item id="none">No authentication</ListBox.Item>
+                              <ListBox.Item id="token">Token</ListBox.Item>
+                              <ListBox.Item id="basic">Username and password</ListBox.Item>
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                        {chartAuthType !== 'none' ? (
+                          <>
+                            <FormField
+                              label="Git username"
+                              value={chartUsername}
+                              onChange={(event) => setChartUsername(event.target.value)}
+                            />
+                            <FormField
+                              label="Git credential"
+                              type="password"
+                              value={chartCredential}
+                              onChange={(event) => setChartCredential(event.target.value)}
+                            />
+                          </>
+                        ) : null}
+                      </>
+                    ) : null}
+                    <HelmCredentialSelect
+                      credentials={availableHelmCredentials}
+                      value={helmRegistryCredentialID ?? ''}
+                      onChange={(value) => { helmCredentialSelectionTouched.current = true; setHelmRegistryCredentialID(value || null); }}
+                    />
                     <FormField
-                      label="Local chart path"
+                      label="Chart path"
                       value={chart}
                       onChange={(event) => setChart(event.target.value)}
-                      placeholder="charts/app2"
+                      placeholder={helmSourceType === 'local' ? 'charts/app2' : 'charts/app2'}
                     />
                     <div className="grid gap-2">
                       <Label htmlFor="value-paths">Values files</Label>
@@ -1025,6 +1491,12 @@ export default function GitRepositoryDetailPage() {
                         variant="secondary"
                       />
                     </div>
+                    <FormField
+                      label="Release name"
+                      value={releaseName}
+                      onChange={(event) => setReleaseName(event.target.value)}
+                      placeholder="Optional; defaults to the chart directory name"
+                    />
                   </>
                 ) : null}
               </Modal.Body>
@@ -1038,9 +1510,161 @@ export default function GitRepositoryDetailPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+      <Modal>
+        <Modal.Backdrop isOpen={helmSourceOverlay.isOpen} onOpenChange={helmSourceOverlay.setOpen}>
+          <Modal.Container size="lg">
+            <Modal.Dialog>
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>
+                  {editingHelmSource ? 'Edit Helm source' : 'Add Helm source'}
+                </Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="grid gap-4">
+                <Select
+                  aria-label="Chart location"
+                  value={helmSourceType}
+                  onChange={(value) => setHelmSourceType(String(value) as HelmSourceMode)}
+                  variant="secondary"
+                >
+                  <Label>Chart location</Label>
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="local">This repository</ListBox.Item>
+                      <ListBox.Item id="repository">Registered Git repository</ListBox.Item>
+                      <ListBox.Item id="url">Direct Git URL</ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                {helmSourceType === 'repository' ? (
+                  <Select
+                    aria-label="Chart repository"
+                    value={chartRepositoryID || null}
+                    onChange={(value) => setChartRepositoryID(String(value ?? ''))}
+                    placeholder="Select a repository"
+                    variant="secondary"
+                  >
+                    <Label>Registered chart repository</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {selectableChartRepositories.map((item) => (
+                          <ListBox.Item id={item.id} key={item.id}>
+                            {item.name}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                ) : null}
+                {helmSourceType === 'url' ? (
+                  <>
+                    <FormField
+                      label="Chart repository URL"
+                      value={chartCloneURL}
+                      onChange={(event) => setChartCloneURL(event.target.value)}
+                      placeholder="https://git.example.com/team/chart.git"
+                    />
+                    <FormField
+                      label="Chart repository ref"
+                      value={chartRef}
+                      onChange={(event) => setChartRef(event.target.value)}
+                      placeholder="main"
+                    />
+                    <Select
+                      aria-label="Chart repository authentication"
+                      value={chartAuthType}
+                      onChange={(value) => setChartAuthType(String(value) as typeof chartAuthType)}
+                      variant="secondary"
+                    >
+                      <Label>Chart repository authentication</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="none">No authentication</ListBox.Item>
+                          <ListBox.Item id="token">Token</ListBox.Item>
+                          <ListBox.Item id="basic">Username and password</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    {chartAuthType !== 'none' ? (
+                      <>
+                        <FormField
+                          label="Git username"
+                          value={chartUsername}
+                          onChange={(event) => setChartUsername(event.target.value)}
+                        />
+                        <FormField
+                          label={
+                            editingHelmSource?.credential_configured
+                              ? 'New Git credential (optional)'
+                              : 'Git credential'
+                          }
+                          type="password"
+                          value={chartCredential}
+                          onChange={(event) => setChartCredential(event.target.value)}
+                        />
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+                <HelmCredentialSelect
+                  credentials={availableHelmCredentials}
+                  value={helmRegistryCredentialID ?? ''}
+                  onChange={(value) => { helmCredentialSelectionTouched.current = true; setHelmRegistryCredentialID(value || null); }}
+                />
+                <FormField
+                  label="Chart path"
+                  value={chart}
+                  onChange={(event) => setChart(event.target.value)}
+                  placeholder="apps/litellm"
+                />
+                <div className="grid gap-2">
+                  <Label htmlFor="managed-value-paths">Values files</Label>
+                  <TextArea
+                    id="managed-value-paths"
+                    value={values}
+                    onChange={(event) => setValues(event.target.value)}
+                    placeholder="envs/ki/dev/litellm/values.yaml"
+                    rows={3}
+                    variant="secondary"
+                  />
+                  <Description>
+                    One deployment-repository path per line. Values are applied in order.
+                  </Description>
+                </div>
+                <FormField
+                  label="Release name"
+                  value={releaseName}
+                  onChange={(event) => setReleaseName(event.target.value)}
+                  placeholder="Optional; defaults to the chart directory name"
+                />
+              </Modal.Body>
+              <Modal.Footer>
+                <Button slot="close" variant="tertiary">
+                  Cancel
+                </Button>
+                <Button isPending={savingHelmSource} onPress={() => void saveHelmSource()}>
+                  Save Helm source
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
       {confirmDialog}
     </PageContainer>
-	);
+  );
 }
 
 function MetricCard({

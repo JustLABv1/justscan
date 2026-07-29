@@ -3,6 +3,8 @@ title: Registries and Artifactory Xray
 description: Configure image registry access and select Trivy, Grype, or Xray analysis.
 ---
 
+> Helm dependency authentication uses [Helm registry credentials](./helm-registry-credentials), not the image registries described here.
+
 Create registries in **Workspace setup → Registries**. Credentials are encrypted at rest with the configured encryption key. Test a registry connection before relying on it in a scheduled or CI workflow. Set a default registry only when that default is unambiguous for the intended workspace.
 
 ## Xray modes

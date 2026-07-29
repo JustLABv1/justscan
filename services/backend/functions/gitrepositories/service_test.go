@@ -2,6 +2,8 @@ package gitrepositories
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -232,6 +234,138 @@ discovery:
 	}
 }
 
+func TestAppendHelmChartBuildsDependenciesBeforeRendering(t *testing.T) {
+	dir := t.TempDir()
+	chartDir := filepath.Join(dir, "charts", "demo")
+	if err := os.MkdirAll(chartDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(chartDir, "Chart.yaml"), []byte("apiVersion: v2\nname: demo\nversion: 0.1.0\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	binDir := t.TempDir()
+	logPath := filepath.Join(t.TempDir(), "helm.log")
+	command := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$JUSTSCAN_HELM_LOG\"\nif [ \"$1\" = template ]; then\n  printf '%s\\n' 'apiVersion: v1' 'kind: Pod' 'spec:' '  containers:' '    - name: demo' '      image: registry.example.com/demo:1.0.0'\nfi\n"
+	if err := os.WriteFile(filepath.Join(binDir, "helm"), []byte(command), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JUSTSCAN_HELM_LOG", logPath)
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	byRef := map[string]*DiscoveredImage{}
+	if err := appendHelmChart(context.Background(), dir, byRef, justScanSource{Chart: "charts/demo"}); err != nil {
+		t.Fatalf("appendHelmChart() error = %v", err)
+	}
+	output, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], "dependency build ") || !strings.HasPrefix(lines[1], "template demo ") {
+		t.Fatalf("unexpected Helm invocation order: %#v", lines)
+	}
+	if _, ok := byRef["registry.example.com/demo:1.0.0"]; !ok {
+		t.Fatalf("rendered image was not discovered: %#v", byRef)
+	}
+}
+
+func TestAppendHelmChartFromExternalRootUsesDeploymentValues(t *testing.T) {
+	deploymentRoot := t.TempDir()
+	chartRoot := t.TempDir()
+	chartDir := filepath.Join(chartRoot, "apps", "demo")
+	valuesPath := filepath.Join(deploymentRoot, "envs", "dev", "demo", "values.yaml")
+	if err := os.MkdirAll(filepath.Join(chartDir, "templates"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(valuesPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		filepath.Join(chartDir, "Chart.yaml"):            "apiVersion: v2\nname: demo\nversion: 0.1.0\n",
+		filepath.Join(chartDir, "values.yaml"):           "image: registry.example.com/demo:default\n",
+		filepath.Join(chartDir, "templates", "pod.yaml"): "apiVersion: v1\nkind: Pod\nmetadata:\n  name: demo\nspec:\n  containers:\n    - name: demo\n      image: {{ .Values.image }}\n",
+		valuesPath: "image: registry.example.com/demo:effective\n",
+	}
+	for path, content := range files {
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	byRef := map[string]*DiscoveredImage{}
+	err := appendHelmChartFromRoots(context.Background(), deploymentRoot, chartRoot, byRef, justScanSource{
+		Chart: "apps/demo", Values: []string{"envs/dev/demo/values.yaml"},
+	}, "chart-repository@main:apps/demo", models.GitRepository{}, nil)
+	if err != nil {
+		t.Fatalf("appendHelmChartFromRoots() error = %v", err)
+	}
+	image := byRef["registry.example.com/demo:effective"]
+	if image == nil {
+		t.Fatalf("external chart did not use deployment values: %#v", byRef)
+	}
+	if target := image.Locations[0].Target; target != "Helm values envs/dev/demo/values.yaml" {
+		t.Fatalf("render target = %q", target)
+	}
+}
+
+func TestManagedHelmChartRepositoryUsesDirectSourceCredentials(t *testing.T) {
+	source := models.GitRepositoryHelmSource{
+		SourceType:          "url",
+		CloneURL:            "https://git.example.com/team/chart.git",
+		Ref:                 "release",
+		AuthType:            models.GitRepositoryAuthToken,
+		Username:            "git-user",
+		EncryptedCredential: "encrypted",
+	}
+	repository, err := managedHelmChartRepository(context.Background(), nil, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repository.CloneURL != source.CloneURL || repository.Ref != "release" || repository.EncryptedCredential != "encrypted" {
+		t.Fatalf("direct source was not mapped to a clone connector: %#v", repository)
+	}
+}
+
+func TestWriteHelmRegistryCredentialsSupportsTokenAuthFlows(t *testing.T) {
+	home := t.TempDir()
+	err := writeHelmRegistryCredentials(home, []helmRegistryCredential{
+		{Host: "cloud.de", AuthType: models.RegistryAuthToken, Username: "jfrog-user", Password: "access-token"},
+		{Host: "bearer.example.com", AuthType: models.RegistryAuthToken, Password: "bearer-token"},
+		{Host: "basic.example.com", AuthType: models.RegistryAuthBasic, Username: "registry-user", Password: "registry-password"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(filepath.Join(home, "registry.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var configuration helmRegistryFile
+	if err := json.Unmarshal(content, &configuration); err != nil {
+		t.Fatal(err)
+	}
+	if got := configuration.Auths["cloud.de"].Auth; got != base64.StdEncoding.EncodeToString([]byte("jfrog-user:access-token")) {
+		t.Fatalf("Artifactory token auth = %q", got)
+	}
+	if got := configuration.Auths["cloud.de"].RegistryToken; got != "" {
+		t.Fatalf("Artifactory token stored as direct Bearer token = %q", got)
+	}
+	if got := configuration.Auths["bearer.example.com"].RegistryToken; got != "bearer-token" {
+		t.Fatalf("direct Bearer token = %q", got)
+	}
+	if got := configuration.Auths["basic.example.com"].Auth; got != base64.StdEncoding.EncodeToString([]byte("registry-user:registry-password")) {
+		t.Fatalf("basic auth = %q", got)
+	}
+}
+
+func TestHelmRegistryMatchScorePrefersDependencyRepository(t *testing.T) {
+	dependency := helmRepositoryPath("oci://cloud.de/ki-helm-local")
+	if got := helmRegistryMatchScore(dependency, helmRepositoryPath("https://cloud.de/ki-helm-local")); got <= helmRegistryMatchScore(dependency, helmRepositoryPath("https://cloud.de/docker-remote")) {
+		t.Fatalf("exact dependency repository did not outrank a different repository: %d", got)
+	}
+	if got := helmRegistryMatchScore(dependency, helmRepositoryPath("https://cloud.de")); got <= 0 {
+		t.Fatalf("host-wide registry score = %d", got)
+	}
+}
+
 func TestFindDiscoveryCandidatesHonorsRepositoryRules(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "envs", "demo", "app2", "values.yaml")
@@ -246,7 +380,7 @@ func TestFindDiscoveryCandidatesHonorsRepositoryRules(t *testing.T) {
 	configuration.Discovery.Rules = []justScanRule{{
 		Match: "envs/demo/app2/values.yaml", Type: "helm", Chart: "charts/app2",
 	}}
-	candidates := findDiscoveryCandidates(dir, nil, configuration)
+	candidates := findDiscoveryCandidates(dir, nil, configuration, nil)
 	if len(candidates) != 1 {
 		t.Fatalf("candidates = %#v, want one candidate", candidates)
 	}
@@ -255,9 +389,14 @@ func TestFindDiscoveryCandidatesHonorsRepositoryRules(t *testing.T) {
 	}
 
 	rule := models.GitRepositoryDiscoveryRule{PathPattern: "envs/demo/app2/values.yaml", Resolution: "ignore"}
-	candidates = findDiscoveryCandidates(dir, []models.GitRepositoryDiscoveryRule{rule}, justScanConfig{})
+	candidates = findDiscoveryCandidates(dir, []models.GitRepositoryDiscoveryRule{rule}, justScanConfig{}, nil)
 	if candidates[0].Status != models.GitRepositoryCandidateIgnored {
 		t.Fatalf("candidate status = %q, want ignored", candidates[0].Status)
+	}
+
+	candidates = findDiscoveryCandidates(dir, nil, justScanConfig{}, []models.GitRepositoryHelmSource{{Values: []string{"envs/demo/app2/values.yaml"}}})
+	if candidates[0].Status != models.GitRepositoryCandidateResolved {
+		t.Fatalf("managed Helm candidate status = %q, want resolved", candidates[0].Status)
 	}
 }
 

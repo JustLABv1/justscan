@@ -135,7 +135,7 @@ This builds both images and starts all services. On first run, the backend autom
 ### 4. Open the app
 
 - Application: http://localhost
-- Documentation: http://localhost/docs
+- Documentation: http://localhost/docs (or https://justscan.justlab.app/docs before deployment)
 - Backend API: http://localhost/api/v1
 
 ---

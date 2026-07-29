@@ -820,7 +820,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     <Dropdown.Menu
                       onAction={(key) => {
                         if (key === 'settings') router.push('/profile');
-                        if (key === 'documentation') window.open('/docs', '_blank');
+                        if (key === 'documentation') window.open('/docs', '_blank', 'noopener,noreferrer');
                         if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
                         if (key === 'retake-tour') handleRetakeWorkspaceTour();
                         if (key === 'signout') handleLogout();
@@ -1098,7 +1098,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                     setMobileNavOpen(false);
                                   }
                                   if (key === 'documentation') {
-                                    window.open('/docs', '_blank');
+                                    window.open('/docs', '_blank', 'noopener,noreferrer');
                                     setMobileNavOpen(false);
                                   }
                                   if (key === 'theme') {
@@ -1215,7 +1215,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       <Dropdown.Menu
                         onAction={(key) => {
                           if (key === 'settings') router.push('/profile');
-                          if (key === 'documentation') window.open('/docs', '_blank');
+                          if (key === 'documentation') window.open('/docs', '_blank', 'noopener,noreferrer');
                           if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
                           if (key === 'retake-tour') handleRetakeWorkspaceTour();
                           if (key === 'signout') handleLogout();

@@ -4,7 +4,8 @@
 archive scans for remote analysis; it does not run a scanner locally.
 
 For installation, authentication, every scan source, CI/CD examples, best practices, command
-reference, and troubleshooting, open `/docs/integrations/cli` on your JustScan instance.
+reference, and troubleshooting, open `/docs/integrations/cli` on your JustScan instance. If you
+have not deployed JustScan yet, see the [hosted CLI documentation](https://justscan.justlab.app/docs/integrations/cli).
 
 Download prebuilt macOS, Linux, or Windows binaries from the [latest JustScan CLI
 release](https://github.com/JustLABv1/justscan/releases/latest). The guide includes installation

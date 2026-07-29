@@ -8,7 +8,7 @@ JustScan is a self-hosted container image vulnerability scanner powered by [Triv
 
 ## Screenshot
 
-![JustScan dashboard screenshot placeholder](docs/assets/justscan-screenshot.png)
+![JustScan dashboard screenshot](docs/assets/justscan-screenshot.png)
 
 ## Table of Contents
 
@@ -55,7 +55,7 @@ Git repositories can be connected in the web UI to preview and schedule image sc
 
 Helm is required when a selected Kustomization uses `helmCharts`; the provided container images include it. For local backend development, install Helm or choose plain-manifest discovery for repositories that do not need Helm rendering.
 
-For repositories that combine several deployment mechanisms, add a repository-owned [`.justscan.yaml` discovery configuration](docs/gitops-discovery.md). It can compose Kustomize roots, direct Helm charts, and selected plain-manifest paths in one dry run.
+For repositories that combine several deployment mechanisms, add a repository-owned `.justscan.yaml` discovery configuration. It can compose Kustomize roots, direct Helm charts, and selected plain-manifest paths in one dry run. After deployment, see `/docs/scan-and-analyze/gitops` on your JustScan host; before deployment, see the [hosted GitOps documentation](https://justscan.justlab.app/docs/scan-and-analyze/gitops).
 
 ## Architecture
 
@@ -93,7 +93,8 @@ The CLI prompts for the password and stores the credential in the system keychai
 `JUSTSCAN_TOKEN` only for CI/CD or other unattended automation.
 
 After deployment, open `/docs` on the same JustScan host for the CLI guide, CI/CD provider
-examples, GitOps discovery, operator configuration, and troubleshooting.
+examples, GitOps discovery, operator configuration, and troubleshooting. If you have not deployed
+JustScan yet, browse the [hosted documentation](https://justscan.justlab.app/docs).
 
 ## Quick Start
 

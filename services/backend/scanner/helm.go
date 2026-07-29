@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,9 +10,9 @@ import (
 	"strings"
 
 	"helm.sh/helm/v4/pkg/action"
-	chart "helm.sh/helm/v4/pkg/chart/v2"
 	chartcommon "helm.sh/helm/v4/pkg/chart/common"
 	chartutil "helm.sh/helm/v4/pkg/chart/common/util"
+	chart "helm.sh/helm/v4/pkg/chart/v2"
 	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/engine"
@@ -58,11 +59,19 @@ func ResolveHelmChartInput(chartURL, chartName string) (resolvedChartURL, resolv
 	return resolvedChartURL, resolvedChartName, false
 }
 
+// HelmPullCredential contains the short-lived authentication material needed to
+// download a single Helm chart. It is deliberately separate from image scan
+// registry credentials.
+type HelmPullCredential struct {
+	AuthType string
+	Host     string
+	Username string
+	Secret   string
+}
+
 // ExtractHelmImages pulls a Helm chart (OCI or HTTP repo), renders all templates
 // including subcharts, and returns all unique container images found.
-// registryEnvVars are Trivy-style env vars (TRIVY_USERNAME, etc.) — we map them to
-// Helm registry credentials when the chart URL is an OCI chart.
-func ExtractHelmImages(_ context.Context, chartURL, chartName, chartVersion string, registryEnvVars []string) ([]HelmImage, string, string, error) {
+func ExtractHelmImages(_ context.Context, chartURL, chartName, chartVersion string, credential *HelmPullCredential) ([]HelmImage, string, string, error) {
 	chartURL, chartName, isOCI := ResolveHelmChartInput(chartURL, chartName)
 
 	tmpDir, err := os.MkdirTemp("", "justscan-helm-*")
@@ -71,11 +80,22 @@ func ExtractHelmImages(_ context.Context, chartURL, chartName, chartVersion stri
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Build OCI registry client (with optional credentials)
+	// Build OCI registry client (with optional credentials).
 	var registryOpts []helmregistry.ClientOption
-	username, password := extractRegistryCreds(registryEnvVars)
-	if username != "" || password != "" {
-		registryOpts = append(registryOpts, helmregistry.ClientOptBasicAuth(username, password))
+	if credential != nil {
+		if credential.AuthType == "bearer_token" {
+			credentialsFile := filepath.Join(tmpDir, "registry.json")
+			content, err := json.Marshal(map[string]any{"auths": map[string]map[string]string{credential.Host: {"registrytoken": credential.Secret}}})
+			if err != nil {
+				return nil, "", "", fmt.Errorf("encode Helm bearer credential: %w", err)
+			}
+			if err := os.WriteFile(credentialsFile, content, 0600); err != nil {
+				return nil, "", "", fmt.Errorf("write Helm bearer credential: %w", err)
+			}
+			registryOpts = append(registryOpts, helmregistry.ClientOptCredentialsFile(credentialsFile))
+		} else if credential.Username != "" || credential.Secret != "" {
+			registryOpts = append(registryOpts, helmregistry.ClientOptBasicAuth(credential.Username, credential.Secret))
+		}
 	}
 	registryClient, err := helmregistry.NewClient(registryOpts...)
 	if err != nil {
@@ -105,6 +125,10 @@ func ExtractHelmImages(_ context.Context, chartURL, chartName, chartVersion stri
 	} else {
 		// HTTP repo: chart_url is the repo URL, chart_name is the chart
 		pull.RepoURL = chartURL
+		if credential != nil {
+			pull.Username = credential.Username
+			pull.Password = credential.Secret
+		}
 		chartRef = chartName
 		if chartVersion != "" {
 			pull.Version = chartVersion

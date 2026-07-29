@@ -1,25 +1,29 @@
 package helm
 
 import (
-	"context"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"justscan-backend/config"
 	"justscan-backend/functions/auth"
+	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 )
 
 type extractRequest struct {
-	ChartURL     string `json:"chart_url" binding:"required"`
-	ChartName    string `json:"chart_name"`
-	ChartVersion string `json:"chart_version"`
+	ChartURL                 string `json:"chart_url" binding:"required"`
+	ChartName                string `json:"chart_name"`
+	ChartVersion             string `json:"chart_version"`
+	HelmRegistryCredentialID string `json:"helm_registry_credential_id"`
 }
 
 type extractResponse struct {
@@ -54,14 +58,18 @@ func ExtractImages(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		envVars := resolveRegistryEnvByHost(c.Request.Context(), db, normalizedChartURL)
+		credential, err := resolveHelmPullCredential(c, db, normalizedChartURL, isOCI, req.HelmRegistryCredentialID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		images, resolvedName, resolvedVersion, err := scanner.ExtractHelmImages(
 			c.Request.Context(),
 			normalizedChartURL,
 			normalizedChartName,
 			req.ChartVersion,
-			envVars,
+			credential,
 		)
 		if err != nil {
 			log.Warnf("helm extract error for %s: %v", req.ChartURL, err)
@@ -80,54 +88,53 @@ func ExtractImages(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
-// resolveRegistryEnvByHost finds registry credentials whose host matches the given URL.
-func resolveRegistryEnvByHost(ctx context.Context, db *bun.DB, targetURL string) []string {
-	var registries []models.Registry
-	if err := db.NewSelect().Model(&registries).Scan(ctx); err != nil {
-		return nil
+func resolveHelmPullCredential(c *gin.Context, db *bun.DB, chartURL string, isOCI bool, rawID string) (*scanner.HelmPullCredential, error) {
+	if strings.TrimSpace(rawID) == "" {
+		return nil, nil
 	}
-
-	encKey := crypto.KeyFromString(config.Config.Encryption.Key)
-
-	// Normalise the target to a hostname for matching
-	host := strings.TrimPrefix(targetURL, "oci://")
-	host = strings.TrimPrefix(host, "https://")
-	host = strings.TrimPrefix(host, "http://")
-	if idx := strings.Index(host, "/"); idx != -1 {
-		host = host[:idx]
+	id, err := uuid.Parse(strings.TrimSpace(rawID))
+	if err != nil {
+		return nil, fmt.Errorf("invalid Helm registry credential ID")
 	}
-
-	for _, reg := range registries {
-		regHost := strings.TrimPrefix(reg.URL, "https://")
-		regHost = strings.TrimPrefix(regHost, "http://")
-		regHost = strings.TrimSuffix(regHost, "/")
-
-		if regHost != host {
-			continue
-		}
-
-		password, err := crypto.Decrypt(encKey, reg.Password)
-		if err != nil {
-			log.Warnf("resolveRegistryEnvByHost: decrypt failed for registry %s: %v", reg.Name, err)
-			continue
-		}
-
-		switch reg.AuthType {
-		case models.RegistryAuthBasic:
-			return []string{
-				"TRIVY_USERNAME=" + reg.Username,
-				"TRIVY_PASSWORD=" + password,
-			}
-		case models.RegistryAuthToken:
-			return []string{
-				"TRIVY_REGISTRY_TOKEN=" + password,
-			}
-		case models.RegistryAuthAWSECR:
-			return []string{
-				"AWS_ACCESS_KEY_ID=" + reg.Username,
-				"AWS_SECRET_ACCESS_KEY=" + password,
-			}
-		}
+	userID, _, ok := authz.RequireRequestUser(c, db)
+	if !ok {
+		return nil, fmt.Errorf("unauthorized")
 	}
-	return nil
+	credential := &models.HelmRegistryCredential{}
+	query := db.NewSelect().Model(credential).Where("id = ?", id)
+	scope := c.Query("scope")
+	if scope == "" {
+		scope = "personal"
+	}
+	query = authz.ApplyWorkspaceScopeValue(query, "", "owner_user_id", "owner_org_id", "org_helm_registry_credentials", "helm_registry_credential_id", userID, scope)
+	if err := query.Scan(c.Request.Context()); err != nil {
+		return nil, fmt.Errorf("Helm registry credential is unavailable in this workspace")
+	}
+	expectedProtocol := models.HelmRegistryProtocolHTTP
+	if isOCI {
+		expectedProtocol = models.HelmRegistryProtocolOCI
+	}
+	if credential.Protocol != expectedProtocol || !helmCredentialMatchesChart(credential.URL, chartURL) {
+		return nil, fmt.Errorf("Helm registry credential does not match this chart endpoint")
+	}
+	secret, err := crypto.Decrypt(crypto.KeyFromString(config.Config.Encryption.Key), credential.EncryptedSecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt Helm registry credential")
+	}
+	chart, _ := url.Parse(strings.Replace(chartURL, "oci://", "https://", 1))
+	return &scanner.HelmPullCredential{AuthType: credential.AuthType, Host: chart.Host, Username: credential.Username, Secret: secret}, nil
+}
+
+func helmCredentialMatchesChart(credentialURL, chartURL string) bool {
+	credential, err := url.Parse(strings.Replace(credentialURL, "oci://", "https://", 1))
+	if err != nil || credential.Host == "" {
+		return false
+	}
+	chart, err := url.Parse(strings.Replace(chartURL, "oci://", "https://", 1))
+	if err != nil || chart.Host == "" || !strings.EqualFold(credential.Host, chart.Host) {
+		return false
+	}
+	credentialPath := strings.Trim(strings.TrimSpace(credential.Path), "/")
+	chartPath := strings.Trim(strings.TrimSpace(chart.Path), "/")
+	return credentialPath == "" || chartPath == credentialPath || strings.HasPrefix(chartPath, credentialPath+"/")
 }

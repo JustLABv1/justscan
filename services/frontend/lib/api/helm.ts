@@ -3,12 +3,22 @@ import { appendScope } from './scope';
 import type { HelmExtractResponse, HelmScanRunDetail, HelmScanRunSummary } from './types/helm';
 import type { Scan } from './types/scans';
 
-export const extractHelmImages = (chartUrl: string, chartName?: string, chartVersion?: string) =>
-  req<HelmExtractResponse>('POST', '/api/v1/helm/extract', {
+export const extractHelmImages = (
+  chartUrl: string,
+  chartName?: string,
+  chartVersion?: string,
+  helmRegistryCredentialId?: string
+) => {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const query = params.toString();
+  return req<HelmExtractResponse>('POST', `/api/v1/helm/extract${query ? `?${query}` : ''}`, {
     chart_url: chartUrl,
     chart_name: chartName,
     chart_version: chartVersion,
+    helm_registry_credential_id: helmRegistryCredentialId || undefined,
   });
+};
 
 export const createHelmScans = (
   chartUrl: string,

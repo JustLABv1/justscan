@@ -17,11 +17,13 @@ import {
   HelmExtractResponse,
   HelmScanRunSummary,
   listHelmScanRuns,
+  listHelmRegistryCredentials,
   listOrgs,
   Org,
   listRegistriesWithCapabilities,
   listTags,
   RegistryWithHealth,
+  HelmRegistryCredential,
   ScannerCapabilities,
   Tag,
 } from '@/lib/api';
@@ -91,6 +93,26 @@ const PROVIDER_LABEL: Record<string, string> = {
   artifactory_xray: 'Artifactory Xray',
 };
 
+function credentialMatchesChart(
+  credential: HelmRegistryCredential,
+  rawChartURL: string,
+  isOCI: boolean
+): boolean {
+  if (!rawChartURL.trim()) return true;
+  if (credential.protocol !== (isOCI ? 'oci' : 'http')) return false;
+  try {
+    const normalize = (value: string) => value.replace(/^oci:\/\//, 'https://');
+    const credentialURL = new URL(normalize(credential.url));
+    const chartURL = new URL(normalize(rawChartURL.trim()));
+    if (credentialURL.host.toLowerCase() !== chartURL.host.toLowerCase()) return false;
+    const credentialPath = credentialURL.pathname.replace(/^\/+|\/+$/g, '');
+    const chartPath = chartURL.pathname.replace(/^\/+|\/+$/g, '');
+    return !credentialPath || chartPath === credentialPath || chartPath.startsWith(`${credentialPath}/`);
+  } catch {
+    return false;
+  }
+}
+
 type HelmRunHistoryStatus = 'all' | 'running' | 'completed' | 'failed';
 type HelmRunHistorySortKey =
   | 'chart'
@@ -116,6 +138,8 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
   const [chartURL, setChartURL] = useState('');
   const [chartName, setChartName] = useState('');
   const [chartVersion, setChartVersion] = useState('');
+  const [helmRegistryCredentialId, setHelmRegistryCredentialId] = useState('');
+  const [helmRegistryCredentials, setHelmRegistryCredentials] = useState<HelmRegistryCredential[]>([]);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
 
@@ -140,6 +164,13 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
   const [historyActionRunId, setHistoryActionRunId] = useState<string | null>(null);
 
   const isOCI = chartURL.trim().startsWith('oci://');
+  const matchingHelmCredentials = useMemo(
+    () =>
+      helmRegistryCredentials.filter((credential) =>
+        credentialMatchesChart(credential, chartURL, isOCI)
+      ),
+    [chartURL, helmRegistryCredentials, isOCI]
+  );
   const selectedImages = editableImages.filter((img) => selected.has(img.id));
   const hasInvalidSelection = selectedImages.some((img) => img.edited_ref.trim() === '');
   const selectableRegistries = registries.filter(
@@ -171,6 +202,7 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
     return deferEffect(() => {
       void loadTags();
       void loadHistory();
+      void listHelmRegistryCredentials().then(setHelmRegistryCredentials).catch(() => {});
       void listRegistriesWithCapabilities()
         .then((response) => {
           setRegistries(response.data);
@@ -229,7 +261,8 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
       const result = await extractHelmImages(
         url,
         chartName.trim() || undefined,
-        chartVersion.trim() || undefined
+        chartVersion.trim() || undefined,
+        helmRegistryCredentialId || undefined
       );
       const images = Array.isArray(result.images) ? result.images : [];
       const nextImages = createEditableHelmImages(images);
@@ -320,6 +353,21 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
     setEditableImages((prev) =>
       prev.map((image) => (image.id === id ? { ...image, edited_ref: value } : image))
     );
+  }
+
+  function handleChartURLChange(value: string) {
+    setChartURL(value);
+    if (
+      value.trim() &&
+      helmRegistryCredentialId &&
+      !helmRegistryCredentials.some(
+        (credential) =>
+          credential.id === helmRegistryCredentialId &&
+          credentialMatchesChart(credential, value, value.trim().startsWith('oci://'))
+      )
+    ) {
+      setHelmRegistryCredentialId('');
+    }
   }
 
   async function shareHelmRun(run: HelmScanRunSummary, copyLink = false) {
@@ -435,13 +483,13 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
               </Card.Header>
               <Card.Content>
                 <form onSubmit={handleExtract} className="space-y-4">
-                  <TextField fullWidth isRequired value={chartURL} onChange={setChartURL}>
+                  <TextField fullWidth isRequired value={chartURL} onChange={handleChartURLChange}>
                     <Label>Chart URL</Label>
                     <Input
                       variant="secondary"
                       placeholder="oci://ghcr.io/org/charts/mychart or https://charts.bitnami.com/bitnami"
                       value={chartURL}
-                      onChange={(e) => setChartURL(e.target.value)}
+                      onChange={(e) => handleChartURLChange(e.target.value)}
                       required
                     />
                     <Description>
@@ -449,6 +497,38 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                       &nbsp;·&nbsp; HTTP: provide the repo URL and the chart name below
                     </Description>
                   </TextField>
+
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <Label>Helm credential</Label>
+                    <Select
+                      className="w-full"
+                      value={helmRegistryCredentialId || '__none__'}
+                      onChange={(value) =>
+                        setHelmRegistryCredentialId(
+                          String(value === '__none__' ? '' : (value ?? ''))
+                        )
+                      }
+                      variant="secondary"
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__none__">No credential (public chart)</ListBox.Item>
+                          {matchingHelmCredentials.map((credential) => (
+                            <ListBox.Item key={credential.id} id={credential.id}>
+                              {credential.name} · {credential.url}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <Description>
+                      Only credentials that match this chart endpoint are available.
+                    </Description>
+                  </div>
 
                   {!isOCI && (
                     <div className="grid gap-4 sm:grid-cols-2">

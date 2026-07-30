@@ -16,14 +16,18 @@ import {
 import { deleteScanImageGroup, listScanImages, type ImageOverview } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { useToast } from '@/components/toast';
+import { parseDate, type DateValue } from '@internationalized/date';
 import {
   AlertDialog,
   Button,
   Card,
+  DateField,
+  DateRangePicker,
   Disclosure,
   Label,
   ListBox,
   Pagination,
+  RangeCalendar,
   SearchField,
   Select,
 } from '@heroui/react';
@@ -56,6 +60,8 @@ type ScanFilters = {
   critical: '' | 'yes' | 'no';
   policy: '' | 'fail';
   range: '' | RecentActivityRange;
+  date: string;
+  dateTo: string;
   sort: string;
 };
 
@@ -79,12 +85,16 @@ function Metric({
 
 function initialScanFilters(searchParams: { get(name: string): string | null }): ScanFilters {
   const range = searchParams.get('range');
+  const date = getValidCalendarDate(searchParams.get('date') ?? searchParams.get('from') ?? '');
+  const dateTo = getValidCalendarDate(searchParams.get('dateTo') ?? searchParams.get('to') ?? '');
   return {
     query: searchParams.get('q') ?? searchParams.get('image') ?? '',
     status: searchParams.get('status') ?? '',
     critical: (searchParams.get('critical') as ScanFilters['critical']) ?? '',
     policy: (searchParams.get('policy') as ScanFilters['policy']) ?? '',
     range: range === '6h' || range === '24h' || range === '7d' || range === '30d' ? range : '',
+    date,
+    dateTo: dateTo || date,
     sort: searchParams.get('sort') ?? '',
   };
 }
@@ -94,8 +104,27 @@ function scanFiltersReducer(
   action: Partial<ScanFilters> | 'reset'
 ): ScanFilters {
   return action === 'reset'
-    ? { query: '', status: '', critical: '', policy: '', range: '', sort: '' }
+    ? { query: '', status: '', critical: '', policy: '', range: '', date: '', dateTo: '', sort: '' }
     : { ...state, ...action };
+}
+
+function getValidCalendarDate(value: string): string {
+  try {
+    return parseDate(value).toString() === value ? value : '';
+  } catch {
+    return '';
+  }
+}
+
+function getScanDateBounds(date: string, dateTo: string): { from: string; to: string } | null {
+  const endDate = dateTo || date;
+  if (!date || !endDate || endDate < date) return null;
+
+  const start = new Date(`${date}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime())) return null;
+  const end = new Date(`${endDate}T23:59:59.999Z`);
+  if (Number.isNaN(end.getTime())) return null;
+  return { from: start.toISOString(), to: end.toISOString() };
 }
 
 function ScansPageContent() {
@@ -112,12 +141,21 @@ function ScansPageContent() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [page, setPage] = useState(() => Math.max(1, Number(searchParams.get('page') ?? '1')));
   const [filters, updateFilters] = useReducer(scanFiltersReducer, searchParams, initialScanFilters);
-  const { query, status, critical, policy, range, sort } = filters;
+  const { query, status, critical, policy, range, date, dateTo, sort } = filters;
   const toast = useToast();
 
-  const bounds = useMemo(() => (range ? getRecentActivityBounds(range) : null), [range]);
-  const activeFilters = Boolean(query || status || critical || policy || range || sort);
-  const filterCount = [critical, policy, range, sort].filter(Boolean).length;
+  const bounds = useMemo(
+    () => (date ? getScanDateBounds(date, dateTo) : range ? getRecentActivityBounds(range) : null),
+    [date, dateTo, range]
+  );
+  const selectedDateRange = useMemo<{ start: DateValue; end: DateValue } | null>(() => {
+    if (!date) return null;
+    const start = getValidCalendarDate(date);
+    const end = getValidCalendarDate(dateTo || date);
+    return start && end ? { start: parseDate(start), end: parseDate(end) } : null;
+  }, [date, dateTo]);
+  const activeFilters = Boolean(query || status || critical || policy || range || date || sort);
+  const filterCount = [critical, policy, range, date, sort].filter(Boolean).length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const visibleOverview = useMemo(
     () => ({
@@ -135,15 +173,20 @@ function ScansPageContent() {
     if (critical) params.set('critical', critical);
     if (policy) params.set('policy', policy);
     if (range) params.set('range', range);
+    if (date) params.set('date', date);
+    if (dateTo && dateTo !== date) params.set('dateTo', dateTo);
     if (sort) params.set('sort', sort);
     if (page > 1) params.set('page', String(page));
     router.replace(params.size ? `/scans?${params}` : '/scans', { scroll: false });
-  }, [critical, page, policy, query, range, router, sort, status]);
+  }, [critical, date, dateTo, page, policy, query, range, router, sort, status]);
 
   useEffect(() => {
     syncRoute();
   }, [syncRoute]);
-  useEffect(() => deferEffect(() => setPage(1)), [query, status, critical, policy, range, sort]);
+  useEffect(
+    () => deferEffect(() => setPage(1)),
+    [query, status, critical, policy, range, date, dateTo, sort]
+  );
   useEffect(
     () =>
       deferEffect(() => {
@@ -367,6 +410,8 @@ function ScansPageContent() {
                 onChange={(value) =>
                   updateFilters({
                     range: (value === '__all__' ? '' : String(value ?? '')) as ScanFilters['range'],
+                    date: '',
+                    dateTo: '',
                   })
                 }
                 variant="secondary"
@@ -386,6 +431,54 @@ function ScansPageContent() {
                   </ListBox>
                 </Select.Popover>
               </Select>
+              <DateRangePicker
+                aria-label="Scan date range"
+                className="min-w-[280px] flex-1"
+                value={selectedDateRange}
+                onChange={(value) =>
+                  updateFilters({
+                    date: value?.start.toString() ?? '',
+                    dateTo: value?.end.toString() ?? '',
+                    range: '',
+                  })
+                }
+              >
+                <Label className="sr-only">Scan date range</Label>
+                <DateField.Group fullWidth variant="secondary">
+                  <DateField.Input slot="start">
+                    {(segment) => <DateField.Segment segment={segment} />}
+                  </DateField.Input>
+                  <DateRangePicker.RangeSeparator />
+                  <DateField.Input slot="end">
+                    {(segment) => <DateField.Segment segment={segment} />}
+                  </DateField.Input>
+                  <DateField.Suffix>
+                    <DateRangePicker.Trigger>
+                      <DateRangePicker.TriggerIndicator />
+                    </DateRangePicker.Trigger>
+                  </DateField.Suffix>
+                </DateField.Group>
+                <DateRangePicker.Popover>
+                  <RangeCalendar aria-label="Scan date range">
+                    <RangeCalendar.Header>
+                      <RangeCalendar.YearPickerTrigger>
+                        <RangeCalendar.YearPickerTriggerHeading />
+                        <RangeCalendar.YearPickerTriggerIndicator />
+                      </RangeCalendar.YearPickerTrigger>
+                      <RangeCalendar.NavButton slot="previous" />
+                      <RangeCalendar.NavButton slot="next" />
+                    </RangeCalendar.Header>
+                    <RangeCalendar.Grid>
+                      <RangeCalendar.GridHeader>
+                        {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
+                      </RangeCalendar.GridHeader>
+                      <RangeCalendar.GridBody>
+                        {(calendarDate) => <RangeCalendar.Cell date={calendarDate} />}
+                      </RangeCalendar.GridBody>
+                    </RangeCalendar.Grid>
+                  </RangeCalendar>
+                </DateRangePicker.Popover>
+              </DateRangePicker>
               <Select
                 aria-label="Policy result"
                 className="min-w-[180px] flex-1"

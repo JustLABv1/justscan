@@ -1,6 +1,11 @@
 import { req } from './core';
 import { appendScope } from './scope';
-import type { DashboardStats, DashboardTrendPoint, DashboardVulnTrendPoint, ScannerHealth } from './types/dashboard';
+import type {
+  DashboardStats,
+  DashboardTrendPoint,
+  DashboardVulnTrendPoint,
+  ScannerHealth,
+} from './types/dashboard';
 
 export const getStats = () => {
   const params = new URLSearchParams();
@@ -9,11 +14,11 @@ export const getStats = () => {
   return req<DashboardStats>('GET', `/api/v1/dashboard/stats${qs ? `?${qs}` : ''}`);
 };
 
-export const getScannerHealth = () =>
-  req<ScannerHealth>('GET', '/api/v1/dashboard/scanner-health');
+export const getScannerHealth = () => req<ScannerHealth>('GET', '/api/v1/dashboard/scanner-health');
 
-export const getDashboardTrends = () => {
+export const getDashboardTrends = (range: '6h' | '24h' | '7d' | '30d' = '30d') => {
   const params = new URLSearchParams();
+  params.set('range', range);
   appendScope(params);
   const qs = params.toString();
   return req<{ data: DashboardTrendPoint[] }>(

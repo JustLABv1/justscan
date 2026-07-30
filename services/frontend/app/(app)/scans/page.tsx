@@ -56,6 +56,7 @@ type ScanFilters = {
   critical: '' | 'yes' | 'no';
   policy: '' | 'fail';
   range: '' | RecentActivityRange;
+  date: string;
   sort: string;
 };
 
@@ -79,12 +80,14 @@ function Metric({
 
 function initialScanFilters(searchParams: { get(name: string): string | null }): ScanFilters {
   const range = searchParams.get('range');
+  const date = searchParams.get('date') ?? '';
   return {
     query: searchParams.get('q') ?? searchParams.get('image') ?? '',
     status: searchParams.get('status') ?? '',
     critical: (searchParams.get('critical') as ScanFilters['critical']) ?? '',
     policy: (searchParams.get('policy') as ScanFilters['policy']) ?? '',
     range: range === '6h' || range === '24h' || range === '7d' || range === '30d' ? range : '',
+    date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '',
     sort: searchParams.get('sort') ?? '',
   };
 }
@@ -94,8 +97,17 @@ function scanFiltersReducer(
   action: Partial<ScanFilters> | 'reset'
 ): ScanFilters {
   return action === 'reset'
-    ? { query: '', status: '', critical: '', policy: '', range: '', sort: '' }
+    ? { query: '', status: '', critical: '', policy: '', range: '', date: '', sort: '' }
     : { ...state, ...action };
+}
+
+function getScanDayBounds(date: string): { from: string; to: string } | null {
+  const start = new Date(`${date}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime())) return null;
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  end.setUTCMilliseconds(end.getUTCMilliseconds() - 1);
+  return { from: start.toISOString(), to: end.toISOString() };
 }
 
 function ScansPageContent() {
@@ -112,12 +124,15 @@ function ScansPageContent() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [page, setPage] = useState(() => Math.max(1, Number(searchParams.get('page') ?? '1')));
   const [filters, updateFilters] = useReducer(scanFiltersReducer, searchParams, initialScanFilters);
-  const { query, status, critical, policy, range, sort } = filters;
+  const { query, status, critical, policy, range, date, sort } = filters;
   const toast = useToast();
 
-  const bounds = useMemo(() => (range ? getRecentActivityBounds(range) : null), [range]);
-  const activeFilters = Boolean(query || status || critical || policy || range || sort);
-  const filterCount = [critical, policy, range, sort].filter(Boolean).length;
+  const bounds = useMemo(
+    () => (date ? getScanDayBounds(date) : range ? getRecentActivityBounds(range) : null),
+    [date, range]
+  );
+  const activeFilters = Boolean(query || status || critical || policy || range || date || sort);
+  const filterCount = [critical, policy, range, date, sort].filter(Boolean).length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const visibleOverview = useMemo(
     () => ({
@@ -135,15 +150,19 @@ function ScansPageContent() {
     if (critical) params.set('critical', critical);
     if (policy) params.set('policy', policy);
     if (range) params.set('range', range);
+    if (date) params.set('date', date);
     if (sort) params.set('sort', sort);
     if (page > 1) params.set('page', String(page));
     router.replace(params.size ? `/scans?${params}` : '/scans', { scroll: false });
-  }, [critical, page, policy, query, range, router, sort, status]);
+  }, [critical, date, page, policy, query, range, router, sort, status]);
 
   useEffect(() => {
     syncRoute();
   }, [syncRoute]);
-  useEffect(() => deferEffect(() => setPage(1)), [query, status, critical, policy, range, sort]);
+  useEffect(
+    () => deferEffect(() => setPage(1)),
+    [query, status, critical, policy, range, date, sort]
+  );
   useEffect(
     () =>
       deferEffect(() => {
@@ -367,6 +386,7 @@ function ScansPageContent() {
                 onChange={(value) =>
                   updateFilters({
                     range: (value === '__all__' ? '' : String(value ?? '')) as ScanFilters['range'],
+                    date: '',
                   })
                 }
                 variant="secondary"

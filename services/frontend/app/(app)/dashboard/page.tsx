@@ -249,12 +249,14 @@ function ScanOutcomeChart({
   range,
   loading,
   onRangeChange,
+  onDayPress,
   onStatusPress,
 }: {
   data: DashboardTrendPoint[];
   range: RecentActivityRange;
   loading: boolean;
   onRangeChange: (range: RecentActivityRange) => void;
+  onDayPress: (date: string) => void;
   onStatusPress: (status: string) => void;
 }) {
   const filledData = fillScanOutcomeDates(data, range);
@@ -322,7 +324,15 @@ function ScanOutcomeChart({
               stackType="stacked"
               className="h-full !aspect-auto"
               barCategoryGap={8}
-              chartProps={{ margin: { top: 12, right: 8, left: -18, bottom: 0 } }}
+              chartProps={{
+                margin: { top: 12, right: 8, left: -18, bottom: 0 },
+                onClick: ({ activeLabel }) => {
+                  const day = typeof activeLabel === 'string' ? activeLabel : null;
+                  if (day && filledData.some((point) => point.date === day && point.total > 0)) {
+                    onDayPress(day);
+                  }
+                },
+              }}
             >
               <EvilBarGrid stroke="rgba(161,161,170,0.15)" vertical={false} />
               <EvilBarXAxis
@@ -640,6 +650,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [trends, setTrends] = useState<DashboardTrendPoint[]>([]);
   const [vulnTrends, setVulnTrends] = useState<DashboardVulnTrendPoint[]>([]);
+  const [chartRefreshKey, setChartRefreshKey] = useState(0);
   const [vulnTrendPeriod, setVulnTrendPeriod] = useState(30);
   const [scanOutcomeRange, setScanOutcomeRange] = useState<RecentActivityRange>('30d');
   const [scanOutcomeLoading, setScanOutcomeLoading] = useState(false);
@@ -698,6 +709,7 @@ export default function DashboardPage() {
         setVulnTrends(vt);
         setScannerHealth(healthResult.health);
         setScannerHealthError(healthResult.error);
+        setChartRefreshKey((current) => current + 1);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
@@ -771,6 +783,10 @@ export default function DashboardPage() {
   function openScanOutcomeStatus(status: string) {
     const params = new URLSearchParams({ range: scanOutcomeRange, status });
     router.push(`/scans?${params.toString()}`);
+  }
+
+  function openScanOutcomeDay(date: string) {
+    router.push(`/scans?date=${encodeURIComponent(date)}`);
   }
 
   if (loading) return <DashboardLoadingSkeleton />;
@@ -991,6 +1007,7 @@ export default function DashboardPage() {
               {severeFindingsTrend.length >= 2 ? (
                 <div className="mt-5 h-28">
                   <MiniSparkline
+                    key={`severe-findings-${chartRefreshKey}`}
                     data={severeFindingsTrend}
                     color="var(--success)"
                     showArea={false}
@@ -1096,10 +1113,12 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.52fr)]">
           <ScanOutcomeChart
+            key={`scan-outcomes-${chartRefreshKey}`}
             data={trends}
             range={scanOutcomeRange}
             loading={scanOutcomeLoading}
             onRangeChange={handleScanOutcomeRangeChange}
+            onDayPress={openScanOutcomeDay}
             onStatusPress={openScanOutcomeStatus}
           />
 
@@ -1195,6 +1214,7 @@ export default function DashboardPage() {
       </section>
 
       <VulnTrendChart
+        key={`vulnerability-trend-${chartRefreshKey}`}
         data={vulnTrends}
         period={vulnTrendPeriod}
         onPeriod={handleVulnPeriodChange}

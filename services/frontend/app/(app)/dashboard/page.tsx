@@ -544,31 +544,18 @@ function VulnTrendChart({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex shrink-0 items-center gap-1 rounded-xl bg-surface-secondary p-1">
           {VULNERABILITY_TREND_PERIODS.map((d) => (
-            <button
+            <Button
               key={d}
-              type="button"
-              onClick={() => onPeriod(d)}
-              className="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150"
-              style={
-                period === d
-                  ? {
-                      background: 'color-mix(in srgb, var(--accent) 25%, transparent)',
-                      color: 'color-mix(in srgb, var(--accent) 78%, white)',
-                      border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
-                    }
-                  : {
-                      background: 'var(--row-hover)',
-                      color: 'var(--text-muted)',
-                      border: '1px solid var(--surface-border)',
-                    }
-              }
               aria-pressed={period === d}
               aria-label={`Show last ${d} days`}
+              onPress={() => onPeriod(d)}
+              size="sm"
+              variant={period === d ? 'secondary' : 'ghost'}
             >
               {d}d
-            </button>
+            </Button>
           ))}
         </div>
       </div>

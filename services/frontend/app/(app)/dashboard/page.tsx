@@ -50,7 +50,7 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 import { getWatchlistPolicyAttentionItems } from '@/lib/watchlist-posture';
-import { Alert, Button, Card, Chip, useOverlayState } from '@heroui/react';
+import { Button, Card, Chip, ProgressBar, Separator, useOverlayState } from '@heroui/react';
 import {
   AlertCircleIcon,
   ArrowRight01Icon,
@@ -708,6 +708,7 @@ const STACK = [
   { key: 'high' as const, label: 'High', color: '#fb923c', opacity: 0.88 },
   { key: 'critical' as const, label: 'Critical', color: '#f87171', opacity: 0.92 },
 ];
+const VULNERABILITY_TREND_PERIODS = [7, 14, 30] as const;
 
 // Fill every calendar day in the period so gaps are visible as zeros
 function fillDates(data: DashboardVulnTrendPoint[], days: number): DashboardVulnTrendPoint[] {
@@ -762,7 +763,6 @@ function VulnTrendChart({
   const latestActivePoint = [...chartData].reverse().find((point) => point.total > 0) ?? null;
   const peakAverage = Math.max(...chartData.map((point) => point.total), 0);
   const ticks = niceTicks(peakAverage);
-  const PERIODS = [7, 14, 30] as const;
 
   return (
     <Card className="relative z-10 rounded-2xl p-4">
@@ -798,7 +798,7 @@ function VulnTrendChart({
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {PERIODS.map((d) => (
+          {VULNERABILITY_TREND_PERIODS.map((d) => (
             <button
               key={d}
               type="button"
@@ -928,8 +928,13 @@ export default function DashboardPage() {
     [trends]
   );
   const severeFindingsTrend = useMemo(
-    () => buildVulnerabilityTrendSeries(vulnTrends, 7, (point) => point.critical + point.high),
-    [vulnTrends]
+    () =>
+      buildVulnerabilityTrendSeries(
+        vulnTrends,
+        vulnTrendPeriod,
+        (point) => point.critical + point.high
+      ),
+    [vulnTrendPeriod, vulnTrends]
   );
   const hasActiveScans = (stats?.attention_scans ?? []).some(
     (scan) => scan.status === 'pending' || scan.status === 'running'
@@ -1088,6 +1093,18 @@ export default function DashboardPage() {
     needs_attention: 0,
     in_progress: 0,
   };
+  const operations = stats.operations ?? {
+    blocked_policy_count: 0,
+    xray_blocked_count: 0,
+    org_policy_fail_count: 0,
+    active_xray_count: 0,
+    active_xray_step_counts: {},
+    active_xray_scans: [],
+  };
+  const activePolicySignals =
+    operations.blocked_policy_count +
+    operations.xray_blocked_count +
+    operations.org_policy_fail_count;
   const activityWorkspaceLabel =
     workScope.kind === 'org' ? 'Organization workspace' : 'Personal workspace';
   const policyFailureTone: PostureTone = policyFailures.today > 0 ? 'danger' : 'neutral';
@@ -1138,10 +1155,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="space-y-6 p-6">
       <PageHeader
-        title="Dashboard"
-        description="Scan activity and security posture for the current workspace."
+        title="Security posture"
+        description="Vulnerability exposure, organizational policy signals, and scan coverage for the current workspace."
         actions={
           <Button
             className="inline-flex items-center gap-2"
@@ -1169,66 +1186,310 @@ export default function DashboardPage() {
         />
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <BriefingMetric
-          label="Images scanned today"
-          icon={<PackageIcon size={16} />}
-          value={dashboardActivity.images_scanned_today.toLocaleString()}
-          detail={`${activityWorkspaceLabel} · finalized image targets`}
-          tone={dashboardActivity.images_scanned_today > 0 ? 'accent' : 'neutral'}
-          href="/scans"
-        />
-        <BriefingMetric
-          label="Policy failures today"
-          icon={<AlertCircleIcon size={16} />}
-          value={policyFailures.today.toLocaleString()}
-          detail={`${policyFailures.last_3_days} in last 3 days · ${policyFailures.last_7_days} in last 7 days`}
-          tone={policyFailureTone}
-          href="/scans?status=failed"
-        />
-        <BriefingMetric
-          label="Git repositories"
-          icon={<GitBranchIcon size={16} />}
-          value={gitRepositories.total.toLocaleString()}
-          detail={gitRepositoryDetail}
-          tone={gitRepositoryTone}
-          href="/git-repositories"
-        />
-        <BriefingMetric
-          label="Historical severe findings"
-          icon={<Shield01Icon size={16} />}
-          value={formatCompactNumber(criticalHighCount)}
-          detail={`${formatCompactNumber(totalVulns)} findings across scan history`}
-          tone={criticalHighCount > 0 ? 'danger' : 'neutral'}
-          sparkline={{ data: severeFindingsTrend, valueLabel: 'critical and high findings' }}
-          href="/scans?critical=yes&sort=risk_desc"
-        />
-        <BriefingMetric
-          label="Watchlist attention"
-          icon={<AlertCircleIcon size={16} />}
-          value={watchlistAttentionCount.toLocaleString()}
-          detail="Current scheduled scans with a policy or scan failure"
-          tone={watchlistAttentionCount > 0 ? 'danger' : 'neutral'}
-          href="/watchlist?focus=attention"
-        />
-        <BriefingMetric
-          label="Coverage freshness"
-          icon={<Clock01Icon size={16} />}
-          value={`${watchlistCoverage.coverage7d}%`}
-          detail={`${watchlistCoverage.staleItems.length.toLocaleString()} stale · ${watchlistCoverage.neverScannedCount.toLocaleString()} never scanned`}
-          tone={coverageTone}
-          trend={coverageTrendChip}
-          href={
-            watchlistCoverage.staleItems.length > 0
-              ? '/watchlist?focus=stale'
-              : watchlistCoverage.neverScannedCount > 0
-                ? '/watchlist?focus=never_scanned'
-                : '/watchlist'
-          }
-        />
-      </div>
+      <section className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.58fr)]">
+        <Card className="overflow-hidden p-0" variant="tertiary">
+          <Card.Content className="grid min-h-[308px] p-0 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)]">
+            <div className="flex flex-col justify-between p-6 sm:p-7">
+              <div>
+                <Chip color={criticalHighCount > 0 ? 'warning' : 'success'} variant="soft">
+                  Organization policy context
+                </Chip>
+                <h2 className="mt-5 max-w-2xl text-3xl font-semibold leading-[1.1] tracking-[-0.035em] text-foreground sm:text-4xl">
+                  {criticalHighCount > 0
+                    ? `${formatCompactNumber(criticalHighCount)} severe findings need context.`
+                    : 'No severe findings are recorded in this workspace history.'}
+                </h2>
+                <p className="mt-4 max-w-2xl text-sm leading-6 text-muted">
+                  Review vulnerability exposure alongside the organizational policies that apply to
+                  this workspace—such as configured severity or CVSS thresholds. Policy results
+                  provide evidence; they do not decide release readiness.
+                </p>
+              </div>
+              <div className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-3 text-sm">
+                <span className="text-muted">
+                  <strong className="font-semibold text-danger">
+                    {(stats.severity_totals.critical ?? 0).toLocaleString()}
+                  </strong>{' '}
+                  critical
+                </span>
+                <span className="text-muted">
+                  <strong className="font-semibold text-warning">
+                    {(stats.severity_totals.high ?? 0).toLocaleString()}
+                  </strong>{' '}
+                  high
+                </span>
+                <span className="text-muted">
+                  <strong className="font-semibold text-foreground">
+                    {formatCompactNumber(totalVulns)}
+                  </strong>{' '}
+                  findings
+                </span>
+                <Link
+                  className="font-medium text-accent hover:text-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  href="/scans?critical=yes&sort=risk_desc"
+                >
+                  Explore findings →
+                </Link>
+              </div>
+            </div>
 
-      <ScanActivityCard activeScans={activeScans} recentResults={recentResults} />
+            <div className="flex min-h-[230px] flex-col justify-between border-t border-divider bg-surface-secondary p-6 lg:border-t-0 lg:border-l">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                    Severe finding trend
+                  </p>
+                  <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
+                    {formatCompactNumber(criticalHighCount)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">Critical and high in scan history</p>
+                </div>
+                <div className="flex rounded-xl bg-surface p-1">
+                  {[7, 14, 30].map((days) => (
+                    <Button
+                      key={days}
+                      onPress={() => handleVulnPeriodChange(days)}
+                      size="sm"
+                      variant={vulnTrendPeriod === days ? 'secondary' : 'ghost'}
+                    >
+                      {days}d
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              {severeFindingsTrend.length >= 2 ? (
+                <div className="mt-5 h-28">
+                  <MiniSparkline
+                    data={severeFindingsTrend}
+                    color="var(--success)"
+                    showArea={false}
+                    valueLabel="critical and high findings"
+                  />
+                </div>
+              ) : (
+                <p className="py-8 text-sm text-muted">
+                  No trend data is available for this period.
+                </p>
+              )}
+              <p className="mt-3 text-xs text-muted">Historical average per finalized scan</p>
+            </div>
+          </Card.Content>
+        </Card>
+
+        <Card className="flex min-h-[308px] flex-col p-6">
+          <Card.Header className="p-0">
+            <div className="flex items-center justify-between gap-4">
+              <Chip
+                color={policyFailures.today > 0 || activePolicySignals > 0 ? 'warning' : 'success'}
+                variant="soft"
+              >
+                Policy signals
+              </Chip>
+              <span className="text-xs tabular-nums text-muted">Today</span>
+            </div>
+            <Card.Title className="mt-4">What merits review</Card.Title>
+            <Card.Description>
+              Signals from organization and scanner policy evaluation
+            </Card.Description>
+          </Card.Header>
+          <Card.Content className="flex flex-1 flex-col justify-center gap-5 p-0 py-6">
+            <div className="flex items-start gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-warning/10 text-xs font-semibold text-warning">
+                1
+              </span>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {policyFailures.today.toLocaleString()} policy failures today
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  {policyFailures.last_7_days.toLocaleString()} recorded in the last 7 days across
+                  the current workspace.
+                </p>
+              </div>
+            </div>
+            <Separator variant="tertiary" />
+            <div className="flex items-start gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-danger/10 text-xs font-semibold text-danger">
+                2
+              </span>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {activePolicySignals.toLocaleString()} active policy signals
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  {operations.org_policy_fail_count.toLocaleString()} organization policy ·{' '}
+                  {operations.xray_blocked_count.toLocaleString()} Xray policy ·{' '}
+                  {operations.blocked_policy_count.toLocaleString()} blocked policy
+                </p>
+              </div>
+            </div>
+            <Separator variant="tertiary" />
+            <div className="flex items-start gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-xs font-semibold text-accent">
+                3
+              </span>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {watchlistAttentionCount.toLocaleString()} watchlist items need attention
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  Scheduled scans with a policy outcome or scan issue stay visible here.
+                </p>
+              </div>
+            </div>
+          </Card.Content>
+          <Card.Footer className="flex-col items-stretch gap-2 p-0">
+            <Button onPress={() => openDrilldown('total')} variant="secondary">
+              Review scan outcomes
+              <ArrowRight01Icon size={15} />
+            </Button>
+            <Button onPress={() => openDrilldown('watchlist')} variant="ghost">
+              Open watchlist attention
+            </Button>
+          </Card.Footer>
+        </Card>
+      </section>
+
+      <section>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
+              Evidence snapshot
+            </p>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-foreground">
+              The facts behind the posture
+            </h2>
+          </div>
+          <Link
+            className="text-xs font-medium text-accent hover:text-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            href="/scans"
+          >
+            Browse all scans →
+          </Link>
+        </div>
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          <BriefingMetric
+            label="Historical severe findings"
+            icon={<Shield01Icon size={16} />}
+            value={formatCompactNumber(criticalHighCount)}
+            detail={`${formatCompactNumber(totalVulns)} findings across scan history`}
+            tone={criticalHighCount > 0 ? 'danger' : 'neutral'}
+            href="/scans?critical=yes&sort=risk_desc"
+          />
+          <BriefingMetric
+            label="Policy failures today"
+            icon={<AlertCircleIcon size={16} />}
+            value={policyFailures.today.toLocaleString()}
+            detail={`${policyFailures.last_3_days} in 3 days · ${policyFailures.last_7_days} in 7 days`}
+            tone={policyFailureTone}
+            onPress={() => openDrilldown('total')}
+          />
+          <BriefingMetric
+            label="Coverage freshness"
+            icon={<Clock01Icon size={16} />}
+            value={`${watchlistCoverage.coverage7d}%`}
+            detail={`${watchlistCoverage.staleItems.length.toLocaleString()} stale · ${watchlistCoverage.neverScannedCount.toLocaleString()} never scanned`}
+            tone={coverageTone}
+            trend={coverageTrendChip}
+            href={
+              watchlistCoverage.staleItems.length > 0
+                ? '/watchlist?focus=stale'
+                : watchlistCoverage.neverScannedCount > 0
+                  ? '/watchlist?focus=never_scanned'
+                  : '/watchlist'
+            }
+          />
+        </div>
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.52fr)]">
+        <ScanActivityCard activeScans={activeScans} recentResults={recentResults} />
+
+        <Card className="p-6">
+          <Card.Header className="p-0">
+            <Card.Title>Coverage and confidence</Card.Title>
+            <Card.Description>How much of the monitored estate has fresh evidence</Card.Description>
+          </Card.Header>
+          <Card.Content className="mt-6 space-y-6 p-0">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+                  {watchlistCoverage.coverage7d}%
+                </p>
+                <p className="mt-1 text-[11px] text-muted">fresh in 7 days</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold tabular-nums tracking-tight text-warning">
+                  {watchlistCoverage.staleItems.length}
+                </p>
+                <p className="mt-1 text-[11px] text-muted">overdue</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold tabular-nums tracking-tight text-accent">
+                  {dashboardActivity.images_scanned_today}
+                </p>
+                <p className="mt-1 text-[11px] text-muted">scanned today</p>
+              </div>
+            </div>
+            <ProgressBar
+              aria-label="Fresh scan coverage"
+              color={
+                coverageTone === 'success'
+                  ? 'success'
+                  : coverageTone === 'warning'
+                    ? 'warning'
+                    : 'accent'
+              }
+              value={watchlistCoverage.coverage7d}
+            >
+              <ProgressBar.Track>
+                <ProgressBar.Fill />
+              </ProgressBar.Track>
+            </ProgressBar>
+            <Separator variant="tertiary" />
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className="flex items-center gap-2 text-muted">
+                  <GitBranchIcon size={16} /> Git repositories
+                </span>
+                <span
+                  className={
+                    gitRepositoryTone === 'success'
+                      ? 'text-success'
+                      : gitRepositoryTone === 'danger'
+                        ? 'text-danger'
+                        : 'text-foreground'
+                  }
+                >
+                  {gitRepositoryDetail}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="flex items-center gap-2 text-muted">
+                  <ChartIcon size={16} /> Active Xray scans
+                </span>
+                <span className="tabular-nums text-foreground">{operations.active_xray_count}</span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="flex items-center gap-2 text-muted">
+                  <PackageIcon size={16} /> Scheduled items
+                </span>
+                <span className="tabular-nums text-foreground">
+                  {watchlistCoverage.enabledCount}
+                </span>
+              </div>
+            </div>
+          </Card.Content>
+          <Card.Footer className="px-0 pt-6">
+            <Link
+              className="text-xs font-medium text-accent hover:text-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              href="/watchlist"
+            >
+              Manage coverage →
+            </Link>
+          </Card.Footer>
+        </Card>
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.55fr)]">
         <VulnTrendChart
@@ -1240,36 +1501,25 @@ export default function DashboardPage() {
           <DashboardSectionHeader
             title="Scan volume"
             icon={<ChartIcon size={16} />}
-            description="Secondary throughput view for the last 30 days"
+            description="Finalized scan activity over the last 30 days"
             action={
-              <Link
-                href="/scans"
-                className="text-xs font-medium"
-                style={{ color: 'color-mix(in srgb, var(--accent) 78%, white)' }}
-              >
+              <Link href="/scans" className="text-xs font-medium text-accent hover:text-accent/75">
                 View all →
               </Link>
             }
           />
-          <p className="mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-            <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
+          <p className="mt-2 text-[11px] text-muted">
+            <span className="tabular-nums text-foreground">
               {scanVolumeTrend.reduce((sum, point) => sum + point.value, 0).toLocaleString()}
             </span>{' '}
             total scans over 30 days
           </p>
           {scanVolumeTrend.length >= 2 ? (
             <div className="mt-4 flex-1">
-              <MiniSparkline
-                data={scanVolumeTrend}
-                color="color-mix(in srgb, var(--accent) 78%, white)"
-                valueLabel="scans"
-              />
+              <MiniSparkline data={scanVolumeTrend} color="var(--accent)" valueLabel="scans" />
             </div>
           ) : (
-            <div
-              className="flex flex-1 items-center justify-center py-8 text-sm"
-              style={{ color: 'var(--text-faint)' }}
-            >
+            <div className="flex flex-1 items-center justify-center py-8 text-sm text-muted">
               No trend data yet
             </div>
           )}

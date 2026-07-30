@@ -12,23 +12,29 @@ import {
   YAxis as EvilAreaYAxis,
 } from '@/components/evilcharts/charts/area-chart';
 import {
+  Bar as EvilBar,
+  EvilBarChart,
+  Grid as EvilBarGrid,
+  Tooltip as EvilBarTooltip,
+  XAxis as EvilBarXAxis,
+  YAxis as EvilBarYAxis,
+} from '@/components/evilcharts/charts/bar-chart';
+import {
   buildRecentActivityHref,
   getRecentActivityBounds,
   RECENT_ACTIVITY_RANGE_OPTIONS,
   RecentActivityRange,
-  RecentActivityRow,
 } from '@/components/scans/recent-activity';
-import { StatusBadge } from '@/components/ui/badges';
-import { StatusAlert } from '@/components/ui/form-alert';
 import {
+  CHART_TONES,
   formatChartDate as formatChartDateShared,
   singleSeriesConfig,
   typedChartConfigFromSeries,
 } from '@/components/ui/chart-adapter';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { PageHeader } from '@/components/ui/page-header';
-import { StatCard } from '@/components/ui/stat-card';
+import { DashboardLoadingSkeleton } from '@/components/ui/skeleton';
 import { SurfaceIcon } from '@/components/ui/surface-icon';
-import { DashboardLoadingSkeleton, RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
@@ -48,21 +54,18 @@ import {
   WatchlistItem,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { fullDate, timeAgo } from '@/lib/time';
 import { getWatchlistPolicyAttentionItems } from '@/lib/watchlist-posture';
 import { Button, Card, Chip, ProgressBar, Separator, useOverlayState } from '@heroui/react';
 import {
-  AlertCircleIcon,
   ArrowRight01Icon,
   ChartIcon,
-  Clock01Icon,
   GitBranchIcon,
   PackageIcon,
   Shield01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // ── severity config ──────────────────────────────────────────────────
 const SEV = [
@@ -103,6 +106,28 @@ const SEV = [
   },
 ];
 
+const SCAN_OUTCOME_SERIES = [
+  { key: 'completed', label: 'Succeeded', color: CHART_TONES.success.dark, status: 'completed' },
+  {
+    key: 'policy_blocked',
+    label: 'Blocked by policy',
+    color: CHART_TONES.warning.dark,
+    status: 'blocked_by_xray_policy',
+  },
+  { key: 'failed', label: 'Failed', color: CHART_TONES.danger.dark, status: 'failed' },
+  { key: 'running', label: 'Running', color: CHART_TONES.accent.dark, status: 'running' },
+  { key: 'pending', label: 'Queued', color: CHART_TONES.neutral.dark, status: 'pending' },
+  { key: 'cancelled', label: 'Cancelled', color: CHART_TONES.neutral.light, status: 'cancelled' },
+] as const;
+
+const SCAN_OUTCOME_CONFIG = typedChartConfigFromSeries(SCAN_OUTCOME_SERIES);
+const SCAN_OUTCOME_RANGE_DAYS: Record<RecentActivityRange, number> = {
+  '6h': 1,
+  '24h': 1,
+  '7d': 7,
+  '30d': 30,
+};
+
 function formatChartDate(date: string, options?: Intl.DateTimeFormatOptions): string {
   if (options?.year) {
     return formatChartDateShared(date, true);
@@ -114,25 +139,6 @@ function toTimestamp(value?: string | null): number | null {
   if (!value) return null;
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : parsed;
-}
-
-function buildTrendSeries(
-  trends: DashboardTrendPoint[],
-  days: number,
-  selectValue: (point: DashboardTrendPoint) => number
-): { date: string; value: number }[] {
-  const result: { date: string; value: number }[] = [];
-  const valuesByDate = new Map(trends.map((point) => [point.date, selectValue(point)]));
-  const now = new Date();
-
-  for (let index = days - 1; index >= 0; index--) {
-    const date = new Date(now);
-    date.setUTCDate(date.getUTCDate() - index);
-    const key = date.toISOString().slice(0, 10);
-    result.push({ date: key, value: valuesByDate.get(key) ?? 0 });
-  }
-
-  return result;
 }
 
 function sumAvgFindings(point: DashboardVulnTrendPoint): number {
@@ -149,47 +155,6 @@ type WatchlistCoverage = {
   neverScannedCount: number;
   coverage7d: number;
   topSchedule: [string, number] | null;
-};
-
-type TrendChip = {
-  label: string;
-  tone: PostureTone;
-};
-
-const TONE_STYLES: Record<
-  PostureTone,
-  { color: string; bg: string; border: string; softBg: string }
-> = {
-  success: {
-    color: '#34d399',
-    bg: 'rgba(52,211,153,0.14)',
-    border: 'rgba(52,211,153,0.28)',
-    softBg: 'rgba(52,211,153,0.07)',
-  },
-  warning: {
-    color: '#fbbf24',
-    bg: 'rgba(251,191,36,0.14)',
-    border: 'rgba(251,191,36,0.28)',
-    softBg: 'rgba(251,191,36,0.07)',
-  },
-  danger: {
-    color: '#f87171',
-    bg: 'rgba(248,113,113,0.14)',
-    border: 'rgba(248,113,113,0.28)',
-    softBg: 'rgba(248,113,113,0.07)',
-  },
-  accent: {
-    color: 'color-mix(in srgb, var(--accent) 78%, white)',
-    bg: 'color-mix(in srgb, var(--accent) 14%, transparent)',
-    border: 'color-mix(in srgb, var(--accent) 28%, transparent)',
-    softBg: 'color-mix(in srgb, var(--accent) 7%, transparent)',
-  },
-  neutral: {
-    color: 'var(--text-muted)',
-    bg: 'var(--row-hover)',
-    border: 'var(--surface-border)',
-    softBg: 'rgba(161,161,170,0.07)',
-  },
 };
 
 function formatCompactNumber(value: number): string {
@@ -260,75 +225,6 @@ function buildVulnerabilityTrendSeries(
   }));
 }
 
-function getSeriesWindowAverage(
-  series: { date: string; value: number }[],
-  start: number,
-  end: number
-): number {
-  const slice = series.slice(start, end);
-  if (slice.length === 0) return 0;
-  return slice.reduce((sum, point) => sum + point.value, 0) / slice.length;
-}
-
-function getTrendChip(
-  series: { date: string; value: number }[],
-  options?: {
-    higherIsBetter?: boolean;
-    stableLabel?: string;
-    noDataLabel?: string;
-    usePercent?: boolean;
-  }
-): TrendChip {
-  const higherIsBetter = options?.higherIsBetter ?? false;
-  const stableLabel = options?.stableLabel ?? 'Stable';
-  const noDataLabel = options?.noDataLabel ?? 'No trend yet';
-  const usePercent = options?.usePercent ?? true;
-
-  if (series.length < 2) {
-    return { label: noDataLabel, tone: 'neutral' };
-  }
-
-  const midpoint = Math.max(1, Math.floor(series.length / 2));
-  const previousAvg = getSeriesWindowAverage(series, 0, midpoint);
-  const recentAvg = getSeriesWindowAverage(series, midpoint, series.length);
-  const delta = recentAvg - previousAvg;
-
-  if (Math.abs(delta) < 0.5) {
-    return { label: stableLabel, tone: 'neutral' };
-  }
-
-  const tone =
-    delta > 0 ? (higherIsBetter ? 'success' : 'danger') : higherIsBetter ? 'danger' : 'success';
-  const direction = delta > 0 ? '↑' : '↓';
-
-  if (usePercent && previousAvg > 0) {
-    const percentChange = Math.round((Math.abs(delta) / previousAvg) * 100);
-    return {
-      label: `${direction} ${percentChange}%`,
-      tone,
-    };
-  }
-
-  if (usePercent && previousAvg === 0 && recentAvg > 0) {
-    return {
-      label: `${direction} +${Math.round(recentAvg)}`,
-      tone,
-    };
-  }
-
-  const roundedDelta = Math.round(Math.abs(delta) * 10) / 10;
-
-  return {
-    label: `${direction} ${roundedDelta}`,
-    tone,
-  };
-}
-
-function isFlatSeries(series: { date: string; value: number }[]) {
-  if (series.length < 2) return true;
-  return series.every((point) => point.value === series[0]?.value);
-}
-
 function isScannerReady({
   isAdmin,
   scannerHealth,
@@ -348,304 +244,127 @@ function isScannerReady({
   );
 }
 
-function BriefingMetric({
-  label,
-  value,
-  detail,
-  icon,
-  tone = 'neutral',
-  trend,
-  sparkline,
-  href,
-  onPress,
-  className,
+function ScanOutcomeChart({
+  data,
+  range,
+  loading,
+  onRangeChange,
+  onStatusPress,
 }: {
-  label: string;
-  value: React.ReactNode;
-  detail: React.ReactNode;
-  icon?: ReactNode;
-  tone?: PostureTone;
-  trend?: TrendChip;
-  sparkline?: { data: { date: string; value: number }[]; valueLabel?: string };
-  href?: string;
-  onPress?: () => void;
-  className?: string;
+  data: DashboardTrendPoint[];
+  range: RecentActivityRange;
+  loading: boolean;
+  onRangeChange: (range: RecentActivityRange) => void;
+  onStatusPress: (status: string) => void;
 }) {
-  const toneStyle = TONE_STYLES[tone];
-  const statTone = tone === 'neutral' ? 'default' : tone;
-  const sparklineIsFlat = sparkline ? isFlatSeries(sparkline.data) : false;
-  const content = (
-    <StatCard
-      label={label}
-      value={value}
-      hint={detail}
-      icon={icon}
-      iconTone="default"
-      iconVariant="repository"
-      tone={statTone}
-      variant="stacked"
-      className={['h-full', className].filter(Boolean).join(' ')}
-      valueClassName="text-lg font-semibold tabular-nums"
-      valueStyle={{ color: toneStyle.color }}
-      hintClassName="text-[11px] leading-4 text-muted"
-      aside={
-        <>
-          <div className="flex items-center gap-2">
-            {trend ? (
-              <Chip
-                size="sm"
-                variant="soft"
-                color={
-                  trend.tone === 'danger'
-                    ? 'danger'
-                    : trend.tone === 'warning'
-                      ? 'warning'
-                      : trend.tone === 'success'
-                        ? 'success'
-                        : trend.tone === 'accent'
-                          ? 'accent'
-                          : 'default'
-                }
-              >
-                {trend.label}
-              </Chip>
-            ) : null}
-            <span
-              className="size-1.5 rounded-full"
-              style={{ background: toneStyle.color, opacity: 0.9 }}
-            />
-          </div>
-          {sparkline ? (
-            sparklineIsFlat ? (
-              <div className="flex h-8 w-20 items-center justify-end">
-                <span className="block h-px w-20 rounded-full bg-default-500/60" />
-              </div>
-            ) : (
-              <MiniSparkline
-                data={sparkline.data}
-                color={toneStyle.color}
-                compact
-                showArea={false}
-                valueLabel={sparkline.valueLabel ?? 'events'}
-              />
-            )
-          ) : null}
-        </>
-      }
-    />
-  );
-
-  if (href) {
-    return (
-      <Link
-        href={href}
-        className="group block h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
-      >
-        {content}
-      </Link>
-    );
-  }
-
-  if (!onPress) return content;
+  const filledData = fillScanOutcomeDates(data, range);
+  const totalScans = filledData.reduce((sum, point) => sum + point.total, 0);
+  const chartData: Array<Record<string, unknown>> = filledData.map((point) => ({
+    ...point,
+    ...Object.fromEntries(
+      SCAN_OUTCOME_SERIES.map((series) => [series.key, point[series.key] ?? 0])
+    ),
+  }));
+  const totals = SCAN_OUTCOME_SERIES.map((series) => ({
+    ...series,
+    total: filledData.reduce((sum, point) => sum + (point[series.key] ?? 0), 0),
+  }));
 
   return (
-    <button
-      type="button"
-      onClick={onPress}
-      className="group h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
-      aria-haspopup="dialog"
-    >
-      {content}
-    </button>
-  );
-}
-
-function DashboardSectionHeader({
-  title,
-  icon,
-  description,
-  action,
-}: {
-  title: string;
-  icon?: ReactNode;
-  description?: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          {icon ? <SurfaceIcon icon={icon} variant="repository" /> : null}
-          <h2 className="truncate text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {title}
-          </h2>
+    <Card className="p-5">
+      <Card.Header className="flex flex-wrap items-start justify-between gap-4 p-0">
+        <div>
+          <Card.Title>Scan outcomes</Card.Title>
+          <Card.Description>
+            Every scan run in the selected period, grouped by its current outcome.
+          </Card.Description>
         </div>
-        {description && (
-          <p className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>
-            {description}
-          </p>
-        )}
-      </div>
-      {action}
-    </div>
-  );
-}
+        <div className="flex flex-wrap items-center gap-1 rounded-xl bg-surface-secondary p-1">
+          {RECENT_ACTIVITY_RANGE_OPTIONS.map((option) => (
+            <Button
+              key={option.id}
+              aria-pressed={range === option.id}
+              onPress={() => onRangeChange(option.id)}
+              size="sm"
+              variant={range === option.id ? 'secondary' : 'ghost'}
+            >
+              {option.shortLabel}
+            </Button>
+          ))}
+        </div>
+      </Card.Header>
 
-function ScanActivityCard({
-  activeScans,
-  recentResults,
-}: {
-  activeScans: Scan[];
-  recentResults: Scan[];
-}) {
-  return (
-    <Card className="p-4">
-      <DashboardSectionHeader
-        title="Scan activity"
-        icon={<Shield01Icon size={16} />}
-        description={
-          activeScans.length > 0
-            ? 'Running work and the latest finalized results'
-            : 'Latest finalized results for this workspace'
-        }
-        action={
+      <Card.Content className="p-0 pt-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-sm text-muted">
+            <span className="font-semibold tabular-nums text-foreground">
+              {totalScans.toLocaleString()}
+            </span>{' '}
+            total scans
+          </p>
           <Link
-            href="/scans"
-            className="text-xs font-medium text-accent hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70"
+            href={`/scans?range=${range}`}
+            className="text-xs font-medium text-accent hover:text-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             View all scans →
           </Link>
-        }
-      />
+        </div>
 
-      <div className={`mt-4 grid gap-4${activeScans.length > 0 ? ' xl:grid-cols-2' : ''}`}>
-        {activeScans.length > 0 ? (
-          <div className="min-w-0">
-            <div className="flex items-center justify-between gap-2 px-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Active</p>
-              <Chip color="accent" size="sm" variant="soft">
-                {activeScans.length}
-              </Chip>
-            </div>
-            <div className="mt-2 space-y-1">
-              {activeScans.slice(0, 3).map((scan) => (
-                <RecentActivityRow key={scan.id} scan={scan} />
-              ))}
-            </div>
+        {loading ? (
+          <div className="mt-5 flex h-[280px] items-center justify-center text-sm text-muted">
+            Updating scan outcomes…
           </div>
-        ) : null}
-
-        <div className="min-w-0">
-          <p className="px-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-            Recent results
-          </p>
-          {recentResults.length > 0 ? (
-            <div className="mt-2 space-y-1">
-              {recentResults.slice(0, 3).map((scan) => (
-                <RecentActivityRow key={scan.id} scan={scan} />
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 rounded-xl border border-surface-border bg-surface-secondary px-3 py-4 text-sm text-muted">
-              No finalized scans yet.
-            </p>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function isProblemScan(scan: Scan): boolean {
-  return scan.status === 'failed' || scan.external_status === 'blocked_by_xray_policy';
-}
-
-function problemScanTime(scan: Scan): string {
-  return scan.completed_at ?? scan.started_at ?? scan.created_at;
-}
-
-function RecentProblemScansCard({
-  scans,
-  loading,
-  error,
-  href,
-}: {
-  scans: Scan[];
-  loading: boolean;
-  error: string;
-  href: string;
-}) {
-  return (
-    <Card className="h-full p-4">
-      <DashboardSectionHeader
-        title="Recent problem scans"
-        icon={<Shield01Icon size={16} />}
-        description="Latest failed or policy-blocked runs"
-        action={
-          <Link href={href}>
-            <Button size="sm" variant="secondary">
-              Open scan activity
-              <ArrowRight01Icon />
-            </Button>
-          </Link>
-        }
-      />
-
-      {loading ? (
-        <div className="mt-4 space-y-1.5">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <RecentScanRowSkeleton key={index} />
-          ))}
-        </div>
-      ) : error ? (
-        <StatusAlert
-          className="mt-4"
-          status="danger"
-          title="Scan activity failed to load"
-          description={error}
-        />
-      ) : scans.length === 0 ? (
-        <StatusAlert
-          className="mt-4"
-          title="No recent failed or blocked scans"
-          description="When scans fail or Xray blocks a result, it will appear here first."
-        />
-      ) : (
-        <div className="mt-3 grid gap-2">
-          {scans.map((scan) => (
-            <Link
-              key={scan.id}
-              href={`/scans/details/${scan.id}`}
-              className="grid min-w-0 gap-2 rounded-xl border border-surface-border bg-surface-secondary px-3 py-2.5 transition-colors hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/70 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center 2xl:grid-cols-[minmax(150px,0.9fr)_auto_minmax(160px,1.2fr)_auto]"
+        ) : (
+          <div className="mt-5 h-[280px] w-full overflow-hidden rounded-xl bg-surface-secondary p-2">
+            <EvilBarChart
+              data={chartData}
+              config={SCAN_OUTCOME_CONFIG}
+              stackType="stacked"
+              className="h-full !aspect-auto"
+              barCategoryGap={8}
+              chartProps={{ margin: { top: 12, right: 8, left: -18, bottom: 0 } }}
             >
-              <p
-                className="truncate font-mono text-sm font-medium text-foreground"
-                title={`${scan.image_name}:${scan.image_tag}`}
-              >
-                {scan.image_name}:{scan.image_tag}
-              </p>
-              <div className="flex items-center gap-2 text-[11px]">
-                <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+              <EvilBarGrid stroke="rgba(161,161,170,0.15)" vertical={false} />
+              <EvilBarXAxis
+                dataKey="date"
+                minTickGap={30}
+                tickFormatter={(value: string) => formatChartDate(value)}
+              />
+              <EvilBarYAxis allowDecimals={false} width={28} />
+              <EvilBarTooltip variant="frosted-glass" roundness="lg" />
+              {SCAN_OUTCOME_SERIES.map((series) => (
+                <EvilBar key={series.key} bufferBar dataKey={series.key} variant="gradient" />
+              ))}
+            </EvilBarChart>
+          </div>
+        )}
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {totals.map((series) => (
+            <Button
+              key={series.key}
+              aria-label={`View ${series.label.toLowerCase()} scans from the selected period`}
+              className="h-auto justify-between gap-3 px-3 py-2 text-left"
+              onPress={() => onStatusPress(series.status)}
+              size="sm"
+              variant="ghost"
+            >
+              <span className="flex min-w-0 items-center gap-2">
                 <span
-                  className="whitespace-nowrap text-muted"
-                  title={fullDate(problemScanTime(scan))}
-                >
-                  {timeAgo(problemScanTime(scan))}
-                </span>
-              </div>
-              <p className="truncate text-xs text-muted" title={scan.error_message || undefined}>
-                {scan.error_message || 'No error details reported'}
-              </p>
-              <div className="flex items-baseline justify-end gap-1.5 whitespace-nowrap">
-                <span className="text-sm font-semibold tabular-nums text-danger">
-                  {scan.critical_count + scan.high_count}
-                </span>
-                <span className="text-[11px] text-muted">critical + high</span>
-              </div>
-            </Link>
+                  aria-hidden="true"
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: series.color }}
+                />
+                <span className="truncate">{series.label}</span>
+              </span>
+              <span className="tabular-nums text-muted">{series.total.toLocaleString()}</span>
+            </Button>
           ))}
         </div>
-      )}
+        <p className="mt-3 text-xs text-muted">
+          Select an outcome to open the matching scans for this time range.
+        </p>
+      </Card.Content>
     </Card>
   );
 }
@@ -722,6 +441,34 @@ function fillDates(data: DashboardVulnTrendPoint[], days: number): DashboardVuln
     result.push(map.get(key) ?? { date: key, critical: 0, high: 0, medium: 0, low: 0, unknown: 0 });
   }
   return result;
+}
+
+function fillScanOutcomeDates(
+  data: DashboardTrendPoint[],
+  range: RecentActivityRange
+): DashboardTrendPoint[] {
+  const pointsByDate = new Map(data.map((point) => [point.date, point]));
+  const days = SCAN_OUTCOME_RANGE_DAYS[range];
+  const today = new Date();
+
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(today);
+    date.setUTCDate(date.getUTCDate() - (days - 1 - index));
+    const key = date.toISOString().slice(0, 10);
+    return (
+      pointsByDate.get(key) ?? {
+        date: key,
+        total: 0,
+        completed: 0,
+        failed: 0,
+        policy_blocked: 0,
+        running: 0,
+        pending: 0,
+        cancelled: 0,
+        other: 0,
+      }
+    );
+  });
 }
 
 // Compute 4–5 human-readable Y-axis tick values that cover maxVal
@@ -907,6 +654,8 @@ export default function DashboardPage() {
   const [trends, setTrends] = useState<DashboardTrendPoint[]>([]);
   const [vulnTrends, setVulnTrends] = useState<DashboardVulnTrendPoint[]>([]);
   const [vulnTrendPeriod, setVulnTrendPeriod] = useState(30);
+  const [scanOutcomeRange, setScanOutcomeRange] = useState<RecentActivityRange>('30d');
+  const [scanOutcomeLoading, setScanOutcomeLoading] = useState(false);
   const [scannerHealth, setScannerHealth] = useState<ScannerHealth | null>(null);
   const [scannerHealthError, setScannerHealthError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -923,10 +672,6 @@ export default function DashboardPage() {
   const currentUser = getUser() as { role?: string } | null;
   const isAdmin = currentUser?.role === 'admin' || getTokenType() === 'admin';
 
-  const scanVolumeTrend = useMemo(
-    () => buildTrendSeries(trends, 30, (point) => point.total),
-    [trends]
-  );
   const severeFindingsTrend = useMemo(
     () =>
       buildVulnerabilityTrendSeries(
@@ -956,7 +701,7 @@ export default function DashboardPage() {
 
     Promise.all([
       getStats(),
-      getDashboardTrends().catch(() => [] as DashboardTrendPoint[]),
+      getDashboardTrends(scanOutcomeRange).catch(() => [] as DashboardTrendPoint[]),
       getDashboardVulnTrends(vulnTrendPeriod).catch(() => [] as DashboardVulnTrendPoint[]),
       healthPromise,
     ])
@@ -1026,6 +771,21 @@ export default function DashboardPage() {
       .catch(() => setVulnTrends([]));
   }
 
+  function handleScanOutcomeRangeChange(range: RecentActivityRange) {
+    if (range === scanOutcomeRange) return;
+    setScanOutcomeRange(range);
+    setScanOutcomeLoading(true);
+    getDashboardTrends(range)
+      .then(setTrends)
+      .catch(() => setTrends([]))
+      .finally(() => setScanOutcomeLoading(false));
+  }
+
+  function openScanOutcomeStatus(status: string) {
+    const params = new URLSearchParams({ range: scanOutcomeRange, status });
+    router.push(`/scans?${params.toString()}`);
+  }
+
   if (loading) return <DashboardLoadingSkeleton />;
 
   if (error)
@@ -1062,28 +822,15 @@ export default function DashboardPage() {
     RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === recentActivityRange)?.label ??
     'Last 24 hours';
   const recentActivityHref = buildRecentActivityHref(recentActivityRange);
-  const coverageTrendChip: TrendChip =
-    watchlistCoverage.coverage7d >= 90 && watchlistCoverage.staleItems.length === 0
-      ? { label: 'Fresh', tone: 'success' }
-      : watchlistCoverage.coverage7d === 0 && watchlistCoverage.enabledCount === 0
-        ? { label: 'No schedules', tone: 'neutral' }
-        : watchlistCoverage.staleItems.length > 0 || watchlistCoverage.neverScannedCount > 0
-          ? { label: 'Needs review', tone: 'warning' }
-          : { label: 'Monitoring', tone: 'accent' };
   const coverageTone: PostureTone = !scannerReady
     ? 'warning'
-    : coverageTrendChip.tone === 'success'
+    : watchlistCoverage.coverage7d >= 90 && watchlistCoverage.staleItems.length === 0
       ? 'success'
-      : coverageTrendChip.tone === 'warning'
+      : watchlistCoverage.staleItems.length > 0 || watchlistCoverage.neverScannedCount > 0
         ? 'warning'
-        : coverageTrendChip.tone === 'accent'
-          ? 'accent'
-          : 'neutral';
-  const activeScans = (stats.attention_scans ?? []).filter(
-    (scan) => scan.status === 'pending' || scan.status === 'running'
-  );
-  const activeScanIds = new Set(activeScans.map((scan) => scan.id));
-  const recentResults = (stats.recent_scans ?? []).filter((scan) => !activeScanIds.has(scan.id));
+        : watchlistCoverage.enabledCount === 0
+          ? 'neutral'
+          : 'accent';
   const dashboardActivity = stats.activity ?? { images_scanned_today: 0 };
   const policyFailures = stats.policy_failures ?? { today: 0, last_3_days: 0, last_7_days: 0 };
   const gitRepositories = stats.git_repositories ?? {
@@ -1105,9 +852,6 @@ export default function DashboardPage() {
     operations.blocked_policy_count +
     operations.xray_blocked_count +
     operations.org_policy_fail_count;
-  const activityWorkspaceLabel =
-    workScope.kind === 'org' ? 'Organization workspace' : 'Personal workspace';
-  const policyFailureTone: PostureTone = policyFailures.today > 0 ? 'danger' : 'neutral';
   const gitRepositoryTone: PostureTone =
     gitRepositories.needs_attention > 0
       ? 'danger'
@@ -1350,181 +1094,124 @@ export default function DashboardPage() {
         </Card>
       </section>
 
-      <section>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
-              Evidence snapshot
-            </p>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-foreground">
-              The facts behind the posture
-            </h2>
-          </div>
-          <Link
-            className="text-xs font-medium text-accent hover:text-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            href="/scans"
-          >
-            Browse all scans →
-          </Link>
+      <section aria-labelledby="posture-facts-heading">
+        <div className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+            Evidence snapshot
+          </p>
+          <h2 id="posture-facts-heading" className="mt-1 text-lg font-semibold text-foreground">
+            The facts behind the posture
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            Scan outcomes and coverage evidence for the selected workspace.
+          </p>
         </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
-          <BriefingMetric
-            label="Historical severe findings"
-            icon={<Shield01Icon size={16} />}
-            value={formatCompactNumber(criticalHighCount)}
-            detail={`${formatCompactNumber(totalVulns)} findings across scan history`}
-            tone={criticalHighCount > 0 ? 'danger' : 'neutral'}
-            href="/scans?critical=yes&sort=risk_desc"
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.52fr)]">
+          <ScanOutcomeChart
+            data={trends}
+            range={scanOutcomeRange}
+            loading={scanOutcomeLoading}
+            onRangeChange={handleScanOutcomeRangeChange}
+            onStatusPress={openScanOutcomeStatus}
           />
-          <BriefingMetric
-            label="Policy failures today"
-            icon={<AlertCircleIcon size={16} />}
-            value={policyFailures.today.toLocaleString()}
-            detail={`${policyFailures.last_3_days} in 3 days · ${policyFailures.last_7_days} in 7 days`}
-            tone={policyFailureTone}
-            onPress={() => openDrilldown('total')}
-          />
-          <BriefingMetric
-            label="Coverage freshness"
-            icon={<Clock01Icon size={16} />}
-            value={`${watchlistCoverage.coverage7d}%`}
-            detail={`${watchlistCoverage.staleItems.length.toLocaleString()} stale · ${watchlistCoverage.neverScannedCount.toLocaleString()} never scanned`}
-            tone={coverageTone}
-            trend={coverageTrendChip}
-            href={
-              watchlistCoverage.staleItems.length > 0
-                ? '/watchlist?focus=stale'
-                : watchlistCoverage.neverScannedCount > 0
-                  ? '/watchlist?focus=never_scanned'
-                  : '/watchlist'
-            }
-          />
+
+          <Card className="p-6">
+            <Card.Header className="p-0">
+              <Card.Title>Coverage and confidence</Card.Title>
+              <Card.Description>
+                How much of the monitored estate has fresh evidence
+              </Card.Description>
+            </Card.Header>
+            <Card.Content className="mt-6 space-y-6 p-0">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+                    {watchlistCoverage.coverage7d}%
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted">fresh in 7 days</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold tabular-nums tracking-tight text-warning">
+                    {watchlistCoverage.staleItems.length}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted">overdue</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold tabular-nums tracking-tight text-accent">
+                    {dashboardActivity.images_scanned_today}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted">scanned today</p>
+                </div>
+              </div>
+              <ProgressBar
+                aria-label="Fresh scan coverage"
+                color={
+                  coverageTone === 'success'
+                    ? 'success'
+                    : coverageTone === 'warning'
+                      ? 'warning'
+                      : 'accent'
+                }
+                value={watchlistCoverage.coverage7d}
+              >
+                <ProgressBar.Track>
+                  <ProgressBar.Fill />
+                </ProgressBar.Track>
+              </ProgressBar>
+              <Separator variant="tertiary" />
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="flex items-center gap-2 text-muted">
+                    <GitBranchIcon size={16} /> Git repositories
+                  </span>
+                  <span
+                    className={
+                      gitRepositoryTone === 'success'
+                        ? 'text-success'
+                        : gitRepositoryTone === 'danger'
+                          ? 'text-danger'
+                          : 'text-foreground'
+                    }
+                  >
+                    {gitRepositoryDetail}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="flex items-center gap-2 text-muted">
+                    <ChartIcon size={16} /> Active Xray scans
+                  </span>
+                  <span className="tabular-nums text-foreground">
+                    {operations.active_xray_count}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="flex items-center gap-2 text-muted">
+                    <PackageIcon size={16} /> Scheduled items
+                  </span>
+                  <span className="tabular-nums text-foreground">
+                    {watchlistCoverage.enabledCount}
+                  </span>
+                </div>
+              </div>
+            </Card.Content>
+            <Card.Footer className="px-0 pt-6">
+              <Link
+                className="text-xs font-medium text-accent hover:text-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                href="/watchlist"
+              >
+                Manage coverage →
+              </Link>
+            </Card.Footer>
+          </Card>
         </div>
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.52fr)]">
-        <ScanActivityCard activeScans={activeScans} recentResults={recentResults} />
-
-        <Card className="p-6">
-          <Card.Header className="p-0">
-            <Card.Title>Coverage and confidence</Card.Title>
-            <Card.Description>How much of the monitored estate has fresh evidence</Card.Description>
-          </Card.Header>
-          <Card.Content className="mt-6 space-y-6 p-0">
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <p className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                  {watchlistCoverage.coverage7d}%
-                </p>
-                <p className="mt-1 text-[11px] text-muted">fresh in 7 days</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold tabular-nums tracking-tight text-warning">
-                  {watchlistCoverage.staleItems.length}
-                </p>
-                <p className="mt-1 text-[11px] text-muted">overdue</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold tabular-nums tracking-tight text-accent">
-                  {dashboardActivity.images_scanned_today}
-                </p>
-                <p className="mt-1 text-[11px] text-muted">scanned today</p>
-              </div>
-            </div>
-            <ProgressBar
-              aria-label="Fresh scan coverage"
-              color={
-                coverageTone === 'success'
-                  ? 'success'
-                  : coverageTone === 'warning'
-                    ? 'warning'
-                    : 'accent'
-              }
-              value={watchlistCoverage.coverage7d}
-            >
-              <ProgressBar.Track>
-                <ProgressBar.Fill />
-              </ProgressBar.Track>
-            </ProgressBar>
-            <Separator variant="tertiary" />
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between gap-4">
-                <span className="flex items-center gap-2 text-muted">
-                  <GitBranchIcon size={16} /> Git repositories
-                </span>
-                <span
-                  className={
-                    gitRepositoryTone === 'success'
-                      ? 'text-success'
-                      : gitRepositoryTone === 'danger'
-                        ? 'text-danger'
-                        : 'text-foreground'
-                  }
-                >
-                  {gitRepositoryDetail}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="flex items-center gap-2 text-muted">
-                  <ChartIcon size={16} /> Active Xray scans
-                </span>
-                <span className="tabular-nums text-foreground">{operations.active_xray_count}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="flex items-center gap-2 text-muted">
-                  <PackageIcon size={16} /> Scheduled items
-                </span>
-                <span className="tabular-nums text-foreground">
-                  {watchlistCoverage.enabledCount}
-                </span>
-              </div>
-            </div>
-          </Card.Content>
-          <Card.Footer className="px-0 pt-6">
-            <Link
-              className="text-xs font-medium text-accent hover:text-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              href="/watchlist"
-            >
-              Manage coverage →
-            </Link>
-          </Card.Footer>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.55fr)]">
-        <VulnTrendChart
-          data={vulnTrends}
-          period={vulnTrendPeriod}
-          onPeriod={handleVulnPeriodChange}
-        />
-        <Card className="flex min-h-[240px] flex-col p-5">
-          <DashboardSectionHeader
-            title="Scan volume"
-            icon={<ChartIcon size={16} />}
-            description="Finalized scan activity over the last 30 days"
-            action={
-              <Link href="/scans" className="text-xs font-medium text-accent hover:text-accent/75">
-                View all →
-              </Link>
-            }
-          />
-          <p className="mt-2 text-[11px] text-muted">
-            <span className="tabular-nums text-foreground">
-              {scanVolumeTrend.reduce((sum, point) => sum + point.value, 0).toLocaleString()}
-            </span>{' '}
-            total scans over 30 days
-          </p>
-          {scanVolumeTrend.length >= 2 ? (
-            <div className="mt-4 flex-1">
-              <MiniSparkline data={scanVolumeTrend} color="var(--accent)" valueLabel="scans" />
-            </div>
-          ) : (
-            <div className="flex flex-1 items-center justify-center py-8 text-sm text-muted">
-              No trend data yet
-            </div>
-          )}
-        </Card>
-      </div>
+      <VulnTrendChart
+        data={vulnTrends}
+        period={vulnTrendPeriod}
+        onPeriod={handleVulnPeriodChange}
+      />
 
       <DashboardDrilldownModal
         state={drilldownModal}

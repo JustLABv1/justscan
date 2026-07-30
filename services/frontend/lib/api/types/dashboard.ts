@@ -76,6 +76,11 @@ export interface DashboardTrendPoint {
   total: number;
   completed: number;
   failed: number;
+  policy_blocked: number;
+  running: number;
+  pending: number;
+  cancelled: number;
+  other: number;
 }
 
 export interface DashboardVulnTrendPoint {

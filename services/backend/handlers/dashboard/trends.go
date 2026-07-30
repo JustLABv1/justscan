@@ -38,6 +38,10 @@ func trendCutoff(rangeName string, now time.Time) time.Time {
 	}
 }
 
+func usesHourlyTrendBuckets(rangeName string) bool {
+	return rangeName == "6h" || rangeName == "24h"
+}
+
 // GetTrends returns daily scan outcome counts. The optional range query accepts
 // 6h, 24h, 7d, and 30d; 30d is the default.
 func GetTrends(db *bun.DB) gin.HandlerFunc {
@@ -48,12 +52,17 @@ func GetTrends(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		now := time.Now().UTC()
-		cutoff := trendCutoff(c.Query("range"), now)
+		rangeName := c.Query("range")
+		cutoff := trendCutoff(rangeName, now)
+		bucketExpression := "to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date"
+		if usesHourlyTrendBuckets(rangeName) {
+			bucketExpression = "to_char(date_trunc('hour', created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD\"T\"HH24:00:00\"Z\"') AS date"
+		}
 
 		var rows []scanTrendRow
 		query := db.NewSelect().
 			TableExpr("scans").
-			ColumnExpr("to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date").
+			ColumnExpr(bucketExpression).
 			ColumnExpr("COUNT(*) AS total").
 			ColumnExpr("SUM(CASE WHEN status = ? AND COALESCE(external_status, '') <> ? THEN 1 ELSE 0 END) AS completed", models.ScanStatusCompleted, models.ScanExternalStatusBlockedByXrayPolicy).
 			ColumnExpr("SUM(CASE WHEN status = ? AND COALESCE(external_status, '') <> ? THEN 1 ELSE 0 END) AS failed", models.ScanStatusFailed, models.ScanExternalStatusBlockedByXrayPolicy).

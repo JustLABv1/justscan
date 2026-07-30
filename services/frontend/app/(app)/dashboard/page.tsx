@@ -121,9 +121,15 @@ const SCAN_OUTCOME_SERIES = [
 ] as const;
 
 const SCAN_OUTCOME_CONFIG = typedChartConfigFromSeries(SCAN_OUTCOME_SERIES);
-const SCAN_OUTCOME_RANGE_DAYS: Record<RecentActivityRange, number> = {
-  '6h': 1,
-  '24h': 1,
+const HOUR_FORMATTER = new Intl.DateTimeFormat('en', { hour: 'numeric', hour12: false });
+const HOUR_TOOLTIP_FORMATTER = new Intl.DateTimeFormat('en', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: false,
+});
+const SCAN_OUTCOME_RANGE_DAYS: Record<Exclude<RecentActivityRange, '6h' | '24h'>, number> = {
   '7d': 7,
   '30d': 30,
 };
@@ -259,7 +265,7 @@ function ScanOutcomeChart({
   onDayPress: (date: string) => void;
   onStatusPress: (status: string) => void;
 }) {
-  const filledData = fillScanOutcomeDates(data, range);
+  const filledData = fillScanOutcomeBuckets(data, range);
   const totalScans = filledData.reduce((sum, point) => sum + point.total, 0);
   const chartData: Array<Record<string, unknown>> = filledData.map((point) => ({
     ...point,
@@ -271,6 +277,8 @@ function ScanOutcomeChart({
     ...series,
     total: filledData.reduce((sum, point) => sum + (point[series.key] ?? 0), 0),
   }));
+  const rangeLabel =
+    RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === range)?.label ?? 'selected period';
 
   return (
     <Card className="p-5">
@@ -316,6 +324,10 @@ function ScanOutcomeChart({
           <div className="mt-5 flex h-[280px] items-center justify-center text-sm text-muted">
             Updating scan outcomes…
           </div>
+        ) : totalScans === 0 ? (
+          <div className="mt-5 flex h-[280px] items-center justify-center rounded-xl bg-surface-secondary px-6 text-center text-sm text-muted">
+            No scans were started in the {rangeLabel.toLowerCase()}.
+          </div>
         ) : (
           <div className="mt-5 h-[280px] w-full overflow-hidden rounded-xl bg-surface-secondary p-2">
             <EvilBarChart
@@ -338,10 +350,14 @@ function ScanOutcomeChart({
               <EvilBarXAxis
                 dataKey="date"
                 minTickGap={30}
-                tickFormatter={(value: string) => formatChartDate(value)}
+                tickFormatter={(value: string) => formatScanOutcomeBucket(value, range)}
               />
               <EvilBarYAxis allowDecimals={false} width={28} />
-              <EvilBarTooltip variant="frosted-glass" roundness="lg" />
+              <EvilBarTooltip
+                variant="frosted-glass"
+                roundness="lg"
+                labelFormatter={(label) => formatScanOutcomeTooltip(String(label), range)}
+              />
               {SCAN_OUTCOME_SERIES.map((series) => (
                 <EvilBar key={series.key} bufferBar dataKey={series.key} variant="gradient" />
               ))}
@@ -396,7 +412,7 @@ function MiniSparkline({
   if (data.length < 2) return null;
 
   return (
-    <div className={compact ? 'h-8 w-18 shrink-0' : 'h-full min-h-[208px] w-full'}>
+    <div className={compact ? 'h-8 w-18 shrink-0' : 'h-full min-w-0 w-full'}>
       <EvilAreaChart
         data={data}
         config={singleSeriesConfig('value', valueLabel, color)}
@@ -453,18 +469,61 @@ function fillDates(data: DashboardVulnTrendPoint[], days: number): DashboardVuln
   return result;
 }
 
-function fillScanOutcomeDates(
+function formatScanOutcomeBucket(value: string, range: RecentActivityRange): string {
+  if (range === '6h' || range === '24h') {
+    return HOUR_FORMATTER.format(new Date(value));
+  }
+  return formatChartDate(value);
+}
+
+function formatScanOutcomeTooltip(value: string, range: RecentActivityRange): string {
+  if (range === '6h' || range === '24h') {
+    return HOUR_TOOLTIP_FORMATTER.format(new Date(value));
+  }
+  return formatChartDate(value, { year: 'numeric' });
+}
+
+function fillScanOutcomeBuckets(
   data: DashboardTrendPoint[],
   range: RecentActivityRange
 ): DashboardTrendPoint[] {
   const pointsByDate = new Map(data.map((point) => [point.date, point]));
-  const days = SCAN_OUTCOME_RANGE_DAYS[range];
-  const today = new Date();
+  if (range === '6h' || range === '24h') {
+    const hours = range === '6h' ? 6 : 24;
+    const currentHour = new Date();
+    currentHour.setUTCMinutes(0, 0, 0);
+    return Array.from({ length: hours + 1 }, (_, index) => {
+      const bucket = new Date(currentHour);
+      bucket.setUTCHours(bucket.getUTCHours() - (hours - index));
+      const key = bucket.toISOString().slice(0, 13) + ':00:00Z';
+      return (
+        pointsByDate.get(key) ?? {
+          date: key,
+          total: 0,
+          completed: 0,
+          failed: 0,
+          policy_blocked: 0,
+          running: 0,
+          pending: 0,
+          cancelled: 0,
+          other: 0,
+        }
+      );
+    });
+  }
 
-  return Array.from({ length: days }, (_, index) => {
-    const date = new Date(today);
-    date.setUTCDate(date.getUTCDate() - (days - 1 - index));
+  const today = new Date();
+  const days = SCAN_OUTCOME_RANGE_DAYS[range];
+  const start = new Date(today);
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+
+  const dateKeys: string[] = [];
+  for (const date = new Date(start); date <= today; date.setUTCDate(date.getUTCDate() + 1)) {
     const key = date.toISOString().slice(0, 10);
+    if (dateKeys.at(-1) !== key) dateKeys.push(key);
+  }
+
+  return dateKeys.map((key) => {
     return (
       pointsByDate.get(key) ?? {
         date: key,
@@ -825,14 +884,13 @@ export default function DashboardPage() {
     RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === recentActivityRange)?.label ??
     'Last 24 hours';
   const recentActivityHref = buildRecentActivityHref(recentActivityRange);
-  const coverageTone: PostureTone = !scannerReady
-    ? 'warning'
-    : watchlistCoverage.coverage7d >= 90 && watchlistCoverage.staleItems.length === 0
-      ? 'success'
-      : watchlistCoverage.staleItems.length > 0 || watchlistCoverage.neverScannedCount > 0
-        ? 'warning'
-        : watchlistCoverage.enabledCount === 0
-          ? 'neutral'
+  const coverageTone: PostureTone =
+    watchlistCoverage.enabledCount === 0
+      ? 'neutral'
+      : watchlistCoverage.coverage7d >= 90 && watchlistCoverage.staleItems.length === 0
+        ? 'success'
+        : watchlistCoverage.staleItems.length > 0 || watchlistCoverage.neverScannedCount > 0
+          ? 'warning'
           : 'accent';
   const dashboardActivity = stats.activity ?? { images_scanned_today: 0 };
   const policyFailures = stats.policy_failures ?? { today: 0, last_3_days: 0, last_7_days: 0 };
@@ -1005,7 +1063,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               {severeFindingsTrend.length >= 2 ? (
-                <div className="mt-5 h-28">
+                <div className="mt-5 h-32 sm:h-40 lg:h-52">
                   <MiniSparkline
                     key={`severe-findings-${chartRefreshKey}`}
                     data={severeFindingsTrend}

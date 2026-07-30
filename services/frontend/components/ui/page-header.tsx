@@ -14,6 +14,7 @@ export interface PageTitleProps {
   status?: ReactNode;
   icon?: ReactNode;
   description?: string;
+  meta?: ReactNode;
   actions?: ReactNode;
   breadcrumbs?: BreadcrumbItem[];
 }
@@ -23,18 +24,25 @@ export function PageTitle({
   status,
   icon,
   description,
+  meta,
   actions,
   breadcrumbs,
 }: PageTitleProps) {
   return (
-    <header id="tour-page-header" className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <header
+      id="tour-page-header"
+      className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+    >
       <div className="min-w-0 flex-1">
         {breadcrumbs && breadcrumbs.length > 1 ? (
           <Breadcrumbs className="mb-2 text-sm">
             {breadcrumbs.map((item, index) => {
               const isCurrent = index === breadcrumbs.length - 1;
               return (
-                <Breadcrumbs.Item key={`${item.href ?? 'current'}:${item.label}`} href={isCurrent ? undefined : item.href}>
+                <Breadcrumbs.Item
+                  key={`${item.href ?? 'current'}:${item.label}`}
+                  href={isCurrent ? undefined : item.href}
+                >
                   {item.label}
                 </Breadcrumbs.Item>
               );
@@ -46,6 +54,7 @@ export function PageTitle({
           <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
           {status}
         </div>
+        {meta ? <div className="mt-2">{meta}</div> : null}
         {description ? (
           <Typography.Paragraph className="mt-1 max-w-3xl text-sm leading-6" color="muted">
             {description}
@@ -59,8 +68,16 @@ export function PageTitle({
   );
 }
 
-export function PageContainer({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`w-full space-y-5 px-4 py-6 md:px-6 xl:py-7 ${className}`}>{children}</div>;
+export function PageContainer({
+  children,
+  className = '',
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`w-full space-y-5 px-4 py-6 md:px-6 xl:py-7 ${className}`}>{children}</div>
+  );
 }
 
 /** @deprecated Use PageTitle. Kept temporarily so route migrations stay source-compatible. */

@@ -80,6 +80,7 @@ export interface DashboardTrendPoint {
   running: number;
   pending: number;
   cancelled: number;
+  org_policy_failed: number;
   other: number;
 }
 

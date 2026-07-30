@@ -272,14 +272,14 @@ function ScanOutcomeChart({
 
   return (
     <Card className="p-5">
-      <Card.Header className="flex flex-wrap items-start justify-between gap-4 p-0">
-        <div>
+      <Card.Header className="!flex !flex-row !flex-nowrap items-start justify-between gap-4 p-0">
+        <div className="min-w-0">
           <Card.Title>Scan outcomes</Card.Title>
           <Card.Description>
             Every scan run in the selected period, grouped by its current outcome.
           </Card.Description>
         </div>
-        <div className="flex flex-wrap items-center gap-1 rounded-xl bg-surface-secondary p-1">
+        <div className="flex shrink-0 items-center gap-1 rounded-xl bg-surface-secondary p-1">
           {RECENT_ACTIVITY_RANGE_OPTIONS.map((option) => (
             <Button
               key={option.id}
@@ -339,12 +339,12 @@ function ScanOutcomeChart({
           </div>
         )}
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-4 flex min-w-0 gap-1 overflow-x-auto pb-1">
           {totals.map((series) => (
             <Button
               key={series.key}
               aria-label={`View ${series.label.toLowerCase()} scans from the selected period`}
-              className="h-auto justify-between gap-3 px-3 py-2 text-left"
+              className="h-8 shrink-0 justify-between gap-2 px-2.5 text-left"
               onPress={() => onStatusPress(series.status)}
               size="sm"
               variant="ghost"

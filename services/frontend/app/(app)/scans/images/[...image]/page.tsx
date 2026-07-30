@@ -6,9 +6,10 @@ import {
   RECENT_ACTIVITY_RANGE_OPTIONS,
   type RecentActivityRange,
 } from '@/components/scans/recent-activity';
+import { useToast } from '@/components/toast';
 import {
-  FilterDisclosureTrigger,
   filterDisclosureBodyClassName,
+  FilterDisclosureTrigger,
 } from '@/components/ui/filter-toolbar';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
@@ -22,7 +23,6 @@ import {
   type ImageStats,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { useToast } from '@/components/toast';
 import {
   AlertDialog,
   Button,
@@ -46,7 +46,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
-type MetricTone = 'neutral' | 'danger';
+type MetricTone = 'neutral' | 'danger' | 'success';
 
 type PendingGroupDelete = { kind: 'image' } | { kind: 'tag'; artifact: ArtifactSummary };
 
@@ -96,8 +96,7 @@ function Metric({
       className="h-full"
       hint={description}
       icon={icon}
-      iconTone="default"
-      iconVariant="repository"
+      iconTone={tone === 'neutral' ? 'default' : tone}
       label={label}
       tone={tone}
       value={value}
@@ -321,6 +320,7 @@ export default function ImageScansPage() {
             label="Completed"
             value={stats.completed_scans}
             icon={<CheckmarkCircle02Icon size={17} />}
+            tone="success"
           />
           <Metric
             label="Failed executions"
@@ -335,6 +335,7 @@ export default function ImageScansPage() {
                 value={stats.policy_passed_scans}
                 description={`${stats.policy_evaluated_scans} evaluated`}
                 icon={<CheckmarkCircle02Icon size={17} />}
+                tone="success"
               />
               <Metric
                 label="Policy failed"

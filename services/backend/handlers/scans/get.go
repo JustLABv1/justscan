@@ -123,6 +123,14 @@ func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) err
 		"xray_request_logs",
 		"pipeline_scan_requests",
 	} {
+		exists, err := scanDeletionTableExists(ctx, db, table)
+		if err != nil {
+			return fmt.Errorf("check %s: %w", table, err)
+		}
+		if !exists {
+			continue
+		}
+
 		if _, err := db.NewDelete().TableExpr(table).Where("scan_id IN (?)", bun.In(scanIDs)).Exec(ctx); err != nil {
 			return fmt.Errorf("delete %s: %w", table, err)
 		}
@@ -133,4 +141,16 @@ func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) err
 		return fmt.Errorf("delete scans: %w", err)
 	}
 	return nil
+}
+
+// scanDeletionTableExists keeps scan deletion compatible with installations that
+// are upgraded from an older schema. Tables introduced after a scan was created
+// cannot contain rows for it, so they are safe to skip until the corresponding
+// migration has run.
+func scanDeletionTableExists(ctx context.Context, db bun.IDB, table string) (bool, error) {
+	var exists bool
+	if err := db.NewRaw("SELECT to_regclass(?) IS NOT NULL", table).Scan(ctx, &exists); err != nil {
+		return false, err
+	}
+	return exists, nil
 }

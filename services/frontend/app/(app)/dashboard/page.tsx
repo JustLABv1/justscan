@@ -106,8 +106,22 @@ const SEV = [
   },
 ];
 
+type ScanOutcomeSeries = {
+  key: 'completed' | 'org_policy_failed' | 'policy_blocked' | 'failed' | 'running' | 'pending' | 'cancelled';
+  label: string;
+  color: string;
+  status?: string;
+  policy?: 'fail';
+};
+
 const SCAN_OUTCOME_SERIES = [
   { key: 'completed', label: 'Succeeded', color: CHART_TONES.success.dark, status: 'completed' },
+  {
+    key: 'org_policy_failed',
+    label: 'Org policy failed',
+    color: CHART_TONES.danger.dark,
+    policy: 'fail',
+  },
   {
     key: 'policy_blocked',
     label: 'Blocked by policy',
@@ -118,7 +132,7 @@ const SCAN_OUTCOME_SERIES = [
   { key: 'running', label: 'Running', color: CHART_TONES.accent.dark, status: 'running' },
   { key: 'pending', label: 'Queued', color: CHART_TONES.neutral.dark, status: 'pending' },
   { key: 'cancelled', label: 'Cancelled', color: CHART_TONES.neutral.light, status: 'cancelled' },
-] as const;
+] as const satisfies readonly ScanOutcomeSeries[];
 
 const SCAN_OUTCOME_CONFIG = typedChartConfigFromSeries(SCAN_OUTCOME_SERIES);
 const HOUR_FORMATTER = new Intl.DateTimeFormat('en', { hour: 'numeric', hour12: false });
@@ -263,7 +277,7 @@ function ScanOutcomeChart({
   loading: boolean;
   onRangeChange: (range: RecentActivityRange) => void;
   onDayPress: (date: string) => void;
-  onStatusPress: (status: string) => void;
+  onStatusPress: (filters: { status?: string; policy?: string }) => void;
 }) {
   const filledData = fillScanOutcomeBuckets(data, range);
   const totalScans = filledData.reduce((sum, point) => sum + point.total, 0);
@@ -371,7 +385,12 @@ function ScanOutcomeChart({
               key={series.key}
               aria-label={`View ${series.label.toLowerCase()} scans from the selected period`}
               className="h-8 shrink-0 justify-between gap-2 px-2.5 text-left"
-              onPress={() => onStatusPress(series.status)}
+              onPress={() =>
+                onStatusPress({
+                  status: 'status' in series ? series.status : undefined,
+                  policy: 'policy' in series ? series.policy : undefined,
+                })
+              }
               size="sm"
               variant="ghost"
             >
@@ -506,6 +525,7 @@ function fillScanOutcomeBuckets(
           running: 0,
           pending: 0,
           cancelled: 0,
+          org_policy_failed: 0,
           other: 0,
         }
       );
@@ -534,6 +554,7 @@ function fillScanOutcomeBuckets(
         running: 0,
         pending: 0,
         cancelled: 0,
+        org_policy_failed: 0,
         other: 0,
       }
     );
@@ -839,8 +860,10 @@ export default function DashboardPage() {
       .finally(() => setScanOutcomeLoading(false));
   }
 
-  function openScanOutcomeStatus(status: string) {
-    const params = new URLSearchParams({ range: scanOutcomeRange, status });
+  function openScanOutcomeStatus(filters: { status?: string; policy?: string }) {
+    const params = new URLSearchParams({ range: scanOutcomeRange });
+    if (filters.status) params.set('status', filters.status);
+    if (filters.policy) params.set('policy', filters.policy);
     router.push(`/scans?${params.toString()}`);
   }
 

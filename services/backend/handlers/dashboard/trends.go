@@ -8,6 +8,7 @@ import (
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
@@ -20,6 +21,7 @@ type scanTrendRow struct {
 	Running       int64  `bun:"running" json:"running"`
 	Pending       int64  `bun:"pending" json:"pending"`
 	Cancelled     int64  `bun:"cancelled" json:"cancelled"`
+	OrgPolicyFail int64  `bun:"org_policy_failed" json:"org_policy_failed"`
 	Other         int64  `bun:"other" json:"other"`
 }
 
@@ -42,6 +44,25 @@ func usesHourlyTrendBuckets(rangeName string) bool {
 	return rangeName == "6h" || rangeName == "24h"
 }
 
+func orgPolicyFailureCondition(scope string, isAdmin bool, accessibleOrgIDs []uuid.UUID) (string, []interface{}) {
+	if !isAdmin && len(accessibleOrgIDs) == 0 {
+		return "FALSE", nil
+	}
+
+	condition := "EXISTS (SELECT 1 FROM compliance_results AS cr WHERE cr.scan_id = scan.id AND cr.status = 'fail'"
+	args := make([]interface{}, 0, 2)
+	if !isAdmin {
+		condition += " AND cr.org_id IN (?)"
+		args = append(args, bun.In(accessibleOrgIDs))
+	}
+	if orgID, scoped := scopedOrgID(scope); scoped {
+		condition += " AND cr.org_id = ?"
+		args = append(args, orgID)
+	}
+
+	return condition + ")", args
+}
+
 // GetTrends returns daily scan outcome counts. The optional range query accepts
 // 6h, 24h, 7d, and 30d; 30d is the default.
 func GetTrends(db *bun.DB) gin.HandlerFunc {
@@ -58,19 +79,32 @@ func GetTrends(db *bun.DB) gin.HandlerFunc {
 		if usesHourlyTrendBuckets(rangeName) {
 			bucketExpression = "to_char(date_trunc('hour', created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD\"T\"HH24:00:00\"Z\"') AS date"
 		}
+		orgPolicyFailure, orgPolicyFailureArgs := orgPolicyFailureCondition(
+			c.Query("scope"),
+			isAdmin,
+			accessibleOrgIDs,
+		)
+		completedArgs := append([]interface{}{models.ScanStatusCompleted, models.ScanExternalStatusBlockedByXrayPolicy}, orgPolicyFailureArgs...)
+		failedArgs := append([]interface{}{models.ScanStatusFailed, models.ScanExternalStatusBlockedByXrayPolicy}, orgPolicyFailureArgs...)
+		policyBlockedArgs := append([]interface{}{models.ScanExternalStatusBlockedByXrayPolicy}, orgPolicyFailureArgs...)
+		runningArgs := append([]interface{}{models.ScanStatusRunning}, orgPolicyFailureArgs...)
+		pendingArgs := append([]interface{}{models.ScanStatusPending}, orgPolicyFailureArgs...)
+		cancelledArgs := append([]interface{}{models.ScanStatusCancelled}, orgPolicyFailureArgs...)
+		otherArgs := append([]interface{}{bun.In([]string{models.ScanStatusCompleted, models.ScanStatusFailed, models.ScanStatusRunning, models.ScanStatusPending, models.ScanStatusCancelled}), models.ScanExternalStatusBlockedByXrayPolicy}, orgPolicyFailureArgs...)
 
 		var rows []scanTrendRow
 		query := db.NewSelect().
-			TableExpr("scans").
+			TableExpr("scans AS scan").
 			ColumnExpr(bucketExpression).
 			ColumnExpr("COUNT(*) AS total").
-			ColumnExpr("SUM(CASE WHEN status = ? AND COALESCE(external_status, '') <> ? THEN 1 ELSE 0 END) AS completed", models.ScanStatusCompleted, models.ScanExternalStatusBlockedByXrayPolicy).
-			ColumnExpr("SUM(CASE WHEN status = ? AND COALESCE(external_status, '') <> ? THEN 1 ELSE 0 END) AS failed", models.ScanStatusFailed, models.ScanExternalStatusBlockedByXrayPolicy).
-			ColumnExpr("SUM(CASE WHEN external_status = ? THEN 1 ELSE 0 END) AS policy_blocked", models.ScanExternalStatusBlockedByXrayPolicy).
-			ColumnExpr("SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS running", models.ScanStatusRunning).
-			ColumnExpr("SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending", models.ScanStatusPending).
-			ColumnExpr("SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS cancelled", models.ScanStatusCancelled).
-			ColumnExpr("SUM(CASE WHEN status NOT IN (?) AND COALESCE(external_status, '') <> ? THEN 1 ELSE 0 END) AS other", bun.In([]string{models.ScanStatusCompleted, models.ScanStatusFailed, models.ScanStatusRunning, models.ScanStatusPending, models.ScanStatusCancelled}), models.ScanExternalStatusBlockedByXrayPolicy).
+			ColumnExpr("SUM(CASE WHEN status = ? AND COALESCE(external_status, '') <> ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS completed", completedArgs...).
+			ColumnExpr("SUM(CASE WHEN status = ? AND COALESCE(external_status, '') <> ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS failed", failedArgs...).
+			ColumnExpr("SUM(CASE WHEN external_status = ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS policy_blocked", policyBlockedArgs...).
+			ColumnExpr("SUM(CASE WHEN status = ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS running", runningArgs...).
+			ColumnExpr("SUM(CASE WHEN status = ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS pending", pendingArgs...).
+			ColumnExpr("SUM(CASE WHEN status = ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS cancelled", cancelledArgs...).
+			ColumnExpr("SUM(CASE WHEN "+orgPolicyFailure+" THEN 1 ELSE 0 END) AS org_policy_failed", orgPolicyFailureArgs...).
+			ColumnExpr("SUM(CASE WHEN status NOT IN (?) AND COALESCE(external_status, '') <> ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS other", otherArgs...).
 			Where("created_at >= ?", cutoff).
 			GroupExpr("date").
 			OrderExpr("date ASC")

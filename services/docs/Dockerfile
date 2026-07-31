@@ -1,6 +1,7 @@
 FROM reg.mini.dev/node:v26.5.1 AS base
 
 FROM base AS platform
+USER root
 WORKDIR /app
 RUN npm install -g pnpm
 

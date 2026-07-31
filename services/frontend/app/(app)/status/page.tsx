@@ -20,11 +20,14 @@ import {
   createStatusPage,
   deleteStatusPage,
   getStatusPage,
+  getGitRepositoryRun,
   getTokenType,
   getUser,
   getWorkScope,
   GitRepository,
+  GitRepositoryRunImage,
   listGitRepositories,
+  listGitRepositoryRuns,
   listStatusPages,
   listStatusPageShares,
   listStatusPageTargetOptions,
@@ -147,6 +150,13 @@ export default function StatusPagesPage() {
   const [targetOptions, setTargetOptions] = useState<StatusPageTargetOption[]>([]);
   const [gitRepositories, setGitRepositories] = useState<GitRepository[]>([]);
   const [selectedGitRepositoryIds, setSelectedGitRepositoryIds] = useState<string[]>([]);
+  const [gitRepositoryImages, setGitRepositoryImages] = useState<
+    Record<string, GitRepositoryRunImage[]>
+  >({});
+  const [selectedGitImageNames, setSelectedGitImageNames] = useState<Record<string, string[]>>({});
+  const [gitImageSelectionEnabled, setGitImageSelectionEnabled] = useState<Record<string, boolean>>(
+    {}
+  );
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -246,6 +256,36 @@ export default function StatusPagesPage() {
       cancelled = true;
     };
   }, [scopeKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const repositoryIds = selectedGitRepositoryIds;
+    if (repositoryIds.length === 0) {
+      return;
+    }
+
+    void Promise.all(
+      repositoryIds.map(async (repositoryId) => {
+        const runs = await listGitRepositoryRuns(repositoryId);
+        const latestSnapshot = runs.find(
+          (run) => run.status === 'completed' || run.status === 'partial'
+        );
+        if (!latestSnapshot) return [repositoryId, []] as const;
+        const result = await getGitRepositoryRun(repositoryId, latestSnapshot.id);
+        return [repositoryId, result.images.filter((image) => image.state !== 'excluded')] as const;
+      })
+    )
+      .then((entries) => {
+        if (!cancelled) setGitRepositoryImages(Object.fromEntries(entries));
+      })
+      .catch(() => {
+        if (!cancelled) setGitRepositoryImages({});
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedGitRepositoryIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -351,8 +391,15 @@ export default function StatusPagesPage() {
 
   const includesGitSources = trackingMode === 'git' || trackingMode === 'mixed';
   const includesImageScope = trackingMode === 'images' || trackingMode === 'mixed';
+  const hasIncompleteGitImageSelection = selectedGitRepositoryIds.some(
+    (repositoryId) =>
+      gitImageSelectionEnabled[repositoryId] &&
+      (selectedGitImageNames[repositoryId] ?? []).length === 0
+  );
   const scopeIsValid =
-    (includesGitSources && selectedGitRepositoryIds.length > 0) ||
+    (includesGitSources &&
+      selectedGitRepositoryIds.length > 0 &&
+      !hasIncompleteGitImageSelection) ||
     (includesImageScope &&
       (imageScopeMode === 'all' ||
         (imageScopeMode === 'exact' && selectedTargets.length > 0) ||
@@ -486,6 +533,8 @@ export default function StatusPagesPage() {
     setStaleAfterHours('72');
     setSelectedTargetKeys(new Set());
     setSelectedGitRepositoryIds([]);
+    setSelectedGitImageNames({});
+    setGitImageSelectionEnabled({});
     setGitRepositoryQuery('');
     setTargetQuery('');
     setImagePatternText('');
@@ -534,6 +583,22 @@ export default function StatusPagesPage() {
         (full.page.git_repository_sources ?? [])
           .sort((a, b) => a.display_order - b.display_order)
           .map((source) => source.repository_id)
+      );
+      setSelectedGitImageNames(
+        Object.fromEntries(
+          (full.page.git_repository_sources ?? []).map((source) => [
+            source.repository_id,
+            source.image_names ?? [],
+          ])
+        )
+      );
+      setGitImageSelectionEnabled(
+        Object.fromEntries(
+          (full.page.git_repository_sources ?? []).map((source) => [
+            source.repository_id,
+            (source.image_names ?? []).length > 0,
+          ])
+        )
       );
       setTargetQuery('');
       setImagePatternText((full.page.image_patterns ?? []).join('\n'));
@@ -593,6 +658,7 @@ export default function StatusPagesPage() {
       git_repository_sources: includesGitSources
         ? selectedGitRepositoryIds.map((repository_id, index) => ({
             repository_id,
+            image_names: selectedGitImageNames[repository_id] ?? [],
             display_order: index + 1,
           }))
         : [],
@@ -1141,6 +1207,127 @@ export default function StatusPagesPage() {
                           })
                         )}
                       </div>
+
+                      {selectedGitRepositoryIds.map((repositoryId) => {
+                        const repository = gitRepositories.find(
+                          (candidate) => candidate.id === repositoryId
+                        );
+                        const images = Array.from(
+                          new Map(
+                            (gitRepositoryImages[repositoryId] ?? []).map((image) => [
+                              image.image_name,
+                              image,
+                            ])
+                          ).values()
+                        );
+                        const selectedImageNames = new Set(
+                          selectedGitImageNames[repositoryId] ?? []
+                        );
+                        const isPickingImages = gitImageSelectionEnabled[repositoryId] ?? false;
+
+                        return (
+                          <Card key={repositoryId} className="space-y-3 bg-surface-secondary p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                  {repository?.name ?? 'Selected repository'} images
+                                </p>
+                                <p className="mt-1 text-xs leading-5 text-muted">
+                                  Choose whether to follow every discovered image or curate the
+                                  image names this page publishes.
+                                </p>
+                              </div>
+                              <Checkbox
+                                aria-label={`Follow all images from ${repository?.name ?? 'this repository'}`}
+                                isSelected={!isPickingImages}
+                                onChange={(checked) => {
+                                  setGitImageSelectionEnabled((current) => ({
+                                    ...current,
+                                    [repositoryId]: !checked,
+                                  }));
+                                  if (checked) {
+                                    setSelectedGitImageNames((current) => ({
+                                      ...current,
+                                      [repositoryId]: [],
+                                    }));
+                                  }
+                                }}
+                                variant="secondary"
+                              >
+                                <Checkbox.Content className="items-center gap-2">
+                                  <Checkbox.Control>
+                                    <Checkbox.Indicator />
+                                  </Checkbox.Control>
+                                  <span className="text-xs font-medium text-foreground">
+                                    All images
+                                  </span>
+                                </Checkbox.Content>
+                              </Checkbox>
+                            </div>
+
+                            {!isPickingImages ? (
+                              <p className="text-xs text-muted">
+                                Following every image from the latest completed discovery.
+                              </p>
+                            ) : gitRepositoryImages[repositoryId] === undefined ? (
+                              <div className="flex items-center gap-2 text-xs text-muted">
+                                <Spinner size="sm" /> Loading the latest discovery…
+                              </div>
+                            ) : images.length === 0 ? (
+                              <p className="text-xs text-muted">
+                                No completed discovery images are available yet. The page will
+                                follow this repository once a discovery run completes.
+                              </p>
+                            ) : (
+                              <div className="max-h-52 divide-y divide-divider overflow-y-auto rounded-xl border border-divider bg-surface">
+                                {images.map((image) => {
+                                  const selected = selectedImageNames.has(image.image_name);
+                                  const checkboxId = `git-status-image-${repositoryId}-${image.image_name}`;
+                                  return (
+                                    <Checkbox
+                                      id={checkboxId}
+                                      key={image.image_name}
+                                      isSelected={selected}
+                                      onChange={(checked) =>
+                                        setSelectedGitImageNames((current) => {
+                                          const next = new Set(current[repositoryId] ?? []);
+                                          if (checked) next.add(image.image_name);
+                                          else next.delete(image.image_name);
+                                          return { ...current, [repositoryId]: Array.from(next) };
+                                        })
+                                      }
+                                      variant="secondary"
+                                      className="w-full bg-surface"
+                                    >
+                                      <Checkbox.Content className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left hover:bg-surface-hovered">
+                                        <Checkbox.Control>
+                                          <Checkbox.Indicator />
+                                        </Checkbox.Control>
+                                        <span className="min-w-0 flex-1">
+                                          <Label
+                                            htmlFor={checkboxId}
+                                            className="block truncate font-mono text-xs text-foreground"
+                                          >
+                                            {image.image_name}
+                                          </Label>
+                                          <Description className="mt-0.5 block text-xs text-muted">
+                                            Latest tag: {image.image_tag}
+                                          </Description>
+                                        </span>
+                                      </Checkbox.Content>
+                                    </Checkbox>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {isPickingImages && selectedImageNames.size === 0 && (
+                              <p className="text-xs text-danger">
+                                Select at least one image, or check All images.
+                              </p>
+                            )}
+                          </Card>
+                        );
+                      })}
                     </section>
                   )}
 

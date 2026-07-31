@@ -67,6 +67,27 @@ func TestBuildStatusPageModelsAcceptsGitRepositorySourceWithoutFixedTargets(t *t
 	}
 }
 
+func TestBuildStatusPageModelsNormalizesGitRepositorySourceImageNames(t *testing.T) {
+	repositoryID := uuid.New()
+	_, _, sources, _, err := buildStatusPageModels(statusPagePayload{
+		Name:       "GitOps production",
+		Visibility: models.StatusPageVisibilityAuthenticated,
+		GitRepositorySources: []statusPageGitRepositorySourcePayload{{
+			RepositoryID: repositoryID.String(),
+			ImageNames:   []string{" ghcr.io/acme/api ", "ghcr.io/acme/web", "ghcr.io/acme/api", ""},
+		}},
+	}, uuid.New())
+	if err != nil {
+		t.Fatalf("buildStatusPageModels returned error: %v", err)
+	}
+	if len(sources) != 1 || len(sources[0].ImageNames) != 2 {
+		t.Fatalf("expected two normalized image names, got %#v", sources)
+	}
+	if sources[0].ImageNames[0] != "ghcr.io/acme/api" || sources[0].ImageNames[1] != "ghcr.io/acme/web" {
+		t.Fatalf("unexpected normalized image names: %#v", sources[0].ImageNames)
+	}
+}
+
 func TestMatchesStatusPagePatternsChecksReferenceNameAndTag(t *testing.T) {
 	compiled, err := compileStatusPagePatterns(models.StringList{`^ghcr\.io/acme/api:prod-.*$`, `^stable$`})
 	if err != nil {

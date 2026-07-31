@@ -36,8 +36,9 @@ type statusPageTargetPayload struct {
 }
 
 type statusPageGitRepositorySourcePayload struct {
-	RepositoryID string `json:"repository_id" binding:"required"`
-	DisplayOrder int    `json:"display_order"`
+	RepositoryID string   `json:"repository_id" binding:"required"`
+	ImageNames   []string `json:"image_names"`
+	DisplayOrder int      `json:"display_order"`
 }
 
 type statusPageUpdatePayload struct {
@@ -1166,6 +1167,9 @@ func loadGitRepositoryStatusPageItems(ctx context.Context, db *bun.DB, page *mod
 			return nil, err
 		}
 		for _, image := range images {
+			if len(source.ImageNames) > 0 && !containsStatusPageGitImageName(source.ImageNames, image.ImageName) {
+				continue
+			}
 			item := StatusPageItem{
 				ImageName: image.ImageName, ImageTag: image.ImageTag, FullRef: image.FullRef,
 				SourceType: "git_repository", SourceRepositoryID: source.RepositoryID.String(),
@@ -1349,6 +1353,7 @@ func gitRepositorySourceCurrentScanWhere(page *models.StatusPage, scanAlias stri
 		SELECT 1 FROM status_page_git_repository_sources source
 		JOIN git_repository_runs snapshot ON snapshot.repository_id = source.repository_id
 		JOIN git_repository_run_images current_image ON current_image.run_id = snapshot.id AND current_image.state != 'excluded'
+			AND (jsonb_array_length(source.image_names) = 0 OR source.image_names ? current_image.image_name)
 		JOIN git_repository_run_images linked_image ON linked_image.full_ref = current_image.full_ref
 		JOIN git_repository_runs linked_run ON linked_run.id = linked_image.run_id AND linked_run.repository_id = source.repository_id
 		WHERE source.page_id = '%s' AND snapshot.status IN ('completed', 'partial')
@@ -1551,7 +1556,8 @@ func buildStatusPageModels(body statusPagePayload, userID uuid.UUID) (*models.St
 		if displayOrder == 0 {
 			displayOrder = index + 1
 		}
-		sources = append(sources, models.StatusPageGitRepositorySource{ID: uuid.New(), PageID: pageID, RepositoryID: repositoryID, DisplayOrder: displayOrder, CreatedAt: now})
+		imageNames := normalizeStatusPageGitImageNames(source.ImageNames)
+		sources = append(sources, models.StatusPageGitRepositorySource{ID: uuid.New(), PageID: pageID, RepositoryID: repositoryID, ImageNames: imageNames, DisplayOrder: displayOrder, CreatedAt: now})
 	}
 	if !page.IncludeAllTags && len(targets) == 0 && len(imagePatterns) == 0 && len(sources) == 0 {
 		return nil, nil, nil, nil, fmt.Errorf("add an exact target, image regex, Git repository source, or enable include all tags")
@@ -1644,6 +1650,32 @@ func normalizeStatusPagePatterns(patterns []string) (models.StringList, error) {
 		normalized = append(normalized, pattern)
 	}
 	return normalized, nil
+}
+
+func normalizeStatusPageGitImageNames(imageNames []string) models.StringList {
+	seen := make(map[string]struct{}, len(imageNames))
+	result := make(models.StringList, 0, len(imageNames))
+	for _, imageName := range imageNames {
+		imageName = strings.TrimSpace(imageName)
+		if imageName == "" {
+			continue
+		}
+		if _, exists := seen[imageName]; exists {
+			continue
+		}
+		seen[imageName] = struct{}{}
+		result = append(result, imageName)
+	}
+	return result
+}
+
+func containsStatusPageGitImageName(imageNames models.StringList, imageName string) bool {
+	for _, candidate := range imageNames {
+		if candidate == imageName {
+			return true
+		}
+	}
+	return false
 }
 
 func compileStatusPagePatterns(patterns models.StringList) ([]*regexp.Regexp, error) {

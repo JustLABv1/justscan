@@ -42,6 +42,7 @@ type StatusPageGitRepositorySource struct {
 	ID           uuid.UUID      `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
 	PageID       uuid.UUID      `bun:"page_id,type:uuid,notnull" json:"page_id"`
 	RepositoryID uuid.UUID      `bun:"repository_id,type:uuid,notnull" json:"repository_id"`
+	ImageNames   StringList     `bun:"image_names,type:jsonb,notnull,default:'[]'" json:"image_names"`
 	DisplayOrder int            `bun:"display_order,type:int,notnull,default:0" json:"display_order"`
 	CreatedAt    time.Time      `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 	Repository   *GitRepository `bun:"rel:belongs-to,join:repository_id=id" json:"repository,omitempty"`

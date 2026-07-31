@@ -1,13 +1,14 @@
 FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
 
-FROM node:25.9.0-alpine AS base
+FROM reg.mini.dev/node:v25.9.0-dev AS base
+USER root
 
 # Stage 1: Build the frontend
-FROM node:25.9.0-alpine AS frontend-builder
+FROM reg.mini.dev/node:v25.9.0-dev AS frontend-builder
+USER root
 WORKDIR /app/frontend
 
 RUN npm install -g pnpm
-RUN apk add --no-cache libc6-compat
 
 COPY services/frontend/package.json services/frontend/pnpm-lock.yaml services/frontend/pnpm-workspace.yaml ./
 RUN pnpm install
@@ -21,11 +22,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm run build
 
 # Stage 2: Build the documentation service
-FROM node:25.9.0-alpine AS docs-builder
+FROM reg.mini.dev/node:v26.5.1-dev AS docs-builder
+USER root
 WORKDIR /app/docs
 
 RUN npm install -g pnpm
-RUN apk add --no-cache libc6-compat
 
 COPY services/docs/package.json services/docs/pnpm-lock.yaml services/docs/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -37,7 +38,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm run build
 
 # Stage 3: Build the backend
-FROM golang:1.26-alpine AS backend-builder
+FROM reg.mini.dev/go:v1.26.5 AS backend-builder
 WORKDIR /app/backend
 COPY services/backend/go.mod services/backend/go.sum ./
 RUN go mod download

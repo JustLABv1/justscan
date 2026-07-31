@@ -1207,7 +1207,7 @@ func (c *xrayClient) warmImageInArtifactory(ctx context.Context, imageRepoPath, 
 			return fmt.Errorf("timed out after %s warming the artifactory cache: %w", waitWindow, lastErr)
 		}
 
-		log.Warnf("Artifactory cache warm-up for %s:%s hit a transient error; retrying in %s: %v", imageRepoPath, tag, registryWarmupRetryInterval, err)
+		log.Warnf("Artifactory cache warm-up for %s hit a transient error; retrying in %s: %v", buildImageRef(imageRepoPath, tag), registryWarmupRetryInterval, err)
 
 		select {
 		case <-ctx.Done():

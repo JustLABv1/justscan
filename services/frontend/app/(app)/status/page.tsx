@@ -1156,7 +1156,7 @@ export default function StatusPagesPage() {
                           </p>
                         </Card>
                       ) : (
-                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.95fr)]">
+                        <div className="w-full">
                           <Card
                             className={`space-y-3 bg-surface-secondary p-4${imageScopeMode !== 'exact' ? ' hidden' : ''}`}
                           >

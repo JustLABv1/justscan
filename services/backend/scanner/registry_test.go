@@ -13,6 +13,13 @@ func TestBuildImageRefUsesAtSeparatorForDigest(t *testing.T) {
 	}
 }
 
+func TestBuildImageRefPreservesCanonicalDigestFromGitDiscovery(t *testing.T) {
+	imageRef := buildImageRef("qdrant", "sha256:ba00e62939eac2ae7543f7d4878019e07bdc08a894f3a1110911ccdeba57462d")
+	if imageRef != "qdrant@sha256:ba00e62939eac2ae7543f7d4878019e07bdc08a894f3a1110911ccdeba57462d" {
+		t.Fatalf("expected Git-discovered digest to retain @ separator, got %q", imageRef)
+	}
+}
+
 func TestNormalizeScanTargetWithXrayRepository_DefaultRepoApplied(t *testing.T) {
 	registry := &models.Registry{
 		URL:            "https://registry.example.com",

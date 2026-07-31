@@ -35,7 +35,7 @@ export function PageTitle({
     >
       <div className="min-w-0 flex-1">
         {breadcrumbs && breadcrumbs.length > 1 ? (
-          <Breadcrumbs className="mb-2 text-sm">
+          <Breadcrumbs className="mb-2 min-w-0 max-w-full overflow-hidden text-sm">
             {breadcrumbs.map((item, index) => {
               const isCurrent = index === breadcrumbs.length - 1;
               return (

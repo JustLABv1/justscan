@@ -18,6 +18,7 @@ func StatusPages(router *gin.RouterGroup, db *bun.DB) {
 	s := router.Group("/status-pages").Use(middlewares.Auth(db))
 	{
 		s.GET("/", statuspages.ListStatusPages(db))
+		s.GET("/slug-available", statuspages.CheckStatusPageSlugAvailability(db))
 		s.POST("/", statuspages.CreateStatusPage(db))
 		s.GET("/:id", statuspages.GetStatusPage(db))
 		s.GET("/:id/shares", statuspages.ListStatusPageShares(db))

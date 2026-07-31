@@ -14,6 +14,7 @@ export interface StatusPageGitRepositorySource {
   id?: string;
   page_id?: string;
   repository_id: string;
+  image_names?: string[];
   display_order: number;
   created_at?: string;
   repository?: { id: string; name: string };

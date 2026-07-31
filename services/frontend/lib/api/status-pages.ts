@@ -26,6 +26,15 @@ export const createStatusPage = (data: StatusPagePayload) =>
 export const getStatusPage = (id: string) =>
   req<StatusPageResponse>('GET', `/api/v1/status-pages/${id}`);
 
+export const checkStatusPageSlugAvailability = (slug: string, excludeId?: string) => {
+  const params = new URLSearchParams({ slug });
+  if (excludeId) params.set('exclude_id', excludeId);
+  return req<{ slug: string; available: boolean }>(
+    'GET',
+    `/api/v1/status-pages/slug-available?${params}`
+  );
+};
+
 export const updateStatusPage = (id: string, data: StatusPagePayload) =>
   req<StatusPage>('PUT', `/api/v1/status-pages/${id}`, data);
 

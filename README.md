@@ -57,6 +57,8 @@ Helm is required when a selected Kustomization uses `helmCharts`; the provided c
 
 For repositories that combine several deployment mechanisms, add a repository-owned `.justscan.yaml` discovery configuration. It can compose Kustomize roots, direct Helm charts, and selected plain-manifest paths in one dry run. After deployment, see `/docs/scan-and-analyze/gitops` on your JustScan host; before deployment, see the [hosted GitOps documentation](https://justscan.justlab.app/docs/scan-and-analyze/gitops).
 
+Status pages can follow a whole Git repository or a curated set of discovered image names. Curated sources always use the repository's latest completed discovery, so the page moves forward as the selected images receive new tags in Git.
+
 ## Architecture
 
 | Service  | Tech           | Default Port |

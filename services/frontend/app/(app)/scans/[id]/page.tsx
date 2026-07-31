@@ -2048,6 +2048,7 @@ export default function ScanDetailPage() {
         breadcrumbs={[
           { label: 'Scans', href: '/scans' },
           { label: scan.image_name, href: imageHref },
+          { label: scan.image_tag },
         ]}
         icon={<Shield01Icon size={18} />}
         status={<StatusBadge status={scan.status} externalStatus={scan.external_status} />}

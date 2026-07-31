@@ -283,8 +283,9 @@ func RunScanWithRegistryRetry(ctx context.Context, db *bun.DB, scan *models.Scan
 		return nil, "", fmt.Errorf("trivy scan hit a transient remote registry error, and registry cache warm-up failed: %w", warmErr)
 	}
 
-	log.Warnf("Retrying Trivy scan %s for %s:%s after warming registry cache", scan.ID, scan.ImageName, scan.ImageTag)
-	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Retrying the Trivy scan after warming the registry cache for %s:%s.", scan.ImageName, scan.ImageTag))
+	imageRef := buildImageRef(scan.ImageName, scan.ImageTag)
+	log.Warnf("Retrying Trivy scan %s for %s after warming registry cache", scan.ID, imageRef)
+	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Retrying the Trivy scan after warming the registry cache for %s.", imageRef))
 	output, version, retryErr := RunScan(ctx, scan.ImageName, scan.ImageTag, envVars, platform, cacheDir)
 	if retryErr != nil {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Trivy retry after registry warm-up failed: %v", retryErr))

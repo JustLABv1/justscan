@@ -1,4 +1,4 @@
-FROM node:25.9.0-alpine AS base
+FROM reg.mini.dev/node:v26.5.1 AS base
 
 FROM base AS platform
 WORKDIR /app

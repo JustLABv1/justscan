@@ -3,9 +3,9 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { useToast } from '@/components/toast';
+import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusAlert } from '@/components/ui/form-alert';
-import { OwnershipBadge } from '@/components/ui/badges';
 import {
   fieldLabelClassName,
   heroFieldClassName,
@@ -17,14 +17,18 @@ import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
+  checkStatusPageSlugAvailability,
   createStatusPage,
   deleteStatusPage,
+  getGitRepositoryRun,
   getStatusPage,
   getTokenType,
   getUser,
   getWorkScope,
   GitRepository,
+  GitRepositoryRunImage,
   listGitRepositories,
+  listGitRepositoryRuns,
   listStatusPages,
   listStatusPageShares,
   listStatusPageTargetOptions,
@@ -76,11 +80,32 @@ const textareaCls = heroTextAreaClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
 const fieldLabelCls = fieldLabelClassName;
 
-const visibilityOptions: Array<StatusPage['visibility']> = ['private', 'authenticated', 'public'];
+const visibilityOptions = [
+  {
+    id: 'private',
+    label: 'Private',
+    description: 'Only the page owner and members of its organization can view it.',
+  },
+  {
+    id: 'authenticated',
+    label: 'Authenticated',
+    description: 'Any signed-in JustScan user can view it.',
+  },
+  {
+    id: 'public',
+    label: 'Public',
+    description: 'Anyone with the link can view it without signing in.',
+  },
+] as const satisfies ReadonlyArray<{
+  id: StatusPage['visibility'];
+  label: string;
+  description: string;
+}>;
 const updateLevelOptions = ['info', 'maintenance', 'incident'] as const;
 const statusPageSteps = ['Details', 'Sources', 'Configure', 'Review'] as const;
 type TrackingMode = 'git' | 'images' | 'mixed';
 type ImageScopeMode = 'all' | 'exact' | 'pattern';
+type DetailsErrors = Partial<Record<'name' | 'slug' | 'staleAfterHours', string>>;
 const exactSelectionBadgeStyle = {
   background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
   border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
@@ -109,6 +134,14 @@ function splitImagePatterns(value: string) {
 
 function matchesPattern(regex: RegExp, option: StatusPageTargetOption) {
   return regex.test(option.label) || regex.test(option.image_name) || regex.test(option.image_tag);
+}
+
+function normalizeStatusPageSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function describeScope(page: StatusPage) {
@@ -147,6 +180,13 @@ export default function StatusPagesPage() {
   const [targetOptions, setTargetOptions] = useState<StatusPageTargetOption[]>([]);
   const [gitRepositories, setGitRepositories] = useState<GitRepository[]>([]);
   const [selectedGitRepositoryIds, setSelectedGitRepositoryIds] = useState<string[]>([]);
+  const [gitRepositoryImages, setGitRepositoryImages] = useState<
+    Record<string, GitRepositoryRunImage[]>
+  >({});
+  const [selectedGitImageNames, setSelectedGitImageNames] = useState<Record<string, string[]>>({});
+  const [gitImageSelectionEnabled, setGitImageSelectionEnabled] = useState<Record<string, boolean>>(
+    {}
+  );
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -156,6 +196,8 @@ export default function StatusPagesPage() {
   const [trackingMode, setTrackingMode] = useState<TrackingMode>('images');
   const [imageScopeMode, setImageScopeMode] = useState<ImageScopeMode>('exact');
   const [formError, setFormError] = useState('');
+  const [detailsErrors, setDetailsErrors] = useState<DetailsErrors>({});
+  const [validatingDetails, setValidatingDetails] = useState(false);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
@@ -246,6 +288,36 @@ export default function StatusPagesPage() {
       cancelled = true;
     };
   }, [scopeKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const repositoryIds = selectedGitRepositoryIds;
+    if (repositoryIds.length === 0) {
+      return;
+    }
+
+    void Promise.all(
+      repositoryIds.map(async (repositoryId) => {
+        const runs = await listGitRepositoryRuns(repositoryId);
+        const latestSnapshot = runs.find(
+          (run) => run.status === 'completed' || run.status === 'partial'
+        );
+        if (!latestSnapshot) return [repositoryId, []] as const;
+        const result = await getGitRepositoryRun(repositoryId, latestSnapshot.id);
+        return [repositoryId, result.images.filter((image) => image.state !== 'excluded')] as const;
+      })
+    )
+      .then((entries) => {
+        if (!cancelled) setGitRepositoryImages(Object.fromEntries(entries));
+      })
+      .catch(() => {
+        if (!cancelled) setGitRepositoryImages({});
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedGitRepositoryIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -351,15 +423,22 @@ export default function StatusPagesPage() {
 
   const includesGitSources = trackingMode === 'git' || trackingMode === 'mixed';
   const includesImageScope = trackingMode === 'images' || trackingMode === 'mixed';
+  const hasIncompleteGitImageSelection = selectedGitRepositoryIds.some(
+    (repositoryId) =>
+      gitImageSelectionEnabled[repositoryId] &&
+      (selectedGitImageNames[repositoryId] ?? []).length === 0
+  );
   const scopeIsValid =
-    (includesGitSources && selectedGitRepositoryIds.length > 0) ||
+    (includesGitSources &&
+      selectedGitRepositoryIds.length > 0 &&
+      !hasIncompleteGitImageSelection) ||
     (includesImageScope &&
       (imageScopeMode === 'all' ||
         (imageScopeMode === 'exact' && selectedTargets.length > 0) ||
         (imageScopeMode === 'pattern' && imagePatterns.length > 0)));
   const canAdvanceStatusPageStep =
     formStep === 0
-      ? name.trim().length > 0
+      ? !validatingDetails
       : formStep === 2
         ? scopeIsValid && invalidImagePatterns.length === 0
         : true;
@@ -486,6 +565,8 @@ export default function StatusPagesPage() {
     setStaleAfterHours('72');
     setSelectedTargetKeys(new Set());
     setSelectedGitRepositoryIds([]);
+    setSelectedGitImageNames({});
+    setGitImageSelectionEnabled({});
     setGitRepositoryQuery('');
     setTargetQuery('');
     setImagePatternText('');
@@ -493,6 +574,50 @@ export default function StatusPagesPage() {
     setUpdateBody('');
     setUpdateLevel('info');
     setFormError('');
+    setDetailsErrors({});
+    setValidatingDetails(false);
+  }
+
+  async function validateDetailsStep() {
+    const nextErrors: DetailsErrors = {};
+    const trimmedName = name.trim();
+    const normalizedSlug = normalizeStatusPageSlug(slug || trimmedName);
+    const staleHours = Number(staleAfterHours);
+
+    if (!trimmedName) nextErrors.name = 'Enter a status page name.';
+    if (!normalizedSlug) nextErrors.slug = 'Enter a slug with at least one letter or number.';
+    if (!Number.isInteger(staleHours) || staleHours < 1) {
+      nextErrors.staleAfterHours = 'Enter a whole number of at least 1 hour.';
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setDetailsErrors(nextErrors);
+      return false;
+    }
+
+    setValidatingDetails(true);
+    try {
+      const result = await checkStatusPageSlugAvailability(normalizedSlug, editing?.id);
+      if (!result.available) {
+        setDetailsErrors({ slug: 'This slug is already in use. Choose another one.' });
+        return false;
+      }
+      setSlug(normalizedSlug);
+      setDetailsErrors({});
+      return true;
+    } catch (error: unknown) {
+      setDetailsErrors({
+        slug: error instanceof Error ? error.message : 'Could not validate this slug. Try again.',
+      });
+      return false;
+    } finally {
+      setValidatingDetails(false);
+    }
+  }
+
+  async function advanceStatusPageStep() {
+    if (formStep === 0 && !(await validateDetailsStep())) return;
+    if (formStep === 2 && (!scopeIsValid || invalidImagePatterns.length > 0)) return;
+    setFormStep((step) => step + 1);
   }
 
   function openCreate() {
@@ -534,6 +659,22 @@ export default function StatusPagesPage() {
         (full.page.git_repository_sources ?? [])
           .sort((a, b) => a.display_order - b.display_order)
           .map((source) => source.repository_id)
+      );
+      setSelectedGitImageNames(
+        Object.fromEntries(
+          (full.page.git_repository_sources ?? []).map((source) => [
+            source.repository_id,
+            source.image_names ?? [],
+          ])
+        )
+      );
+      setGitImageSelectionEnabled(
+        Object.fromEntries(
+          (full.page.git_repository_sources ?? []).map((source) => [
+            source.repository_id,
+            (source.image_names ?? []).length > 0,
+          ])
+        )
       );
       setTargetQuery('');
       setImagePatternText((full.page.image_patterns ?? []).join('\n'));
@@ -593,6 +734,7 @@ export default function StatusPagesPage() {
       git_repository_sources: includesGitSources
         ? selectedGitRepositoryIds.map((repository_id, index) => ({
             repository_id,
+            image_names: selectedGitImageNames[repository_id] ?? [],
             display_order: index + 1,
           }))
         : [],
@@ -895,21 +1037,39 @@ export default function StatusPagesPage() {
                         <div className="space-y-1.5">
                           <Label className={fieldLabelCls}>Name</Label>
                           <Input
-                            className={fieldCls + ' bg-surface-secondary'}
+                            className={`${fieldCls} bg-surface-secondary${detailsErrors.name ? ' border-danger' : ''}`}
                             placeholder="Production Containers"
                             value={name}
-                            onChange={(event) => setName(event.target.value)}
+                            onChange={(event) => {
+                              setName(event.target.value);
+                              setDetailsErrors((current) => ({ ...current, name: undefined }));
+                            }}
+                            aria-invalid={Boolean(detailsErrors.name)}
                             required
                           />
+                          {detailsErrors.name && (
+                            <p className="text-xs text-danger" role="alert">
+                              {detailsErrors.name}
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-1.5">
                           <Label className={fieldLabelCls}>Slug</Label>
                           <Input
-                            className={fieldCls + ' bg-surface-secondary'}
+                            className={`${fieldCls} bg-surface-secondary${detailsErrors.slug ? ' border-danger' : ''}`}
                             placeholder="production-containers"
                             value={slug}
-                            onChange={(event) => setSlug(event.target.value)}
+                            onChange={(event) => {
+                              setSlug(event.target.value);
+                              setDetailsErrors((current) => ({ ...current, slug: undefined }));
+                            }}
+                            aria-invalid={Boolean(detailsErrors.slug)}
                           />
+                          {detailsErrors.slug && (
+                            <p className="text-xs text-danger" role="alert">
+                              {detailsErrors.slug}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -934,14 +1094,31 @@ export default function StatusPagesPage() {
                         >
                           <Label className={fieldLabelCls}>Visibility</Label>
                           <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
-                            <Select.Value />
+                            <Select.Value>
+                              {({ defaultChildren, isPlaceholder, state }) => {
+                                if (isPlaceholder || state.selectedItems.length === 0) {
+                                  return defaultChildren;
+                                }
+                                const selectedOption = visibilityOptions.find(
+                                  (option) => option.id === state.selectedItems[0]?.key
+                                );
+                                return selectedOption?.label ?? defaultChildren;
+                              }}
+                            </Select.Value>
                             <Select.Indicator />
                           </Select.Trigger>
                           <Select.Popover>
                             <ListBox>
                               {visibilityOptions.map((option) => (
-                                <ListBox.Item id={option} key={option} textValue={option}>
-                                  {option}
+                                <ListBox.Item
+                                  id={option.id}
+                                  key={option.id}
+                                  textValue={option.label}
+                                >
+                                  <div className="flex min-w-0 flex-col">
+                                    <Label>{option.label}</Label>
+                                    <Description>{option.description}</Description>
+                                  </div>
                                   <ListBox.ItemIndicator />
                                 </ListBox.Item>
                               ))}
@@ -951,11 +1128,26 @@ export default function StatusPagesPage() {
                         <div className="space-y-1.5">
                           <Label className={fieldLabelCls}>Stale After Hours</Label>
                           <Input
-                            className={fieldCls + ' bg-surface-secondary'}
+                            className={`${fieldCls} bg-surface-secondary${detailsErrors.staleAfterHours ? ' border-danger' : ''}`}
                             value={staleAfterHours}
-                            onChange={(event) => setStaleAfterHours(event.target.value)}
+                            onChange={(event) => {
+                              setStaleAfterHours(event.target.value);
+                              setDetailsErrors((current) => ({
+                                ...current,
+                                staleAfterHours: undefined,
+                              }));
+                            }}
+                            type="number"
+                            min={1}
+                            step={1}
                             inputMode="numeric"
+                            aria-invalid={Boolean(detailsErrors.staleAfterHours)}
                           />
+                          {detailsErrors.staleAfterHours && (
+                            <p className="text-xs text-danger" role="alert">
+                              {detailsErrors.staleAfterHours}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </>
@@ -1083,7 +1275,7 @@ export default function StatusPagesPage() {
                         </Chip>
                       </div>
 
-                      <SearchField className={fieldCls}>
+                      <SearchField className={fieldCls} variant="secondary">
                         <SearchField.Group>
                           <SearchField.SearchIcon />
                           <SearchField.Input
@@ -1141,6 +1333,127 @@ export default function StatusPagesPage() {
                           })
                         )}
                       </div>
+
+                      {selectedGitRepositoryIds.map((repositoryId) => {
+                        const repository = gitRepositories.find(
+                          (candidate) => candidate.id === repositoryId
+                        );
+                        const images = Array.from(
+                          new Map(
+                            (gitRepositoryImages[repositoryId] ?? []).map((image) => [
+                              image.image_name,
+                              image,
+                            ])
+                          ).values()
+                        );
+                        const selectedImageNames = new Set(
+                          selectedGitImageNames[repositoryId] ?? []
+                        );
+                        const isPickingImages = gitImageSelectionEnabled[repositoryId] ?? false;
+
+                        return (
+                          <Card key={repositoryId} className="space-y-3 bg-surface-secondary p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                  {repository?.name ?? 'Selected repository'} images
+                                </p>
+                                <p className="mt-1 text-xs leading-5 text-muted">
+                                  Choose whether to follow every discovered image or curate the
+                                  image names this page publishes.
+                                </p>
+                              </div>
+                              <Checkbox
+                                aria-label={`Follow all images from ${repository?.name ?? 'this repository'}`}
+                                isSelected={!isPickingImages}
+                                onChange={(checked) => {
+                                  setGitImageSelectionEnabled((current) => ({
+                                    ...current,
+                                    [repositoryId]: !checked,
+                                  }));
+                                  if (checked) {
+                                    setSelectedGitImageNames((current) => ({
+                                      ...current,
+                                      [repositoryId]: [],
+                                    }));
+                                  }
+                                }}
+                                variant="primary"
+                              >
+                                <Checkbox.Content className="items-center gap-2">
+                                  <Checkbox.Control>
+                                    <Checkbox.Indicator />
+                                  </Checkbox.Control>
+                                  <span className="text-xs font-medium text-foreground">
+                                    All images
+                                  </span>
+                                </Checkbox.Content>
+                              </Checkbox>
+                            </div>
+
+                            {!isPickingImages ? (
+                              <p className="text-xs text-muted">
+                                Following every image from the latest completed discovery.
+                              </p>
+                            ) : gitRepositoryImages[repositoryId] === undefined ? (
+                              <div className="flex items-center gap-2 text-xs text-muted">
+                                <Spinner size="sm" /> Loading the latest discovery…
+                              </div>
+                            ) : images.length === 0 ? (
+                              <p className="text-xs text-muted">
+                                No completed discovery images are available yet. The page will
+                                follow this repository once a discovery run completes.
+                              </p>
+                            ) : (
+                              <div className="max-h-52 divide-y divide-divider overflow-y-auto rounded-xl border border-divider bg-surface">
+                                {images.map((image) => {
+                                  const selected = selectedImageNames.has(image.image_name);
+                                  const checkboxId = `git-status-image-${repositoryId}-${image.image_name}`;
+                                  return (
+                                    <Checkbox
+                                      id={checkboxId}
+                                      key={image.image_name}
+                                      isSelected={selected}
+                                      onChange={(checked) =>
+                                        setSelectedGitImageNames((current) => {
+                                          const next = new Set(current[repositoryId] ?? []);
+                                          if (checked) next.add(image.image_name);
+                                          else next.delete(image.image_name);
+                                          return { ...current, [repositoryId]: Array.from(next) };
+                                        })
+                                      }
+                                      variant="secondary"
+                                      className="w-full bg-surface"
+                                    >
+                                      <Checkbox.Content className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left hover:bg-surface-hovered">
+                                        <Checkbox.Control>
+                                          <Checkbox.Indicator />
+                                        </Checkbox.Control>
+                                        <span className="min-w-0 flex-1">
+                                          <Label
+                                            htmlFor={checkboxId}
+                                            className="block truncate font-mono text-xs text-foreground"
+                                          >
+                                            {image.image_name}
+                                          </Label>
+                                          <Description className="mt-0.5 block text-xs text-muted">
+                                            Latest tag: {image.image_tag}
+                                          </Description>
+                                        </span>
+                                      </Checkbox.Content>
+                                    </Checkbox>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {isPickingImages && selectedImageNames.size === 0 && (
+                              <p className="text-xs text-danger">
+                                Select at least one image, or check All images.
+                              </p>
+                            )}
+                          </Card>
+                        );
+                      })}
                     </section>
                   )}
 
@@ -1156,7 +1469,7 @@ export default function StatusPagesPage() {
                           </p>
                         </Card>
                       ) : (
-                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.95fr)]">
+                        <div className="w-full">
                           <Card
                             className={`space-y-3 bg-surface-secondary p-4${imageScopeMode !== 'exact' ? ' hidden' : ''}`}
                           >
@@ -1600,7 +1913,7 @@ export default function StatusPagesPage() {
                     <Button
                       type="button"
                       isDisabled={!canAdvanceStatusPageStep}
-                      onPress={() => setFormStep((step) => step + 1)}
+                      onPress={() => void advanceStatusPageStep()}
                     >
                       Continue
                     </Button>

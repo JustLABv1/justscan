@@ -174,6 +174,33 @@ func ListStatusPages(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
+func CheckStatusPageSlugAvailability(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		slug := normalizeSlug(c.Query("slug"))
+		if slug == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "slug must contain at least one alphanumeric character"})
+			return
+		}
+
+		query := db.NewSelect().Model((*models.StatusPage)(nil)).Where("slug = ?", slug)
+		if rawExcludeID := strings.TrimSpace(c.Query("exclude_id")); rawExcludeID != "" {
+			excludeID, err := uuid.Parse(rawExcludeID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid exclude_id"})
+				return
+			}
+			query = query.Where("id != ?", excludeID)
+		}
+
+		exists, err := query.Exists(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check status page slug"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"slug": slug, "available": !exists})
+	}
+}
+
 func CreateStatusPage(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, _, ok := requireAuthContext(c, db)

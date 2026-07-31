@@ -3,9 +3,9 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { useToast } from '@/components/toast';
+import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusAlert } from '@/components/ui/form-alert';
-import { OwnershipBadge } from '@/components/ui/badges';
 import {
   fieldLabelClassName,
   heroFieldClassName,
@@ -17,10 +17,11 @@ import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
+  checkStatusPageSlugAvailability,
   createStatusPage,
   deleteStatusPage,
-  getStatusPage,
   getGitRepositoryRun,
+  getStatusPage,
   getTokenType,
   getUser,
   getWorkScope,
@@ -104,6 +105,7 @@ const updateLevelOptions = ['info', 'maintenance', 'incident'] as const;
 const statusPageSteps = ['Details', 'Sources', 'Configure', 'Review'] as const;
 type TrackingMode = 'git' | 'images' | 'mixed';
 type ImageScopeMode = 'all' | 'exact' | 'pattern';
+type DetailsErrors = Partial<Record<'name' | 'slug' | 'staleAfterHours', string>>;
 const exactSelectionBadgeStyle = {
   background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
   border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
@@ -132,6 +134,14 @@ function splitImagePatterns(value: string) {
 
 function matchesPattern(regex: RegExp, option: StatusPageTargetOption) {
   return regex.test(option.label) || regex.test(option.image_name) || regex.test(option.image_tag);
+}
+
+function normalizeStatusPageSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function describeScope(page: StatusPage) {
@@ -186,6 +196,8 @@ export default function StatusPagesPage() {
   const [trackingMode, setTrackingMode] = useState<TrackingMode>('images');
   const [imageScopeMode, setImageScopeMode] = useState<ImageScopeMode>('exact');
   const [formError, setFormError] = useState('');
+  const [detailsErrors, setDetailsErrors] = useState<DetailsErrors>({});
+  const [validatingDetails, setValidatingDetails] = useState(false);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
@@ -426,7 +438,7 @@ export default function StatusPagesPage() {
         (imageScopeMode === 'pattern' && imagePatterns.length > 0)));
   const canAdvanceStatusPageStep =
     formStep === 0
-      ? name.trim().length > 0
+      ? !validatingDetails
       : formStep === 2
         ? scopeIsValid && invalidImagePatterns.length === 0
         : true;
@@ -562,6 +574,50 @@ export default function StatusPagesPage() {
     setUpdateBody('');
     setUpdateLevel('info');
     setFormError('');
+    setDetailsErrors({});
+    setValidatingDetails(false);
+  }
+
+  async function validateDetailsStep() {
+    const nextErrors: DetailsErrors = {};
+    const trimmedName = name.trim();
+    const normalizedSlug = normalizeStatusPageSlug(slug || trimmedName);
+    const staleHours = Number(staleAfterHours);
+
+    if (!trimmedName) nextErrors.name = 'Enter a status page name.';
+    if (!normalizedSlug) nextErrors.slug = 'Enter a slug with at least one letter or number.';
+    if (!Number.isInteger(staleHours) || staleHours < 1) {
+      nextErrors.staleAfterHours = 'Enter a whole number of at least 1 hour.';
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setDetailsErrors(nextErrors);
+      return false;
+    }
+
+    setValidatingDetails(true);
+    try {
+      const result = await checkStatusPageSlugAvailability(normalizedSlug, editing?.id);
+      if (!result.available) {
+        setDetailsErrors({ slug: 'This slug is already in use. Choose another one.' });
+        return false;
+      }
+      setSlug(normalizedSlug);
+      setDetailsErrors({});
+      return true;
+    } catch (error: unknown) {
+      setDetailsErrors({
+        slug: error instanceof Error ? error.message : 'Could not validate this slug. Try again.',
+      });
+      return false;
+    } finally {
+      setValidatingDetails(false);
+    }
+  }
+
+  async function advanceStatusPageStep() {
+    if (formStep === 0 && !(await validateDetailsStep())) return;
+    if (formStep === 2 && (!scopeIsValid || invalidImagePatterns.length > 0)) return;
+    setFormStep((step) => step + 1);
   }
 
   function openCreate() {
@@ -981,21 +1037,39 @@ export default function StatusPagesPage() {
                         <div className="space-y-1.5">
                           <Label className={fieldLabelCls}>Name</Label>
                           <Input
-                            className={fieldCls + ' bg-surface-secondary'}
+                            className={`${fieldCls} bg-surface-secondary${detailsErrors.name ? ' border-danger' : ''}`}
                             placeholder="Production Containers"
                             value={name}
-                            onChange={(event) => setName(event.target.value)}
+                            onChange={(event) => {
+                              setName(event.target.value);
+                              setDetailsErrors((current) => ({ ...current, name: undefined }));
+                            }}
+                            aria-invalid={Boolean(detailsErrors.name)}
                             required
                           />
+                          {detailsErrors.name && (
+                            <p className="text-xs text-danger" role="alert">
+                              {detailsErrors.name}
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-1.5">
                           <Label className={fieldLabelCls}>Slug</Label>
                           <Input
-                            className={fieldCls + ' bg-surface-secondary'}
+                            className={`${fieldCls} bg-surface-secondary${detailsErrors.slug ? ' border-danger' : ''}`}
                             placeholder="production-containers"
                             value={slug}
-                            onChange={(event) => setSlug(event.target.value)}
+                            onChange={(event) => {
+                              setSlug(event.target.value);
+                              setDetailsErrors((current) => ({ ...current, slug: undefined }));
+                            }}
+                            aria-invalid={Boolean(detailsErrors.slug)}
                           />
+                          {detailsErrors.slug && (
+                            <p className="text-xs text-danger" role="alert">
+                              {detailsErrors.slug}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -1054,11 +1128,26 @@ export default function StatusPagesPage() {
                         <div className="space-y-1.5">
                           <Label className={fieldLabelCls}>Stale After Hours</Label>
                           <Input
-                            className={fieldCls + ' bg-surface-secondary'}
+                            className={`${fieldCls} bg-surface-secondary${detailsErrors.staleAfterHours ? ' border-danger' : ''}`}
                             value={staleAfterHours}
-                            onChange={(event) => setStaleAfterHours(event.target.value)}
+                            onChange={(event) => {
+                              setStaleAfterHours(event.target.value);
+                              setDetailsErrors((current) => ({
+                                ...current,
+                                staleAfterHours: undefined,
+                              }));
+                            }}
+                            type="number"
+                            min={1}
+                            step={1}
                             inputMode="numeric"
+                            aria-invalid={Boolean(detailsErrors.staleAfterHours)}
                           />
+                          {detailsErrors.staleAfterHours && (
+                            <p className="text-xs text-danger" role="alert">
+                              {detailsErrors.staleAfterHours}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </>
@@ -1186,7 +1275,7 @@ export default function StatusPagesPage() {
                         </Chip>
                       </div>
 
-                      <SearchField className={fieldCls}>
+                      <SearchField className={fieldCls} variant="secondary">
                         <SearchField.Group>
                           <SearchField.SearchIcon />
                           <SearchField.Input
@@ -1289,7 +1378,7 @@ export default function StatusPagesPage() {
                                     }));
                                   }
                                 }}
-                                variant="secondary"
+                                variant="primary"
                               >
                                 <Checkbox.Content className="items-center gap-2">
                                   <Checkbox.Control>
@@ -1824,7 +1913,7 @@ export default function StatusPagesPage() {
                     <Button
                       type="button"
                       isDisabled={!canAdvanceStatusPageStep}
-                      onPress={() => setFormStep((step) => step + 1)}
+                      onPress={() => void advanceStatusPageStep()}
                     >
                       Continue
                     </Button>

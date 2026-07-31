@@ -47,6 +47,15 @@ func TestBuildStatusPageModelsRejectsInvalidRegex(t *testing.T) {
 	}
 }
 
+func TestNormalizeSlugMatchesAvailabilityCheckInput(t *testing.T) {
+	if got := normalizeSlug(" Production Containers "); got != "production-containers" {
+		t.Fatalf("expected normalized slug, got %q", got)
+	}
+	if got := normalizeSlug("---"); got != "" {
+		t.Fatalf("expected empty slug for non-alphanumeric input, got %q", got)
+	}
+}
+
 func TestBuildStatusPageModelsAcceptsGitRepositorySourceWithoutFixedTargets(t *testing.T) {
 	repositoryID := uuid.New()
 	_, targets, sources, _, err := buildStatusPageModels(statusPagePayload{

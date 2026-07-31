@@ -79,7 +79,27 @@ const textareaCls = heroTextAreaClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
 const fieldLabelCls = fieldLabelClassName;
 
-const visibilityOptions: Array<StatusPage['visibility']> = ['private', 'authenticated', 'public'];
+const visibilityOptions = [
+  {
+    id: 'private',
+    label: 'Private',
+    description: 'Only the page owner and members of its organization can view it.',
+  },
+  {
+    id: 'authenticated',
+    label: 'Authenticated',
+    description: 'Any signed-in JustScan user can view it.',
+  },
+  {
+    id: 'public',
+    label: 'Public',
+    description: 'Anyone with the link can view it without signing in.',
+  },
+] as const satisfies ReadonlyArray<{
+  id: StatusPage['visibility'];
+  label: string;
+  description: string;
+}>;
 const updateLevelOptions = ['info', 'maintenance', 'incident'] as const;
 const statusPageSteps = ['Details', 'Sources', 'Configure', 'Review'] as const;
 type TrackingMode = 'git' | 'images' | 'mixed';
@@ -1000,14 +1020,31 @@ export default function StatusPagesPage() {
                         >
                           <Label className={fieldLabelCls}>Visibility</Label>
                           <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
-                            <Select.Value />
+                            <Select.Value>
+                              {({ defaultChildren, isPlaceholder, state }) => {
+                                if (isPlaceholder || state.selectedItems.length === 0) {
+                                  return defaultChildren;
+                                }
+                                const selectedOption = visibilityOptions.find(
+                                  (option) => option.id === state.selectedItems[0]?.key
+                                );
+                                return selectedOption?.label ?? defaultChildren;
+                              }}
+                            </Select.Value>
                             <Select.Indicator />
                           </Select.Trigger>
                           <Select.Popover>
                             <ListBox>
                               {visibilityOptions.map((option) => (
-                                <ListBox.Item id={option} key={option} textValue={option}>
-                                  {option}
+                                <ListBox.Item
+                                  id={option.id}
+                                  key={option.id}
+                                  textValue={option.label}
+                                >
+                                  <div className="flex min-w-0 flex-col">
+                                    <Label>{option.label}</Label>
+                                    <Description>{option.description}</Description>
+                                  </div>
                                   <ListBox.ItemIndicator />
                                 </ListBox.Item>
                               ))}

@@ -10,14 +10,14 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o justscan-backend
+RUN CGO_ENABLED=0 go build -o justscan-backend
 
 FROM builder AS helm-builder
 
 # Alpine's packaged Helm binary currently embeds older Go dependencies. Build
 # the same Helm release used by the backend instead, so the runtime CLI gets
 # a current, pinned dependency set.
-RUN GOBIN=/out go install helm.sh/helm/v4/cmd/helm@v4.2.3
+RUN CGO_ENABLED=0 GOBIN=/out go install helm.sh/helm/v4/cmd/helm@v4.2.3
 
 FROM alpine:3.24 AS runtime-base
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"

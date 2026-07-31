@@ -43,7 +43,7 @@ WORKDIR /app/backend
 COPY services/backend/go.mod services/backend/go.sum ./
 RUN go mod download
 COPY services/backend/ ./
-RUN go build -o justscan-backend
+RUN CGO_ENABLED=0 go build -o justscan-backend
 
 # Stage 4: Create the final image
 FROM base AS runner

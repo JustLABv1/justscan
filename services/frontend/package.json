@@ -12,7 +12,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@dagrejs/dagre": "1.1.8",
+    "@dagrejs/dagre": "3.0.0",
     "@gsap/react": "^2.1.2",
     "@heroui/react": "3.2.2",
     "@heroui/styles": "3.2.2",

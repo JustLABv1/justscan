@@ -3,12 +3,23 @@ title: Release images
 description: Reference the published JustScan container image families.
 ---
 
-| Image tag | Purpose |
-| --- | --- |
-| `backend-<version>` | Standard backend with local scanner support |
-| `backend-minimal-<version>` | Xray-only backend without local scanners |
-| `frontend-<version>` | Next.js application frontend |
-| `docs-<version>` | Fumadocs documentation service |
-| `<version>` | Combined backend, frontend, and documentation image |
+| Image tag                   | Purpose                                             |
+| --------------------------- | --------------------------------------------------- |
+| `backend-<version>`         | Standard backend with local scanner support         |
+| `backend-minimal-<version>` | Xray-only backend without local scanners            |
+| `frontend-<version>`        | Next.js application frontend                        |
+| `docs-<version>`            | Fumadocs documentation service                      |
+| `<version>`                 | Combined backend, frontend, and documentation image |
 
 Use the same release version for every service. Stable releases also publish `latest`; beta releases publish matching beta tags. Pin a numbered release in production and upgrade backend, frontend, and docs together. This portal documents the current release rather than maintaining versioned documentation archives.
+
+## Creating a release
+
+Create and push a semver tag such as `v2.5.4`:
+
+```bash
+git tag v2.5.4
+git push origin v2.5.4
+```
+
+The release workflow derives the application version from the tag and injects it into the frontend and backend builds. You do not need to update `services/frontend/package.json` or `services/backend/main.go` for each release. The package version remains the local-build fallback; backend local builds report `dev`.

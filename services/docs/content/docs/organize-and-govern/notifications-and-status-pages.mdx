@@ -7,6 +7,14 @@ Create notification channels and rules at the personal or organization level, th
 
 Status pages expose a controlled set of image health signals. Choose the intended visibility, select the targets, set freshness expectations, and share or transfer the page using the same ownership controls as other resources.
 
+## Guided notification rule conditions
+
+The rule editor uses a guided value control for each condition. Event types, scan providers, scan statuses, severities, compliance and intelligence statuses, and boolean values are selected from known options. CVSS scores and finding counts use numeric inputs.
+
+Conditions that refer to resources—such as users, organizations, policies, tags, images, and Xray policies or watches—provide searchable suggestions. Suggestions are limited to values visible in the current personal, organization, or system notification scope. The stored value remains the resource ID when the condition uses an ID field; the label is only there to make the choice understandable.
+
+Use `contains`, `matches`, or `matches_any` where offered when a partial or pattern value is intentional. Those operators allow custom entry for pattern-capable fields. Existing values that are no longer available in the current scope are shown as flagged saved legacy values and are preserved until you replace them.
+
 ## Git repository sources
 
 A status page can also follow one or more Git repositories. This is useful for GitOps deployments where image tags or digests change frequently: JustScan uses the non-excluded image inventory from each repository’s latest completed or partial discovery run, so new references appear automatically and removed references stop appearing.

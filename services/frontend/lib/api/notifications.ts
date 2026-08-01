@@ -1,13 +1,31 @@
 import { req } from './core';
 import type {
   NotificationChannel,
+  NotificationConditionOption,
   NotificationDelivery,
   NotificationQueueJob,
   NotificationRule,
 } from './types/admin';
 
+export const listScopedNotificationConditionOptions = (
+  basePath: string,
+  field: string,
+  query = ''
+) => {
+  const params = new URLSearchParams({ field });
+  if (query.trim()) {
+    params.set('q', query.trim());
+  }
+  return req<{ data: NotificationConditionOption[] }>(
+    'GET',
+    `${basePath}/condition-options?${params.toString()}`
+  ).then((result) => result.data ?? []);
+};
+
 export const listScopedNotificationChannels = (basePath: string) =>
-  req<{ data: NotificationChannel[] }>('GET', `${basePath}/channels`).then((result) => result.data ?? []);
+  req<{ data: NotificationChannel[] }>('GET', `${basePath}/channels`).then(
+    (result) => result.data ?? []
+  );
 
 export const createScopedNotificationChannel = (
   basePath: string,
@@ -42,10 +60,14 @@ export const deleteScopedNotificationRule = (basePath: string, id: string) =>
   req<{ result: string }>('DELETE', `${basePath}/rules/${id}`);
 
 export const listScopedNotificationDeliveries = (basePath: string, limit = 25) =>
-  req<{ data: NotificationDelivery[] }>('GET', `${basePath}/deliveries?limit=${limit}`).then((result) => result.data ?? []);
+  req<{ data: NotificationDelivery[] }>('GET', `${basePath}/deliveries?limit=${limit}`).then(
+    (result) => result.data ?? []
+  );
 
 export const listScopedNotificationQueue = (basePath: string, limit = 50) =>
-  req<{ data: NotificationQueueJob[] }>('GET', `${basePath}/queue?limit=${limit}`).then((result) => result.data ?? []);
+  req<{ data: NotificationQueueJob[] }>('GET', `${basePath}/queue?limit=${limit}`).then(
+    (result) => result.data ?? []
+  );
 
 export const retryScopedNotificationQueueJob = (basePath: string, jobId: string) =>
   req<{ result: string }>('POST', `${basePath}/queue/${jobId}/retry`);

@@ -4,10 +4,27 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, heroTextAreaClassName } from '@/components/ui/form-styles';
+import {
+  conditionFieldLabels,
+  conditionFieldOptions,
+  conditionValueIsEmpty,
+  eventTypeOptions,
+  formatConditionValue,
+  getConditionDefinition,
+  getDefaultConditionValue,
+  getDefaultOperator,
+  getOperatorOptions,
+  normalizeConditionValue,
+  operatorLabels,
+  parseConditionValue,
+  type ConditionValue,
+} from '@/components/notifications/condition-catalog';
+import { ConditionValueControl } from '@/components/notifications/condition-value-control';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import type {
   NotificationChannel,
   NotificationConditionGroup,
+  NotificationConditionOption,
   NotificationConditionPredicate,
   NotificationDelivery,
   NotificationQueueJob,
@@ -19,6 +36,7 @@ import {
   deleteScopedNotificationChannel,
   deleteScopedNotificationRule,
   listScopedNotificationChannels,
+  listScopedNotificationConditionOptions,
   listScopedNotificationDeliveries,
   listScopedNotificationQueue,
   listScopedNotificationRules,
@@ -47,7 +65,7 @@ import {
   Refresh01Icon,
   Setting07Icon,
 } from 'hugeicons-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const channelTypeOptions: Array<{ value: NotificationChannel['type']; label: string }> = [
   { value: 'discord', label: 'Discord' },
@@ -57,123 +75,6 @@ const channelTypeOptions: Array<{ value: NotificationChannel['type']; label: str
   { value: 'email', label: 'Email' },
   { value: 'telegram', label: 'Telegram' },
 ];
-
-const eventTypeOptions = [
-  { value: 'scan_complete', label: 'Scan complete' },
-  { value: 'scan_failed', label: 'Scan failed' },
-  { value: 'compliance_failed', label: 'Compliance failed' },
-  { value: 'intelligence_policy_impact', label: 'CVE intelligence policy impact' },
-];
-
-const conditionFieldOptions = [
-  'event_type',
-  'user_id',
-  'org_id',
-  'image_ref',
-  'scan_provider',
-  'scan_status',
-  'highest_severity',
-  'highest_cvss',
-  'critical_count',
-  'high_count',
-  'medium_count',
-  'low_count',
-  'unknown_count',
-  'suppressed_count',
-  'compliance_failed',
-  'compliance_status',
-  'policy_id',
-  'policy_name',
-  'intelligence_impact',
-  'historical_compliance_status',
-  'current_compliance_status',
-  'xray_blocked',
-  'xray_policy_name',
-  'xray_watch_name',
-  'tag',
-] as const;
-
-const conditionFieldLabels: Record<(typeof conditionFieldOptions)[number], string> = {
-  event_type: 'Event type',
-  user_id: 'User',
-  org_id: 'Organization',
-  image_ref: 'Image reference',
-  scan_provider: 'Scan provider',
-  scan_status: 'Scan status',
-  highest_severity: 'Highest severity',
-  highest_cvss: 'Highest CVSS',
-  critical_count: 'Critical findings',
-  high_count: 'High findings',
-  medium_count: 'Medium findings',
-  low_count: 'Low findings',
-  unknown_count: 'Unknown findings',
-  suppressed_count: 'Suppressed findings',
-  compliance_failed: 'Compliance failed',
-  compliance_status: 'Compliance status',
-  policy_id: 'Policy ID',
-  policy_name: 'Policy name',
-  intelligence_impact: 'Intelligence impact',
-  historical_compliance_status: 'Historical compliance status',
-  current_compliance_status: 'Current compliance status',
-  xray_blocked: 'Blocked by Xray',
-  xray_policy_name: 'Xray policy name',
-  xray_watch_name: 'Xray watch name',
-  tag: 'Tag',
-};
-
-const conditionFieldKinds: Record<
-  (typeof conditionFieldOptions)[number],
-  'enum' | 'text' | 'pattern' | 'numeric' | 'boolean' | 'severity'
-> = {
-  event_type: 'enum',
-  user_id: 'text',
-  org_id: 'text',
-  image_ref: 'pattern',
-  scan_provider: 'enum',
-  scan_status: 'enum',
-  highest_severity: 'severity',
-  highest_cvss: 'numeric',
-  critical_count: 'numeric',
-  high_count: 'numeric',
-  medium_count: 'numeric',
-  low_count: 'numeric',
-  unknown_count: 'numeric',
-  suppressed_count: 'numeric',
-  compliance_failed: 'boolean',
-  compliance_status: 'enum',
-  policy_id: 'text',
-  policy_name: 'text',
-  intelligence_impact: 'enum',
-  historical_compliance_status: 'enum',
-  current_compliance_status: 'enum',
-  xray_blocked: 'boolean',
-  xray_policy_name: 'text',
-  xray_watch_name: 'text',
-  tag: 'text',
-};
-
-const operatorOptionsByKind = {
-  enum: ['eq', 'neq', 'in'],
-  text: ['eq', 'neq', 'contains', 'in'],
-  pattern: ['eq', 'contains', 'matches', 'matches_any'],
-  numeric: ['eq', 'gte', 'gt', 'lte', 'lt'],
-  boolean: ['eq'],
-  severity: ['eq', 'gte_severity'],
-} as const;
-
-const operatorLabels: Record<string, string> = {
-  eq: 'is',
-  neq: 'is not',
-  contains: 'contains',
-  in: 'is one of',
-  matches: 'matches pattern',
-  matches_any: 'matches any pattern',
-  gte: 'is at least',
-  gt: 'is greater than',
-  lte: 'is at most',
-  lt: 'is less than',
-  gte_severity: 'is at least severity',
-};
 
 const deliveryModeLabels: Record<'immediate' | 'digest', string> = {
   immediate: 'Immediate',
@@ -185,33 +86,7 @@ const groupOpLabels: Record<'all' | 'any', string> = {
   any: 'Match any condition',
 };
 
-const conditionValuePlaceholders: Record<string, string> = {
-  event_type: 'scan_complete',
-  user_id: 'user UUID',
-  org_id: '550e8400-e29b-41d4-a716-446655440000',
-  image_ref: 'ghcr.io/acme/api:*',
-  scan_provider: 'trivy',
-  scan_status: 'completed',
-  highest_severity: 'HIGH',
-  highest_cvss: '7',
-  critical_count: '1',
-  high_count: '5',
-  medium_count: '10',
-  low_count: '20',
-  unknown_count: '0',
-  suppressed_count: '0',
-  compliance_failed: 'true',
-  compliance_status: 'fail',
-  policy_id: '7b4f5bb9-0d9b-4d4f-beb3-91d2f90ed4e4',
-  policy_name: 'Critical Runtime Policy',
-  intelligence_impact: 'resolved',
-  historical_compliance_status: 'fail',
-  current_compliance_status: 'needs_validation',
-  xray_blocked: 'true',
-  xray_policy_name: 'Production Block Policy',
-  xray_watch_name: 'prod-cluster',
-  tag: 'production',
-};
+const noopConditionLookup = () => {};
 
 type NotificationManagerProps = {
   basePath: string;
@@ -247,7 +122,7 @@ type RuleFormState = {
   delivery_mode: 'immediate' | 'digest';
   digest_window_minutes: string;
   op: 'all' | 'any';
-  conditions: Array<{ id: string; field: string; operator: string; value: string }>;
+  conditions: Array<{ id: string; field: string; operator: string; value: ConditionValue }>;
 };
 
 function emptyChannelForm(): ChannelFormState {
@@ -278,12 +153,17 @@ function emptyRuleForm(): RuleFormState {
     delivery_mode: 'immediate',
     digest_window_minutes: '15',
     op: 'all',
-    conditions: [{ id: crypto.randomUUID(), field: 'highest_cvss', operator: 'gte', value: '7' }],
+    conditions: [createCondition('highest_cvss')],
   };
 }
 
-function formatConditionValue(value: NotificationConditionPredicate['value']) {
-  return Array.isArray(value) ? value.join(', ') : String(value);
+function createCondition(field = 'highest_cvss') {
+  return {
+    id: crypto.randomUUID(),
+    field,
+    operator: getDefaultOperator(field),
+    value: getDefaultConditionValue(field),
+  };
 }
 
 function decodeRuleConditions(group?: NotificationConditionGroup | null) {
@@ -294,28 +174,8 @@ function decodeRuleConditions(group?: NotificationConditionGroup | null) {
     id: crypto.randomUUID(),
     field: condition.field,
     operator: condition.operator,
-    value: formatConditionValue(condition.value),
+    value: Array.isArray(condition.value) ? condition.value.map(String) : String(condition.value),
   }));
-}
-
-function parseConditionValue(
-  operator: string,
-  rawValue: string
-): string | number | boolean | string[] {
-  const trimmed = rawValue.trim();
-  if (operator === 'in' || operator === 'matches_any') {
-    return trimmed
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean);
-  }
-  if (trimmed === 'true' || trimmed === 'false') {
-    return trimmed === 'true';
-  }
-  if (trimmed !== '' && !Number.isNaN(Number(trimmed))) {
-    return Number(trimmed);
-  }
-  return trimmed;
 }
 
 function parseHeaders(rawHeaders: string) {
@@ -330,20 +190,12 @@ function parseHeaders(rawHeaders: string) {
   return headers;
 }
 
-function getOperatorOptions(field: string) {
-  const kind = conditionFieldKinds[field as keyof typeof conditionFieldKinds] ?? 'text';
-  return operatorOptionsByKind[kind];
-}
-
-function getDefaultOperator(field: string) {
-  const options = getOperatorOptions(field);
-  return options[0] ?? 'eq';
-}
-
 function summarizeRule(rule: NotificationRule, channels: NotificationChannel[]) {
   const channelNames = rule.channel_ids
-    .map((channelId) => channels.find((channel) => channel.id === channelId)?.name)
-    .filter(Boolean)
+    .flatMap((channelId) => {
+      const name = channels.find((channel) => channel.id === channelId)?.name;
+      return name ? [name] : [];
+    })
     .join(', ');
   const conditions =
     rule.conditions?.conditions
@@ -370,8 +222,13 @@ export function NotificationManager({
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(
     null
   );
-  const [channelForm, setChannelForm] = useState<ChannelFormState>(emptyChannelForm());
-  const [ruleForm, setRuleForm] = useState<RuleFormState>(emptyRuleForm());
+  const [channelForm, setChannelForm] = useState<ChannelFormState>(() => emptyChannelForm());
+  const [ruleForm, setRuleForm] = useState<RuleFormState>(() => emptyRuleForm());
+  const [conditionOptions, setConditionOptions] = useState<
+    Record<string, NotificationConditionOption[]>
+  >({});
+  const [conditionOptionLoading, setConditionOptionLoading] = useState<Record<string, boolean>>({});
+  const conditionLookupRequest = useRef<Record<string, number>>({});
 
   const channelModal = useOverlayState();
   const ruleModal = useOverlayState();
@@ -400,6 +257,31 @@ export function NotificationManager({
 
   useEffect(() => deferEffect(load), [load]);
 
+  const loadConditionOptions = useCallback(
+    async (field: string, query = '') => {
+      const definition = getConditionDefinition(field);
+      if (definition.kind !== 'dynamic' && definition.kind !== 'pattern') return;
+
+      const requestID = (conditionLookupRequest.current[field] ?? 0) + 1;
+      conditionLookupRequest.current[field] = requestID;
+      setConditionOptionLoading((current) => ({ ...current, [field]: true }));
+      try {
+        const options = await listScopedNotificationConditionOptions(basePath, field, query);
+        if (conditionLookupRequest.current[field] === requestID) {
+          setConditionOptions((current) => ({ ...current, [field]: options }));
+        }
+      } catch {
+        // Suggestions are an enhancement; a saved legacy value or a custom
+        // pattern must remain editable when the lookup is unavailable.
+      } finally {
+        if (conditionLookupRequest.current[field] === requestID) {
+          setConditionOptionLoading((current) => ({ ...current, [field]: false }));
+        }
+      }
+    },
+    [basePath]
+  );
+
   const channelNames = useMemo(
     () => Object.fromEntries(channels.map((channel) => [channel.id, channel.name])),
     [channels]
@@ -415,6 +297,18 @@ export function NotificationManager({
         conditionFieldOptions.map((field) => [field, conditionFieldLabels[field]])
       ),
     []
+  );
+  const conditionLookupHandlers = useMemo(
+    () =>
+      Object.fromEntries(
+        conditionFieldOptions.map((field) => [
+          field,
+          (query: string) => {
+            void loadConditionOptions(field, query);
+          },
+        ])
+      ) as Record<string, (query: string) => void>,
+    [loadConditionOptions]
   );
 
   function openCreateChannel() {
@@ -530,13 +424,22 @@ export function NotificationManager({
         ruleForm.delivery_mode === 'digest' ? Number(ruleForm.digest_window_minutes) || 15 : 0,
       conditions: {
         op: ruleForm.op,
-        conditions: ruleForm.conditions
-          .filter((condition) => condition.field.trim() && condition.operator.trim())
-          .map<NotificationConditionPredicate>((condition) => ({
-            field: condition.field.trim(),
-            operator: condition.operator.trim(),
-            value: parseConditionValue(condition.operator, condition.value),
-          })),
+        conditions: ruleForm.conditions.flatMap<NotificationConditionPredicate>((condition) => {
+          if (
+            !condition.field.trim() ||
+            !condition.operator.trim() ||
+            conditionValueIsEmpty(condition.value)
+          ) {
+            return [];
+          }
+          return [
+            {
+              field: condition.field.trim(),
+              operator: condition.operator.trim(),
+              value: parseConditionValue(condition.field, condition.operator, condition.value),
+            },
+          ];
+        }),
       },
     };
 
@@ -1406,24 +1309,39 @@ export function NotificationManager({
                     </Select.Popover>
                   </Select>
 
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-sm font-medium">Conditions</p>
+                      <p className="text-xs text-muted">
+                        Choose known values from guided lists. Resource fields search values visible
+                        in this scope, while pattern operators can accept a custom value.
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="space-y-3">
                     {ruleForm.conditions.map((condition, index) => (
                       <Card key={condition.id} variant="secondary">
-                        <Card.Content className="grid gap-3 lg:grid-cols-[1.1fr_1fr_1.2fr_auto]">
+                        <Card.Content className="grid gap-3 lg:grid-cols-[1.1fr_1fr_minmax(14rem,1.5fr)_auto]">
                           <Select
                             value={condition.field}
                             onChange={(value) =>
                               setRuleForm((current) => ({
                                 ...current,
-                                conditions: current.conditions.map((item, itemIndex) =>
-                                  itemIndex === index
-                                    ? {
-                                        ...item,
-                                        field: String(value),
-                                        operator: getDefaultOperator(String(value)),
-                                      }
-                                    : item
-                                ),
+                                conditions: current.conditions.map((item, itemIndex) => {
+                                  if (itemIndex !== index) return item;
+                                  const nextField = String(value);
+                                  const nextOperator = getDefaultOperator(nextField);
+                                  return {
+                                    ...item,
+                                    field: nextField,
+                                    operator: nextOperator,
+                                    value: normalizeConditionValue(
+                                      nextOperator,
+                                      getDefaultConditionValue(nextField)
+                                    ),
+                                  };
+                                }),
                               }))
                             }
                             variant="primary"
@@ -1457,7 +1375,13 @@ export function NotificationManager({
                               setRuleForm((current) => ({
                                 ...current,
                                 conditions: current.conditions.map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, operator: String(value) } : item
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        operator: String(value),
+                                        value: normalizeConditionValue(String(value), item.value),
+                                      }
+                                    : item
                                 ),
                               }))
                             }
@@ -1472,39 +1396,40 @@ export function NotificationManager({
                             </Select.Trigger>
                             <Select.Popover>
                               <ListBox>
-                                {getOperatorOptions(condition.field).map((operator) => (
-                                  <ListBox.Item
-                                    key={operator}
-                                    id={operator}
-                                    textValue={operatorLabels[operator]}
-                                  >
-                                    {operatorLabels[operator]}
-                                    <ListBox.ItemIndicator />
-                                  </ListBox.Item>
-                                ))}
+                                {getOperatorOptions(condition.field, condition.operator).map(
+                                  (operator) => (
+                                    <ListBox.Item
+                                      key={operator}
+                                      id={operator}
+                                      textValue={operatorLabels[operator]}
+                                    >
+                                      {operatorLabels[operator]}
+                                      <ListBox.ItemIndicator />
+                                    </ListBox.Item>
+                                  )
+                                )}
                               </ListBox>
                             </Select.Popover>
                           </Select>
 
-                          <FormField
-                            label="Value"
-                            hideLabel
+                          <ConditionValueControl
+                            key={`${condition.id}-${condition.field}`}
+                            field={condition.field}
+                            operator={condition.operator}
                             value={condition.value}
-                            onChange={(event) =>
+                            options={conditionOptions[condition.field] ?? []}
+                            isLoading={conditionOptionLoading[condition.field] ?? false}
+                            onLookup={
+                              conditionLookupHandlers[condition.field] ?? noopConditionLookup
+                            }
+                            onChange={(value) =>
                               setRuleForm((current) => ({
                                 ...current,
                                 conditions: current.conditions.map((item, itemIndex) =>
-                                  itemIndex === index
-                                    ? { ...item, value: event.target.value }
-                                    : item
+                                  itemIndex === index ? { ...item, value } : item
                                 ),
                               }))
                             }
-                            placeholder={
-                              conditionValuePlaceholders[condition.field] ??
-                              'Value or comma-separated values'
-                            }
-                            variant="primary"
                           />
 
                           <div className="flex items-center justify-end">
@@ -1533,15 +1458,7 @@ export function NotificationManager({
                       onPress={() =>
                         setRuleForm((current) => ({
                           ...current,
-                          conditions: [
-                            ...current.conditions,
-                            {
-                              id: crypto.randomUUID(),
-                              field: 'highest_cvss',
-                              operator: 'gte',
-                              value: '7',
-                            },
-                          ],
+                          conditions: [...current.conditions, createCondition()],
                         }))
                       }
                     >

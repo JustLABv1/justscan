@@ -101,6 +101,13 @@ func Orgs(router *gin.RouterGroup, db *bun.DB) {
 			}
 			notificationhandlers.ListRules(c, db, scope)
 		})
+		r.GET("/:id/notifications/condition-options", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireOrgViewerScope(c, db)
+			if !ok {
+				return
+			}
+			notificationhandlers.ListConditionOptions(c, db, scope)
+		})
 		r.POST("/:id/notifications/rules", func(c *gin.Context) {
 			scope, ok := notificationhandlers.RequireOrgAdminScope(c, db)
 			if !ok {

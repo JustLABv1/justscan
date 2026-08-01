@@ -115,3 +115,53 @@ func TestRuleMatchesIntelligenceImpactConditions(t *testing.T) {
 		t.Fatal("expected different intelligence impact not to match")
 	}
 }
+
+func TestRuleMatchesGuidedEnumBooleanAndNumericConditions(t *testing.T) {
+	rule := models.NotificationRule{
+		Enabled: true,
+		Conditions: models.JSONObject{
+			"op": "all",
+			"conditions": []models.JSONObject{
+				{"field": "scan_status", "operator": "eq", "value": "completed"},
+				{"field": "xray_blocked", "operator": "eq", "value": true},
+				{"field": "critical_count", "operator": "gte", "value": 2},
+			},
+		},
+	}
+
+	payload := Payload{Status: "completed", XrayBlocked: true, CriticalCount: 3}
+	if !ruleMatches(rule, payload) {
+		t.Fatal("expected enum, boolean, and numeric conditions to match")
+	}
+
+	payload.XrayBlocked = false
+	if ruleMatches(rule, payload) {
+		t.Fatal("expected boolean condition to reject a non-matching payload")
+	}
+}
+
+func TestRuleMatchesMultiValueConditions(t *testing.T) {
+	rule := models.NotificationRule{
+		Enabled: true,
+		Conditions: models.JSONObject{
+			"op": "all",
+			"conditions": []models.JSONObject{
+				{"field": "event_type", "operator": "in", "value": []string{"scan_complete", "scan_failed"}},
+				{"field": "tag", "operator": "in", "value": []string{"production", "release"}},
+			},
+		},
+	}
+
+	payload := Payload{
+		Event: models.NotificationEventScanFailed,
+		Tags:  []string{"production"},
+	}
+	if !ruleMatches(rule, payload) {
+		t.Fatal("expected multi-value conditions to match")
+	}
+
+	payload.Tags = []string{"development"}
+	if ruleMatches(rule, payload) {
+		t.Fatal("expected multi-value condition to reject a missing value")
+	}
+}

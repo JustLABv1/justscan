@@ -89,6 +89,13 @@ func User(router *gin.RouterGroup, db *bun.DB) {
 			}
 			notificationhandlers.ListRules(c, db, scope)
 		})
+		user.GET("/notifications/condition-options", func(c *gin.Context) {
+			scope, ok := notificationhandlers.RequireUserScope(c)
+			if !ok {
+				return
+			}
+			notificationhandlers.ListConditionOptions(c, db, scope)
+		})
 		user.POST("/notifications/rules", func(c *gin.Context) {
 			scope, ok := notificationhandlers.RequireUserScope(c)
 			if !ok {

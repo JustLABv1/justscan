@@ -85,3 +85,11 @@ csv-files/
 # heroui-agents-md
 .heroui-docs/
 .pnpm-store
+
+# Graphify local/cache state
+/graphify-out/.graphify_python
+/graphify-out/.graphify_root
+/graphify-out/.graphify_detect.json
+/graphify-out/cost.json
+/graphify-out/cache/
+/services/backend/graphify-out/

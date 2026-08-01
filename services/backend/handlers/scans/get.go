@@ -75,6 +75,10 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan initiator"})
 			return
 		}
+		if scan.IntelligenceVersions, err = scanner.LoadScanIntelligenceVersions(c.Request.Context(), db, scanID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan intelligence versions"})
+			return
+		}
 
 		c.JSON(http.StatusOK, scan)
 	}

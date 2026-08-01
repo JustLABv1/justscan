@@ -15,6 +15,10 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.GET("/dashboard", func(c *gin.Context) {
 			admins.GetDashboard(c, db)
 		})
+		// vulnerability intelligence
+		admin.POST("/vulnerability-intelligence", func(c *gin.Context) {
+			admins.IngestVulnerabilityIntelligence(c, db)
+		})
 		// users
 		admin.GET("/users", func(c *gin.Context) {
 			admins.GetUsers(c, db)

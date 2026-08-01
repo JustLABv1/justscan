@@ -40,9 +40,11 @@ type Vulnerability struct {
 	CreatedAt                  time.Time    `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 
 	// Relations (populated on join)
-	Suppression *Suppression `bun:"-" json:"suppression,omitempty"`
-	Comments    []Comment    `bun:"rel:has-many,join:id=vulnerability_id" json:"comments,omitempty"`
-	KBEntry     *VulnKBEntry `bun:"-" json:"kb,omitempty"`
+	Suppression          *Suppression                        `bun:"-" json:"suppression,omitempty"`
+	Comments             []Comment                           `bun:"rel:has-many,join:id=vulnerability_id" json:"comments,omitempty"`
+	KBEntry              *VulnKBEntry                        `bun:"-" json:"kb,omitempty"`
+	ScanTimeIntelligence []VulnerabilityIntelligenceEvidence `bun:"-" json:"scan_time_intelligence,omitempty"`
+	CurrentPosture       *VulnerabilityPosture               `bun:"-" json:"current_posture,omitempty"`
 }
 
 // Severity constants

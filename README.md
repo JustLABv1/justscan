@@ -6,10 +6,6 @@
 
 JustScan is a self-hosted container image vulnerability scanner powered by [Trivy](https://github.com/aquasecurity/trivy) or Artifactory Xray.
 
-## Screenshot
-
-![JustScan dashboard screenshot](docs/assets/justscan-screenshot.png)
-
 ## Table of Contents
 
 - [Overview](#overview)

@@ -140,6 +140,40 @@ func TestFetchCurrentSnapshotNormalizesOfficialAndNVDData(t *testing.T) {
 	}
 }
 
+func TestCVEHistoryRunContextCachesCurrentSnapshot(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requests.Add(1)
+		switch {
+		case strings.HasPrefix(request.URL.Path, "/official/"):
+			_, _ = writer.Write([]byte(`{"cveMetadata":{"state":"PUBLISHED"}}`))
+		case request.URL.Path == "/nvd":
+			_, _ = writer.Write([]byte(`{"vulnerabilities":[]}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	client := &cveHistoryClient{
+		nvdCVEsBaseURL:     server.URL + "/nvd",
+		officialCVEBaseURL: server.URL + "/official",
+		httpClient:         server.Client(),
+		maxRetries:         0,
+		sleep:              func(context.Context, time.Duration) error { return nil },
+	}
+	runContext := newCVEHistoryRunContext(client)
+	if _, err := runContext.fetchCurrentSnapshot(context.Background(), "CVE-2026-0005"); err != nil {
+		t.Fatalf("first snapshot: %v", err)
+	}
+	if _, err := runContext.fetchCurrentSnapshot(context.Background(), "cve-2026-0005"); err != nil {
+		t.Fatalf("cached snapshot: %v", err)
+	}
+	if requests.Load() != 2 {
+		t.Fatalf("upstream requests = %d, want 2", requests.Load())
+	}
+}
+
 func TestEvaluateAffectedRangesRequiresSufficientIdentity(t *testing.T) {
 	ranges := []models.JSONObject{{
 		"purl":       "pkg:deb/debian/openssl",

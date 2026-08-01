@@ -35,18 +35,69 @@ const (
 
 var ErrCVEHistorySyncRunning = errors.New("CVE history sync is already running")
 
+// CVEHistorySyncProgress is the live, in-process progress of one sync. The
+// durable run table remains the historical record; this status lets the admin
+// UI show what the active worker is doing without another migration.
+type CVEHistorySyncProgress struct {
+	Phase           string
+	EventsTotal     int
+	EventsCompleted int
+	EventsFailed    int
+	UniqueCVEs      int
+	CurrentVulnID   string
+	LastProgressAt  *time.Time
+}
+
 // CVEHistorySyncStatus is the in-process state of the worker. The durable run
 // table is the historical record; this status lets the admin UI show an
 // actively running scheduler or manually queued sync immediately.
 type CVEHistorySyncStatus struct {
 	Running   bool
 	StartedAt *time.Time
+	Progress  CVEHistorySyncProgress
 }
 
 var cveHistoryRunState struct {
 	mu        sync.Mutex
 	running   bool
 	startedAt *time.Time
+	progress  CVEHistorySyncProgress
+}
+
+// cveHistoryRunContext owns per-run state. In particular, snapshots are
+// cached only for the duration of one sync so repeated history events for the
+// same CVE do not trigger the same two upstream requests over and over.
+type cveHistoryRunContext struct {
+	client    *cveHistoryClient
+	snapshots map[string]cveCurrentSnapshot
+	seenCVEs  map[string]struct{}
+}
+
+func newCVEHistoryRunContext(client *cveHistoryClient) *cveHistoryRunContext {
+	return &cveHistoryRunContext{
+		client:    client,
+		snapshots: make(map[string]cveCurrentSnapshot),
+		seenCVEs:  make(map[string]struct{}),
+	}
+}
+
+func (r *cveHistoryRunContext) fetchCurrentSnapshot(ctx context.Context, cveID string) (cveCurrentSnapshot, error) {
+	key := strings.ToUpper(strings.TrimSpace(cveID))
+	if snapshot, ok := r.snapshots[key]; ok {
+		return snapshot, nil
+	}
+	if _, ok := r.seenCVEs[key]; !ok {
+		r.seenCVEs[key] = struct{}{}
+		updateCVEHistorySyncProgress(func(progress *CVEHistorySyncProgress) {
+			progress.UniqueCVEs = len(r.seenCVEs)
+		})
+	}
+	snapshot, err := r.client.fetchCurrentSnapshot(ctx, key)
+	if err != nil {
+		return cveCurrentSnapshot{}, err
+	}
+	r.snapshots[key] = snapshot
+	return snapshot, nil
 }
 
 type cveHistoryClient struct {
@@ -741,6 +792,10 @@ func syncCVEHistoryWithClient(ctx context.Context, db *bun.DB, client *cveHistor
 	if checkpoint.NextRetryAt != nil && checkpoint.NextRetryAt.After(now) {
 		return nil
 	}
+	updateCVEHistorySyncProgress(func(progress *CVEHistorySyncProgress) {
+		progress.Phase = "fetching_history"
+		progress.CurrentVulnID = ""
+	})
 
 	checkpoint.LastAttemptAt = &now
 	checkpoint.UpdatedAt = now
@@ -748,9 +803,14 @@ func syncCVEHistoryWithClient(ctx context.Context, db *bun.DB, client *cveHistor
 		return fmt.Errorf("mark CVE history sync attempt: %w", err)
 	}
 
-	if err := syncCVEHistoryWindows(ctx, db, client, checkpoint, now); err != nil {
+	runContext := newCVEHistoryRunContext(client)
+	if err := syncCVEHistoryWindows(ctx, db, runContext, checkpoint, now); err != nil {
 		return markCVEHistorySyncFailure(ctx, db, checkpoint, err, now)
 	}
+	updateCVEHistorySyncProgress(func(progress *CVEHistorySyncProgress) {
+		progress.Phase = "finalizing"
+		progress.CurrentVulnID = ""
+	})
 	checkpoint.LastSuccessAt = &now
 	checkpoint.NextRetryAt = nil
 	checkpoint.ConsecutiveFailures = 0
@@ -793,7 +853,7 @@ func ensureCVEHistoryCheckpoint(ctx context.Context, db *bun.DB, now time.Time) 
 	return checkpoint, nil
 }
 
-func syncCVEHistoryWindows(ctx context.Context, db *bun.DB, client *cveHistoryClient, checkpoint *models.VulnerabilityIntelligenceSyncCheckpoint, now time.Time) error {
+func syncCVEHistoryWindows(ctx context.Context, db *bun.DB, runContext *cveHistoryRunContext, checkpoint *models.VulnerabilityIntelligenceSyncCheckpoint, now time.Time) error {
 	windowStart := checkpoint.CursorAt
 	if windowStart.IsZero() {
 		windowStart = now.Add(-24 * time.Hour)
@@ -805,15 +865,32 @@ func syncCVEHistoryWindows(ctx context.Context, db *bun.DB, client *cveHistoryCl
 		}
 		startIndex := 0
 		for {
-			page, err := client.fetchHistoryPage(ctx, windowStart, windowEnd, startIndex)
+			updateCVEHistorySyncProgress(func(progress *CVEHistorySyncProgress) {
+				progress.Phase = "fetching_history"
+				progress.CurrentVulnID = ""
+			})
+			page, err := runContext.client.fetchHistoryPage(ctx, windowStart, windowEnd, startIndex)
 			if err != nil {
 				return err
 			}
+			if startIndex == 0 {
+				updateCVEHistorySyncProgress(func(progress *CVEHistorySyncProgress) {
+					progress.EventsTotal += page.TotalResults
+				})
+			}
+			updateCVEHistorySyncProgress(func(progress *CVEHistorySyncProgress) {
+				progress.Phase = "processing_events"
+			})
 			for _, change := range page.Changes {
+				updateCVEHistorySyncProgress(func(progress *CVEHistorySyncProgress) {
+					progress.CurrentVulnID = change.CVEID
+				})
 				if cveHistoryCursorAtOrAfter(checkpoint, change) {
+					completeCVEHistoryEventProgress()
 					continue
 				}
-				if err := processCVEHistoryChange(ctx, db, client, change); err != nil {
+				if err := processCVEHistoryChange(ctx, db, runContext, change); err != nil {
+					failCVEHistoryEventProgress()
 					return err
 				}
 				checkpoint.CursorAt = change.ObservedAt
@@ -821,6 +898,7 @@ func syncCVEHistoryWindows(ctx context.Context, db *bun.DB, client *cveHistoryCl
 				if err := persistCVEHistoryCursor(ctx, db, checkpoint); err != nil {
 					return err
 				}
+				completeCVEHistoryEventProgress()
 			}
 
 			pageSize := page.ResultsPerPage
@@ -854,7 +932,7 @@ func cveHistoryCursorAtOrAfter(checkpoint *models.VulnerabilityIntelligenceSyncC
 	return change.SourceEventID <= checkpoint.CursorEventID
 }
 
-func processCVEHistoryChange(ctx context.Context, db *bun.DB, client *cveHistoryClient, change normalizedCVEHistoryChange) error {
+func processCVEHistoryChange(ctx context.Context, db *bun.DB, runContext *cveHistoryRunContext, change normalizedCVEHistoryChange) error {
 	event, err := persistCVEHistoryChange(ctx, db, change)
 	if err != nil {
 		return err
@@ -863,7 +941,7 @@ func processCVEHistoryChange(ctx context.Context, db *bun.DB, client *cveHistory
 		return nil
 	}
 
-	snapshot, err := client.fetchCurrentSnapshot(ctx, event.VulnID)
+	snapshot, err := runContext.fetchCurrentSnapshot(ctx, event.VulnID)
 	if err != nil {
 		return markCVEHistoryEventError(ctx, db, event.ID, err)
 	}
@@ -1038,7 +1116,36 @@ func CurrentCVEHistorySyncStatus() CVEHistorySyncStatus {
 		value := *cveHistoryRunState.startedAt
 		startedAt = &value
 	}
-	return CVEHistorySyncStatus{Running: cveHistoryRunState.running, StartedAt: startedAt}
+	progress := cveHistoryRunState.progress
+	if progress.LastProgressAt != nil {
+		value := *progress.LastProgressAt
+		progress.LastProgressAt = &value
+	}
+	return CVEHistorySyncStatus{Running: cveHistoryRunState.running, StartedAt: startedAt, Progress: progress}
+}
+
+func updateCVEHistorySyncProgress(update func(*CVEHistorySyncProgress)) {
+	cveHistoryRunState.mu.Lock()
+	defer cveHistoryRunState.mu.Unlock()
+	if !cveHistoryRunState.running {
+		return
+	}
+	update(&cveHistoryRunState.progress)
+	now := time.Now().UTC()
+	cveHistoryRunState.progress.LastProgressAt = &now
+}
+
+func completeCVEHistoryEventProgress() {
+	updateCVEHistorySyncProgress(func(progress *CVEHistorySyncProgress) {
+		progress.EventsCompleted++
+		progress.CurrentVulnID = ""
+	})
+}
+
+func failCVEHistoryEventProgress() {
+	updateCVEHistorySyncProgress(func(progress *CVEHistorySyncProgress) {
+		progress.EventsFailed++
+	})
 }
 
 func runCVEHistorySync(ctx context.Context, db *bun.DB, client *cveHistoryClient, trigger string) error {
@@ -1094,6 +1201,10 @@ func beginCVEHistorySync() (time.Time, bool) {
 	startedAt := time.Now().UTC()
 	cveHistoryRunState.running = true
 	cveHistoryRunState.startedAt = &startedAt
+	cveHistoryRunState.progress = CVEHistorySyncProgress{
+		Phase:          "starting",
+		LastProgressAt: &startedAt,
+	}
 	return startedAt, true
 }
 
@@ -1102,4 +1213,5 @@ func endCVEHistorySync() {
 	defer cveHistoryRunState.mu.Unlock()
 	cveHistoryRunState.running = false
 	cveHistoryRunState.startedAt = nil
+	cveHistoryRunState.progress = CVEHistorySyncProgress{}
 }

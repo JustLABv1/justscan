@@ -3,33 +3,35 @@ title: Backend configuration reference
 description: Reference the current backend YAML settings and supported BACKEND_ environment overrides.
 ---
 
-| Setting | Default | Purpose |
-| --- | --- | --- |
-| `log_level` | `info` | Backend log verbosity: `debug`, `info`, `warn`, or `error` |
-| `database.server`, `port`, `name`, `user`, `password` | Local PostgreSQL defaults | PostgreSQL connection settings |
-| `jwt.secret` | Required in production | Signs JustScan authentication tokens; 32+ characters in production |
-| `encryption.key` | Required in production | Encrypts registry credentials at rest; 32+ characters in production |
-| `port` | `8080` | Backend HTTP port |
-| `allow_origins` | Local frontend origins | Browser origins allowed by CORS |
-| `scanner.enable_trivy` | `true` | Enable local Trivy scans |
-| `scanner.enable_grype` | `false` | Enable Grype augmentation |
-| `scanner.trivy_path`, `grype_path` | `trivy`, `grype` | Scanner executable paths in the backend image |
-| `scanner.timeout` | `600` | Scanner timeout setting |
-| `scanner.concurrency` | `2` | Maximum concurrent scanner workers |
-| `scanner.command_timeout_seconds` | `7200` | Scanner process timeout |
-| `scanner.progress_heartbeat_seconds` | `30` | Scan progress heartbeat interval |
-| `scanner.stale_timeout_seconds` | `7200` | Duration after which inactive scan work is stale |
-| `scanner.db_max_age_hours` | `24` | Maximum local scanner database age |
-| `scanner.enable_osv_java_augmentation` | `true` | Enable OSV Java enrichment |
-| `vuln_kb.cache_days` | `7` | NVD enrichment cache lifetime |
-| `vuln_kb.nvd_api_key` | Empty | Optional NVD API key for CVE enrichment |
-| `vuln_kb.cve_history_enabled` | `true` | Poll NVD CVE change history and re-evaluate retained findings |
-| `vuln_kb.cve_history_interval_minutes` | `120` | Interval between CVE change-history sync attempts |
-| `vuln_kb.cve_history_initial_lookback_hours` | `24` | History window used by the first sync; capped at 120 days |
-| `local_auth.enabled` | `true` | Enable username/password login |
-| `security.allow_insecure_defaults` | `false` | Allow development-only insecure JWT/encryption defaults |
-| `security.callback_allowed_hosts`, `callback_allowed_cidrs` | Empty | Explicit private callback target allowlists |
+| Setting                                                     | Default                   | Purpose                                                             |
+| ----------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------- |
+| `log_level`                                                 | `info`                    | Backend log verbosity: `debug`, `info`, `warn`, or `error`          |
+| `database.server`, `port`, `name`, `user`, `password`       | Local PostgreSQL defaults | PostgreSQL connection settings                                      |
+| `jwt.secret`                                                | Required in production    | Signs JustScan authentication tokens; 32+ characters in production  |
+| `encryption.key`                                            | Required in production    | Encrypts registry credentials at rest; 32+ characters in production |
+| `port`                                                      | `8080`                    | Backend HTTP port                                                   |
+| `allow_origins`                                             | Local frontend origins    | Browser origins allowed by CORS                                     |
+| `scanner.enable_trivy`                                      | `true`                    | Enable local Trivy scans                                            |
+| `scanner.enable_grype`                                      | `false`                   | Enable Grype augmentation                                           |
+| `scanner.trivy_path`, `grype_path`                          | `trivy`, `grype`          | Scanner executable paths in the backend image                       |
+| `scanner.timeout`                                           | `600`                     | Scanner timeout setting                                             |
+| `scanner.concurrency`                                       | `2`                       | Maximum concurrent scanner workers                                  |
+| `scanner.command_timeout_seconds`                           | `7200`                    | Scanner process timeout                                             |
+| `scanner.progress_heartbeat_seconds`                        | `30`                      | Scan progress heartbeat interval                                    |
+| `scanner.stale_timeout_seconds`                             | `7200`                    | Duration after which inactive scan work is stale                    |
+| `scanner.db_max_age_hours`                                  | `24`                      | Maximum local scanner database age                                  |
+| `scanner.enable_osv_java_augmentation`                      | `true`                    | Enable OSV Java enrichment                                          |
+| `vuln_kb.cache_days`                                        | `7`                       | NVD enrichment cache lifetime                                       |
+| `vuln_kb.nvd_api_key`                                       | Empty                     | Optional NVD API key for CVE enrichment                             |
+| `vuln_kb.cve_history_enabled`                               | `true`                    | Poll NVD CVE change history and re-evaluate retained findings       |
+| `vuln_kb.cve_history_interval_minutes`                      | `120`                     | Interval between CVE change-history sync attempts                   |
+| `vuln_kb.cve_history_initial_lookback_hours`                | `24`                      | History window used by the first sync; capped at 120 days           |
+| `local_auth.enabled`                                        | `true`                    | Enable username/password login                                      |
+| `security.allow_insecure_defaults`                          | `false`                   | Allow development-only insecure JWT/encryption defaults             |
+| `security.callback_allowed_hosts`, `callback_allowed_cidrs` | Empty                     | Explicit private callback target allowlists                         |
 
 Every supported setting can be overridden with a `BACKEND_` environment variable using underscore-separated names. For example, `scanner.concurrency` becomes `BACKEND_SCANNER_CONCURRENCY`. Comma-separated callback host and CIDR values are parsed as lists. Keep `jwt.secret`, `encryption.key`, database passwords, and NVD keys in secret injection rather than plain YAML. CVE history polling uses the official NVD history and CVE APIs, retries rate limits and transient failures, and checkpoints only after the corresponding official CVE and NVD records have been re-evaluated. A feed outage therefore leaves the last verified posture unchanged.
+
+CVE history is cursor-based: normal scheduled runs process changes since the last successful checkpoint and do not enumerate every row in `vuln_kb`. The first run uses `cve_history_initial_lookback_hours`, and a larger lookback can create a significant backlog because each distinct changed CVE requires current-record enrichment. Use the [CVE Intelligence guide](/operate/vulnerability-intelligence) for rollout, progress, and recovery guidance.
 
 `scanner.enable_grype=true` requires `scanner.enable_trivy=true`. Do not set `security.allow_insecure_defaults=true` outside local development.

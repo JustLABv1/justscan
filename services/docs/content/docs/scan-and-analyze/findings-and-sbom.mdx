@@ -19,6 +19,8 @@ Use suppressions only for accepted risk; document the decision with a comment an
 
 ## Living vulnerability intelligence
 
+See the [CVE Intelligence operator guide](/operate/vulnerability-intelligence) for the background worker, admin timeline, scheduling, progress telemetry, and troubleshooting. The scan-side model is summarized below.
+
 Completed scans retain the scanner result as immutable scan-time evidence. The authenticated vulnerability response also exposes `scan_time_intelligence` and the separately derived `current_posture`; the scan response lists the `intelligence_versions` used for its feed snapshots. A newer feed can therefore update posture for an older finding without changing its original severity, finding data, or compliance verdict.
 
 Posture changes include the source, observation time, intelligence version, reason, and (when available) a link to the CVE change event. Change events retain the provider payload plus normalized before/after CVE state, severity, CVSS, affected ranges, and fixed versions. Conflicting source evidence is retained and surfaced as `needs_rescan`; unknown applicability is never treated as `not_affected`. Affected-range updates are matched against the finding's package URL and installed version when available. If the identity is incomplete or only a CPE match is available, JustScan uses `needs_rescan` rather than guessing. Historical scans are backfilled asynchronously after the additive schema migration.

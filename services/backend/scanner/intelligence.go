@@ -62,10 +62,11 @@ type IntelligenceIngestRecord struct {
 // IntelligenceIngestResult reports the immutable feed version and the
 // historical postures recalculated from newly inserted records.
 type IntelligenceIngestResult struct {
-	Version         models.VulnerabilityIntelligenceVersion `json:"version"`
-	RecordsReceived int                                     `json:"records_received"`
-	RecordsInserted int                                     `json:"records_inserted"`
-	PosturesChanged int                                     `json:"postures_changed"`
+	Version             models.VulnerabilityIntelligenceVersion `json:"version"`
+	RecordsReceived     int                                     `json:"records_received"`
+	RecordsInserted     int                                     `json:"records_inserted"`
+	PosturesChanged     int                                     `json:"postures_changed"`
+	PolicyImpactChanges []models.IntelligencePostureChange      `json:"-"`
 }
 
 // IntelligenceValidationError marks caller-provided feed data that cannot be
@@ -352,10 +353,15 @@ func intelligenceKeyString(key intelligenceFindingKey) string {
 }
 
 func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFindingKey) (int, error) {
+	changes, err := refreshPosturesWithChanges(ctx, db, keys)
+	return len(changes), err
+}
+
+func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intelligenceFindingKey) ([]models.IntelligencePostureChange, error) {
 	if len(keys) == 0 {
-		return 0, nil
+		return nil, nil
 	}
-	changed := 0
+	changes := make([]models.IntelligencePostureChange, 0)
 
 	vulnIDs := make([]string, 0, len(keys))
 	seenVulnIDs := make(map[string]bool, len(keys))
@@ -368,7 +374,7 @@ func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFinding
 
 	var findings []models.Vulnerability
 	if err := db.NewSelect().Model(&findings).Where("vuln_id IN (?)", bun.In(vulnIDs)).Scan(ctx); err != nil {
-		return 0, fmt.Errorf("load historical findings for posture refresh: %w", err)
+		return nil, fmt.Errorf("load historical findings for posture refresh: %w", err)
 	}
 
 	identityByFinding := make(map[uuid.UUID]vulnerabilityFindingIdentity, len(findings))
@@ -395,7 +401,7 @@ func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFinding
 			Join("JOIN sbom_components AS sc ON sc.id = vcl.component_id").
 			Where("vcl.vulnerability_id IN (?)", bun.In(findingIDs)).
 			Scan(ctx, &packageURLRows); err != nil {
-			return 0, fmt.Errorf("load package identity evidence for posture refresh: %w", err)
+			return nil, fmt.Errorf("load package identity evidence for posture refresh: %w", err)
 		}
 		for _, row := range packageURLRows {
 			purl := strings.TrimSpace(row.PackageURL)
@@ -413,7 +419,7 @@ func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFinding
 		Where("vuln_id IN (?)", bun.In(vulnIDs)).
 		OrderExpr("observed_at DESC, created_at DESC, id DESC").
 		Scan(ctx); err != nil {
-		return 0, fmt.Errorf("load intelligence evidence for posture refresh: %w", err)
+		return nil, fmt.Errorf("load intelligence evidence for posture refresh: %w", err)
 	}
 
 	versionIDs := make([]uuid.UUID, 0, len(evidence))
@@ -428,7 +434,7 @@ func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFinding
 	if len(versionIDs) > 0 {
 		var versions []models.VulnerabilityIntelligenceVersion
 		if err := db.NewSelect().Model(&versions).Where("id IN (?)", bun.In(versionIDs)).Scan(ctx); err != nil {
-			return 0, fmt.Errorf("load intelligence version names: %w", err)
+			return nil, fmt.Errorf("load intelligence version names: %w", err)
 		}
 		for _, version := range versions {
 			versionNames[version.ID] = version.Version
@@ -466,7 +472,7 @@ func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFinding
 		var existing models.VulnerabilityPosture
 		err := db.NewSelect().Model(&existing).Where("finding_id = ?", finding.ID).Scan(ctx)
 		if err != nil && err != sql.ErrNoRows {
-			return 0, fmt.Errorf("load current posture for finding %s: %w", finding.ID, err)
+			return nil, fmt.Errorf("load current posture for finding %s: %w", finding.ID, err)
 		}
 
 		hasExisting := err == nil
@@ -480,11 +486,11 @@ func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFinding
 			if _, err := db.NewUpdate().Model(&posture).
 				Column("scan_id", "state", "cve_state", "severity", "cvss_score", "cvss_vector", "affected_ranges", "fixed_versions", "exploit_signals", "source", "observed_at", "reason", "intelligence_version_id", "intelligence_version", "conflict_sources", "change_event_id", "updated_at").
 				Where("finding_id = ?", finding.ID).Exec(ctx); err != nil {
-				return 0, fmt.Errorf("update posture for finding %s: %w", finding.ID, err)
+				return nil, fmt.Errorf("update posture for finding %s: %w", finding.ID, err)
 			}
 		} else {
 			if _, err := db.NewInsert().Model(&posture).Exec(ctx); err != nil {
-				return 0, fmt.Errorf("create posture for finding %s: %w", finding.ID, err)
+				return nil, fmt.Errorf("create posture for finding %s: %w", finding.ID, err)
 			}
 		}
 
@@ -494,12 +500,21 @@ func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFinding
 		}
 		event := postureEventForTransition(finding.ID, previous, posture, previousState)
 		if _, err := db.NewInsert().Model(event).Exec(ctx); err != nil {
-			return 0, fmt.Errorf("record posture event for finding %s: %w", finding.ID, err)
+			return nil, fmt.Errorf("record posture event for finding %s: %w", finding.ID, err)
 		}
-		changed++
+		changes = append(changes, models.IntelligencePostureChange{
+			PostureEventID: event.ID,
+			FindingID:      finding.ID,
+			ScanID:         finding.ScanID,
+			VulnID:         finding.VulnID,
+			PreviousState:  previousState,
+			State:          posture.State,
+			Reason:         posture.Reason,
+			ChangeEventID:  posture.ChangeEventID,
+		})
 	}
 
-	return changed, nil
+	return changes, nil
 }
 
 func intelligenceKeyRequested(requestedKeys map[string]bool, finding models.Vulnerability) bool {
@@ -722,6 +737,7 @@ func IngestIntelligence(ctx context.Context, db *bun.DB, request IntelligenceIng
 		return result, fmt.Errorf("database is required")
 	}
 
+	var policyImpactChanges []models.IntelligencePostureChange
 	err = db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		version, err := ensureIntelligenceVersion(ctx, tx, descriptor)
 		if err != nil {
@@ -769,16 +785,18 @@ func IngestIntelligence(ctx context.Context, db *bun.DB, request IntelligenceIng
 			result.RecordsInserted = len(evidence)
 		}
 
-		changed, err := refreshPostures(ctx, tx, keys)
+		changes, err := refreshPosturesWithChanges(ctx, tx, keys)
 		if err != nil {
 			return err
 		}
-		result.PosturesChanged = changed
+		policyImpactChanges = changes
+		result.PosturesChanged = len(changes)
 		return nil
 	})
 	if err != nil {
 		return IntelligenceIngestResult{RecordsReceived: result.RecordsReceived}, err
 	}
+	result.PolicyImpactChanges = policyImpactChanges
 	return result, nil
 }
 

@@ -65,3 +65,53 @@ func TestRuleDoesNotMatchWrongEvent(t *testing.T) {
 		t.Fatalf("expected rule not to match mismatched event type")
 	}
 }
+
+func TestNotificationScopeMatchesTargetedUsersAndOrganizations(t *testing.T) {
+	userRule := models.NotificationRule{ScopeType: models.NotificationScopeUser, ScopeRef: "user-1"}
+	if !notificationScopeMatches(userRule, Payload{UserIDs: []string{"user-1"}}) {
+		t.Fatal("expected targeted user rule to match")
+	}
+	if notificationScopeMatches(userRule, Payload{UserIDs: []string{"user-2"}}) {
+		t.Fatal("expected unrelated user rule not to match")
+	}
+
+	orgRule := models.NotificationRule{ScopeType: models.NotificationScopeOrg, ScopeRef: "org-1"}
+	if !notificationScopeMatches(orgRule, Payload{OrgIDs: []string{"org-1"}}) {
+		t.Fatal("expected affected organization rule to match")
+	}
+	if notificationScopeMatches(orgRule, Payload{OrgIDs: []string{"org-2"}}) {
+		t.Fatal("expected unrelated organization rule not to match")
+	}
+}
+
+func TestRuleMatchesIntelligenceImpactConditions(t *testing.T) {
+	rule := models.NotificationRule{
+		Enabled:    true,
+		EventTypes: models.StringList{models.NotificationEventIntelligencePolicyImpact},
+		Conditions: models.JSONObject{
+			"op": "all",
+			"conditions": []models.JSONObject{
+				{"field": "user_id", "operator": "contains", "value": "user-1"},
+				{"field": "intelligence_impact", "operator": "eq", "value": "resolved"},
+				{"field": "historical_compliance_status", "operator": "eq", "value": "fail"},
+				{"field": "current_compliance_status", "operator": "eq", "value": "pass"},
+			},
+		},
+	}
+
+	payload := Payload{
+		Event:                      models.NotificationEventIntelligencePolicyImpact,
+		UserIDs:                    []string{"user-1"},
+		IntelligenceImpact:         "resolved",
+		HistoricalComplianceStatus: "fail",
+		CurrentComplianceStatus:    "pass",
+	}
+	if !ruleMatches(rule, payload) {
+		t.Fatal("expected intelligence impact rule to match")
+	}
+
+	payload.IntelligenceImpact = "still_failed"
+	if ruleMatches(rule, payload) {
+		t.Fatal("expected different intelligence impact not to match")
+	}
+}

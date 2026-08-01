@@ -2,6 +2,7 @@
 import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
+import { IntelligencePolicyImpactBanner } from '@/components/scans/intelligence-policy-impact-banner';
 import { SBOMWorkspace } from '@/components/scans/sbom-workspace';
 import { ManageSuppressionAccessModal } from '@/components/suppressions/manage-suppression-access-modal';
 import { useToast } from '@/components/toast';
@@ -34,6 +35,7 @@ import type {
   PolicyRule,
   ResourceShare,
   Scan,
+  ScanIntelligencePolicyImpactResponse,
   Suppression,
   Tag,
   Vulnerability,
@@ -53,6 +55,7 @@ import {
   deleteSuppressionById,
   getScan,
   getScanCompliance,
+  getScanIntelligencePolicyImpact,
   getScanSBOM,
   getScanSBOMComponent,
   getScanSBOMGraph,
@@ -546,6 +549,9 @@ export default function ScanDetailPage() {
   const [commentSaving, setCommentSaving] = useState(false);
 
   const [compliance, setCompliance] = useState<ComplianceResult[]>([]);
+  const [policyImpact, setPolicyImpact] = useState<ScanIntelligencePolicyImpactResponse | null>(
+    null
+  );
   const [allOrgs, setAllOrgs] = useState<Org[]>([]);
   const [complianceLoading, setComplianceLoading] = useState(false);
   const [selectedOrgToAssign, setSelectedOrgToAssign] = useState('');
@@ -752,6 +758,7 @@ export default function ScanDetailPage() {
       setComplianceVulnById({});
       setComplianceVulnLoaded(false);
       setComplianceVulnLoading(false);
+      setPolicyImpact(null);
       appliedRouteVulnerabilityFocusKeyRef.current = '';
     });
   }, [id]);
@@ -771,6 +778,25 @@ export default function ScanDetailPage() {
       .then(setAllOrgs)
       .catch(() => {});
   }, [id, loadScan]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (scanStatus !== 'completed') {
+      return;
+    }
+
+    getScanIntelligencePolicyImpact(id)
+      .then((response) => {
+        if (!cancelled) setPolicyImpact(response);
+      })
+      .catch(() => {
+        if (!cancelled) setPolicyImpact(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, scanStatus]);
 
   const refreshActiveScan = useCallback(() => {
     void loadScan()
@@ -2289,6 +2315,16 @@ export default function ScanDetailPage() {
           </div>
         </div>
       )}
+
+      {scan.status === 'completed' && policyImpact?.has_impact ? (
+        <IntelligencePolicyImpactBanner
+          canRescan={canMutateCurrentScan && !isScanInProgress && !Boolean(rescanDisabledReason)}
+          impact={policyImpact}
+          onRescan={() => void handleReScan()}
+          rescanDisabledReason={rescanDisabledReason}
+          rescanPending={reScanning}
+        />
+      ) : null}
 
       {/* Scanner info moved to Details tab */}
 

@@ -17,6 +17,7 @@ import type {
   SBOMDocument,
   SBOMGraph,
   Scan,
+  ScanIntelligencePolicyImpactResponse,
   ScanComparison,
   ScanQueueSummary,
   ScanShareResponse,
@@ -130,6 +131,12 @@ export const getScanQueueSummary = () => {
 };
 
 export const getScan = (id: string) => req<Scan>('GET', `/api/v1/scans/${id}`);
+
+export const getScanIntelligencePolicyImpact = (id: string) =>
+  req<ScanIntelligencePolicyImpactResponse>(
+    'GET',
+    `/api/v1/scans/${id}/intelligence/policy-impact`
+  );
 
 export const getScanXrayRequestLogs = (id: string, limit = 200) =>
   req<{ data: XRayRequestLog[] }>('GET', `/api/v1/scans/${id}/xray-requests?limit=${limit}`).then(

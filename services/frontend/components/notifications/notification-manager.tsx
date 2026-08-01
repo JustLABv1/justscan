@@ -62,10 +62,12 @@ const eventTypeOptions = [
   { value: 'scan_complete', label: 'Scan complete' },
   { value: 'scan_failed', label: 'Scan failed' },
   { value: 'compliance_failed', label: 'Compliance failed' },
+  { value: 'intelligence_policy_impact', label: 'CVE intelligence policy impact' },
 ];
 
 const conditionFieldOptions = [
   'event_type',
+  'user_id',
   'org_id',
   'image_ref',
   'scan_provider',
@@ -82,6 +84,9 @@ const conditionFieldOptions = [
   'compliance_status',
   'policy_id',
   'policy_name',
+  'intelligence_impact',
+  'historical_compliance_status',
+  'current_compliance_status',
   'xray_blocked',
   'xray_policy_name',
   'xray_watch_name',
@@ -90,6 +95,7 @@ const conditionFieldOptions = [
 
 const conditionFieldLabels: Record<(typeof conditionFieldOptions)[number], string> = {
   event_type: 'Event type',
+  user_id: 'User',
   org_id: 'Organization',
   image_ref: 'Image reference',
   scan_provider: 'Scan provider',
@@ -106,6 +112,9 @@ const conditionFieldLabels: Record<(typeof conditionFieldOptions)[number], strin
   compliance_status: 'Compliance status',
   policy_id: 'Policy ID',
   policy_name: 'Policy name',
+  intelligence_impact: 'Intelligence impact',
+  historical_compliance_status: 'Historical compliance status',
+  current_compliance_status: 'Current compliance status',
   xray_blocked: 'Blocked by Xray',
   xray_policy_name: 'Xray policy name',
   xray_watch_name: 'Xray watch name',
@@ -117,6 +126,7 @@ const conditionFieldKinds: Record<
   'enum' | 'text' | 'pattern' | 'numeric' | 'boolean' | 'severity'
 > = {
   event_type: 'enum',
+  user_id: 'text',
   org_id: 'text',
   image_ref: 'pattern',
   scan_provider: 'enum',
@@ -133,6 +143,9 @@ const conditionFieldKinds: Record<
   compliance_status: 'enum',
   policy_id: 'text',
   policy_name: 'text',
+  intelligence_impact: 'enum',
+  historical_compliance_status: 'enum',
+  current_compliance_status: 'enum',
   xray_blocked: 'boolean',
   xray_policy_name: 'text',
   xray_watch_name: 'text',
@@ -174,6 +187,7 @@ const groupOpLabels: Record<'all' | 'any', string> = {
 
 const conditionValuePlaceholders: Record<string, string> = {
   event_type: 'scan_complete',
+  user_id: 'user UUID',
   org_id: '550e8400-e29b-41d4-a716-446655440000',
   image_ref: 'ghcr.io/acme/api:*',
   scan_provider: 'trivy',
@@ -190,6 +204,9 @@ const conditionValuePlaceholders: Record<string, string> = {
   compliance_status: 'fail',
   policy_id: '7b4f5bb9-0d9b-4d4f-beb3-91d2f90ed4e4',
   policy_name: 'Critical Runtime Policy',
+  intelligence_impact: 'resolved',
+  historical_compliance_status: 'fail',
+  current_compliance_status: 'needs_validation',
   xray_blocked: 'true',
   xray_policy_name: 'Production Block Policy',
   xray_watch_name: 'prod-cluster',

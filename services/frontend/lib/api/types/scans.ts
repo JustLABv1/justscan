@@ -1,5 +1,5 @@
 import type { OwnerType } from './common';
-import type { ResourceShare } from './orgs';
+import type { PolicyRule, ResourceShare } from './orgs';
 import type { ScanProvider, XrayMode } from './registries';
 import type { VulnerabilityPosture } from './vulnerability-intelligence';
 
@@ -61,6 +61,36 @@ export interface ScanComplianceSummary {
     rule_summaries?: string[];
   }>;
   evaluated_at?: string | null;
+}
+
+export type IntelligencePolicyImpactState =
+  'resolved' | 'new_failure' | 'still_failed' | 'needs_validation';
+
+export interface IntelligencePolicyImpactViolation {
+  rule: PolicyRule;
+  message: string;
+  vuln_id?: string;
+}
+
+export interface ScanIntelligencePolicyImpact {
+  org_id: string;
+  policy_id: string;
+  policy_name: string;
+  historical_status: 'pass' | 'fail' | string;
+  current_status: 'pass' | 'fail' | 'needs_validation' | string;
+  impact: IntelligencePolicyImpactState | string;
+  changed_cves: string[];
+  changed_finding_count: number;
+  historical_violations: IntelligencePolicyImpactViolation[];
+  current_violations: IntelligencePolicyImpactViolation[];
+  reason: string;
+  evaluated_at: string;
+}
+
+export interface ScanIntelligencePolicyImpactResponse {
+  has_impact: boolean;
+  rescan_required: boolean;
+  policies: ScanIntelligencePolicyImpact[];
 }
 
 export interface Tag {

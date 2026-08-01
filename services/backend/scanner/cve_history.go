@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"justscan-backend/compliance"
 	"justscan-backend/config"
 	"justscan-backend/pkg/models"
 
@@ -76,17 +77,45 @@ var cveHistoryRunState struct {
 // cached only for the duration of one sync so repeated history events for the
 // same CVE do not trigger the same two upstream requests over and over.
 type cveHistoryRunContext struct {
-	client    *cveHistoryClient
-	snapshots map[string]cveCurrentSnapshot
-	seenCVEs  map[string]struct{}
+	client              *cveHistoryClient
+	snapshots           map[string]cveCurrentSnapshot
+	seenCVEs            map[string]struct{}
+	policyImpactChanges map[uuid.UUID]models.IntelligencePostureChange
 }
 
 func newCVEHistoryRunContext(client *cveHistoryClient) *cveHistoryRunContext {
 	return &cveHistoryRunContext{
-		client:    client,
-		snapshots: make(map[string]cveCurrentSnapshot),
-		seenCVEs:  make(map[string]struct{}),
+		client:              client,
+		snapshots:           make(map[string]cveCurrentSnapshot),
+		seenCVEs:            make(map[string]struct{}),
+		policyImpactChanges: make(map[uuid.UUID]models.IntelligencePostureChange),
 	}
+}
+
+func (r *cveHistoryRunContext) addPolicyImpactChanges(changes []models.IntelligencePostureChange) {
+	if r == nil {
+		return
+	}
+	if r.policyImpactChanges == nil {
+		r.policyImpactChanges = make(map[uuid.UUID]models.IntelligencePostureChange)
+	}
+	for _, change := range changes {
+		if change.FindingID == uuid.Nil {
+			continue
+		}
+		r.policyImpactChanges[change.FindingID] = change
+	}
+}
+
+func (r *cveHistoryRunContext) policyImpactChangeBatch() []models.IntelligencePostureChange {
+	if r == nil || len(r.policyImpactChanges) == 0 {
+		return nil
+	}
+	changes := make([]models.IntelligencePostureChange, 0, len(r.policyImpactChanges))
+	for _, change := range r.policyImpactChanges {
+		changes = append(changes, change)
+	}
+	return changes
 }
 
 func (r *cveHistoryRunContext) fetchCurrentSnapshot(ctx context.Context, cveID string) (cveCurrentSnapshot, error) {
@@ -815,6 +844,13 @@ func syncCVEHistoryWithClient(ctx context.Context, db *bun.DB, client *cveHistor
 	if err := syncCVEHistoryWindows(ctx, db, runContext, checkpoint, now); err != nil {
 		return markCVEHistorySyncFailure(ctx, db, checkpoint, err, now)
 	}
+	if changes := runContext.policyImpactChangeBatch(); len(changes) > 0 {
+		go func() {
+			if impactErr := compliance.ProcessIntelligencePolicyImpacts(context.Background(), db, changes); impactErr != nil {
+				log.Warnf("intelligence policy impact projection failed: %v", impactErr)
+			}
+		}()
+	}
 	updateCVEHistorySyncProgress(func(progress *CVEHistorySyncProgress) {
 		progress.Phase = "finalizing"
 		progress.CurrentVulnID = ""
@@ -953,7 +989,7 @@ func processCVEHistoryChange(ctx context.Context, db *bun.DB, runContext *cveHis
 	if err != nil {
 		return markCVEHistoryEventError(ctx, db, event.ID, err)
 	}
-	_, err = IngestIntelligence(ctx, db, IntelligenceIngestRequest{
+	result, err := IngestIntelligence(ctx, db, IntelligenceIngestRequest{
 		Source:         "nvd",
 		Version:        "cve-history:" + event.SourceEventID,
 		FeedObservedAt: &event.ObservedAt,
@@ -979,6 +1015,7 @@ func processCVEHistoryChange(ctx context.Context, db *bun.DB, runContext *cveHis
 	if err != nil {
 		return markCVEHistoryEventError(ctx, db, event.ID, err)
 	}
+	runContext.addPolicyImpactChanges(result.PolicyImpactChanges)
 	if _, err := db.NewUpdate().Model((*models.VulnerabilityIntelligenceChangeEvent)(nil)).
 		Set("processed_at = ?", time.Now().UTC()).
 		Set("processing_error = ''").

@@ -99,6 +99,8 @@ func evaluatePredicate(node conditionNode, payload Payload) bool {
 	switch field {
 	case "event_type":
 		return compareString(payload.Event, operator, node.Value)
+	case "user_id":
+		return compareStringList(payload.UserIDs, operator, node.Value)
 	case "org_id":
 		return compareStringList(payload.OrgIDs, operator, node.Value)
 	case "image_name":
@@ -133,6 +135,12 @@ func evaluatePredicate(node conditionNode, payload Payload) bool {
 		return compareStringList(payload.PolicyIDs, operator, node.Value)
 	case "policy_name":
 		return compareStringList(payload.PolicyNames, operator, node.Value)
+	case "intelligence_impact":
+		return compareString(payload.IntelligenceImpact, operator, node.Value)
+	case "historical_compliance_status":
+		return compareString(payload.HistoricalComplianceStatus, operator, node.Value)
+	case "current_compliance_status":
+		return compareString(payload.CurrentComplianceStatus, operator, node.Value)
 	case "xray_blocked":
 		return compareBool(payload.XrayBlocked, operator, node.Value)
 	case "xray_policy_name":

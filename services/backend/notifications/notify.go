@@ -21,35 +21,42 @@ import (
 
 // Payload is the structured event data sent to notification channels.
 type Payload struct {
-	Event            string            `json:"event"`
-	ScanID           string            `json:"scan_id,omitempty"`
-	ImageName        string            `json:"image_name,omitempty"`
-	ImageTag         string            `json:"image_tag,omitempty"`
-	ImageRef         string            `json:"image_ref,omitempty"`
-	OrgIDs           []string          `json:"org_ids,omitempty"`
-	OrgNames         []string          `json:"org_names,omitempty"`
-	Status           string            `json:"status,omitempty"`
-	ScanProvider     string            `json:"scan_provider,omitempty"`
-	HighestSeverity  string            `json:"highest_severity,omitempty"`
-	HighestCVSS      float64           `json:"highest_cvss,omitempty"`
-	ComplianceStatus string            `json:"compliance_status,omitempty"`
-	ComplianceFailed bool              `json:"compliance_failed,omitempty"`
-	CriticalCount    int               `json:"critical_count,omitempty"`
-	HighCount        int               `json:"high_count,omitempty"`
-	MediumCount      int               `json:"medium_count,omitempty"`
-	LowCount         int               `json:"low_count,omitempty"`
-	UnknownCount     int               `json:"unknown_count,omitempty"`
-	SuppressedCount  int               `json:"suppressed_count,omitempty"`
-	XrayBlocked      bool              `json:"xray_blocked,omitempty"`
-	PolicyIDs        []string          `json:"policy_ids,omitempty"`
-	PolicyNames      []string          `json:"policy_names,omitempty"`
-	XrayPolicyNames  []string          `json:"xray_policy_names,omitempty"`
-	XrayWatchNames   []string          `json:"xray_watch_names,omitempty"`
-	Tags             []string          `json:"tags,omitempty"`
-	ScanURL          string            `json:"scan_url,omitempty"`
-	Details          string            `json:"details,omitempty"`
-	Extra            map[string]string `json:"extra,omitempty"`
-	Timestamp        time.Time         `json:"timestamp"`
+	Event                      string            `json:"event"`
+	ScanID                     string            `json:"scan_id,omitempty"`
+	UserIDs                    []string          `json:"user_ids,omitempty"`
+	ImageName                  string            `json:"image_name,omitempty"`
+	ImageTag                   string            `json:"image_tag,omitempty"`
+	ImageRef                   string            `json:"image_ref,omitempty"`
+	OrgIDs                     []string          `json:"org_ids,omitempty"`
+	OrgNames                   []string          `json:"org_names,omitempty"`
+	Status                     string            `json:"status,omitempty"`
+	ScanProvider               string            `json:"scan_provider,omitempty"`
+	HighestSeverity            string            `json:"highest_severity,omitempty"`
+	HighestCVSS                float64           `json:"highest_cvss,omitempty"`
+	ComplianceStatus           string            `json:"compliance_status,omitempty"`
+	ComplianceFailed           bool              `json:"compliance_failed,omitempty"`
+	CriticalCount              int               `json:"critical_count,omitempty"`
+	HighCount                  int               `json:"high_count,omitempty"`
+	MediumCount                int               `json:"medium_count,omitempty"`
+	LowCount                   int               `json:"low_count,omitempty"`
+	UnknownCount               int               `json:"unknown_count,omitempty"`
+	SuppressedCount            int               `json:"suppressed_count,omitempty"`
+	XrayBlocked                bool              `json:"xray_blocked,omitempty"`
+	PolicyIDs                  []string          `json:"policy_ids,omitempty"`
+	PolicyNames                []string          `json:"policy_names,omitempty"`
+	ChangedCVEs                []string          `json:"changed_cves,omitempty"`
+	HistoricalComplianceStatus string            `json:"historical_compliance_status,omitempty"`
+	CurrentComplianceStatus    string            `json:"current_compliance_status,omitempty"`
+	IntelligenceImpact         string            `json:"intelligence_impact,omitempty"`
+	RescanRequired             bool              `json:"rescan_required,omitempty"`
+	XrayPolicyNames            []string          `json:"xray_policy_names,omitempty"`
+	XrayWatchNames             []string          `json:"xray_watch_names,omitempty"`
+	Tags                       []string          `json:"tags,omitempty"`
+	ScanURL                    string            `json:"scan_url,omitempty"`
+	Details                    string            `json:"details,omitempty"`
+	Extra                      map[string]string `json:"extra,omitempty"`
+	DedupeKey                  string            `json:"-"`
+	Timestamp                  time.Time         `json:"timestamp"`
 }
 
 func SendTest(db *bun.DB, channel models.NotificationChannel, event string) error {
@@ -419,6 +426,8 @@ func colorForEvent(event string) int {
 		return 0xef4444
 	case models.NotificationEventComplianceFailed:
 		return 0xf97316
+	case models.NotificationEventIntelligencePolicyImpact:
+		return 0x6366f1
 	default:
 		return 0x6366f1
 	}
@@ -624,6 +633,8 @@ func eventTitle(event string) string {
 		return "Scan Failed"
 	case models.NotificationEventComplianceFailed:
 		return "Compliance Policy Failed"
+	case models.NotificationEventIntelligencePolicyImpact:
+		return "CVE Intelligence Changed Policy Impact"
 	default:
 		return event
 	}

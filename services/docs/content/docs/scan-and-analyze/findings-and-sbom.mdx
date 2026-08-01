@@ -16,3 +16,11 @@ The dependency tree and graph are generated only from relationships supplied by 
 Use **CycloneDX** to download the retained source document. The authenticated scan page and token-shared result page expose the same package evidence; a public result does not expose this expanded investigation surface.
 
 Use suppressions only for accepted risk; document the decision with a comment and review it regularly. A suppression is not a scanner fix and should not hide an unresolved operational error. See [audit and governance](/organize-and-govern/audit-and-governance) for an evidence handoff checklist.
+
+## Living vulnerability intelligence
+
+Completed scans retain the scanner result as immutable scan-time evidence. The authenticated vulnerability response also exposes `scan_time_intelligence` and the separately derived `current_posture`; the scan response lists the `intelligence_versions` used for its feed snapshots. A newer feed can therefore update posture for an older finding without changing its original severity, finding data, or compliance verdict.
+
+Posture changes include the source, observation time, intelligence version, and reason. Conflicting source evidence is retained and surfaced as `needs_rescan`; unknown applicability is never treated as `not_affected`. Historical scans are backfilled asynchronously after the additive schema migration.
+
+Administrators can add an independent normalized feed snapshot with `POST /api/v1/admin/vulnerability-intelligence`. The request supplies a source, immutable version, and records containing CVE state, CVSS data, affected ranges, fixed versions, exploit signals, and raw source evidence. A record with an empty `package_name` applies to all packages carrying that vulnerability. Replaying the same source/version/record is idempotent; newly inserted records immediately re-evaluate matching historical findings and append posture events without rewriting scan data.

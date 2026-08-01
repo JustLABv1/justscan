@@ -1,6 +1,6 @@
 export type AdminArea = 'overview' | 'operations' | 'access' | 'connections' | 'system';
 
-export type AdminTab = 'overview' | 'settings' | 'scanner' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights' | 'identity' | 'registries' | 'ai' | 'organizations';
+export type AdminTab = 'overview' | 'settings' | 'scanner' | 'vulnerability-intelligence' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights' | 'identity' | 'registries' | 'ai' | 'organizations';
 
 export interface AdminTabMeta {
   value: AdminTab;
@@ -28,6 +28,7 @@ export const ADMIN_TABS: AdminTabMeta[] = [
   { value: 'overview', label: 'Control center', href: '/admin', blurb: 'Platform health, attention, and recent activity.', area: 'overview' },
   { value: 'scans', label: 'Scans', href: '/admin/scans', blurb: 'Cross-user scan operations and history.', area: 'operations' },
   { value: 'scanner', label: 'Scanner', href: '/admin/scanner', blurb: 'Worker health and runtime tuning.', area: 'operations' },
+  { value: 'vulnerability-intelligence', label: 'CVE Intelligence', href: '/admin/vulnerability-intelligence', blurb: 'CVE change history and feed sync operations.', area: 'operations' },
   { value: 'autotags', label: 'Auto Tags', href: '/admin/autotags', blurb: 'Rule-driven tag automation.', area: 'operations' },
   { value: 'insights', label: 'Observability', href: '/admin/insights', blurb: 'API and xRay telemetry.', area: 'system' },
   { value: 'users', label: 'Users', href: '/admin/users', blurb: 'System user access and state.', area: 'access' },
@@ -64,7 +65,7 @@ export const ADMIN_AREAS: AdminAreaMeta[] = [
     label: 'Operations',
     href: '/admin/scans',
     description: 'Runtime health, scan queues, and automation.',
-    tabs: [tabMeta('scans'), tabMeta('scanner'), tabMeta('autotags')],
+    tabs: [tabMeta('scans'), tabMeta('scanner'), tabMeta('vulnerability-intelligence'), tabMeta('autotags')],
   },
   {
     value: 'access',

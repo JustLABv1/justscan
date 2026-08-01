@@ -55,6 +55,7 @@ import {
   getTokenType,
   getUser,
   getVulnerabilityContextAnalysis,
+  getVulnerabilityHistory,
   getVulnerabilitySummary,
   grantScanOrgAccess,
   listOrgs,
@@ -4088,6 +4089,7 @@ export default function ScanDetailPage() {
         loadContextAnalysis={(vulnerability) =>
           getVulnerabilityContextAnalysis(id, vulnerability.id)
         }
+        loadHistory={(vulnerability) => getVulnerabilityHistory(id, vulnerability.id)}
       />
       {confirmDialog}
 

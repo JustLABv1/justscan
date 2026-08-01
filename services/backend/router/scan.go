@@ -43,6 +43,7 @@ func Scans(router *gin.RouterGroup, db *bun.DB) {
 		s.GET("/:id/vulnerabilities", scans.ListVulnerabilities(db))
 		s.GET("/:id/vulnerabilities/summary", scans.GetVulnerabilitySummary(db))
 		s.GET("/:id/vulnerabilities/:vulnerabilityId/analysis", scans.GetVulnerabilityContextAnalysis(db))
+		s.GET("/:id/vulnerabilities/:vulnerabilityId/history", scans.GetVulnerabilityHistory(db))
 		s.GET("/:id/sbom", scans.GetSBOM(db))
 		s.GET("/:id/sbom/graph", scans.GetSBOMGraph(db))
 		s.GET("/:id/sbom/components/:componentId", scans.GetSBOMComponent(db))

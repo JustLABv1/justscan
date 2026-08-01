@@ -38,4 +38,6 @@ export * from './api/types/vulnkb';
 export * from './api/types/watchlist';
 export * from './api/user';
 export * from './api/vulnkb';
+export * from './api/vulnerability-intelligence';
+export * from './api/types/vulnerability-intelligence';
 export * from './api/watchlist';

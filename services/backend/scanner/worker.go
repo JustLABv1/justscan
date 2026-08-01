@@ -105,6 +105,7 @@ func InitWorker(db *bun.DB) {
 
 	log.Infof("Scanner worker pool started with concurrency=%d", concurrency)
 	startScanStaleWatchdog(db)
+	StartCVEHistorySync(db)
 
 	// Periodically refresh trivy databases for all workers so they stay current
 	// even when no scans are running (e.g. after a startup where the initial

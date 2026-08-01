@@ -23,10 +23,13 @@ description: Reference the current backend YAML settings and supported BACKEND_ 
 | `scanner.enable_osv_java_augmentation` | `true` | Enable OSV Java enrichment |
 | `vuln_kb.cache_days` | `7` | NVD enrichment cache lifetime |
 | `vuln_kb.nvd_api_key` | Empty | Optional NVD API key for CVE enrichment |
+| `vuln_kb.cve_history_enabled` | `true` | Poll NVD CVE change history and re-evaluate retained findings |
+| `vuln_kb.cve_history_interval_minutes` | `120` | Interval between CVE change-history sync attempts |
+| `vuln_kb.cve_history_initial_lookback_hours` | `24` | History window used by the first sync; capped at 120 days |
 | `local_auth.enabled` | `true` | Enable username/password login |
 | `security.allow_insecure_defaults` | `false` | Allow development-only insecure JWT/encryption defaults |
 | `security.callback_allowed_hosts`, `callback_allowed_cidrs` | Empty | Explicit private callback target allowlists |
 
-Every supported setting can be overridden with a `BACKEND_` environment variable using underscore-separated names. For example, `scanner.concurrency` becomes `BACKEND_SCANNER_CONCURRENCY`. Comma-separated callback host and CIDR values are parsed as lists. Keep `jwt.secret`, `encryption.key`, database passwords, and NVD keys in secret injection rather than plain YAML.
+Every supported setting can be overridden with a `BACKEND_` environment variable using underscore-separated names. For example, `scanner.concurrency` becomes `BACKEND_SCANNER_CONCURRENCY`. Comma-separated callback host and CIDR values are parsed as lists. Keep `jwt.secret`, `encryption.key`, database passwords, and NVD keys in secret injection rather than plain YAML. CVE history polling uses the official NVD history and CVE APIs, retries rate limits and transient failures, and checkpoints only after the corresponding official CVE and NVD records have been re-evaluated. A feed outage therefore leaves the last verified posture unchanged.
 
 `scanner.enable_grype=true` requires `scanner.enable_trivy=true`. Do not set `security.allow_insecure_defaults=true` outside local development.

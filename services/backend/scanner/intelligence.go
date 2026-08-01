@@ -56,6 +56,7 @@ type IntelligenceIngestRecord struct {
 	FixedVersions    []string            `json:"fixed_versions,omitempty"`
 	ExploitSignals   []models.JSONObject `json:"exploit_signals,omitempty"`
 	RawEvidence      models.JSONObject   `json:"raw_evidence,omitempty"`
+	ChangeEventID    *uuid.UUID          `json:"-"`
 }
 
 // IntelligenceIngestResult reports the immutable feed version and the
@@ -370,6 +371,43 @@ func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFinding
 		return 0, fmt.Errorf("load historical findings for posture refresh: %w", err)
 	}
 
+	identityByFinding := make(map[uuid.UUID]vulnerabilityFindingIdentity, len(findings))
+	for _, finding := range findings {
+		identityByFinding[finding.ID] = vulnerabilityFindingIdentity{
+			PackageName:      finding.PkgName,
+			InstalledVersion: finding.InstalledVersion,
+			PURLs:            []string{},
+		}
+	}
+	if len(findings) > 0 {
+		type findingPackageURLRow struct {
+			VulnerabilityID uuid.UUID `bun:"vulnerability_id"`
+			PackageURL      string    `bun:"package_url"`
+		}
+		findingIDs := make([]uuid.UUID, 0, len(findings))
+		for _, finding := range findings {
+			findingIDs = append(findingIDs, finding.ID)
+		}
+		var packageURLRows []findingPackageURLRow
+		if err := db.NewSelect().
+			TableExpr("vulnerability_component_links AS vcl").
+			ColumnExpr("vcl.vulnerability_id, sc.package_url").
+			Join("JOIN sbom_components AS sc ON sc.id = vcl.component_id").
+			Where("vcl.vulnerability_id IN (?)", bun.In(findingIDs)).
+			Scan(ctx, &packageURLRows); err != nil {
+			return 0, fmt.Errorf("load package identity evidence for posture refresh: %w", err)
+		}
+		for _, row := range packageURLRows {
+			purl := strings.TrimSpace(row.PackageURL)
+			if purl == "" {
+				continue
+			}
+			identity := identityByFinding[row.VulnerabilityID]
+			identity.PURLs = append(identity.PURLs, purl)
+			identityByFinding[row.VulnerabilityID] = identity
+		}
+	}
+
 	var evidence []models.VulnerabilityIntelligenceEvidence
 	if err := db.NewSelect().Model(&evidence).
 		Where("vuln_id IN (?)", bun.In(vulnIDs)).
@@ -424,7 +462,7 @@ func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFinding
 			continue
 		}
 
-		posture := derivePosture(finding, latest, versionNames)
+		posture := derivePostureForIdentity(finding, identityByFinding[finding.ID], latest, versionNames)
 		var existing models.VulnerabilityPosture
 		err := db.NewSelect().Model(&existing).Where("finding_id = ?", finding.ID).Scan(ctx)
 		if err != nil && err != sql.ErrNoRows {
@@ -440,7 +478,7 @@ func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFinding
 		if hasExisting {
 			previousState = existing.State
 			if _, err := db.NewUpdate().Model(&posture).
-				Column("scan_id", "state", "cve_state", "severity", "cvss_score", "cvss_vector", "affected_ranges", "fixed_versions", "exploit_signals", "source", "observed_at", "reason", "intelligence_version_id", "intelligence_version", "conflict_sources", "updated_at").
+				Column("scan_id", "state", "cve_state", "severity", "cvss_score", "cvss_vector", "affected_ranges", "fixed_versions", "exploit_signals", "source", "observed_at", "reason", "intelligence_version_id", "intelligence_version", "conflict_sources", "change_event_id", "updated_at").
 				Where("finding_id = ?", finding.ID).Exec(ctx); err != nil {
 				return 0, fmt.Errorf("update posture for finding %s: %w", finding.ID, err)
 			}
@@ -450,16 +488,11 @@ func refreshPostures(ctx context.Context, db bun.IDB, keys []intelligenceFinding
 			}
 		}
 
-		event := &models.VulnerabilityPostureEvent{
-			FindingID:             finding.ID,
-			PreviousState:         previousState,
-			State:                 posture.State,
-			Source:                posture.Source,
-			ObservedAt:            posture.ObservedAt,
-			Reason:                posture.Reason,
-			IntelligenceVersionID: posture.IntelligenceVersionID,
-			ConflictSources:       posture.ConflictSources,
+		var previous *models.VulnerabilityPosture
+		if hasExisting {
+			previous = &existing
 		}
+		event := postureEventForTransition(finding.ID, previous, posture, previousState)
 		if _, err := db.NewInsert().Model(event).Exec(ctx); err != nil {
 			return 0, fmt.Errorf("record posture event for finding %s: %w", finding.ID, err)
 		}
@@ -473,6 +506,38 @@ func intelligenceKeyRequested(requestedKeys map[string]bool, finding models.Vuln
 	exactKey := intelligenceKeyString(intelligenceFindingKey{VulnID: finding.VulnID, PackageName: finding.PkgName})
 	wildcardKey := intelligenceKeyString(intelligenceFindingKey{VulnID: finding.VulnID})
 	return requestedKeys[exactKey] || requestedKeys[wildcardKey]
+}
+
+func postureEventForTransition(findingID uuid.UUID, previous *models.VulnerabilityPosture, next models.VulnerabilityPosture, previousState string) *models.VulnerabilityPostureEvent {
+	event := &models.VulnerabilityPostureEvent{
+		FindingID:              findingID,
+		PreviousState:          previousState,
+		State:                  next.State,
+		Source:                 next.Source,
+		ObservedAt:             next.ObservedAt,
+		Reason:                 next.Reason,
+		IntelligenceVersionID:  next.IntelligenceVersionID,
+		ConflictSources:        cloneStringSlice(next.ConflictSources),
+		PreviousAffectedRanges: []models.JSONObject{},
+		AffectedRanges:         cloneJSONObjectSlice(next.AffectedRanges),
+		PreviousFixedVersions:  []string{},
+		FixedVersions:          cloneStringSlice(next.FixedVersions),
+		CVEState:               next.CVEState,
+		Severity:               next.Severity,
+		CVSSScore:              next.CVSSScore,
+		CVSSVector:             next.CVSSVector,
+		ChangeEventID:          next.ChangeEventID,
+	}
+	if previous == nil {
+		return event
+	}
+	event.PreviousCVEState = previous.CVEState
+	event.PreviousSeverity = previous.Severity
+	event.PreviousCVSSScore = previous.CVSSScore
+	event.PreviousCVSSVector = previous.CVSSVector
+	event.PreviousAffectedRanges = cloneJSONObjectSlice(previous.AffectedRanges)
+	event.PreviousFixedVersions = cloneStringSlice(previous.FixedVersions)
+	return event
 }
 
 type evidenceCandidate struct {
@@ -537,100 +602,6 @@ func intelligenceEvidenceIsNewer(left, right models.VulnerabilityIntelligenceEvi
 		return true
 	}
 	return left.CreatedAt.Equal(right.CreatedAt) && left.ID.String() > right.ID.String()
-}
-
-func derivePosture(finding models.Vulnerability, latest []models.VulnerabilityIntelligenceEvidence, versionNames map[uuid.UUID]string) models.VulnerabilityPosture {
-	posture := models.VulnerabilityPosture{
-		FindingID:       finding.ID,
-		ScanID:          finding.ScanID,
-		CVEState:        models.IntelligenceCVEStateUnknown,
-		Severity:        models.SeverityUnknown,
-		AffectedRanges:  []models.JSONObject{},
-		FixedVersions:   []string{},
-		ExploitSignals:  []models.JSONObject{},
-		ConflictSources: []string{},
-	}
-
-	sources := make([]string, 0, len(latest))
-	for _, record := range latest {
-		sources = append(sources, record.Source)
-	}
-	posture.Source = strings.Join(sources, ",")
-
-	if len(latest) > 1 && intelligenceEvidenceConflicts(latest) {
-		posture.State = models.PostureStateNeedsRescan
-		posture.Reason = "Conflicting intelligence sources require validation before posture can be derived."
-		posture.ConflictSources = append([]string(nil), sources...)
-		for _, record := range latest {
-			if record.ObservedAt.After(posture.ObservedAt) {
-				posture.ObservedAt = record.ObservedAt
-			}
-		}
-		return posture
-	}
-
-	representative := latest[0]
-	posture.CVEState = representative.CVEState
-	posture.Severity = representative.Severity
-	posture.CVSSScore = representative.CVSSScore
-	posture.CVSSVector = representative.CVSSVector
-	posture.AffectedRanges = cloneJSONObjectSlice(representative.AffectedRanges)
-	posture.FixedVersions = append([]string{}, representative.FixedVersions...)
-	posture.ExploitSignals = cloneJSONObjectSlice(representative.ExploitSignals)
-	posture.ObservedAt = representative.ObservedAt
-	posture.IntelligenceVersionID = uuidPointer(representative.IntelligenceVersionID)
-	posture.IntelligenceVersion = versionNames[representative.IntelligenceVersionID]
-
-	posture.State, posture.Reason = derivePostureState(finding, representative)
-	if len(latest) > 1 {
-		posture.Reason = fmt.Sprintf("Sources %s agree: %s", posture.Source, posture.Reason)
-		posture.IntelligenceVersionID = nil
-		posture.IntelligenceVersion = ""
-		for _, record := range latest[1:] {
-			if record.ObservedAt.After(posture.ObservedAt) {
-				posture.ObservedAt = record.ObservedAt
-			}
-		}
-	}
-	return posture
-}
-
-func derivePostureState(finding models.Vulnerability, evidence models.VulnerabilityIntelligenceEvidence) (string, string) {
-	source := strings.TrimSpace(evidence.Source)
-	if source == "" {
-		source = "the intelligence feed"
-	}
-
-	switch strings.ToLower(strings.TrimSpace(evidence.CVEState)) {
-	case "":
-		return models.PostureStateNeedsRescan, "Intelligence applicability is unknown; rescan required."
-	case models.IntelligenceCVEStateUnknown:
-		return models.PostureStateNeedsRescan, fmt.Sprintf("%s did not provide applicability information; rescan required.", source)
-	case models.IntelligenceCVEStateDisputed:
-		return models.PostureStateDisputed, fmt.Sprintf("%s reports that the vulnerability is disputed.", source)
-	case models.IntelligenceCVEStateRejected:
-		return models.PostureStateRejected, fmt.Sprintf("%s reports that the vulnerability is rejected.", source)
-	case models.IntelligenceCVEStateNotAffected:
-		return models.PostureStateNotAffected, fmt.Sprintf("%s explicitly reports that this package is not affected.", source)
-	case models.IntelligenceCVEStateAffected:
-		// A scanner finding with a fixed version is still affected at the
-		// installed version, but the current posture should make remediation
-		// available without rewriting the scan-time result.
-		if len(evidence.FixedVersions) > 0 {
-			return models.PostureStateFixAvailable, fmt.Sprintf("%s reports fixed version(s): %s.", source, strings.Join(evidence.FixedVersions, ", "))
-		}
-		currentRank := severityRank(finding.Severity)
-		latestRank := severityRank(evidence.Severity)
-		if latestRank > currentRank || (latestRank == currentRank && evidence.CVSSScore > finding.CVSSScore) {
-			return models.PostureStateSeverityIncreased, fmt.Sprintf("%s increased the assessed severity to %s.", source, evidence.Severity)
-		}
-		if latestRank < currentRank || (latestRank == currentRank && evidence.CVSSScore > 0 && evidence.CVSSScore < finding.CVSSScore) {
-			return models.PostureStateSeverityReduced, fmt.Sprintf("%s reduced the assessed severity to %s.", source, evidence.Severity)
-		}
-		return models.PostureStateUnchanged, fmt.Sprintf("%s did not change the assessed severity or remediation state.", source)
-	default:
-		return models.PostureStateNeedsRescan, fmt.Sprintf("%s returned an unrecognized applicability state; rescan required.", source)
-	}
 }
 
 func intelligenceEvidenceConflicts(records []models.VulnerabilityIntelligenceEvidence) bool {
@@ -782,6 +753,7 @@ func IngestIntelligence(ctx context.Context, db *bun.DB, request IntelligenceIng
 				FixedVersions:         record.FixedVersions,
 				ExploitSignals:        record.ExploitSignals,
 				RawEvidence:           record.RawEvidence,
+				ChangeEventID:         record.ChangeEventID,
 			})
 		}
 

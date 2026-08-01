@@ -1,10 +1,10 @@
 FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
 
-FROM reg.mini.dev/node:v25.9.0-dev AS base
+FROM reg.mini.dev/node:v26.5.1-dev AS base
 USER root
 
 # Stage 1: Build the frontend
-FROM reg.mini.dev/node:v25.9.0-dev AS frontend-builder
+FROM reg.mini.dev/node:v26.5.1-dev AS frontend-builder
 USER root
 WORKDIR /app/frontend
 

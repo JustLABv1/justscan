@@ -144,6 +144,10 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 				Scan(c.Request.Context()) //nolint:errcheck
 			vulns[i].Comments = comments
 		}
+		if err := scanner.AttachVulnerabilityIntelligence(c.Request.Context(), db, vulns); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load vulnerability intelligence"})
+			return
+		}
 
 		// Batch-query first_seen_at for each vuln_id+pkg_name combination across
 		// all OTHER completed scans of the same image. Excluding the current scan

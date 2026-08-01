@@ -130,8 +130,13 @@ func InitWorker(db *bun.DB) {
 		}()
 	}
 
-	// Backfill vuln_kb from existing vulnerabilities (best-effort, runs once in background)
-	go backfillKB(db)
+	// Backfill the KB before capturing historical intelligence so existing
+	// exploit signals are available to the first evidence snapshot. Both jobs
+	// are idempotent and safe to retry on the next startup.
+	go func() {
+		backfillKB(db)
+		BackfillVulnerabilityIntelligence(db)
+	}()
 }
 
 // EnqueueScan queues a scan job. The scan row must already exist in the DB with status=pending.
@@ -471,6 +476,12 @@ func processScan(job ScanJob, cacheDir string) {
 		Where("id = ?", scanID).Exec(context.Background()); err != nil {
 		log.Errorf("Worker: failed to mark scan %s as completed: %v", scanID, err)
 		return
+	}
+	if err := RecordIntelligenceSnapshot(context.Background(), db, scan); err != nil {
+		log.Warnf("Worker: intelligence snapshot failed for scan %s (non-fatal): %v", scanID, err)
+		recordScanStepOutput(context.Background(), db, scanID, fmt.Sprintf("Scan-time intelligence snapshot failed, but the scan result remains available: %v", err))
+	} else {
+		recordScanStepOutput(context.Background(), db, scanID, "Stored scan-time vulnerability intelligence and refreshed current posture.")
 	}
 	if err := setScanStep(context.Background(), db, scan, models.ScanStepCompleted); err != nil {
 		log.Errorf("Worker: failed to record completed step for scan %s: %v", scanID, err)

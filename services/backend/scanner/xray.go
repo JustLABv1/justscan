@@ -598,6 +598,12 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to mark xray scan as completed: %w", err)
 	}
+	if err := RecordIntelligenceSnapshot(ctx, db, scan); err != nil {
+		log.Warnf("Xray: intelligence snapshot failed for scan %s (non-fatal): %v", scan.ID, err)
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Scan-time intelligence snapshot failed, but the Xray result remains available: %v", err))
+	} else {
+		recordScanStepOutput(ctx, db, scan.ID, "Stored scan-time vulnerability intelligence and refreshed current posture.")
+	}
 	if err := setScanStep(ctx, db, scan, models.ScanStepCompleted); err != nil {
 		return err
 	}

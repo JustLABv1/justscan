@@ -13,7 +13,7 @@ import {
   setToken,
   setUser,
 } from '@/lib/api';
-import { Button, Form } from '@heroui/react';
+import { Button, Checkbox, Form } from '@heroui/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -27,6 +27,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [localAuthEnabled, setLocalAuthEnabled] = useState(true);
@@ -58,7 +59,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await login(email, password);
+      const res = await login(email, password, rememberMe);
       setToken(res.token);
       setUser(res.user);
       clearAuthReturnUrl();
@@ -82,8 +83,9 @@ export default function LoginPage() {
 
   return (
     <AuthCard
-      title="JustScan"
-      subtitle="Great to see you again. Sign in to continue."
+      eyebrow="Secure access"
+      title="Welcome back."
+      subtitle="Sign in to see what changed across your images, clusters, and registries."
       footer={
         signInEnabled && localAuthEnabled && signUpEnabled ? (
           <>
@@ -101,7 +103,7 @@ export default function LoginPage() {
       {error ? <FormAlert description={error} title="Sign-in failed" /> : null}
 
       {signInEnabled && localAuthEnabled ? (
-        <Form className="space-y-4" onSubmit={handleSubmit}>
+        <Form className="auth-card-form" onSubmit={handleSubmit}>
           <FormField
             autoComplete="username"
             label="Email or Username"
@@ -120,7 +122,21 @@ export default function LoginPage() {
             type="password"
             value={password}
           />
-          <Button fullWidth isPending={loading} type="submit">
+          <Checkbox
+            className="auth-card-remember"
+            isSelected={rememberMe}
+            name="remember_me"
+            onChange={setRememberMe}
+            variant="secondary"
+          >
+            <Checkbox.Content className="auth-card-remember-content">
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              Remember me
+            </Checkbox.Content>
+          </Checkbox>
+          <Button className="auth-card-submit" fullWidth isPending={loading} type="submit">
             {({ isPending }) => (isPending ? 'Signing In…' : 'Sign In')}
           </Button>
         </Form>
@@ -129,18 +145,10 @@ export default function LoginPage() {
       {signInEnabled && hasOIDC ? (
         <>
           {localAuthEnabled ? (
-            <div className="flex items-center gap-3">
-              <div
-                className="h-px flex-1"
-                style={{ background: 'color-mix(in oklab,var(--accent) 20%,transparent)' }}
-              />
-              <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
-                or
-              </span>
-              <div
-                className="h-px flex-1"
-                style={{ background: 'color-mix(in oklab,var(--accent) 20%,transparent)' }}
-              />
+            <div aria-hidden="true" className="auth-card-divider">
+              <span />
+              <em>or continue with</em>
+              <span />
             </div>
           ) : null}
           <div className="space-y-2">
@@ -160,6 +168,7 @@ export default function LoginPage() {
                   </svg>
                 }
                 label={provider.display_name}
+                className="auth-card-provider-button"
                 onBeforeNavigate={() => storeAuthReturnUrl(loginReturnUrl())}
               />
             ))}

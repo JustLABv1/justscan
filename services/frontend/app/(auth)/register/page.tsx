@@ -43,8 +43,9 @@ export default function RegisterPage() {
 
   return (
     <AuthCard
-      title="JustScan"
-      subtitle="Let's get you set up with a new account."
+      eyebrow="Start scanning"
+      title="Make risk visible."
+      subtitle="Create a workspace for the images your team ships every day."
       footer={
         <>
           Already have an account?{' '}
@@ -66,7 +67,7 @@ export default function RegisterPage() {
       ) : (
         <>
           {error ? <FormAlert description={error} title="Registration failed" /> : null}
-          <Form className="space-y-4" onSubmit={handleSubmit}>
+          <Form className="auth-card-form" onSubmit={handleSubmit}>
             <FormField
               autoComplete="username"
               label="Username"
@@ -96,7 +97,7 @@ export default function RegisterPage() {
               type="password"
               value={password}
             />
-            <Button fullWidth isPending={loading} type="submit">
+            <Button className="auth-card-submit" fullWidth isPending={loading} type="submit">
               {({ isPending }) => (isPending ? 'Creating Account…' : 'Create Account')}
             </Button>
           </Form>

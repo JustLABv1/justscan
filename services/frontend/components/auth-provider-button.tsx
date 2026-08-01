@@ -7,12 +7,20 @@ interface AuthProviderButtonProps {
   href: string;
   label: string;
   icon?: ReactNode;
+  className?: string;
   onBeforeNavigate?: () => void;
 }
 
-export function AuthProviderButton({ href, label, icon, onBeforeNavigate }: AuthProviderButtonProps) {
+export function AuthProviderButton({
+  href,
+  label,
+  icon,
+  className,
+  onBeforeNavigate,
+}: AuthProviderButtonProps) {
   return (
     <Button
+      className={className}
       fullWidth
       onPress={() => {
         onBeforeNavigate?.();

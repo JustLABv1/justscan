@@ -13,6 +13,7 @@ import {
   LandingGitOpsSection,
 } from '@/components/landing/landing-feature-scenes';
 import { LandingIntelligenceSection } from '@/components/landing/landing-intelligence';
+import { getServerSession } from '@/lib/server-auth';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -33,7 +34,9 @@ export const metadata: Metadata = {
   },
 };
 
-export default function Page() {
+export default async function Page() {
+  const session = await getServerSession();
+
   return (
     <div className="landing-page relative min-h-screen overflow-hidden bg-background text-foreground">
       <a
@@ -42,7 +45,7 @@ export default function Page() {
       >
         Skip to content
       </a>
-      <LandingHeader />
+      <LandingHeader initialIsLoggedIn={Boolean(session.token)} />
       <main id="main-content" className="relative z-10">
         <LandingHeroSection />
         <LandingProofStrip />

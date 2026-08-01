@@ -3,12 +3,8 @@ import { PATHNAME_HEADER_NAME } from '@/lib/metadata';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
-const PUBLIC_ALLOWLIST_PREFIXES = [
-  '/maintenance',
-  '/login',
-  '/auth',
-  '/admin',
-];
+const PUBLIC_ALLOWLIST_PREFIXES = ['/maintenance', '/login', '/auth', '/admin'];
+const ANONYMOUS_AUTH_PATHS = new Set(['/login', '/register']);
 
 interface MaintenanceSettings {
   enabled: boolean;
@@ -63,8 +59,17 @@ function isAdmin(request: NextRequest) {
   return payload?.role === 'admin' || payload?.type === 'admin';
 }
 
+function hasValidSession(request: NextRequest) {
+  const token = request.cookies.get('justscan_token')?.value;
+  const payload = parseTokenPayload(token);
+  if (!token || !payload) return false;
+  return typeof payload.exp !== 'number' || payload.exp > Math.floor(Date.now() / 1000);
+}
+
 function isAllowlisted(pathname: string) {
-  return PUBLIC_ALLOWLIST_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  return PUBLIC_ALLOWLIST_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
 }
 
 async function getMaintenanceSettings(): Promise<MaintenanceSettings | null> {
@@ -91,6 +96,13 @@ function continueWithPathnameHeader(request: NextRequest) {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (ANONYMOUS_AUTH_PATHS.has(pathname) && hasValidSession(request)) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/scans';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
 
   if (isAllowlisted(pathname) || isAdmin(request)) {
     return continueWithPathnameHeader(request);

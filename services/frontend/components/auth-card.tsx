@@ -7,35 +7,38 @@ import type { ReactNode } from 'react';
 type AuthCardProps = {
   title: string;
   subtitle: string;
+  eyebrow?: string;
   children: ReactNode;
   footer?: ReactNode;
 };
 
-export function AuthCard({ title, subtitle, children, footer }: AuthCardProps) {
+export function AuthCard({
+  title,
+  subtitle,
+  eyebrow = 'Secure access',
+  children,
+  footer,
+}: AuthCardProps) {
   return (
-    <div className="space-y-6">
-      <div className="space-y-3 text-center">
-        <Logo size={60} className="mx-auto" />
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">{title}</h1>
-          <p className="mt-1 text-base font-medium text-foreground/70">{subtitle}</p>
-        </div>
-      </div>
-
-      <Card className="surface-card relative rounded-3xl border border-divider/70 shadow-lg shadow-black/5">
-        <Card.Content className="space-y-5 p-6">
-          <div
-            className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-            style={{
-              background:
-                'linear-gradient(90deg,transparent,color-mix(in oklab,var(--accent) 35%,transparent),transparent)',
-            }}
-          />
-          {children}
+    <div className="auth-card-shell">
+      <Card className="auth-card surface-card">
+        <Card.Content className="auth-card-content">
+          <div className="auth-card-heading">
+            <div className="auth-card-brand">
+              <Logo className="auth-card-brand-logo" size={32} />
+              <span className="auth-card-brand-name">JustScan</span>
+            </div>
+            <div className="auth-card-copy">
+              <p className="auth-card-eyebrow">{eyebrow}</p>
+              <h1>{title}</h1>
+              <p>{subtitle}</p>
+            </div>
+          </div>
+          <div className="auth-card-body">{children}</div>
         </Card.Content>
       </Card>
 
-      {footer ? <div className="text-center text-sm text-foreground/60">{footer}</div> : null}
+      {footer ? <div className="auth-card-footer">{footer}</div> : null}
     </div>
   );
 }

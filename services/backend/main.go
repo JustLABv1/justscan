@@ -23,7 +23,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const version string = "2.5.3"
+// Release builds replace this value with the Git tag through the linker.
+var version = "dev"
 
 var (
 	configFile = kingpin.Flag("config", "Config file").Short('c').Default("/etc/justscan/config.yaml").String()

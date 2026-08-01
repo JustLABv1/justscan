@@ -10,7 +10,8 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 go build -o justscan-backend
+ARG APP_VERSION=dev
+RUN CGO_ENABLED=0 go build -ldflags="-X main.version=${APP_VERSION}" -o justscan-backend
 
 FROM builder AS helm-builder
 

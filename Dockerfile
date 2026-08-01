@@ -16,7 +16,9 @@ RUN pnpm install
 COPY services/frontend/ ./
 
 ARG NEXT_PUBLIC_API_URL=""
+ARG APP_VERSION=dev
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN pnpm run build
@@ -43,7 +45,8 @@ WORKDIR /app/backend
 COPY services/backend/go.mod services/backend/go.sum ./
 RUN go mod download
 COPY services/backend/ ./
-RUN CGO_ENABLED=0 go build -o justscan-backend
+ARG APP_VERSION=dev
+RUN CGO_ENABLED=0 go build -ldflags="-X main.version=${APP_VERSION}" -o justscan-backend
 
 # Stage 4: Create the final image
 FROM base AS runner

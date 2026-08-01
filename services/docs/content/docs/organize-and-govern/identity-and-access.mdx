@@ -5,11 +5,14 @@ description: Give people and pipelines only the JustScan access they need, then 
 
 JustScan combines user authentication with workspace and organization authorization. Use personal access for individual work, organizations for shared security workflows, and scoped organization tokens for unattended automation.
 
-<img src="/docs/authentication-flow.svg" alt="User browser, JustScan, and an OIDC provider exchange identity information before JustScan authorizes the user's workspace access" />
+<img
+  src="/docs/authentication-flow.svg"
+  alt="User browser, JustScan, and an OIDC provider exchange identity information before JustScan authorizes the user's workspace access"
+/>
 
 ## People
 
-Configure local username/password sign-in or [OIDC](/operate/authentication) first. Invite users to organizations, assign the least privileged role, and remove membership when responsibility ends. OIDC mappings are evaluated at login, so removed identity-provider membership takes effect at the next sign-in.
+Complete [local authentication](/setup/local-authentication) or [OIDC authentication](/setup/oidc-authentication) first. Invite users to organizations, assign the least privileged role, and remove membership when responsibility ends. OIDC mappings are evaluated at login, so removed identity-provider membership takes effect at the next sign-in.
 
 Keep at least one tested administrator path while changing identity settings. Do not disable local authentication until an OIDC administrator can sign in through the public production hostname.
 

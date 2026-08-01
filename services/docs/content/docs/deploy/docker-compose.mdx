@@ -1,0 +1,74 @@
+---
+title: Install with Docker Compose
+description: Deploy JustScan, PostgreSQL, the frontend, and documentation on a single host with Docker Compose.
+---
+
+The supported Compose deployment runs PostgreSQL, the backend, frontend, documentation, and nginx. Nginx exposes the application and routes `/api`, `/swagger`, and `/docs` through one host.
+
+## Prerequisites
+
+- Docker 24 or newer with Docker Compose v2
+- A host port available for nginx, port `80` by default
+- Persistent storage for PostgreSQL and backend scanner data
+- A public HTTPS hostname for production use
+
+## Configure
+
+From the Compose deployment directory, create the environment file and review the backend configuration:
+
+```bash
+cd deploy/docker-compose
+cp .env.example .env
+```
+
+Set at least:
+
+| Setting             | Purpose                                                                         |
+| ------------------- | ------------------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD` | PostgreSQL password; it must match `database.password` in `backend-config.yaml` |
+| `JUSTSCAN_VERSION`  | Release tag to deploy, such as `v1.2.3`; defaults to `latest`                   |
+| `HTTP_PORT`         | Host port for nginx; defaults to `80`                                           |
+
+Replace every `change-me-in-production` value in `backend-config.yaml` before production use. Generate distinct values for `jwt.secret` and `encryption.key`, and set `allow_origins` to the URL users open in their browser. Keep database passwords, JWT secrets, encryption keys, and provider credentials in the host secret manager where possible.
+
+For a remote host, the published frontend image expects the local development API address by default. If the browser must reach a different backend URL, build the frontend locally with `NEXT_PUBLIC_API_URL` set to that public API URL.
+
+## Start and verify
+
+```bash
+docker compose up -d
+```
+
+Open `http://HOST[:HTTP_PORT]` and verify that `/`, `/docs`, `/swagger`, and `/api/v1/health` resolve through nginx. Then continue with [first-time setup](/setup/quick-start) to create the initial administrator.
+
+## Large archive uploads
+
+The bundled nginx configuration allows multipart framing above JustScan's 5 GiB archive limit, disables request buffering for archive uploads, and waits up to two hours for long-running backend requests. If another reverse proxy sits in front of Compose, configure at least a 6 GiB request-body limit, disable buffering where supported, and use read/send timeouts of at least two hours. See [reverse proxy, ingress, and TLS](/deploy/reverse-proxy-and-tls).
+
+## Artifactory Xray-only deployments
+
+When every registry uses Artifactory Xray, use the smaller backend image and disable local scanners:
+
+```dotenv
+JUSTSCAN_BACKEND_IMAGE_PREFIX=backend-minimal
+JUSTSCAN_VERSION=v1.2.3
+```
+
+```yaml
+scanner:
+  enable_trivy: false
+  enable_grype: false
+```
+
+Keep the default `backend` image if any registry will use local Trivy scanning.
+
+## Operate the stack
+
+```bash
+docker compose logs -f
+docker compose logs -f backend
+docker compose pull
+docker compose up -d
+```
+
+Use [upgrades and maintenance](/operate/upgrades-and-maintenance) for release changes and [troubleshooting](/operate/troubleshooting) for runtime failures. `docker compose down -v` removes the PostgreSQL and backend data volumes; back up data before using it.

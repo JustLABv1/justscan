@@ -7,12 +7,12 @@ Expose JustScan through one public hostname. Keeping the application and API on 
 
 ## Required routes
 
-| Route | Destination | Purpose |
-| --- | --- | --- |
-| `/` | Frontend | Application and authentication screens |
-| `/api` | Backend | API and health endpoint |
-| `/swagger` | Backend | Generated API reference |
-| `/docs` | Documentation service | User, administrator, and operator guides |
+| Route      | Destination           | Purpose                                  |
+| ---------- | --------------------- | ---------------------------------------- |
+| `/`        | Frontend              | Application and authentication screens   |
+| `/api`     | Backend               | API and health endpoint                  |
+| `/swagger` | Backend               | Generated API reference                  |
+| `/docs`    | Documentation service | User, administrator, and operator guides |
 
 The supplied Compose nginx configuration already maps these routes. The Helm chart ingress maps `/docs` to the documentation service and the other routes to their corresponding services.
 

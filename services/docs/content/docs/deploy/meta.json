@@ -1,0 +1,12 @@
+{
+  "title": "Deploy JustScan",
+  "pages": [
+    "overview",
+    "docker-compose",
+    "helm",
+    "production-readiness",
+    "reverse-proxy-and-tls",
+    "configuration",
+    "security-and-custom-cas"
+  ]
+}

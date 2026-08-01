@@ -1,35 +1,41 @@
 ---
 title: JustScan documentation
-description: The current-release guide for deploying, securing, integrating, and operating JustScan.
+description: Deploy, set up, integrate, and operate the current JustScan release.
 ---
 
 JustScan helps teams scan container images and Helm charts, investigate findings, and apply organization policy before software ships. This portal documents the current JustScan release running in your environment. Use the [release image reference](/reference/release-images) when planning an upgrade.
 
 <img src="/docs/architecture.svg" alt="JustScan deployment topology" />
 
-## Choose your path
+## Follow the deployment lifecycle
 
-| Your role                   | Start here                                                              | Continue with                                                                                                                                                          |
-| --------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Platform administrator      | [Plan a production deployment](/operate/production-deployment)          | [Configure identity](/operate/authentication), [scanners](/operate/scanners-and-xray), and [operations](/operate/observability-and-maintenance).                       |
-| Security administrator      | [Create an organization](/organize-and-govern/organizations-and-access) | [Set policy](/organize-and-govern/policies-and-compliance), [review CVE Intelligence](/operate/vulnerability-intelligence), notifications, and accepted-risk controls. |
-| Developer or pipeline owner | [Run a first scan](/getting-started/first-scan)                         | [Install the CLI](/integrations/cli) and add a CI quality gate.                                                                                                        |
+| Stage     | Start here                                                              | Outcome                                                                         |
+| --------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Deploy    | [Choose Docker Compose or Helm](/deploy/overview)                       | A healthy JustScan service with `/`, `/api`, `/swagger`, and `/docs` available. |
+| Set up    | [Complete first-time setup](/setup/quick-start)                         | An administrator, authentication path, organization, and first scan.            |
+| Scan      | [Choose a scan source](/scan-and-analyze/scan-sources)                  | The right workflow for registry images, local artifacts, Helm, or GitOps.       |
+| Govern    | [Create an organization](/organize-and-govern/organizations-and-access) | Shared ownership, roles, policies, tokens, and audit history.                   |
+| Integrate | [Run JustScan in CI/CD](/integrations/ci-cd)                            | A policy-aware automation workflow with safe exit handling.                     |
+| Operate   | [Observe and maintain JustScan](/operate/observability-and-maintenance) | Recoverable upgrades, scanner health, backups, and troubleshooting.             |
 
 ## Recommended rollout
 
-1. Confirm [production readiness](/getting-started/production-readiness), select [Docker Compose](/operate/docker-compose) or [Helm](/operate/helm), and verify the service health endpoint.
-2. Configure local authentication or [OIDC](/operate/authentication), then create the first organization, roles, and automation token.
-3. Add and test a registry, complete a first scan, and review findings, SBOM evidence, and the policy verdict.
-4. Start policy in report-only practice, set up notifications, then make the final verdict a [CI/CD gate](/integrations/ci-cd).
-5. Establish the backup, upgrade, monitoring, and troubleshooting routines before relying on JustScan for release decisions.
+1. Deploy with [Docker Compose](/deploy/docker-compose) or [Helm](/deploy/helm), then verify `/api/v1/health` through the intended public hostname.
+2. Create the initial administrator with [local authentication](/setup/local-authentication) or [OIDC authentication](/setup/oidc-authentication).
+3. Create an organization, invite users, configure a registry, and complete a [first governed scan](/setup/first-scan).
+4. Add [organization policies](/organize-and-govern/policies-and-compliance), notifications, and a scoped automation token.
+5. Start with a non-blocking [CI/CD integration](/integrations/ci-cd), then make the verdict required after scan, policy, and recovery behavior are understood.
+6. Establish the [backup and recovery](/operate/backups-and-recovery), upgrade, monitoring, and troubleshooting routines before relying on JustScan for release decisions.
 
 ## Common tasks
 
+- [Install with Docker Compose](/deploy/docker-compose)
+- [Install with Helm](/deploy/helm)
+- [Set up OIDC](/setup/oidc-authentication)
+- [Create an organization](/organize-and-govern/organizations-and-access)
 - [Set up a registry](/scan-and-analyze/registries-and-xray)
+- [Review findings and SBOMs](/scan-and-analyze/findings-and-sbom)
 - [Review CVE Intelligence](/operate/vulnerability-intelligence)
-- [Create an organization policy](/organize-and-govern/policies-and-compliance)
-- [Run JustScan in CI/CD](/integrations/ci-cd)
-- [Configure OIDC](/operate/authentication)
 - [Recover from an operational problem](/operate/troubleshooting)
 
 For endpoint-level exploration, use the <a href="/swagger/index.html">interactive API reference</a>.

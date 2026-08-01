@@ -1,18 +1,11 @@
 {
   "title": "Operate JustScan",
   "pages": [
-    "production-deployment",
-    "docker-compose",
-    "helm",
-    "reverse-proxy-and-tls",
-    "configuration",
-    "authentication",
-    "scanners-and-xray",
-    "vulnerability-intelligence",
-    "security-and-custom-cas",
-    "backups-and-recovery",
     "observability-and-maintenance",
     "upgrades-and-maintenance",
+    "backups-and-recovery",
+    "scanners-and-xray",
+    "vulnerability-intelligence",
     "troubleshooting"
   ]
 }

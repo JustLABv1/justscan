@@ -1,0 +1,10 @@
+{
+  "title": "Set up JustScan",
+  "pages": [
+    "quick-start",
+    "local-authentication",
+    "oidc-authentication",
+    "concepts",
+    "first-scan"
+  ]
+}

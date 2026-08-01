@@ -251,7 +251,7 @@ func isAllowedChannelType(channelType string) bool {
 
 func isAllowedNotificationEvent(event string) bool {
 	switch event {
-	case models.NotificationEventScanComplete, models.NotificationEventScanFailed, models.NotificationEventComplianceFailed:
+	case models.NotificationEventScanComplete, models.NotificationEventScanFailed, models.NotificationEventComplianceFailed, models.NotificationEventIntelligencePolicyImpact:
 		return true
 	default:
 		return false

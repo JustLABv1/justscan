@@ -45,6 +45,13 @@ export interface AuditLog {
   role?: string;
 }
 
+export interface NotificationConditionOption {
+  value: string;
+  label: string;
+  description?: string;
+  group?: string;
+}
+
 export interface APIRequestLogFilters {
   method?: string;
   path?: string;

@@ -127,6 +127,9 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.GET("/notifications/rules", func(c *gin.Context) {
 			notificationhandlers.ListRules(c, db, notificationhandlers.SystemScope())
 		})
+		admin.GET("/notifications/condition-options", func(c *gin.Context) {
+			notificationhandlers.ListConditionOptions(c, db, notificationhandlers.SystemScope())
+		})
 		admin.POST("/notifications/rules", func(c *gin.Context) {
 			notificationhandlers.CreateRule(c, db, notificationhandlers.SystemScope())
 		})

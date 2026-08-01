@@ -484,6 +484,8 @@ func isAllowedNotificationEvent(event string) bool {
 	switch event {
 	case models.NotificationEventScanComplete, models.NotificationEventScanFailed, models.NotificationEventComplianceFailed:
 		return true
+	case models.NotificationEventIntelligencePolicyImpact:
+		return true
 	default:
 		return false
 	}

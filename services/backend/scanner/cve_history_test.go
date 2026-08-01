@@ -6,12 +6,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"justscan-backend/pkg/models"
+
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 )
 
 func TestNormalizeNVDHistoryChangePreservesPayloadAndBeforeAfter(t *testing.T) {
@@ -235,5 +238,46 @@ func TestCurrentSnapshotRawPayloadIsJSONSerializable(t *testing.T) {
 	snapshot := cveCurrentSnapshot{RawOfficial: models.JSONObject{"state": "PUBLISHED"}, RawNVD: models.JSONObject{"id": "CVE-2026-0004"}}
 	if _, err := json.Marshal(snapshot.RawOfficial); err != nil {
 		t.Fatalf("official payload: %v", err)
+	}
+}
+
+func TestCancelCVEHistorySyncCancelsActiveContext(t *testing.T) {
+	endCVEHistorySync()
+	_, runCtx, ok := beginCVEHistorySync(context.Background())
+	if !ok {
+		t.Fatal("expected sync to start")
+	}
+	defer endCVEHistorySync()
+
+	if !CancelCVEHistorySync() {
+		t.Fatal("expected active sync cancellation to be requested")
+	}
+	select {
+	case <-runCtx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("sync context was not cancelled")
+	}
+	status := CurrentCVEHistorySyncStatus()
+	if !status.Running || !status.CancelRequested {
+		t.Fatalf("status after cancellation = %+v", status)
+	}
+}
+
+func TestReconcileOrphanedCVEHistoryRuns(t *testing.T) {
+	endCVEHistorySync()
+	db, mock, cleanup := newMockBunDB(t)
+	defer cleanup()
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "vulnerability_intelligence_sync_runs"`)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+
+	recovered, err := ReconcileOrphanedCVEHistoryRuns(context.Background(), db)
+	if err != nil {
+		t.Fatalf("reconcile orphaned runs: %v", err)
+	}
+	if recovered != 2 {
+		t.Fatalf("recovered runs = %d, want 2", recovered)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
 	}
 }

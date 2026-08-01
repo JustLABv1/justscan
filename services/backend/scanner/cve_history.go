@@ -35,6 +35,11 @@ const (
 
 var ErrCVEHistorySyncRunning = errors.New("CVE history sync is already running")
 
+const (
+	cveHistoryRunCancelledError = "CVE history sync was cancelled by an administrator."
+	cveHistoryRunOrphanedError  = "CVE history sync was interrupted because the backend stopped before it completed."
+)
+
 // CVEHistorySyncProgress is the live, in-process progress of one sync. The
 // durable run table remains the historical record; this status lets the admin
 // UI show what the active worker is doing without another migration.
@@ -52,16 +57,19 @@ type CVEHistorySyncProgress struct {
 // table is the historical record; this status lets the admin UI show an
 // actively running scheduler or manually queued sync immediately.
 type CVEHistorySyncStatus struct {
-	Running   bool
-	StartedAt *time.Time
-	Progress  CVEHistorySyncProgress
+	Running         bool
+	CancelRequested bool
+	StartedAt       *time.Time
+	Progress        CVEHistorySyncProgress
 }
 
 var cveHistoryRunState struct {
-	mu        sync.Mutex
-	running   bool
-	startedAt *time.Time
-	progress  CVEHistorySyncProgress
+	mu              sync.Mutex
+	running         bool
+	cancel          context.CancelFunc
+	cancelRequested bool
+	startedAt       *time.Time
+	progress        CVEHistorySyncProgress
 }
 
 // cveHistoryRunContext owns per-run state. In particular, snapshots are
@@ -1052,6 +1060,11 @@ func StartCVEHistorySync(db *bun.DB) {
 	if db == nil || !CVEHistoryEnabled() {
 		return
 	}
+	if recovered, err := ReconcileOrphanedCVEHistoryRuns(context.Background(), db); err != nil {
+		log.Warnf("CVE history sync startup recovery failed: %v", err)
+	} else if recovered > 0 {
+		log.Warnf("CVE history sync marked %d interrupted run(s) as failed", recovered)
+	}
 	interval := time.Duration(config.Config.VulnKB.CVEHistoryIntervalMinutes) * time.Minute
 	if interval <= 0 {
 		interval = 120 * time.Minute
@@ -1084,13 +1097,13 @@ func QueueCVEHistorySync(db *bun.DB) bool {
 	if db == nil || !CVEHistoryEnabled() {
 		return false
 	}
-	startedAt, ok := beginCVEHistorySync()
+	startedAt, runCtx, ok := beginCVEHistorySync(context.Background())
 	if !ok {
 		return false
 	}
 	go func() {
 		defer endCVEHistorySync()
-		if err := performCVEHistorySync(context.Background(), db, newCVEHistoryClient(), "manual", startedAt); err != nil {
+		if err := performCVEHistorySync(runCtx, db, newCVEHistoryClient(), "manual", startedAt); err != nil {
 			log.Warnf("manual CVE history sync failed: %v", err)
 		}
 	}()
@@ -1121,7 +1134,54 @@ func CurrentCVEHistorySyncStatus() CVEHistorySyncStatus {
 		value := *progress.LastProgressAt
 		progress.LastProgressAt = &value
 	}
-	return CVEHistorySyncStatus{Running: cveHistoryRunState.running, StartedAt: startedAt, Progress: progress}
+	return CVEHistorySyncStatus{
+		Running:         cveHistoryRunState.running,
+		CancelRequested: cveHistoryRunState.cancelRequested,
+		StartedAt:       startedAt,
+		Progress:        progress,
+	}
+}
+
+// CancelCVEHistorySync requests cancellation of the active sync. The worker
+// exits at the next context-aware network or persistence boundary and records
+// the run as cancelled. It returns false when no sync is active in this
+// backend process.
+func CancelCVEHistorySync() bool {
+	cveHistoryRunState.mu.Lock()
+	defer cveHistoryRunState.mu.Unlock()
+	if !cveHistoryRunState.running || cveHistoryRunState.cancel == nil {
+		return false
+	}
+	cveHistoryRunState.cancelRequested = true
+	cveHistoryRunState.cancel()
+	return true
+}
+
+// ReconcileOrphanedCVEHistoryRuns repairs durable run rows left behind when
+// the backend process stopped. A run belonging to the current process is
+// protected by the in-process state and is never reconciled here.
+func ReconcileOrphanedCVEHistoryRuns(ctx context.Context, db *bun.DB) (int, error) {
+	if db == nil {
+		return 0, fmt.Errorf("database is required")
+	}
+	if CurrentCVEHistorySyncStatus().Running {
+		return 0, nil
+	}
+	now := time.Now().UTC()
+	result, err := db.NewUpdate().Model((*models.VulnerabilityIntelligenceSyncRun)(nil)).
+		Set("status = ?", "failed").
+		Set("completed_at = ?", now).
+		Set("error = ?", cveHistoryRunOrphanedError).
+		Where("source = ? AND status = ?", cveHistorySource, "running").
+		Exec(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("reconcile orphaned CVE history runs: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("count reconciled CVE history runs: %w", err)
+	}
+	return int(count), nil
 }
 
 func updateCVEHistorySyncProgress(update func(*CVEHistorySyncProgress)) {
@@ -1152,12 +1212,12 @@ func runCVEHistorySync(ctx context.Context, db *bun.DB, client *cveHistoryClient
 	if db == nil {
 		return fmt.Errorf("database is required")
 	}
-	startedAt, ok := beginCVEHistorySync()
+	startedAt, runCtx, ok := beginCVEHistorySync(ctx)
 	if !ok {
 		return ErrCVEHistorySyncRunning
 	}
 	defer endCVEHistorySync()
-	return performCVEHistorySync(ctx, db, client, trigger, startedAt)
+	return performCVEHistorySync(runCtx, db, client, trigger, startedAt)
 }
 
 func performCVEHistorySync(ctx context.Context, db *bun.DB, client *cveHistoryClient, trigger string, startedAt time.Time) error {
@@ -1174,16 +1234,21 @@ func performCVEHistorySync(ctx context.Context, db *bun.DB, client *cveHistoryCl
 	syncErr := syncCVEHistoryWithClient(ctx, db, client)
 	completedAt := time.Now().UTC()
 	run.CompletedAt = &completedAt
-	if syncErr != nil {
+	if errors.Is(syncErr, context.Canceled) {
+		run.Status = "cancelled"
+		run.Error = cveHistoryRunCancelledError
+	} else if syncErr != nil {
 		run.Status = "failed"
 		run.Error = syncErr.Error()
 	} else {
 		run.Status = "success"
 	}
+	persistCtx, persistCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer persistCancel()
 	if _, err := db.NewUpdate().Model(run).
 		Column("status", "completed_at", "error").
 		Where("id = ?", run.ID).
-		Exec(ctx); err != nil {
+		Exec(persistCtx); err != nil {
 		if syncErr != nil {
 			return fmt.Errorf("CVE history sync failed: %v (and run update failed: %w)", syncErr, err)
 		}
@@ -1192,26 +1257,35 @@ func performCVEHistorySync(ctx context.Context, db *bun.DB, client *cveHistoryCl
 	return syncErr
 }
 
-func beginCVEHistorySync() (time.Time, bool) {
+func beginCVEHistorySync(parent context.Context) (time.Time, context.Context, bool) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	runCtx, cancel := context.WithCancel(parent)
 	cveHistoryRunState.mu.Lock()
 	defer cveHistoryRunState.mu.Unlock()
 	if cveHistoryRunState.running {
-		return time.Time{}, false
+		cancel()
+		return time.Time{}, nil, false
 	}
 	startedAt := time.Now().UTC()
 	cveHistoryRunState.running = true
+	cveHistoryRunState.cancel = cancel
+	cveHistoryRunState.cancelRequested = false
 	cveHistoryRunState.startedAt = &startedAt
 	cveHistoryRunState.progress = CVEHistorySyncProgress{
 		Phase:          "starting",
 		LastProgressAt: &startedAt,
 	}
-	return startedAt, true
+	return startedAt, runCtx, true
 }
 
 func endCVEHistorySync() {
 	cveHistoryRunState.mu.Lock()
 	defer cveHistoryRunState.mu.Unlock()
 	cveHistoryRunState.running = false
+	cveHistoryRunState.cancel = nil
+	cveHistoryRunState.cancelRequested = false
 	cveHistoryRunState.startedAt = nil
 	cveHistoryRunState.progress = CVEHistorySyncProgress{}
 }

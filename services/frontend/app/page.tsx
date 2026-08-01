@@ -12,6 +12,7 @@ import {
   LandingFeatureOverviewSection,
   LandingGitOpsSection,
 } from '@/components/landing/landing-feature-scenes';
+import { LandingIntelligenceSection } from '@/components/landing/landing-intelligence';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -46,6 +47,7 @@ export default function Page() {
         <LandingHeroSection />
         <LandingProofStrip />
         <LandingFeatureOverviewSection />
+        <LandingIntelligenceSection />
         <LandingCliSection />
         <LandingGitOpsSection />
         <LandingCollectorsSection />

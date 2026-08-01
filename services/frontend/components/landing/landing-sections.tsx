@@ -21,6 +21,9 @@ export function LandingHeader() {
           <Link className="text-sm text-muted" href="#features">
             Features
           </Link>
+          <Link className="text-sm text-muted" href="#intelligence">
+            Intelligence
+          </Link>
           <Link className="text-sm text-muted" href="#cli">
             CLI
           </Link>
@@ -178,6 +181,9 @@ export function LandingFooter() {
         <nav aria-label="Footer navigation" className="flex flex-wrap items-center gap-x-5 gap-y-3">
           <Link className="text-sm text-muted" href="#features">
             Features
+          </Link>
+          <Link className="text-sm text-muted" href="#intelligence">
+            Intelligence
           </Link>
           <Link className="text-sm text-muted" href="#cli">
             CLI

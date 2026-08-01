@@ -13,13 +13,19 @@ jobs:
       docs: ${{ steps.filter.outputs.docs }}
       backend: ${{ steps.filter.outputs.backend }}
       cli: ${{ steps.filter.outputs.cli }}
-      combined: ${{ steps.filter.outputs.combined }}
+      frontend_image: ${{ steps.filter.outputs.frontend_image }}
+      docs_image: ${{ steps.filter.outputs.docs_image }}
+      backend_image: ${{ steps.filter.outputs.backend_image }}
+      cli_image: ${{ steps.filter.outputs.cli_image }}
+      combined_image: ${{ steps.filter.outputs.combined_image }}
     steps:
       - uses: actions/checkout@v7
 
       - uses: dorny/paths-filter@v4
         id: filter
         with:
+          # Source changes are covered by the compile/test jobs above. Keep
+          # image checks focused on changes to the image definitions.
           filters: |
             frontend:
               - 'services/frontend/**'
@@ -33,13 +39,18 @@ jobs:
             cli:
               - 'services/cli/**'
               - '.github/workflows/check-image-build.yml'
-            combined:
+            frontend_image:
+              - 'services/frontend/Dockerfile'
+            docs_image:
+              - 'services/docs/Dockerfile'
+            backend_image:
+              - 'services/backend/Dockerfile'
+              - 'services/backend/docker-entrypoint.sh'
+            cli_image:
+              - 'services/cli/Dockerfile'
+            combined_image:
               - 'Dockerfile'
               - 'docker-entrypoint.sh'
-              - 'services/backend/**'
-              - 'services/frontend/**'
-              - 'services/docs/**'
-              - '.github/workflows/check-image-build.yml'
 
   frontend-compile:
     name: Frontend — Compile Check
@@ -142,7 +153,7 @@ jobs:
   frontend-image-build:
     name: Frontend — Docker Build Check
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.frontend_image == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -159,7 +170,7 @@ jobs:
   docs-image-build:
     name: Documentation — Docker Build Check
     needs: changes
-    if: needs.changes.outputs.docs == 'true'
+    if: needs.changes.outputs.docs_image == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -176,7 +187,7 @@ jobs:
   backend-image-build:
     name: Backend — Docker Build Check
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.backend_image == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -197,7 +208,7 @@ jobs:
   cli-image-build:
     name: CLI — Docker Build Check
     needs: changes
-    if: needs.changes.outputs.cli == 'true'
+    if: needs.changes.outputs.cli_image == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -214,7 +225,7 @@ jobs:
   combined-image-build:
     name: Combined — Docker Build Check
     needs: changes
-    if: needs.changes.outputs.combined == 'true'
+    if: needs.changes.outputs.combined_image == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

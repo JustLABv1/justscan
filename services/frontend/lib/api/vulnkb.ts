@@ -1,7 +1,19 @@
 import { req } from './core';
-import type { VulnKBEntry } from './types/vulnkb';
+import type {
+  PublicVulnerabilityIntelligenceHistory,
+  VulnerabilityExposureResponse,
+  VulnKBEntry,
+} from './types/vulnkb';
 
-export const listKBEntries = (q?: string, severity?: string, page = 1, limit = 50, exploit?: boolean, minCvss?: number, publishedAfter?: string) => {
+export const listKBEntries = (
+  q?: string,
+  severity?: string,
+  page = 1,
+  limit = 50,
+  exploit?: boolean,
+  minCvss?: number,
+  publishedAfter?: string
+) => {
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (severity) params.set('severity', severity);
@@ -15,3 +27,33 @@ export const listKBEntries = (q?: string, severity?: string, page = 1, limit = 5
 
 export const getKBEntry = (vulnId: string) =>
   req<VulnKBEntry>('GET', `/api/v1/kb/${encodeURIComponent(vulnId)}`);
+
+export const getKBHistory = (
+  vulnId: string,
+  options: { limit?: number; beforeAt?: string; beforeId?: string } = {}
+) => {
+  const params = new URLSearchParams({ limit: String(options.limit ?? 50) });
+  if (options.beforeAt && options.beforeId) {
+    params.set('before_at', options.beforeAt);
+    params.set('before_id', options.beforeId);
+  }
+  return req<PublicVulnerabilityIntelligenceHistory>(
+    'GET',
+    `/api/v1/kb/${encodeURIComponent(vulnId)}/history?${params}`
+  );
+};
+
+export const getKBExposure = (
+  vulnId: string,
+  options: { page?: number; limit?: number; posture?: string } = {}
+) => {
+  const params = new URLSearchParams({
+    page: String(options.page ?? 1),
+    limit: String(options.limit ?? 25),
+  });
+  if (options.posture && options.posture !== 'all') params.set('posture', options.posture);
+  return req<VulnerabilityExposureResponse>(
+    'GET',
+    `/api/v1/kb/${encodeURIComponent(vulnId)}/exposure?${params}`
+  );
+};

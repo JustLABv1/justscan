@@ -201,7 +201,8 @@ export const listVulnerabilities = (
   hasFix?: boolean,
   minCvss?: number,
   sortBy?: string,
-  sortDir?: 'asc' | 'desc'
+  sortDir?: 'asc' | 'desc',
+  intelligence?: string
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (severity) params.set('severity', severity);
@@ -210,6 +211,7 @@ export const listVulnerabilities = (
   if (minCvss) params.set('min_cvss', String(minCvss));
   if (sortBy) params.set('sort_by', sortBy);
   if (sortDir) params.set('sort_dir', sortDir);
+  if (intelligence && intelligence !== 'all') params.set('intelligence', intelligence);
   return req<{ data: Vulnerability[]; total: number }>(
     'GET',
     `/api/v1/scans/${scanId}/vulnerabilities?${params}`
@@ -221,13 +223,15 @@ export const getVulnerabilitySummary = (
   severity?: string,
   pkg?: string,
   hasFix?: boolean,
-  minCvss?: number
+  minCvss?: number,
+  intelligence?: string
 ) => {
   const params = new URLSearchParams();
   if (severity) params.set('severity', severity);
   if (pkg) params.set('pkg', pkg);
   if (hasFix) params.set('has_fix', 'true');
   if (minCvss) params.set('min_cvss', String(minCvss));
+  if (intelligence && intelligence !== 'all') params.set('intelligence', intelligence);
   const query = params.toString();
   return req<VulnerabilitySummary>(
     'GET',

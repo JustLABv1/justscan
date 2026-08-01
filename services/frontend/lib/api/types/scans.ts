@@ -1,6 +1,7 @@
 import type { OwnerType } from './common';
 import type { ResourceShare } from './orgs';
 import type { ScanProvider, XrayMode } from './registries';
+import type { VulnerabilityPosture } from './vulnerability-intelligence';
 
 export interface ScanStepLog {
   id: string;
@@ -213,6 +214,7 @@ export interface Vulnerability {
   suppression?: Suppression | null;
   comments?: Comment[];
   first_seen_at?: string | null;
+  current_posture?: VulnerabilityPosture | null;
 }
 
 export interface VulnerabilityContextAnalysis {
@@ -238,6 +240,9 @@ export interface VulnerabilitySummary {
   low: number;
   with_fix: number;
   xray_policy: number;
+  intelligence_changed: number;
+  intelligence_needs_rescan: number;
+  intelligence_fix_available: number;
 }
 
 export interface ScanTrendPoint {

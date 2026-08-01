@@ -8,6 +8,10 @@ export const metadata: Metadata = {
     template: '%s | JustScan documentation',
   },
   description: 'Guides for deploying, configuring, and operating JustScan.',
+  icons: {
+    icon: '/docs/justscan-logo.png',
+    apple: '/docs/justscan-logo.png',
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

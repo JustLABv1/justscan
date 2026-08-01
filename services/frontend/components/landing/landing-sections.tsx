@@ -7,8 +7,23 @@ import { LandingHeroIntro, LandingReveal } from '@/components/landing/landing-mo
 import { Chip, Link, Separator } from '@heroui/react';
 import { ArrowUpRight01Icon } from 'hugeicons-react';
 import NextLink from 'next/link';
+import { getToken } from '@/lib/api';
+import { useEffect, useState } from 'react';
 
-export function LandingHeader() {
+export function LandingHeader({ initialIsLoggedIn = false }: { initialIsLoggedIn?: boolean }) {
+  const [isLoggedIn, setIsLoggedIn] = useState(initialIsLoggedIn);
+
+  useEffect(() => {
+    if (getToken()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsLoggedIn(true);
+    }
+
+    const syncAuthState = () => setIsLoggedIn(Boolean(getToken()));
+    window.addEventListener('storage', syncAuthState);
+    return () => window.removeEventListener('storage', syncAuthState);
+  }, []);
+
   return (
     <header className="pointer-events-none fixed inset-x-0 top-4 z-50 px-4 sm:px-6">
       <div className="pointer-events-auto mx-auto flex h-12 max-w-5xl items-center justify-between gap-3 rounded-2xl border border-foreground/10 bg-background/78 px-3 shadow-lg shadow-foreground/5 backdrop-blur-xl sm:rounded-full sm:px-4">
@@ -42,9 +57,9 @@ export function LandingHeader() {
           <LandingThemeToggle />
           <Separator className="hidden h-6 lg:block" orientation="vertical" variant="tertiary" />
           <LandingButtonLink
-            className="hidden lg:inline-flex"
-            href="/login"
-            label="Sign in"
+            className="inline-flex shrink-0"
+            href={isLoggedIn ? '/scans' : '/login'}
+            label={isLoggedIn ? 'Dashboard' : 'Sign in'}
             size="sm"
             variant="outline"
           />

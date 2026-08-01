@@ -21,8 +21,8 @@ Use this checklist before making JustScan part of a deployment gate. It separate
 
 ## Rollout gates
 
-1. Deploy the selected topology from [Docker Compose](/operate/docker-compose) or [Helm](/operate/helm).
+1. Deploy the selected topology from [Docker Compose](/deploy/docker-compose) or [Helm](/deploy/helm).
 2. Confirm `/api/v1/health` is healthy through the intended route and verify `/docs` and `/swagger` resolve on the same hostname.
-3. Test login, create an organization, add a test registry, and complete a small image scan.
+3. Test the selected [local authentication](/setup/local-authentication) or [OIDC authentication](/setup/oidc-authentication) path, create an organization, add a test registry, and complete a small image scan.
 4. Test the notification channel and pipeline token without making the policy result blocking.
 5. Record the release image tags and the current backup restore procedure in the operations runbook.

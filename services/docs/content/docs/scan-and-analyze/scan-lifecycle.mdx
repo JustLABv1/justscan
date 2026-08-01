@@ -3,9 +3,12 @@ title: Scan lifecycle and release decision
 description: Understand how an artifact becomes scan evidence and a policy-aware CI decision.
 ---
 
-Every JustScan workflow follows the same decision path: identify an artifact, submit it to a configured scanner provider, collect evidence, evaluate organization policy, and expose the terminal outcome to people or automation.
+After deployment and first-time setup, every JustScan workflow follows the same decision path: identify an artifact, submit it to a configured scanner provider, collect evidence, evaluate organization policy, and expose the terminal outcome to people or automation.
 
-<img src="/docs/pipeline-flow.svg" alt="CI build submits to JustScan, which analyzes with Trivy, Grype, or Xray, evaluates policy, and returns either continue or stop and review" />
+<img
+  src="/docs/pipeline-flow.svg"
+  alt="CI build submits to JustScan, which analyzes with Trivy, Grype, or Xray, evaluates policy, and returns either continue or stop and review"
+/>
 
 ## Lifecycle states
 
@@ -18,6 +21,6 @@ The verdict is immutable scan-time evidence. Later CVE Intelligence updates can 
 
 ## Choose the source deliberately
 
-Use a registry image when JustScan can authenticate to the registry; use CLI local-image or archive mode for unpublished build outputs; use Helm for rendered chart workloads; and use GitOps discovery for continuously managed deployment repositories. See [scan sources](/getting-started/scan-sources) for the selection table.
+Use a registry image when JustScan can authenticate to the registry; use CLI local-image or archive mode for unpublished build outputs; use Helm for rendered chart workloads; and use GitOps discovery for continuously managed deployment repositories. See [scan sources](/scan-and-analyze/scan-sources) for the selection table.
 
 For CI, make the terminal verdict the gate. The CLI returns `0` for pass, `1` for policy failure, and `2` for an operational error. Do not configure a fallback that turns errors into a release pass.

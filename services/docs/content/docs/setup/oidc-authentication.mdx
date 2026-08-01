@@ -1,0 +1,35 @@
+---
+title: Set up OIDC authentication
+description: Provision users through OpenID Connect and map identity-provider claims to JustScan administrators and organization access.
+---
+
+JustScan can provision users through one or more OIDC providers. Use this guide either to create the first administrator through OIDC or to add single sign-on after a local administrator already exists. Configure providers from **Administration → Identity Providers**.
+
+The OIDC callback and public application URL must use the same HTTPS hostname that users actually open. The OIDC redirect URI must exactly match the provider registration. The first `allow_origins` value is used as the post-login destination and for notification links.
+
+## Configure a provider
+
+1. Set the public frontend URL in `allow_origins`, and set the provider's issuer, client ID, and client secret in the provider configuration.
+2. Register the callback URL shown by the administration flow at the identity provider. The usual callback pattern is `/api/v1/auth/oidc/<provider-name>/callback` on the public JustScan hostname.
+3. Request the scopes needed for the provider, normally `openid`, `email`, and `profile`.
+4. Configure the groups and roles claim names, then list the identity-provider groups or roles that should grant the JustScan `admin` role.
+5. Test normal sign-in, administrator mapping, and any organization claim mappings before relying on the provider in production.
+
+## OIDC-first administrator setup
+
+For an installation that starts with OIDC:
+
+1. Configure and enable the provider before the first user signs in.
+2. Ensure the first user's identity-provider group or role matches one of the configured administrator groups or roles.
+3. Sign in through the provider. JustScan creates the user automatically and grants the platform `admin` role when the configured administrator claim matches.
+4. Open **Administration → Users** and verify the account, then create or invite the remaining users and organizations.
+
+If no existing account matches the OIDC subject, JustScan checks for a local account with the same email address and links it when possible. Otherwise it creates a new OIDC-backed user without a local password. A user whose claims do not match an administrator mapping is created as a normal user.
+
+When local authentication is disabled, password login and self-registration are unavailable. At least one OIDC administrator mapping is therefore required before the first login.
+
+## Claim changes and recovery
+
+Administrator and organization mapping is evaluated on every OIDC login. Removing a person from a configured group or role takes effect on their next sign-in. Keep a tested administrator recovery path while changing provider, CORS, or claim settings. Do not set `local_auth.enabled: false` or switch to SSO-only login until an OIDC administrator can sign in through the public production hostname.
+
+For the resulting permissions model, see [roles and token scopes](/reference/roles-and-token-scopes). For organization membership and automation credentials, see [roles and automation access](/organize-and-govern/identity-and-access).

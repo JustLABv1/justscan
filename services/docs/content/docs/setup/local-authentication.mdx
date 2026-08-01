@@ -1,0 +1,32 @@
+---
+title: Set up local authentication
+description: Create the first local administrator and manage username/password accounts safely.
+---
+
+Local username/password authentication is enabled by default. Use it when JustScan should create accounts through its sign-up screen or when you need a protected administrator recovery path alongside OIDC.
+
+## Create the first administrator
+
+1. Confirm `local_auth.enabled` is enabled in the deployment configuration.
+2. Open the public JustScan URL and choose **Create Account** or visit `/register`.
+3. Register the first account in the empty database.
+
+The first local account receives the platform `admin` role. Later self-registered accounts receive the normal user role and do not become platform administrators automatically.
+
+## Create additional users
+
+After signing in as the first administrator, open **Administration → Users**. Create local users there, assign the appropriate platform role, disable accounts when access must be suspended, and review the account's authentication type before changing credentials. Platform administration and organization membership are separate: add people to the organizations where they should work.
+
+## Control self-service sign-up
+
+After the intended local accounts exist, use **Administration → Identity Providers → Sign-in and sign-up controls** to disable self-service sign-up when open registration is not appropriate. This runtime setting is separate from the deployment-level `local_auth.enabled` setting:
+
+- `local_auth.enabled: true` allows username/password authentication unless an administrator disables it at runtime.
+- `local_auth.enabled: false` prevents local password authentication and local registration.
+- Disabling self-service sign-up does not delete existing local accounts.
+
+Keep at least one tested administrator login before changing these controls. If OIDC is also enabled, test an OIDC administrator through the public production hostname before hiding or disabling password sign-in.
+
+## Continue with shared access
+
+Once the administrator path is verified, [create an organization](/organize-and-govern/organizations-and-access), invite members, and use [roles and automation access](/organize-and-govern/identity-and-access) to choose organization roles and token scopes.

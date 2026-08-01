@@ -3,7 +3,7 @@ title: CI/CD integration
 description: Run policy-aware scans in pipelines and use their final verdict safely.
 ---
 
-Use the CLI for most pipelines. It handles profiles, authentication, registry scans, local Docker or Podman images, archives, polling, and exit codes. Create a dedicated organization token with `pipeline_scan`, inject it only from the CI secret manager, and label the token so pipeline activity remains attributable.
+After [deployment and first-time setup](/setup/quick-start), use the CLI for most pipelines. It handles profiles, authentication, registry scans, local Docker or Podman images, archives, polling, and exit codes. Create a dedicated organization token with `pipeline_scan`, inject it only from the CI secret manager, and label the token so pipeline activity remains attributable.
 
 ```sh
 export JUSTSCAN_TOKEN="<pipeline-scoped-org-token>"

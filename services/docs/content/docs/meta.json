@@ -1,7 +1,8 @@
 {
   "title": "JustScan documentation",
   "pages": [
-    "getting-started",
+    "deploy",
+    "setup",
     "scan-and-analyze",
     "organize-and-govern",
     "integrations",

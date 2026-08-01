@@ -1,0 +1,43 @@
+---
+title: Deploy JustScan
+description: Choose Docker Compose or Helm and make a self-hosted JustScan service ready for first-time setup.
+---
+
+JustScan is delivered as separate backend, frontend, and documentation services, with PostgreSQL for persistent application data. Choose the deployment model that matches the platform you already operate, then continue to [first-time setup](/setup/quick-start) after the health checks pass.
+
+<img
+  src="/docs/architecture.svg"
+  alt="JustScan deployment topology showing users, nginx or ingress, frontend, backend, documentation, PostgreSQL, and scanners"
+/>
+
+## Select a topology
+
+| Topology                                 | Use when                                                                      | You operate                                                                                    |
+| ---------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [Docker Compose](/deploy/docker-compose) | A single host is appropriate for the expected scan volume.                    | nginx, named Docker volumes, images, and host-level backups.                                   |
+| [Helm](/deploy/helm)                     | Your platform standard is Kubernetes or you need managed ingress and secrets. | Kubernetes resources, storage classes, ingress, and optionally an external PostgreSQL service. |
+
+Use matching backend, frontend, and documentation image tags from one JustScan release. The docs service is intentionally deployed separately but stays on the same hostname at `/docs`.
+
+## Common deployment sequence
+
+1. Create the public HTTPS hostname and route `/`, `/api`, `/swagger`, and `/docs` through the same proxy or ingress.
+2. Provision PostgreSQL and backend persistence. PostgreSQL stores JustScan data; the backend volume retains runtime data such as scanner caches.
+3. Inject the database password, JWT secret, and encryption key from your secret manager. Do not use development defaults in production.
+4. Deploy the services and wait for backend `/api/v1/health` before treating the frontend as ready.
+5. Open the application, docs, and Swagger on the public hostname. Confirm the remaining [production readiness](/deploy/production-readiness) checks, then complete [first-time setup](/setup/quick-start).
+
+## Public routes
+
+| Route            | Expected result                                 |
+| ---------------- | ----------------------------------------------- |
+| `/`              | JustScan application and authentication screens |
+| `/api/v1/health` | Healthy backend response                        |
+| `/swagger`       | Generated API reference                         |
+| `/docs`          | This documentation service                      |
+
+Use [reverse proxy, ingress, and TLS](/deploy/reverse-proxy-and-tls) when publishing these routes through a separate edge proxy. Use [deployment configuration](/deploy/configuration) for YAML and `BACKEND_` environment overrides.
+
+## Capacity and failure boundaries
+
+Scanner work happens in the backend, so allocate its CPU, memory, network access, and persistent data for your largest image and expected parallel scans. Tune `scanner.concurrency` only after observing normal queueing and completion time. JustScan does not claim high availability or automated database backup: provide these through the surrounding platform if required.

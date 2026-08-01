@@ -1,0 +1,35 @@
+---
+title: First-time setup
+description: Create the initial administrator, choose an authentication path, and prepare the first organization and scan.
+---
+
+Complete this guide after [Docker Compose](/deploy/docker-compose) or [Helm](/deploy/helm) is healthy. It is intentionally independent of the deployment platform.
+
+## 1. Choose the administrator path
+
+Choose one of these supported first-account flows:
+
+- [Local authentication](/setup/local-authentication): register the first account through the JustScan sign-up screen. The first local account in an empty database becomes the platform administrator.
+- [OIDC authentication](/setup/oidc-authentication): configure an identity provider before first login and map an identity-provider group or role to the JustScan administrator role.
+
+Do not disable every recovery path until an administrator can sign in through the public hostname.
+
+## 2. Confirm platform access
+
+After signing in as an administrator:
+
+1. Open Administration → Users and create or verify the platform accounts that need system-wide access.
+2. If local self-service sign-up is not part of your operating model, disable it after the intended administrators and users have been created.
+3. Keep a second tested administrator or a tested OIDC administrator recovery path.
+
+## 3. Create shared security context
+
+Create an [organization](/organize-and-govern/organizations-and-access), invite collaborators, and assign the least privileged organization role. Use the organization as the owner for registries, policies, tokens, notifications, and release evidence that must survive individual account changes.
+
+## 4. Complete a first scan
+
+Follow [complete your first governed scan](/setup/first-scan) to configure a registry or choose another [scan source](/scan-and-analyze/scan-sources), inspect the result, and validate a policy verdict before connecting CI/CD.
+
+## 5. Connect automation
+
+Create a scoped organization token, run the [CLI](/integrations/cli) in a non-blocking pipeline first, and then add [policy rules](/organize-and-govern/policies-and-compliance) and a [CI/CD gate](/integrations/ci-cd) once the scan and recovery behavior are understood.

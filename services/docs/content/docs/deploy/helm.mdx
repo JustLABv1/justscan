@@ -1,0 +1,42 @@
+---
+title: Install with Helm
+description: Install the supported JustScan Helm chart on Kubernetes with persistent storage, ingress, and managed secrets.
+---
+
+The JustScan chart deploys the backend, frontend, documentation, and optionally PostgreSQL. It can use the bundled Bitnami PostgreSQL subchart or an external PostgreSQL service. Enable ingress to expose one hostname with `/`, `/api`, `/swagger`, and `/docs` routes.
+
+## Prerequisites
+
+- Kubernetes access through `kubectl`
+- Helm 3 with OCI registry support
+- A storage class for PostgreSQL and any enabled backend persistence
+- An ingress controller and TLS secret for a production hostname
+
+## Install the release chart
+
+```sh
+helm upgrade --install justscan oci://ghcr.io/justlabv1/charts/justscan \
+  --namespace justscan --create-namespace \
+  --set backend.secrets.jwtSecret="<32-or-more-characters>" \
+  --set backend.secrets.encryptionKey="<32-or-more-characters>" \
+  --set postgresql.auth.password="<database-password>"
+```
+
+Use a values file for production rather than putting long-lived secrets in shell history. When your platform owns secret management, set `backend.secrets.existingSecret` or the per-field `existingSecretRefs` values. Generate distinct JWT and encryption keys and keep the database password in a Kubernetes Secret.
+
+## Configure ingress and persistence
+
+Set the public application URL in `backend.config.allowOrigins`, configure `ingress.hosts` and `ingress.tls`, and choose persistent storage for PostgreSQL. The ingress annotations in `values.yaml` include the larger request-body and timeout settings required for archive uploads.
+
+With the bundled database, leave `postgresql.enabled=true` and set `postgresql.auth.password`. For an external database, set `postgresql.enabled=false`, configure `backend.config.database.server`, `name`, and `user`, and provide `backend.secrets.dbPassword` or an existing Secret reference.
+
+Pin matching backend, frontend, and documentation image tags from the same JustScan release. For Artifactory Xray-only deployments, use the `backend-minimal-<version>` image and disable Trivy and Grype in `backend.config.scanner`.
+
+## Verify and continue
+
+```bash
+kubectl get pods --namespace justscan
+helm status justscan --namespace justscan
+```
+
+Verify the public hostname returns `/`, `/docs`, `/swagger`, and `/api/v1/health`, then follow [first-time setup](/setup/quick-start) to create the initial administrator. Use the same command with the new chart version for upgrades, and review [upgrades and maintenance](/operate/upgrades-and-maintenance) before changing persistent releases.

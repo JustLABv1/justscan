@@ -19,6 +19,15 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.POST("/vulnerability-intelligence", func(c *gin.Context) {
 			admins.IngestVulnerabilityIntelligence(c, db)
 		})
+		admin.GET("/vulnerability-intelligence/history", func(c *gin.Context) {
+			admins.GetVulnerabilityIntelligenceHistory(c, db)
+		})
+		admin.POST("/vulnerability-intelligence/sync", func(c *gin.Context) {
+			admins.QueueVulnerabilityIntelligenceSync(c, db)
+		})
+		admin.POST("/vulnerability-intelligence/sync/cancel", func(c *gin.Context) {
+			admins.CancelVulnerabilityIntelligenceSync(c, db)
+		})
 		// users
 		admin.GET("/users", func(c *gin.Context) {
 			admins.GetUsers(c, db)

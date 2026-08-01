@@ -15,6 +15,10 @@ Verify `allow_origins` includes the public application URL, reverse proxy routes
 
 Inspect backend logs and scanner health. Check registry access, available worker capacity, command timeout settings, and vulnerability database refreshes.
 
+## CVE Intelligence sync is slow or failing
+
+Open [CVE Intelligence](/operate/vulnerability-intelligence) and inspect the active phase, completed/total events, unique CVEs, current CVE, last progress update, checkpoint error, and recent sync runs. The worker follows a resumable change cursor and only advances it after successful enrichment and posture evaluation. A large initial lookback or many distinct changed CVEs can take a long time because upstream requests are deliberately rate-limited. A database-column error indicates an incomplete or mismatched backend migration; stop repeated retries, resolve the migration state, and restart the backend before running the worker again.
+
 ## Registry credentials do not save
 
 Check the encryption key and backend logs. Do not rotate the key without a migration plan for existing encrypted credentials.

@@ -23,12 +23,15 @@ type VulnerabilityResponse struct {
 }
 
 type VulnerabilitySummary struct {
-	Critical   int `json:"critical"`
-	High       int `json:"high"`
-	Medium     int `json:"medium"`
-	Low        int `json:"low"`
-	WithFix    int `json:"with_fix"`
-	XrayPolicy int `json:"xray_policy"`
+	Critical            int `json:"critical"`
+	High                int `json:"high"`
+	Medium              int `json:"medium"`
+	Low                 int `json:"low"`
+	WithFix             int `json:"with_fix"`
+	XrayPolicy          int `json:"xray_policy"`
+	IntelligenceChanged int `json:"intelligence_changed"`
+	IntelligenceRescan  int `json:"intelligence_needs_rescan"`
+	IntelligenceFix     int `json:"intelligence_fix_available"`
 }
 
 func applyVulnerabilityFilters(c *gin.Context, q *bun.SelectQuery) *bun.SelectQuery {
@@ -44,25 +47,68 @@ func applyVulnerabilityFilters(c *gin.Context, q *bun.SelectQuery) *bun.SelectQu
 		switch len(values) {
 		case 0:
 		case 1:
-			q = q.Where("severity = ?", values[0])
+			q = q.Where("v.severity = ?", values[0])
 		default:
-			q = q.Where("severity IN (?)", bun.In(values))
+			q = q.Where("v.severity IN (?)", bun.In(values))
 		}
 	}
 	if pkg := c.Query("pkg"); pkg != "" {
-		q = q.Where("pkg_name ILIKE ?", "%"+pkg+"%")
+		q = q.Where("v.pkg_name ILIKE ?", "%"+pkg+"%")
 	}
 	if c.Query("has_fix") == "true" {
-		q = q.Where("fixed_version != ''")
+		q = q.Where("v.fixed_version != ''")
 	}
 	if minCVSS := c.Query("min_cvss"); minCVSS != "" {
-		q = q.Where("cvss_score >= ?", minCVSS)
+		q = q.Where("v.cvss_score >= ?", minCVSS)
+	}
+	if intelligence := strings.ToLower(strings.TrimSpace(c.Query("intelligence"))); intelligence != "" {
+		q = applyIntelligenceFilter(q, intelligence)
 	}
 	return q
 }
 
+func validateIntelligenceFilter(c *gin.Context) bool {
+	filter := strings.ToLower(strings.TrimSpace(c.Query("intelligence")))
+	if filter == "" {
+		return true
+	}
+	if _, _, ok := intelligenceFilterCondition(filter); ok {
+		return true
+	}
+	c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported intelligence filter"})
+	return false
+}
+
+func applyIntelligenceFilter(q *bun.SelectQuery, filter string) *bun.SelectQuery {
+	condition, args, ok := intelligenceFilterCondition(filter)
+	if !ok {
+		return q
+	}
+	return q.Where(condition, args...)
+}
+
+func intelligenceFilterCondition(filter string) (string, []interface{}, bool) {
+	switch filter {
+	case "changed":
+		return "EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state IS NOT NULL AND p.state <> ?)", []interface{}{models.PostureStateUnchanged}, true
+	case models.PostureStateNeedsRescan:
+		return "EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state = ?)", []interface{}{models.PostureStateNeedsRescan}, true
+	case models.PostureStateFixAvailable:
+		return "EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state = ?)", []interface{}{models.PostureStateFixAvailable}, true
+	case models.PostureStateNotAffected:
+		return "EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state = ?)", []interface{}{models.PostureStateNotAffected}, true
+	case "disputed_rejected":
+		return "EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state IN (?))", []interface{}{bun.In([]string{models.PostureStateDisputed, models.PostureStateRejected})}, true
+	default:
+		return "", nil, false
+	}
+}
+
 func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if !validateIntelligenceFilter(c) {
+			return
+		}
 		scanID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
@@ -92,8 +138,10 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 		orderExpr := vulnerabilityview.OrderExpr(c.Query("sort_by"), c.Query("sort_dir"))
 
 		var vulns []models.Vulnerability
-		q := db.NewSelect().Model(&vulns).
-			Where("scan_id = ?", scanID).
+		q := db.NewSelect().
+			TableExpr("vulnerabilities AS v").
+			ColumnExpr("v.*").
+			Where("v.scan_id = ?", scanID).
 			OrderExpr(orderExpr).
 			Limit(limit).
 			Offset(offset)
@@ -106,7 +154,7 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if err := q.Scan(c.Request.Context()); err != nil {
+		if err := q.Scan(c.Request.Context(), &vulns); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list vulnerabilities"})
 			return
 		}
@@ -196,6 +244,9 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 
 func GetVulnerabilitySummary(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if !validateIntelligenceFilter(c) {
+			return
+		}
 		scanID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
@@ -207,23 +258,26 @@ func GetVulnerabilitySummary(db *bun.DB) gin.HandlerFunc {
 		}
 
 		baseQuery := db.NewSelect().
-			TableExpr("vulnerabilities").
-			Where("scan_id = ?", scanID)
+			TableExpr("vulnerabilities AS v").
+			Where("v.scan_id = ?", scanID)
 		baseQuery = applyVulnerabilityFilters(c, baseQuery)
 
 		var summary VulnerabilitySummary
 		if err := baseQuery.
-			ColumnExpr("COUNT(*) FILTER (WHERE severity = 'CRITICAL') AS critical").
-			ColumnExpr("COUNT(*) FILTER (WHERE severity = 'HIGH') AS high").
-			ColumnExpr("COUNT(*) FILTER (WHERE severity = 'MEDIUM') AS medium").
-			ColumnExpr("COUNT(*) FILTER (WHERE severity = 'LOW') AS low").
-			ColumnExpr("COUNT(*) FILTER (WHERE fixed_version != '') AS with_fix").
+			ColumnExpr("COUNT(*) FILTER (WHERE v.severity = 'CRITICAL') AS critical").
+			ColumnExpr("COUNT(*) FILTER (WHERE v.severity = 'HIGH') AS high").
+			ColumnExpr("COUNT(*) FILTER (WHERE v.severity = 'MEDIUM') AS medium").
+			ColumnExpr("COUNT(*) FILTER (WHERE v.severity = 'LOW') AS low").
+			ColumnExpr("COUNT(*) FILTER (WHERE v.fixed_version != '') AS with_fix").
 			ColumnExpr(`COUNT(*) FILTER (
-				WHERE xray_is_blocking = true
-					OR COALESCE(xray_watch_name, '') != ''
-					OR COALESCE(jsonb_array_length(xray_watch_names), 0) > 0
-					OR COALESCE(jsonb_array_length(xray_watch_policy_matches), 0) > 0
+				WHERE v.xray_is_blocking = true
+					OR COALESCE(v.xray_watch_name, '') != ''
+					OR COALESCE(jsonb_array_length(v.xray_watch_names), 0) > 0
+					OR COALESCE(jsonb_array_length(v.xray_watch_policy_matches), 0) > 0
 			) AS xray_policy`).
+			ColumnExpr("COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state IS NOT NULL AND p.state <> ?)) AS intelligence_changed", models.PostureStateUnchanged).
+			ColumnExpr("COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state = ?)) AS intelligence_needs_rescan", models.PostureStateNeedsRescan).
+			ColumnExpr("COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state = ?)) AS intelligence_fix_available", models.PostureStateFixAvailable).
 			Scan(c.Request.Context(), &summary); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to summarize vulnerabilities"})
 			return

@@ -2,6 +2,7 @@
 import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
+import { IntelligencePolicyImpactBanner } from '@/components/scans/intelligence-policy-impact-banner';
 import { SBOMWorkspace } from '@/components/scans/sbom-workspace';
 import { ManageSuppressionAccessModal } from '@/components/suppressions/manage-suppression-access-modal';
 import { useToast } from '@/components/toast';
@@ -21,6 +22,11 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
+import {
+  INTELLIGENCE_FILTER_OPTIONS,
+  IntelligenceStatusChip,
+  type IntelligenceFilter,
+} from '@/components/vulnerability-intelligence-status';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import type {
@@ -29,6 +35,7 @@ import type {
   PolicyRule,
   ResourceShare,
   Scan,
+  ScanIntelligencePolicyImpactResponse,
   Suppression,
   Tag,
   Vulnerability,
@@ -48,6 +55,7 @@ import {
   deleteSuppressionById,
   getScan,
   getScanCompliance,
+  getScanIntelligencePolicyImpact,
   getScanSBOM,
   getScanSBOMComponent,
   getScanSBOMGraph,
@@ -55,6 +63,7 @@ import {
   getTokenType,
   getUser,
   getVulnerabilityContextAnalysis,
+  getVulnerabilityHistory,
   getVulnerabilitySummary,
   grantScanOrgAccess,
   listOrgs,
@@ -280,6 +289,9 @@ function summarizeVisibleVulnerabilities(vulnerabilities: Vulnerability[]): Vuln
     low: 0,
     with_fix: 0,
     xray_policy: 0,
+    intelligence_changed: 0,
+    intelligence_needs_rescan: 0,
+    intelligence_fix_available: 0,
   };
 
   for (const vulnerability of vulnerabilities) {
@@ -304,6 +316,16 @@ function summarizeVisibleVulnerabilities(vulnerabilities: Vulnerability[]): Vuln
     }
     if (vulnerabilityHasXrayPolicy(vulnerability)) {
       summary.xray_policy += 1;
+    }
+    const postureState = vulnerability.current_posture?.state;
+    if (postureState && postureState !== 'unchanged') {
+      summary.intelligence_changed += 1;
+    }
+    if (postureState === 'needs_rescan') {
+      summary.intelligence_needs_rescan += 1;
+    }
+    if (postureState === 'fix_available') {
+      summary.intelligence_fix_available += 1;
     }
   }
 
@@ -500,6 +522,7 @@ export default function ScanDetailPage() {
   const [cveInput, setCveInput] = useState('');
   const [minCvss, setMinCvss] = useState(0);
   const [hasFix, setHasFix] = useState(false);
+  const [intelligenceFilter, setIntelligenceFilter] = useState<IntelligenceFilter>('all');
   const [hideSuppressed, setHideSuppressed] = useState(false);
   const [xrayPolicyFirst, setXrayPolicyFirst] = useState(false);
   const [policyFailedOnly, setPolicyFailedOnly] = useState(false);
@@ -512,6 +535,7 @@ export default function ScanDetailPage() {
   const [viewPreferenceSaving, setViewPreferenceSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [vulnLoading, setVulnLoading] = useState(false);
+  const [vulnError, setVulnError] = useState('');
   const [vulnSummary, setVulnSummary] = useState<VulnerabilitySummary | null>(null);
   const [filteredVulnSummaryOverride, setFilteredVulnSummaryOverride] =
     useState<VulnerabilitySummary | null>(null);
@@ -525,6 +549,9 @@ export default function ScanDetailPage() {
   const [commentSaving, setCommentSaving] = useState(false);
 
   const [compliance, setCompliance] = useState<ComplianceResult[]>([]);
+  const [policyImpact, setPolicyImpact] = useState<ScanIntelligencePolicyImpactResponse | null>(
+    null
+  );
   const [allOrgs, setAllOrgs] = useState<Org[]>([]);
   const [complianceLoading, setComplianceLoading] = useState(false);
   const [selectedOrgToAssign, setSelectedOrgToAssign] = useState('');
@@ -624,6 +651,7 @@ export default function ScanDetailPage() {
     cveInput.trim().length > 0 ||
     cveFilter.trim().length > 0 ||
     hideSuppressed ||
+    intelligenceFilter !== 'all' ||
     !isPersistableSeverityFilter(severityFilter) ||
     hasRouteVulnerabilityFocus;
   const advancedVulnerabilityFilterCount = [
@@ -633,6 +661,7 @@ export default function ScanDetailPage() {
     hideSuppressed,
     xrayPolicyFirst,
     policyFailedOnly,
+    intelligenceFilter !== 'all',
   ].filter(Boolean).length;
   const hasActiveVulnerabilityFilters =
     Boolean(severityFilter) ||
@@ -718,6 +747,7 @@ export default function ScanDetailPage() {
       setSeverityFilter('');
       setMinCvss(0);
       setHasFix(false);
+      setIntelligenceFilter('all');
       setHideSuppressed(false);
       setXrayPolicyFirst(false);
       setPolicyFailedOnly(false);
@@ -728,6 +758,7 @@ export default function ScanDetailPage() {
       setComplianceVulnById({});
       setComplianceVulnLoaded(false);
       setComplianceVulnLoading(false);
+      setPolicyImpact(null);
       appliedRouteVulnerabilityFocusKeyRef.current = '';
     });
   }, [id]);
@@ -747,6 +778,25 @@ export default function ScanDetailPage() {
       .then(setAllOrgs)
       .catch(() => {});
   }, [id, loadScan]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (scanStatus !== 'completed') {
+      return;
+    }
+
+    getScanIntelligencePolicyImpact(id)
+      .then((response) => {
+        if (!cancelled) setPolicyImpact(response);
+      })
+      .catch(() => {
+        if (!cancelled) setPolicyImpact(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, scanStatus]);
 
   const refreshActiveScan = useCallback(() => {
     void loadScan()
@@ -951,6 +1001,7 @@ export default function ScanDetailPage() {
     if (!scan || scan.status === 'pending' || scan.status === 'running' || !viewSettingsReady)
       return;
     setVulnLoading(true);
+    setVulnError('');
     const severityParts = severityFilter
       .split(',')
       .map((part) => part.trim().toUpperCase())
@@ -963,6 +1014,7 @@ export default function ScanDetailPage() {
       minCvss || undefined,
       sortBy,
       sortDir,
+      intelligenceFilter === 'all' ? undefined : intelligenceFilter,
     ] as const;
 
     const normalizedCveFilter = cveFilter.trim().toUpperCase();
@@ -1043,7 +1095,8 @@ export default function ScanDetailPage() {
         setVulns(rows);
         setVulnTotal(res.total ?? rows.length);
       })
-      .catch(() => {
+      .catch((reason: unknown) => {
+        setVulnError(reason instanceof Error ? reason.message : 'Failed to load vulnerabilities');
         setFilteredVulnSummaryOverride(null);
       })
       .finally(() => setVulnLoading(false));
@@ -1060,6 +1113,7 @@ export default function ScanDetailPage() {
     pkgFilter,
     minCvss,
     hasFix,
+    intelligenceFilter,
     xrayPolicyFirst,
     policyFailedOnly,
     hideSuppressed,
@@ -1088,7 +1142,8 @@ export default function ScanDetailPage() {
         severityFilter || undefined,
         pkgFilter || undefined,
         hasFix || undefined,
-        minCvss || undefined
+        minCvss || undefined,
+        intelligenceFilter === 'all' ? undefined : intelligenceFilter
       )
         .then(setVulnSummary)
         .catch(() => setVulnSummary(null));
@@ -1096,6 +1151,7 @@ export default function ScanDetailPage() {
   }, [
     filteredVulnSummaryOverride,
     hasFix,
+    intelligenceFilter,
     id,
     minCvss,
     pkgFilter,
@@ -1222,6 +1278,7 @@ export default function ScanDetailPage() {
     setSeverityFilter('');
     setMinCvss(0);
     setHasFix(false);
+    setIntelligenceFilter('all');
     setHideSuppressed(false);
     setXrayPolicyFirst(false);
     setPolicyFailedOnly(false);
@@ -1231,6 +1288,7 @@ export default function ScanDetailPage() {
     params.delete('severity');
     params.delete('has_fix');
     params.delete('suppressed');
+    params.delete('intelligence');
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
@@ -2258,6 +2316,16 @@ export default function ScanDetailPage() {
         </div>
       )}
 
+      {scan.status === 'completed' && policyImpact?.has_impact ? (
+        <IntelligencePolicyImpactBanner
+          canRescan={canMutateCurrentScan && !isScanInProgress && !Boolean(rescanDisabledReason)}
+          impact={policyImpact}
+          onRescan={() => void handleReScan()}
+          rescanDisabledReason={rescanDisabledReason}
+          rescanPending={reScanning}
+        />
+      ) : null}
+
       {/* Scanner info moved to Details tab */}
 
       {/* Error banner - shown when scan failed outside the Xray policy summary */}
@@ -2383,6 +2451,11 @@ export default function ScanDetailPage() {
                 >
                   {vulnerabilitiesWithFix} fixable
                 </Button>
+                {(vulnSummary?.intelligence_changed ?? 0) > 0 ? (
+                  <Chip color="warning" size="sm" variant="soft">
+                    {vulnSummary?.intelligence_changed} intelligence updates
+                  </Chip>
+                ) : null}
                 <Dropdown>
                   <Button size="sm" variant="tertiary">
                     View
@@ -2536,6 +2609,35 @@ export default function ScanDetailPage() {
                           </SearchField.Group>
                         </SearchField>
                         <Select
+                          aria-label="Filter vulnerabilities by intelligence"
+                          value={intelligenceFilter}
+                          className="w-full"
+                          variant="secondary"
+                          onChange={(value: any) => {
+                            setIntelligenceFilter(String(value ?? 'all') as IntelligenceFilter);
+                            setPage(1);
+                          }}
+                        >
+                          <Select.Trigger className="h-11">
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {INTELLIGENCE_FILTER_OPTIONS.map((option) => (
+                                <ListBox.Item
+                                  key={option.id}
+                                  id={option.id}
+                                  textValue={option.label}
+                                >
+                                  {option.label}
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                        <Select
                           aria-label="Sort vulnerabilities by"
                           value={sortBy}
                           className="w-full"
@@ -2650,6 +2752,14 @@ export default function ScanDetailPage() {
               </div>
             </div>
           </Card.Header>
+
+          {vulnError ? (
+            <FormAlert
+              className="mx-4 mt-4"
+              title="Vulnerability triage failed to load"
+              description={vulnError}
+            />
+          ) : null}
 
           <Table variant="secondary">
             <Table.ScrollContainer>
@@ -2805,51 +2915,55 @@ export default function ScanDetailPage() {
                                 <span className="text-xs text-muted">No fix reported</span>
                               )}
                             </Table.Cell>
-                            <Table.Cell>
-                              <div className="flex min-w-[220px] flex-wrap items-center gap-1.5">
-                                <FirstSeenBadge firstSeenAt={v.first_seen_at} />
-                                {hasPolicyFailure ? (
-                                  <Tooltip delay={0}>
-                                    <Tooltip.Trigger className="inline-flex">
-                                      <Chip color="danger" size="sm" variant="soft">
-                                        Org policy failed
-                                      </Chip>
-                                    </Tooltip.Trigger>
-                                    <Tooltip.Content placement="top" showArrow>
-                                      <div className="max-w-xs space-y-2 p-0.5">
-                                        {failedPolicies.map((policy) => (
-                                          <div key={policy.name} className="space-y-1">
-                                            <p className="text-xs font-semibold text-zinc-100">
-                                              {policy.name}
-                                            </p>
-                                            {policy.ruleSummaries.length > 0 ? (
-                                              <div className="space-y-0.5">
-                                                {policy.ruleSummaries.map((rule) => (
-                                                  <p
-                                                    key={`${policy.name}-${rule}`}
-                                                    className="text-[11px] text-zinc-300"
-                                                  >
-                                                    {rule}
-                                                  </p>
-                                                ))}
-                                              </div>
-                                            ) : null}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </Tooltip.Content>
-                                  </Tooltip>
-                                ) : null}
-                                {hasXrayPolicySignal ? (
-                                  <Button
-                                    onPress={() => openXrayPolicyDetails(v)}
-                                    size="sm"
-                                    variant="danger-soft"
-                                  >
-                                    Xray {matchedXrayPolicies.length || xrayWatchCount || 1}
-                                  </Button>
-                                ) : null}
+                            <Table.Cell className="align-top">
+                              <div className="flex min-w-[250px] items-start gap-2">
+                                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                                  <IntelligenceStatusChip posture={v.current_posture} />
+                                  <FirstSeenBadge firstSeenAt={v.first_seen_at} />
+                                  {hasPolicyFailure ? (
+                                    <Tooltip delay={0}>
+                                      <Tooltip.Trigger className="inline-flex">
+                                        <Chip color="danger" size="sm" variant="soft">
+                                          Org policy failed
+                                        </Chip>
+                                      </Tooltip.Trigger>
+                                      <Tooltip.Content placement="top" showArrow>
+                                        <div className="max-w-xs space-y-2 p-0.5">
+                                          {failedPolicies.map((policy) => (
+                                            <div key={policy.name} className="space-y-1">
+                                              <p className="text-xs font-semibold text-zinc-100">
+                                                {policy.name}
+                                              </p>
+                                              {policy.ruleSummaries.length > 0 ? (
+                                                <div className="space-y-0.5">
+                                                  {policy.ruleSummaries.map((rule) => (
+                                                    <p
+                                                      key={`${policy.name}-${rule}`}
+                                                      className="text-[11px] text-zinc-300"
+                                                    >
+                                                      {rule}
+                                                    </p>
+                                                  ))}
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </Tooltip.Content>
+                                    </Tooltip>
+                                  ) : null}
+                                  {hasXrayPolicySignal ? (
+                                    <Button
+                                      onPress={() => openXrayPolicyDetails(v)}
+                                      size="sm"
+                                      variant="danger-soft"
+                                    >
+                                      Xray {matchedXrayPolicies.length || xrayWatchCount || 1}
+                                    </Button>
+                                  ) : null}
+                                </div>
                                 <Button
+                                  className="shrink-0 whitespace-nowrap"
                                   onPress={() => {
                                     setExpandedVuln(expandedVuln === v.id ? null : v.id);
                                     setCommentText('');
@@ -4088,6 +4202,7 @@ export default function ScanDetailPage() {
         loadContextAnalysis={(vulnerability) =>
           getVulnerabilityContextAnalysis(id, vulnerability.id)
         }
+        loadHistory={(vulnerability) => getVulnerabilityHistory(id, vulnerability.id)}
       />
       {confirmDialog}
 

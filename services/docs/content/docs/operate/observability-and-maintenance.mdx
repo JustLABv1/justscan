@@ -13,6 +13,12 @@ Treat JustScan as a release-decision service once CI depends on policy outcomes.
 - **Notifications:** test channels and inspect delivery logs and queued delivery state after configuration changes.
 - **Audit records:** review organization and administrator activity when investigating access, ownership, policy, or token changes.
 
+## CVE Intelligence health
+
+Review [CVE Intelligence](/operate/vulnerability-intelligence) after enabling the feature and whenever a security feed incident is suspected. The admin page exposes the last successful checkpoint, retry state, recent sync runs, and live progress for an active run. Watch the completed/total event count and the last progress timestamp, not only the running badge: source events can continue appearing while current-record enrichment is still in progress.
+
+Keep the initial lookback bounded in production. The worker follows a resumable NVD change cursor and does not enumerate every Vulnerability Knowledge Base entry during normal operation. A newly created or widened checkpoint can still create a large upstream backlog, so inspect the current CVE, unique-CVE count, backend logs, and NVD response errors before changing the interval or retrying manually.
+
 ## Planned maintenance
 
 Use the administration maintenance setting to communicate planned work to application users. Before an upgrade, capture backups, pin the target release tags, and tell CI owners whether the policy gate should be temporarily non-blocking. After the change, verify health, authentication, a registry connection, a representative scan, and notification delivery.

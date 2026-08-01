@@ -22,9 +22,10 @@ const (
 	NotificationScopeOrg    = "org"
 	NotificationScopeUser   = "user"
 
-	NotificationEventScanComplete     = "scan_complete"
-	NotificationEventScanFailed       = "scan_failed"
-	NotificationEventComplianceFailed = "compliance_failed"
+	NotificationEventScanComplete             = "scan_complete"
+	NotificationEventScanFailed               = "scan_failed"
+	NotificationEventComplianceFailed         = "compliance_failed"
+	NotificationEventIntelligencePolicyImpact = "intelligence_policy_impact"
 
 	NotificationDeliveryModeImmediate = "immediate"
 	NotificationDeliveryModeDigest    = "digest"
@@ -121,6 +122,7 @@ type NotificationEvent struct {
 	ID         uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
 	Event      string     `bun:"event,type:text,notnull" json:"event"`
 	ScanID     *uuid.UUID `bun:"scan_id,type:uuid" json:"scan_id,omitempty"`
+	DedupeKey  string     `bun:"dedupe_key,type:text" json:"dedupe_key,omitempty"`
 	Payload    JSONObject `bun:"payload,type:jsonb,notnull,default:'{}'" json:"payload"`
 	MatchedAt  *time.Time `bun:"matched_at,type:timestamptz" json:"matched_at,omitempty"`
 	CreatedAt  time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
@@ -130,51 +132,51 @@ type NotificationEvent struct {
 type NotificationQueueJob struct {
 	bun.BaseModel `bun:"table:notification_queue_jobs"`
 
-	ID              uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
-	EventID         *uuid.UUID `bun:"event_id,type:uuid" json:"event_id,omitempty"`
-	RuleID          uuid.UUID  `bun:"rule_id,type:uuid,notnull" json:"rule_id"`
-	ChannelID       uuid.UUID  `bun:"channel_id,type:uuid,notnull" json:"channel_id"`
-	DigestID        *uuid.UUID `bun:"digest_id,type:uuid" json:"digest_id,omitempty"`
-	ScopeType       string     `bun:"scope_type,type:text,notnull" json:"scope_type"`
-	ScopeRef        string     `bun:"scope_ref,type:text,notnull,default:''" json:"scope_ref"`
-	DeliveryMode    string     `bun:"delivery_mode,type:text,notnull,default:'immediate'" json:"delivery_mode"`
-	Status          string     `bun:"status,type:text,notnull,default:'pending'" json:"status"`
-	AttemptCount    int        `bun:"attempt_count,type:int,notnull,default:0" json:"attempt_count"`
-	MaxAttempts     int        `bun:"max_attempts,type:int,notnull,default:5" json:"max_attempts"`
-	NextAttemptAt   time.Time  `bun:"next_attempt_at,type:timestamptz,notnull,default:now()" json:"next_attempt_at"`
-	LeaseOwner      string     `bun:"lease_owner,type:text,notnull,default:''" json:"lease_owner"`
-	LeasedUntil     *time.Time `bun:"leased_until,type:timestamptz" json:"leased_until,omitempty"`
-	IdempotencyKey  string     `bun:"idempotency_key,type:text,notnull" json:"idempotency_key"`
-	Payload         JSONObject `bun:"payload,type:jsonb,notnull,default:'{}'" json:"payload"`
-	LastError       string     `bun:"last_error,type:text,notnull,default:''" json:"last_error"`
-	LastAttemptAt   *time.Time `bun:"last_attempt_at,type:timestamptz" json:"last_attempt_at,omitempty"`
-	DeliveredAt     *time.Time `bun:"delivered_at,type:timestamptz" json:"delivered_at,omitempty"`
-	CreatedAt       time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
-	UpdatedAt       time.Time  `bun:"updated_at,type:timestamptz,default:now()" json:"updated_at"`
-	ChannelName     string     `bun:"channel_name,scanonly" json:"channel_name,omitempty"`
-	RuleName        string     `bun:"rule_name,scanonly" json:"rule_name,omitempty"`
+	ID             uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	EventID        *uuid.UUID `bun:"event_id,type:uuid" json:"event_id,omitempty"`
+	RuleID         uuid.UUID  `bun:"rule_id,type:uuid,notnull" json:"rule_id"`
+	ChannelID      uuid.UUID  `bun:"channel_id,type:uuid,notnull" json:"channel_id"`
+	DigestID       *uuid.UUID `bun:"digest_id,type:uuid" json:"digest_id,omitempty"`
+	ScopeType      string     `bun:"scope_type,type:text,notnull" json:"scope_type"`
+	ScopeRef       string     `bun:"scope_ref,type:text,notnull,default:''" json:"scope_ref"`
+	DeliveryMode   string     `bun:"delivery_mode,type:text,notnull,default:'immediate'" json:"delivery_mode"`
+	Status         string     `bun:"status,type:text,notnull,default:'pending'" json:"status"`
+	AttemptCount   int        `bun:"attempt_count,type:int,notnull,default:0" json:"attempt_count"`
+	MaxAttempts    int        `bun:"max_attempts,type:int,notnull,default:5" json:"max_attempts"`
+	NextAttemptAt  time.Time  `bun:"next_attempt_at,type:timestamptz,notnull,default:now()" json:"next_attempt_at"`
+	LeaseOwner     string     `bun:"lease_owner,type:text,notnull,default:''" json:"lease_owner"`
+	LeasedUntil    *time.Time `bun:"leased_until,type:timestamptz" json:"leased_until,omitempty"`
+	IdempotencyKey string     `bun:"idempotency_key,type:text,notnull" json:"idempotency_key"`
+	Payload        JSONObject `bun:"payload,type:jsonb,notnull,default:'{}'" json:"payload"`
+	LastError      string     `bun:"last_error,type:text,notnull,default:''" json:"last_error"`
+	LastAttemptAt  *time.Time `bun:"last_attempt_at,type:timestamptz" json:"last_attempt_at,omitempty"`
+	DeliveredAt    *time.Time `bun:"delivered_at,type:timestamptz" json:"delivered_at,omitempty"`
+	CreatedAt      time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	UpdatedAt      time.Time  `bun:"updated_at,type:timestamptz,default:now()" json:"updated_at"`
+	ChannelName    string     `bun:"channel_name,scanonly" json:"channel_name,omitempty"`
+	RuleName       string     `bun:"rule_name,scanonly" json:"rule_name,omitempty"`
 }
 
 type NotificationDigest struct {
 	bun.BaseModel `bun:"table:notification_digests"`
 
-	ID                  uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
-	RuleID              uuid.UUID  `bun:"rule_id,type:uuid,notnull" json:"rule_id"`
-	ChannelID           uuid.UUID  `bun:"channel_id,type:uuid,notnull" json:"channel_id"`
-	ScopeType           string     `bun:"scope_type,type:text,notnull" json:"scope_type"`
-	ScopeRef            string     `bun:"scope_ref,type:text,notnull,default:''" json:"scope_ref"`
-	WindowStart         time.Time  `bun:"window_start,type:timestamptz,notnull" json:"window_start"`
-	WindowEnd           time.Time  `bun:"window_end,type:timestamptz,notnull" json:"window_end"`
-	Status              string     `bun:"status,type:text,notnull,default:'open'" json:"status"`
-	EventIDs            StringList `bun:"event_ids,type:jsonb,notnull,default:'[]'" json:"event_ids"`
-	EventCount          int        `bun:"event_count,type:int,notnull,default:0" json:"event_count"`
-	LastEventAt         *time.Time `bun:"last_event_at,type:timestamptz" json:"last_event_at,omitempty"`
-	QueueJobID          *uuid.UUID `bun:"queue_job_id,type:uuid" json:"queue_job_id,omitempty"`
-	DeliveredAt         *time.Time `bun:"delivered_at,type:timestamptz" json:"delivered_at,omitempty"`
-	CreatedAt           time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
-	UpdatedAt           time.Time  `bun:"updated_at,type:timestamptz,default:now()" json:"updated_at"`
-	RuleName            string     `bun:"rule_name,scanonly" json:"rule_name,omitempty"`
-	ChannelName         string     `bun:"channel_name,scanonly" json:"channel_name,omitempty"`
+	ID          uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	RuleID      uuid.UUID  `bun:"rule_id,type:uuid,notnull" json:"rule_id"`
+	ChannelID   uuid.UUID  `bun:"channel_id,type:uuid,notnull" json:"channel_id"`
+	ScopeType   string     `bun:"scope_type,type:text,notnull" json:"scope_type"`
+	ScopeRef    string     `bun:"scope_ref,type:text,notnull,default:''" json:"scope_ref"`
+	WindowStart time.Time  `bun:"window_start,type:timestamptz,notnull" json:"window_start"`
+	WindowEnd   time.Time  `bun:"window_end,type:timestamptz,notnull" json:"window_end"`
+	Status      string     `bun:"status,type:text,notnull,default:'open'" json:"status"`
+	EventIDs    StringList `bun:"event_ids,type:jsonb,notnull,default:'[]'" json:"event_ids"`
+	EventCount  int        `bun:"event_count,type:int,notnull,default:0" json:"event_count"`
+	LastEventAt *time.Time `bun:"last_event_at,type:timestamptz" json:"last_event_at,omitempty"`
+	QueueJobID  *uuid.UUID `bun:"queue_job_id,type:uuid" json:"queue_job_id,omitempty"`
+	DeliveredAt *time.Time `bun:"delivered_at,type:timestamptz" json:"delivered_at,omitempty"`
+	CreatedAt   time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	UpdatedAt   time.Time  `bun:"updated_at,type:timestamptz,default:now()" json:"updated_at"`
+	RuleName    string     `bun:"rule_name,scanonly" json:"rule_name,omitempty"`
+	ChannelName string     `bun:"channel_name,scanonly" json:"channel_name,omitempty"`
 }
 
 type NotificationDelivery struct {

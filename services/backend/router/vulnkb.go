@@ -13,5 +13,7 @@ func VulnKB(router *gin.RouterGroup, db *bun.DB) {
 	{
 		kb.GET("/", vulnkb.ListKBEntries(db))
 		kb.GET("/:vulnId", vulnkb.GetKBEntry(db))
+		kb.GET("/:vulnId/history", vulnkb.GetKBHistory(db))
+		kb.GET("/:vulnId/exposure", vulnkb.GetKBExposure(db))
 	}
 }

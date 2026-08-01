@@ -3,6 +3,7 @@ package vulnkb
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"justscan-backend/pkg/models"
 
@@ -20,6 +21,10 @@ func GetKBEntry(db *bun.DB) gin.HandlerFunc {
 		entry := &models.VulnKBEntry{}
 		if err := db.NewSelect().Model(entry).Where("vuln_id = ?", vulnID).Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "no KB entry found"})
+			return
+		}
+		if err := hydrateKBHistorySummary(c, db, []*models.VulnKBEntry{entry}); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load KB history summary"})
 			return
 		}
 		c.JSON(http.StatusOK, entry)
@@ -76,6 +81,93 @@ func ListKBEntries(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query KB"})
 			return
 		}
+		entryPointers := make([]*models.VulnKBEntry, len(entries))
+		for i := range entries {
+			entryPointers[i] = &entries[i]
+		}
+		if err := hydrateKBHistorySummary(c, db, entryPointers); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load KB history summary"})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{"data": entries, "total": total})
 	}
+}
+
+type kbHistorySummaryRow struct {
+	VulnID            string     `bun:"vuln_id"`
+	HistoryEventCount int        `bun:"history_event_count"`
+	LastChangeAt      *time.Time `bun:"last_change_at"`
+}
+
+type kbLastChangeRow struct {
+	VulnID           string    `bun:"vuln_id"`
+	EventName        string    `bun:"event_name"`
+	Source           string    `bun:"source"`
+	SourceIdentifier string    `bun:"source_identifier"`
+	ObservedAt       time.Time `bun:"observed_at"`
+}
+
+func hydrateKBHistorySummary(c *gin.Context, db *bun.DB, entries []*models.VulnKBEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	vulnIDs := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry != nil && entry.VulnID != "" {
+			vulnIDs = append(vulnIDs, entry.VulnID)
+		}
+	}
+	if len(vulnIDs) == 0 {
+		return nil
+	}
+
+	var rows []kbHistorySummaryRow
+	if err := db.NewSelect().
+		TableExpr("vulnerability_intelligence_change_events").
+		ColumnExpr("vuln_id, COUNT(*) AS history_event_count, MAX(observed_at) AS last_change_at").
+		Where("vuln_id IN (?)", bun.In(vulnIDs)).
+		GroupExpr("vuln_id").
+		Scan(c.Request.Context(), &rows); err != nil {
+		return err
+	}
+
+	byVulnID := make(map[string]kbHistorySummaryRow, len(rows))
+	for _, row := range rows {
+		byVulnID[row.VulnID] = row
+	}
+
+	var latestRows []kbLastChangeRow
+	if err := db.NewSelect().
+		TableExpr("vulnerability_intelligence_change_events").
+		ColumnExpr("vuln_id, event_name, source, source_identifier, observed_at").
+		Where("vuln_id IN (?)", bun.In(vulnIDs)).
+		DistinctOn("vuln_id").
+		OrderExpr("vuln_id, observed_at DESC, id DESC").
+		Scan(c.Request.Context(), &latestRows); err != nil {
+		return err
+	}
+	latestByVulnID := make(map[string]kbLastChangeRow, len(latestRows))
+	for _, row := range latestRows {
+		latestByVulnID[row.VulnID] = row
+	}
+
+	for _, entry := range entries {
+		if entry == nil {
+			continue
+		}
+		if row, ok := byVulnID[entry.VulnID]; ok {
+			entry.HistoryEventCount = row.HistoryEventCount
+			entry.LastChangeAt = row.LastChangeAt
+		}
+		if row, ok := latestByVulnID[entry.VulnID]; ok {
+			entry.LastChange = &models.KBLastChange{
+				EventName:        row.EventName,
+				Source:           row.Source,
+				SourceIdentifier: row.SourceIdentifier,
+				ObservedAt:       row.ObservedAt,
+			}
+		}
+	}
+	return nil
 }

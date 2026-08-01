@@ -77,8 +77,11 @@ type EncryptionConf struct {
 }
 
 type VulnKBConf struct {
-	NVDApiKey string `mapstructure:"nvd_api_key"`
-	CacheDays int    `mapstructure:"cache_days"`
+	NVDApiKey                      string `mapstructure:"nvd_api_key"`
+	CacheDays                      int    `mapstructure:"cache_days"`
+	CVEHistoryEnabled              bool   `mapstructure:"cve_history_enabled"`
+	CVEHistoryIntervalMinutes      int    `mapstructure:"cve_history_interval_minutes"`
+	CVEHistoryInitialLookbackHours int    `mapstructure:"cve_history_initial_lookback_hours"`
 }
 
 type DatabaseConf struct {
@@ -117,38 +120,43 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 
 	// Bind specific environment variables
 	envBindings := map[string]string{
-		"log_level":                            "BACKEND_LOG_LEVEL",
-		"port":                                 "BACKEND_PORT",
-		"database.server":                      "BACKEND_DATABASE_SERVER",
-		"database.port":                        "BACKEND_DATABASE_PORT",
-		"database.name":                        "BACKEND_DATABASE_NAME",
-		"database.user":                        "BACKEND_DATABASE_USER",
-		"database.password":                    "BACKEND_DATABASE_PASSWORD",
-		"ai.enabled":                           "BACKEND_AI_ENABLED",
-		"ai.allow_anonymous":                   "BACKEND_AI_ALLOW_ANONYMOUS",
-		"ai.default_provider_key":              "BACKEND_AI_DEFAULT_PROVIDER_KEY",
-		"ai.default_timeout_seconds":           "BACKEND_AI_DEFAULT_TIMEOUT_SECONDS",
-		"ai.max_context_results":               "BACKEND_AI_MAX_CONTEXT_RESULTS",
-		"scanner.enable_trivy":                 "BACKEND_SCANNER_ENABLE_TRIVY",
-		"scanner.trivy_path":                   "BACKEND_SCANNER_TRIVY_PATH",
-		"scanner.grype_path":                   "BACKEND_SCANNER_GRYPE_PATH",
-		"scanner.enable_grype":                 "BACKEND_SCANNER_ENABLE_GRYPE",
-		"scanner.timeout":                      "BACKEND_SCANNER_TIMEOUT",
-		"scanner.command_timeout_seconds":      "BACKEND_SCANNER_COMMAND_TIMEOUT_SECONDS",
-		"scanner.progress_heartbeat_seconds":   "BACKEND_SCANNER_PROGRESS_HEARTBEAT_SECONDS",
-		"scanner.stale_timeout_seconds":        "BACKEND_SCANNER_STALE_TIMEOUT_SECONDS",
-		"scanner.concurrency":                  "BACKEND_SCANNER_CONCURRENCY",
-		"scanner.db_max_age_hours":             "BACKEND_SCANNER_DB_MAX_AGE_HOURS",
-		"scanner.enable_osv_java_augmentation": "BACKEND_SCANNER_ENABLE_OSV_JAVA_AUGMENTATION",
-		"data_path":                            "BACKEND_DATA_PATH",
-		"encryption.key":                       "BACKEND_ENCRYPTION_KEY",
-		"encryption.master_secret":             "BACKEND_ENCRYPTION_MASTER_SECRET",
-		"jwt.secret":                           "BACKEND_JWT_SECRET",
-		"security.allow_insecure_defaults":     "BACKEND_SECURITY_ALLOW_INSECURE_DEFAULTS",
-		"security.callback_allowed_hosts":      "BACKEND_SECURITY_CALLBACK_ALLOWED_HOSTS",
-		"security.callback_allowed_cidrs":      "BACKEND_SECURITY_CALLBACK_ALLOWED_CIDRS",
-		"runner.shared_runner_secret":          "BACKEND_RUNNER_SHARED_RUNNER_SECRET",
-		"local_auth.enabled":                   "BACKEND_LOCAL_AUTH_ENABLED",
+		"log_level":                                  "BACKEND_LOG_LEVEL",
+		"port":                                       "BACKEND_PORT",
+		"database.server":                            "BACKEND_DATABASE_SERVER",
+		"database.port":                              "BACKEND_DATABASE_PORT",
+		"database.name":                              "BACKEND_DATABASE_NAME",
+		"database.user":                              "BACKEND_DATABASE_USER",
+		"database.password":                          "BACKEND_DATABASE_PASSWORD",
+		"ai.enabled":                                 "BACKEND_AI_ENABLED",
+		"ai.allow_anonymous":                         "BACKEND_AI_ALLOW_ANONYMOUS",
+		"ai.default_provider_key":                    "BACKEND_AI_DEFAULT_PROVIDER_KEY",
+		"ai.default_timeout_seconds":                 "BACKEND_AI_DEFAULT_TIMEOUT_SECONDS",
+		"ai.max_context_results":                     "BACKEND_AI_MAX_CONTEXT_RESULTS",
+		"scanner.enable_trivy":                       "BACKEND_SCANNER_ENABLE_TRIVY",
+		"scanner.trivy_path":                         "BACKEND_SCANNER_TRIVY_PATH",
+		"scanner.grype_path":                         "BACKEND_SCANNER_GRYPE_PATH",
+		"scanner.enable_grype":                       "BACKEND_SCANNER_ENABLE_GRYPE",
+		"scanner.timeout":                            "BACKEND_SCANNER_TIMEOUT",
+		"scanner.command_timeout_seconds":            "BACKEND_SCANNER_COMMAND_TIMEOUT_SECONDS",
+		"scanner.progress_heartbeat_seconds":         "BACKEND_SCANNER_PROGRESS_HEARTBEAT_SECONDS",
+		"scanner.stale_timeout_seconds":              "BACKEND_SCANNER_STALE_TIMEOUT_SECONDS",
+		"scanner.concurrency":                        "BACKEND_SCANNER_CONCURRENCY",
+		"scanner.db_max_age_hours":                   "BACKEND_SCANNER_DB_MAX_AGE_HOURS",
+		"scanner.enable_osv_java_augmentation":       "BACKEND_SCANNER_ENABLE_OSV_JAVA_AUGMENTATION",
+		"data_path":                                  "BACKEND_DATA_PATH",
+		"encryption.key":                             "BACKEND_ENCRYPTION_KEY",
+		"encryption.master_secret":                   "BACKEND_ENCRYPTION_MASTER_SECRET",
+		"jwt.secret":                                 "BACKEND_JWT_SECRET",
+		"security.allow_insecure_defaults":           "BACKEND_SECURITY_ALLOW_INSECURE_DEFAULTS",
+		"security.callback_allowed_hosts":            "BACKEND_SECURITY_CALLBACK_ALLOWED_HOSTS",
+		"security.callback_allowed_cidrs":            "BACKEND_SECURITY_CALLBACK_ALLOWED_CIDRS",
+		"runner.shared_runner_secret":                "BACKEND_RUNNER_SHARED_RUNNER_SECRET",
+		"local_auth.enabled":                         "BACKEND_LOCAL_AUTH_ENABLED",
+		"vuln_kb.nvd_api_key":                        "BACKEND_VULN_KB_NVD_API_KEY",
+		"vuln_kb.cache_days":                         "BACKEND_VULN_KB_CACHE_DAYS",
+		"vuln_kb.cve_history_enabled":                "BACKEND_VULN_KB_CVE_HISTORY_ENABLED",
+		"vuln_kb.cve_history_interval_minutes":       "BACKEND_VULN_KB_CVE_HISTORY_INTERVAL_MINUTES",
+		"vuln_kb.cve_history_initial_lookback_hours": "BACKEND_VULN_KB_CVE_HISTORY_INITIAL_LOOKBACK_HOURS",
 	}
 
 	for configKey, envVar := range envBindings {
@@ -250,6 +258,15 @@ func (cm *ConfigurationManager) setDefaults(config *RestfulConf) {
 		config.Scanner.DBMaxAgeHours = 24
 	}
 	config.Scanner.EnableOSVJavaAugmentation = true
+	if !cm.viper.IsSet("vuln_kb.cve_history_enabled") {
+		config.VulnKB.CVEHistoryEnabled = true
+	}
+	if config.VulnKB.CVEHistoryIntervalMinutes == 0 {
+		config.VulnKB.CVEHistoryIntervalMinutes = 120
+	}
+	if config.VulnKB.CVEHistoryInitialLookbackHours == 0 {
+		config.VulnKB.CVEHistoryInitialLookbackHours = 24
+	}
 	// Local auth is enabled by default
 	if !cm.viper.IsSet("local_auth.enabled") {
 		config.LocalAuth.Enabled = true

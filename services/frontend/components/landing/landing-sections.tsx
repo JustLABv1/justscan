@@ -1,3 +1,5 @@
+'use client';
+
 import { Logo } from '@/components/logo';
 import { LandingButtonLink, LandingThemeToggle } from '@/components/landing/landing-controls';
 import { LandingGlitchHero } from '@/components/landing/landing-glitch-hero';

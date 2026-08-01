@@ -1,3 +1,5 @@
+'use client';
+
 import { LandingButtonLink } from '@/components/landing/landing-controls';
 import { LandingFaq } from '@/components/landing/landing-faq';
 import { LandingReveal } from '@/components/landing/landing-motion';

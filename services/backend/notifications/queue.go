@@ -90,10 +90,15 @@ func PublishEvent(ctx context.Context, db *bun.DB, event string, payload Payload
 	entry := &models.NotificationEvent{
 		Event:      payload.Event,
 		ScanID:     scanID,
+		DedupeKey:  strings.TrimSpace(payload.DedupeKey),
 		Payload:    rawPayload,
 		OccurredAt: payload.Timestamp,
 	}
-	_, err = db.NewInsert().Model(entry).Exec(ctx)
+	insert := db.NewInsert().Model(entry)
+	if entry.DedupeKey != "" {
+		insert = insert.On("CONFLICT (dedupe_key) WHERE dedupe_key <> '' DO NOTHING")
+	}
+	_, err = insert.Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("insert notification event: %w", err)
 	}
@@ -208,6 +213,9 @@ func matchPendingEvents(ctx context.Context, db *bun.DB, limit int) error {
 		}
 
 		for _, rule := range rules {
+			if !notificationScopeMatches(rule, payload) {
+				continue
+			}
 			if !ruleMatches(rule, payload) {
 				continue
 			}
@@ -235,6 +243,31 @@ func matchPendingEvents(ctx context.Context, db *bun.DB, limit int) error {
 	}
 
 	return nil
+}
+
+func notificationScopeMatches(rule models.NotificationRule, payload Payload) bool {
+	scopeRef := strings.TrimSpace(rule.ScopeRef)
+	switch rule.ScopeType {
+	case models.NotificationScopeUser:
+		return containsString(payload.UserIDs, scopeRef)
+	case models.NotificationScopeOrg:
+		return containsString(payload.OrgIDs, scopeRef)
+	default:
+		return true
+	}
+}
+
+func containsString(values []string, target string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return false
+	}
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), target) {
+			return true
+		}
+	}
+	return false
 }
 
 func queueMatch(ctx context.Context, db *bun.DB, event models.NotificationEvent, payload Payload, rule models.NotificationRule, channel models.NotificationChannel) error {

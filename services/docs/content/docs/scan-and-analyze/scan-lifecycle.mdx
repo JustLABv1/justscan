@@ -14,6 +14,8 @@ Every JustScan workflow follows the same decision path: identify an artifact, su
 3. **Evidence:** completed scans expose findings, package details, available SBOM data, policy context, comments, and comparisons.
 4. **Verdict:** organization policy evaluates the completed evidence. A policy failure is distinct from an operational or scan-execution error.
 
+The verdict is immutable scan-time evidence. Later CVE Intelligence updates can produce a separate current policy projection for an authorized completed scan, but they never rewrite the original finding, compliance result, compliance history, or scan status. A rejected or not-affected CVE can resolve the current projection, while disputed, unknown, incomplete, or conflicting intelligence conservatively holds the failure as **needs validation**. Review the Scan Details banner and run a confirming rescan before treating any current projection as authoritative.
+
 ## Choose the source deliberately
 
 Use a registry image when JustScan can authenticate to the registry; use CLI local-image or archive mode for unpublished build outputs; use Helm for rendered chart workloads; and use GitOps discovery for continuously managed deployment repositories. See [scan sources](/getting-started/scan-sources) for the selection table.

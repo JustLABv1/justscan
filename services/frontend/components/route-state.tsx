@@ -1,3 +1,5 @@
+'use client';
+
 import { Alert, Button, Card } from '@heroui/react';
 import { AlertCircleIcon, ArrowLeft01Icon, RefreshIcon } from 'hugeicons-react';
 import Link from 'next/link';

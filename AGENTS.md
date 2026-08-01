@@ -17,10 +17,11 @@ When working in this repository, prefer small, local changes that fit the existi
 - `services/backend/handlers/`: HTTP handlers grouped by domain
 - `services/backend/functions/`: business logic and service-layer helpers
 - `services/backend/database/`: migrations and database bootstrap
+- `services/backend/docs/openapi.go`: backend OpenAPI source; keep it separate from the user-facing docs site
 - `services/frontend/app/`: Next.js routes, layouts, and page-level screens
 - `services/frontend/components/`: reusable UI and app shell components
 - `services/frontend/components/ui/`: shared frontend primitives and wrappers
-- `docs/superpowers/specs/`: product and implementation design documents
+- `services/docs/content/docs/`: user-facing MDX documentation and navigation metadata
 
 ## Working Style
 
@@ -61,8 +62,10 @@ If a change touches both frontend and backend contracts, validate both sides.
 
 ## Documentation
 
-- Update README or nearby docs when behavior, setup, configuration, or operator-facing flows change.
-- Put substantial feature or redesign specs in `docs/superpowers/specs/`.
+- User-facing documentation lives in `services/docs/content/docs/`; update the nearest guide and its `meta.json` navigation entry when adding a feature or changing an operator workflow.
+- Update the relevant reference page when configuration, API behavior, data contracts, migration requirements, or other breaking behavior changes. Cross-link feature guides from scan, operations, and troubleshooting pages when users can encounter the feature from those paths.
+- Validate documentation changes from `services/docs` with `pnpm lint`, `pnpm check:links`, `pnpm format:check`, and `pnpm build` as appropriate for the change.
+- Do not create a new root `./docs` folder for user documentation. The backend `services/backend/docs` directory contains OpenAPI source and must be preserved.
 - Keep AGENT-facing guidance concrete and repo-specific; avoid generic advice that does not help with JustScan.
 
 <!-- HEROUI-REACT-AGENTS-MD-START -->

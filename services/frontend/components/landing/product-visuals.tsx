@@ -1,3 +1,5 @@
+'use client';
+
 import { Card, Chip, Separator } from '@heroui/react';
 import { Clock01Icon, PackageIcon, Search01Icon, Shield01Icon } from 'hugeicons-react';
 

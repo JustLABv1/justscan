@@ -42,6 +42,9 @@ encryption:
 vuln_kb:
   nvd_api_key: ""
   cache_days: 7
+  cve_history_enabled: true
+  cve_history_interval_minutes: 120
+  cve_history_initial_lookback_hours: 24
 
 local_auth:
   enabled: true

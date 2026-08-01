@@ -248,9 +248,10 @@ func TestLatestEvidenceForFindingPrefersFeedAndPackageSpecificRecords(t *testing
 
 func TestDerivePostureCarriesFeedEvidenceFields(t *testing.T) {
 	finding := models.Vulnerability{
-		ID:       uuid.New(),
-		ScanID:   uuid.New(),
-		Severity: models.SeverityMedium,
+		ID:               uuid.New(),
+		ScanID:           uuid.New(),
+		Severity:         models.SeverityMedium,
+		InstalledVersion: "1.1.0",
 	}
 	ranges := []models.JSONObject{{"introduced": "1.0.0", "fixed": "1.2.0"}}
 	exploits := []models.JSONObject{{"type": "known_exploit", "available": true}}

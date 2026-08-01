@@ -139,8 +139,13 @@ function DynamicSingleValueControl({
   const stringValue = Array.isArray(value) ? (value[0] ?? '') : value;
   const selectedOption = options.find((option) => option.value === stringValue);
   const [inputValue, setInputValue] = useState(selectedOption?.label ?? stringValue);
+  const [customInputValue, setCustomInputValue] = useState<string | null>(null);
   const displayInputValue =
-    inputValue === stringValue ? (selectedOption?.label ?? stringValue) : inputValue;
+    customInputValue !== null && customInputValue === stringValue
+      ? customInputValue
+      : inputValue === stringValue
+        ? (selectedOption?.label ?? stringValue)
+        : inputValue;
 
   useEffect(() => {
     onLookup('');
@@ -155,6 +160,7 @@ function DynamicSingleValueControl({
       selectedKey={stringValue || null}
       onInputChange={(nextInput) => {
         setInputValue(nextInput);
+        setCustomInputValue(allowsCustom ? nextInput : null);
         onLookup(nextInput);
         if (allowsCustom) onChange(nextInput);
       }}
@@ -164,6 +170,7 @@ function DynamicSingleValueControl({
         const selected = options.find((option) => option.value === selectedValue);
         onChange(selectedValue);
         setInputValue(selected?.label ?? selectedValue);
+        setCustomInputValue(null);
       }}
     >
       <Label className={fieldLabelClassName}>{definition.label}</Label>
@@ -216,21 +223,30 @@ function DynamicMultiValueControl({
     () => selectedValues.map((selectedValue) => ({ id: selectedValue, value: selectedValue })),
     [selectedValues]
   );
+  const selectedValueSet = useMemo(() => new Set(selectedValues), [selectedValues]);
   const [inputValue, setInputValue] = useState('');
+  const [customValues, setCustomValues] = useState<string[]>([]);
   const availableOptions = useMemo(
-    () => options.filter((option) => !selectedValues.includes(option.value)),
-    [options, selectedValues]
+    () => options.filter((option) => !selectedValueSet.has(option.value)),
+    [options, selectedValueSet]
   );
 
   useEffect(() => {
     onLookup('');
   }, [onLookup]);
 
-  const addValue = (nextValue: string | Key | null) => {
+  const addValue = (nextValue: string | Key | null, isCustom = false) => {
     if (nextValue == null) return;
     const trimmed = String(nextValue).trim();
-    if (!trimmed || selectedValues.includes(trimmed)) return;
+    if (!trimmed || selectedValueSet.has(trimmed)) return;
     onChange([...selectedValues, trimmed]);
+    setCustomValues((current) =>
+      isCustom
+        ? current.includes(trimmed)
+          ? current
+          : [...current, trimmed]
+        : current.filter((item) => item !== trimmed)
+    );
     setInputValue('');
     onLookup('');
   };
@@ -240,7 +256,10 @@ function DynamicMultiValueControl({
       <TagGroup
         aria-label={`${definition.label} selected values`}
         selectionMode="none"
-        onRemove={(keys) => onChange(selectedValues.filter((item) => !keys.has(item)))}
+        onRemove={(keys) => {
+          onChange(selectedValues.filter((item) => !keys.has(item)));
+          setCustomValues((current) => current.filter((item) => !keys.has(item)));
+        }}
       >
         <TagGroup.List
           items={tagItems}
@@ -251,10 +270,11 @@ function DynamicMultiValueControl({
         >
           {(tagItem) => {
             const option = options.find((item) => item.value === tagItem.value);
+            const isCustom = customValues.includes(tagItem.value);
             return (
               <Tag key={tagItem.id} id={tagItem.id} textValue={tagItem.value} variant="surface">
-                {option?.legacy ? '⚠ ' : ''}
-                {option?.label ?? tagItem.value}
+                {option?.legacy && !isCustom ? '⚠ ' : ''}
+                {isCustom ? tagItem.value : (option?.label ?? tagItem.value)}
               </Tag>
             );
           }}
@@ -281,7 +301,7 @@ function DynamicMultiValueControl({
             onKeyDown={(event) => {
               if (event.key === 'Enter' && allowsCustom && inputValue.trim()) {
                 event.preventDefault();
-                addValue(inputValue);
+                addValue(inputValue, true);
               }
             }}
           />

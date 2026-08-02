@@ -53,6 +53,7 @@ import {
   ListBox,
   Modal,
   Select,
+  Spinner,
   Switch,
   Table,
   TextArea,
@@ -75,6 +76,8 @@ const channelTypeOptions: Array<{ value: NotificationChannel['type']; label: str
   { value: 'email', label: 'Email' },
   { value: 'telegram', label: 'Telegram' },
 ];
+
+const DELIVERY_PAGE_SIZE = 20;
 
 const deliveryModeLabels: Record<'immediate' | 'digest', string> = {
   immediate: 'Immediate',
@@ -216,6 +219,8 @@ export function NotificationManager({
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [rules, setRules] = useState<NotificationRule[]>([]);
   const [deliveries, setDeliveries] = useState<NotificationDelivery[]>([]);
+  const [deliveriesHasMore, setDeliveriesHasMore] = useState(false);
+  const [deliveriesLoadingMore, setDeliveriesLoadingMore] = useState(false);
   const [queueJobs, setQueueJobs] = useState<NotificationQueueJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -229,6 +234,8 @@ export function NotificationManager({
   >({});
   const [conditionOptionLoading, setConditionOptionLoading] = useState<Record<string, boolean>>({});
   const conditionLookupRequest = useRef<Record<string, number>>({});
+  const deliveryOffsetRef = useRef(0);
+  const deliveriesLoadingRef = useRef(false);
 
   const channelModal = useOverlayState();
   const ruleModal = useOverlayState();
@@ -241,12 +248,14 @@ export function NotificationManager({
       const [nextChannels, nextRules, nextDeliveries, nextQueue] = await Promise.all([
         listScopedNotificationChannels(basePath),
         listScopedNotificationRules(basePath),
-        listScopedNotificationDeliveries(basePath, 20),
+        listScopedNotificationDeliveries(basePath, DELIVERY_PAGE_SIZE),
         listScopedNotificationQueue(basePath, 20),
       ]);
       setChannels(nextChannels);
       setRules(nextRules);
-      setDeliveries(nextDeliveries);
+      setDeliveries(nextDeliveries.data);
+      setDeliveriesHasMore(nextDeliveries.has_more);
+      deliveryOffsetRef.current = nextDeliveries.next_offset;
       setQueueJobs(nextQueue);
     } catch (loadError: unknown) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load notifications');
@@ -256,6 +265,33 @@ export function NotificationManager({
   }, [basePath]);
 
   useEffect(() => deferEffect(load), [load]);
+
+  const loadMoreDeliveries = useCallback(async () => {
+    if (!deliveriesHasMore || deliveriesLoadingRef.current) return;
+
+    deliveriesLoadingRef.current = true;
+    setDeliveriesLoadingMore(true);
+    try {
+      const nextPage = await listScopedNotificationDeliveries(
+        basePath,
+        DELIVERY_PAGE_SIZE,
+        deliveryOffsetRef.current
+      );
+      setDeliveries((current) => {
+        const existingIDs = new Set(current.map((delivery) => delivery.id));
+        return [...current, ...nextPage.data.filter((delivery) => !existingIDs.has(delivery.id))];
+      });
+      setDeliveriesHasMore(nextPage.has_more);
+      deliveryOffsetRef.current = nextPage.next_offset;
+    } catch (loadError: unknown) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load more deliveries');
+    } finally {
+      setDeliveriesLoadingMore(false);
+      requestAnimationFrame(() => {
+        deliveriesLoadingRef.current = false;
+      });
+    }
+  }, [basePath, deliveriesHasMore]);
 
   const loadConditionOptions = useCallback(
     async (field: string, query = '') => {
@@ -819,9 +855,9 @@ export function NotificationManager({
             </p>
           </div>
           <Table variant="secondary">
-            <Table.ScrollContainer>
+            <Table.ScrollContainer className="max-h-[28rem] overflow-y-auto">
               <Table.Content aria-label="Notification deliveries">
-                <Table.Header>
+                <Table.Header className="sticky top-0 z-10 bg-surface-secondary">
                   <Table.Column isRowHeader>Channel</Table.Column>
                   <Table.Column>Event</Table.Column>
                   <Table.Column>Status</Table.Column>
@@ -865,6 +901,18 @@ export function NotificationManager({
                       </Table.Cell>
                     </Table.Row>
                   ))}
+                  {deliveriesHasMore ? (
+                    <Table.LoadMore
+                      isLoading={deliveriesLoadingMore}
+                      scrollOffset={0}
+                      onLoadMore={() => void loadMoreDeliveries()}
+                    >
+                      <Table.LoadMoreContent>
+                        <Spinner size="sm" />
+                        <span className="text-sm">Loading more deliveries…</span>
+                      </Table.LoadMoreContent>
+                    </Table.LoadMore>
+                  ) : null}
                 </Table.Body>
               </Table.Content>
             </Table.ScrollContainer>

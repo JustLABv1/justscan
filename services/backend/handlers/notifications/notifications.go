@@ -318,6 +318,7 @@ func DeleteRule(c *gin.Context, db *bun.DB, scope Scope) {
 
 func ListDeliveries(c *gin.Context, db *bun.DB, scope Scope) {
 	limit := normalizeLimit(c.DefaultQuery("limit", "25"), 25, 200)
+	offset := normalizeOffset(c.DefaultQuery("offset", "0"))
 	var deliveries []models.NotificationDelivery
 	if err := db.NewSelect().
 		TableExpr("notification_delivery_logs ndl").
@@ -326,13 +327,22 @@ func ListDeliveries(c *gin.Context, db *bun.DB, scope Scope) {
 		Join("LEFT JOIN notification_rules nr ON nr.id = ndl.rule_id").
 		Where("ndl.scope_type = ?", scope.Type).
 		Where("ndl.scope_ref = ?", scope.Ref).
-		OrderExpr("ndl.created_at DESC").
-		Limit(limit).
+		OrderExpr("ndl.created_at DESC, ndl.id DESC").
+		Limit(limit+1).
+		Offset(offset).
 		Scan(c.Request.Context(), &deliveries); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load deliveries"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": deliveries})
+	hasMore := len(deliveries) > limit
+	if hasMore {
+		deliveries = deliveries[:limit]
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"data":        deliveries,
+		"has_more":    hasMore,
+		"next_offset": offset + len(deliveries),
+	})
 }
 
 func ListQueue(c *gin.Context, db *bun.DB, scope Scope) {
@@ -389,6 +399,14 @@ func normalizeLimit(raw string, fallback int, max int) int {
 		return max
 	}
 	return limit
+}
+
+func normalizeOffset(raw string) int {
+	offset, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || offset < 0 {
+		return 0
+	}
+	return offset
 }
 
 func validateNotificationChannel(channel models.NotificationChannel) error {

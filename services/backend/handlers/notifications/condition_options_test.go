@@ -1,9 +1,11 @@
 package notifications
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"justscan-backend/middlewares"
 	"justscan-backend/pkg/models"
@@ -160,6 +162,105 @@ func TestNotificationEventValidationIncludesIntelligenceImpact(t *testing.T) {
 	}
 	if isAllowedNotificationEvent("unknown_event") {
 		t.Fatal("unknown notification events should remain rejected")
+	}
+}
+
+func TestNotificationDeliveryOffsetNormalization(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want int
+	}{
+		{raw: "15", want: 15},
+		{raw: "0", want: 0},
+		{raw: "-1", want: 0},
+		{raw: "not-a-number", want: 0},
+	}
+
+	for _, test := range tests {
+		if got := normalizeOffset(test.raw); got != test.want {
+			t.Errorf("normalizeOffset(%q) = %d, want %d", test.raw, got, test.want)
+		}
+	}
+}
+
+func TestListDeliveriesReturnsPaginationMetadata(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, mock, closeDB := newConditionOptionsMockDB(t)
+	defer closeDB()
+
+	columns := []string{
+		"id",
+		"channel_id",
+		"rule_id",
+		"event_id",
+		"queue_job_id",
+		"event",
+		"triggered_by",
+		"status",
+		"error",
+		"details",
+		"scope_type",
+		"scope_ref",
+		"created_at",
+		"channel_name",
+		"rule_name",
+	}
+	channelID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	ruleID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	eventID := uuid.MustParse("55555555-5555-5555-5555-555555555555")
+	queueJobID := uuid.MustParse("66666666-6666-6666-6666-666666666666")
+	now := time.Now().UTC()
+	rows := sqlmock.NewRows(columns)
+	for index := 0; index < 3; index++ {
+		rows.AddRow(
+			uuid.MustParse("77777777-7777-7777-7777-777777777777"),
+			channelID,
+			ruleID,
+			eventID,
+			queueJobID,
+			"scan_complete",
+			"dispatch",
+			"delivered",
+			"",
+			"{}",
+			models.NotificationScopeSystem,
+			"",
+			now,
+			"Discord",
+			"Rule",
+		)
+	}
+	mock.ExpectQuery(`(?s).*LIMIT 3.*OFFSET 4`).WillReturnRows(rows)
+
+	request := httptest.NewRequest("GET", "/notifications/deliveries?limit=2&offset=4", nil)
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Request = request
+
+	ListDeliveries(context, db, SystemScope())
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("mock expectations: %v; body=%s", err, response.Body.String())
+	}
+	if response.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", response.Code, response.Body.String())
+	}
+
+	var payload struct {
+		Data       []json.RawMessage `json:"data"`
+		HasMore    bool              `json:"has_more"`
+		NextOffset int               `json:"next_offset"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v; body=%s", err, response.Body.String())
+	}
+	if len(payload.Data) != 2 {
+		t.Fatalf("data length = %d, want 2", len(payload.Data))
+	}
+	if !payload.HasMore {
+		t.Fatal("has_more = false, want true")
+	}
+	if payload.NextOffset != 6 {
+		t.Fatalf("next_offset = %d, want 6", payload.NextOffset)
 	}
 }
 

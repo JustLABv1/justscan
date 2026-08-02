@@ -2,7 +2,7 @@ import { req } from './core';
 import type {
   NotificationChannel,
   NotificationConditionOption,
-  NotificationDelivery,
+  NotificationDeliveryListResponse,
   NotificationQueueJob,
   NotificationRule,
 } from './types/admin';
@@ -59,10 +59,24 @@ export const updateScopedNotificationRule = (
 export const deleteScopedNotificationRule = (basePath: string, id: string) =>
   req<{ result: string }>('DELETE', `${basePath}/rules/${id}`);
 
-export const listScopedNotificationDeliveries = (basePath: string, limit = 25) =>
-  req<{ data: NotificationDelivery[] }>('GET', `${basePath}/deliveries?limit=${limit}`).then(
-    (result) => result.data ?? []
-  );
+export const listScopedNotificationDeliveries = (
+  basePath: string,
+  limit = 25,
+  offset = 0
+): Promise<NotificationDeliveryListResponse> => {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  return req<Partial<NotificationDeliveryListResponse>>(
+    'GET',
+    `${basePath}/deliveries?${params.toString()}`
+  ).then((result) => {
+    const data = result.data ?? [];
+    return {
+      data,
+      has_more: result.has_more ?? data.length === limit,
+      next_offset: result.next_offset ?? offset + data.length,
+    };
+  });
+};
 
 export const listScopedNotificationQueue = (basePath: string, limit = 50) =>
   req<{ data: NotificationQueueJob[] }>('GET', `${basePath}/queue?limit=${limit}`).then(

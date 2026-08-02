@@ -37,9 +37,11 @@ const HISTORY_LIMIT = 10;
 const ARTIFACT_SELECTION_PAGE_SIZE = 100;
 
 type ArtifactScansTableProps = {
+  allowHistoryDelete?: boolean;
   allowMutationActions?: boolean;
   artifacts: ArtifactSummary[];
   childRefreshKey: Record<string, number>;
+  historyRefreshKey?: number;
   emptyState?: { description: string; title: string };
   expanded: Set<string>;
   hasActiveFilters: boolean;
@@ -47,6 +49,7 @@ type ArtifactScansTableProps = {
   onCancel: (scanId: string, artifactKey: string) => Promise<void> | void;
   onDelete: (scanId: string, artifactKey: string) => Promise<void> | void;
   onDeleteArtifact?: (artifact: ArtifactSummary) => void;
+  onDeleteHistoryScan?: (scan: Scan) => void;
   onRetry: (scanId: string, artifactKey: string) => Promise<void> | void;
   onExpandedChange: (next: Set<string>) => void;
   onSelectedScansChange: Dispatch<SetStateAction<Set<string>>>;
@@ -210,22 +213,26 @@ function useArtifactHistory(imageName: string, imageTag: string, refreshToken: n
 }
 
 function ArtifactHistoryRows({
+  allowHistoryDelete,
   allowMutationActions,
   artifact,
   refreshToken,
   onCancel,
   onDelete,
+  onDeleteHistoryScan,
   onRetry,
   onSelectScan,
   onShareToWorkspace,
   onTransferToWorkspace,
   selectedScans,
 }: {
+  allowHistoryDelete: boolean;
   allowMutationActions: boolean;
   artifact: ArtifactSummary;
   refreshToken: number;
   onCancel: (scanId: string) => void;
   onDelete: (scanId: string) => void;
+  onDeleteHistoryScan?: (scan: Scan) => void;
   onRetry: (scanId: string) => void;
   onSelectScan: (scanId: string, selected: boolean) => void;
   onShareToWorkspace: (scanIds: string[]) => void;
@@ -419,12 +426,17 @@ function ArtifactHistoryRows({
                             icon: <ArrowRight01Icon size={14} aria-hidden />,
                             onAction: () => onTransferToWorkspace([scan.id]),
                           },
+                        ]
+                      : []),
+                    ...(allowMutationActions || allowHistoryDelete
+                      ? [
                           {
                             id: 'delete',
-                            label: 'Delete scan',
+                            label: 'Delete scan history item',
                             icon: <Delete01Icon size={14} aria-hidden />,
                             variant: 'danger' as const,
-                            onAction: () => onDelete(scan.id),
+                            onAction: () =>
+                              onDeleteHistoryScan ? onDeleteHistoryScan(scan) : onDelete(scan.id),
                           },
                         ]
                       : []),
@@ -440,9 +452,11 @@ function ArtifactHistoryRows({
 }
 
 export function ArtifactScansTable({
+  allowHistoryDelete = false,
   allowMutationActions = true,
   artifacts,
   childRefreshKey,
+  historyRefreshKey,
   emptyState,
   expanded,
   hasActiveFilters,
@@ -450,6 +464,7 @@ export function ArtifactScansTable({
   onCancel,
   onDelete,
   onDeleteArtifact,
+  onDeleteHistoryScan,
   onRetry,
   onExpandedChange,
   onSelectedScansChange,
@@ -791,11 +806,13 @@ export function ArtifactScansTable({
                         </div>
                       </Table.Cell>
                       <ArtifactHistoryRows
+                        allowHistoryDelete={allowHistoryDelete}
                         allowMutationActions={allowMutationActions}
                         artifact={artifact}
-                        refreshToken={childRefreshKey[key] ?? 0}
+                        refreshToken={childRefreshKey[key] ?? historyRefreshKey ?? 0}
                         onCancel={(scanId) => onCancel(scanId, key)}
                         onDelete={(scanId) => onDelete(scanId, key)}
+                        onDeleteHistoryScan={onDeleteHistoryScan}
                         onRetry={(scanId) => onRetry(scanId, key)}
                         onSelectScan={setScanSelection}
                         onShareToWorkspace={onShareToWorkspace}

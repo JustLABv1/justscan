@@ -260,6 +260,12 @@ export interface NotificationDelivery {
   rule_name?: string;
 }
 
+export interface NotificationDeliveryListResponse {
+  data: NotificationDelivery[];
+  has_more: boolean;
+  next_offset: number;
+}
+
 export interface NotificationQueueJob {
   id: string;
   event_id?: string | null;

@@ -15,12 +15,14 @@ import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
+  deleteScan,
   deleteScanArtifactGroup,
   deleteScanImageGroup,
   getScanImageStats,
   listScanArtifacts,
   type ArtifactSummary,
   type ImageStats,
+  type Scan,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import {
@@ -48,7 +50,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 type MetricTone = 'neutral' | 'danger' | 'success';
 
-type PendingGroupDelete = { kind: 'image' } | { kind: 'tag'; artifact: ArtifactSummary };
+type PendingDelete =
+  { kind: 'image' } | { kind: 'tag'; artifact: ArtifactSummary } | { kind: 'scan'; scan: Scan };
 
 const STATUS_OPTIONS = [
   { id: '', label: 'Any state' },
@@ -125,7 +128,7 @@ export default function ImageScansPage() {
   const [range, setRange] = useState<'' | RecentActivityRange>('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedScans, setSelectedScans] = useState<Set<string>>(new Set());
-  const [pendingDelete, setPendingDelete] = useState<PendingGroupDelete | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const toast = useToast();
@@ -200,10 +203,23 @@ export default function ImageScansPage() {
     [bounds?.from, bounds?.to, critical, imageName, policy, query, refreshKey, scopeKey, status]
   );
 
-  async function confirmDeleteGroup() {
+  async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
     try {
+      if (pendingDelete.kind === 'scan') {
+        await deleteScan(pendingDelete.scan.id);
+        toast.success('Deleted scan history item');
+        setPendingDelete(null);
+        setSelectedScans((current) => {
+          const next = new Set(current);
+          next.delete(pendingDelete.scan.id);
+          return next;
+        });
+        setRefreshKey((current) => current + 1);
+        return;
+      }
+
       const result =
         pendingDelete.kind === 'image'
           ? await deleteScanImageGroup(imageName)
@@ -270,7 +286,9 @@ export default function ImageScansPage() {
                 <AlertDialog.Heading>
                   {pendingDelete?.kind === 'image'
                     ? 'Delete image scan group?'
-                    : 'Delete tag scan history?'}
+                    : pendingDelete?.kind === 'tag'
+                      ? 'Delete tag scan history?'
+                      : 'Delete scan history item?'}
                 </AlertDialog.Heading>
               </AlertDialog.Header>
               <AlertDialog.Body>
@@ -280,11 +298,19 @@ export default function ImageScansPage() {
                       This removes <strong>{imageName}</strong>, including every tag and scan run in
                       this workspace. This cannot be undone.
                     </>
-                  ) : (
+                  ) : pendingDelete?.kind === 'tag' ? (
                     <>
                       This removes <strong>{pendingDelete?.artifact.image_tag}</strong> and all{' '}
                       {pendingDelete?.artifact.scan_count ?? 0} of its historical scan runs. This
                       cannot be undone.
+                    </>
+                  ) : (
+                    <>
+                      This removes scan <strong>{pendingDelete?.scan.id.slice(0, 8)}…</strong> from{' '}
+                      <strong>
+                        {imageName}:{pendingDelete?.scan.image_tag}
+                      </strong>
+                      . This cannot be undone.
                     </>
                   )}
                 </p>
@@ -293,11 +319,7 @@ export default function ImageScansPage() {
                 <Button isDisabled={deleting} slot="close" variant="tertiary">
                   Cancel
                 </Button>
-                <Button
-                  isPending={deleting}
-                  onPress={() => void confirmDeleteGroup()}
-                  variant="danger"
-                >
+                <Button isPending={deleting} onPress={() => void confirmDelete()} variant="danger">
                   Delete
                 </Button>
               </AlertDialog.Footer>
@@ -510,16 +532,19 @@ export default function ImageScansPage() {
           ) : null}
         </div>
         <ArtifactScansTable
+          allowHistoryDelete
           allowMutationActions={false}
           artifacts={artifacts}
           childRefreshKey={{}}
           expanded={expanded}
           hasActiveFilters={hasFilters}
+          historyRefreshKey={refreshKey}
           hideImageName
           loading={loading}
           onCancel={() => {}}
           onDelete={() => {}}
           onDeleteArtifact={(artifact) => setPendingDelete({ kind: 'tag', artifact })}
+          onDeleteHistoryScan={(scan) => setPendingDelete({ kind: 'scan', scan })}
           onRetry={() => {}}
           onExpandedChange={setExpanded}
           onSelectedScansChange={setSelectedScans}

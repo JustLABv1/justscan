@@ -620,7 +620,7 @@ func buildDigestPayload(ctx context.Context, db *bun.DB, digestID uuid.UUID, rul
 	})
 
 	payload := Payload{
-		Event:     "digest",
+		Event:     notificationDigestEvent,
 		Details:   fmt.Sprintf("%d notification events matched rule %q between %s and %s.", digest.EventCount, rule.Name, digest.WindowStart.Format(time.RFC1123), digest.WindowEnd.Format(time.RFC1123)),
 		Timestamp: time.Now().UTC(),
 		Extra: map[string]string{
@@ -632,6 +632,7 @@ func buildDigestPayload(ctx context.Context, db *bun.DB, digestID uuid.UUID, rul
 	}
 
 	seenOrgs := make(map[string]struct{})
+	seenOrgNames := make(map[string]struct{})
 	seenPolicies := make(map[string]struct{})
 	seenWatches := make(map[string]struct{})
 	for _, event := range events {
@@ -639,6 +640,7 @@ func buildDigestPayload(ctx context.Context, db *bun.DB, digestID uuid.UUID, rul
 		if err != nil {
 			continue
 		}
+		payload.DigestEvents = append(payload.DigestEvents, newDigestEventSummary(event, itemPayload))
 		if payload.ImageName == "" {
 			payload.ImageName = itemPayload.ImageName
 			payload.ImageTag = itemPayload.ImageTag
@@ -649,6 +651,7 @@ func buildDigestPayload(ctx context.Context, db *bun.DB, digestID uuid.UUID, rul
 		payload.MediumCount += itemPayload.MediumCount
 		payload.LowCount += itemPayload.LowCount
 		payload.UnknownCount += itemPayload.UnknownCount
+		payload.SuppressedCount += itemPayload.SuppressedCount
 		payload.HighestCVSS = maxFloat(payload.HighestCVSS, itemPayload.HighestCVSS)
 		if severityRank(itemPayload.HighestSeverity) > severityRank(payload.HighestSeverity) {
 			payload.HighestSeverity = itemPayload.HighestSeverity
@@ -659,6 +662,13 @@ func buildDigestPayload(ctx context.Context, db *bun.DB, digestID uuid.UUID, rul
 			}
 			seenOrgs[orgID] = struct{}{}
 			payload.OrgIDs = append(payload.OrgIDs, orgID)
+		}
+		for _, orgName := range itemPayload.OrgNames {
+			if _, ok := seenOrgNames[orgName]; ok {
+				continue
+			}
+			seenOrgNames[orgName] = struct{}{}
+			payload.OrgNames = append(payload.OrgNames, orgName)
 		}
 		for _, name := range itemPayload.PolicyNames {
 			if _, ok := seenPolicies[name]; ok {
@@ -676,6 +686,52 @@ func buildDigestPayload(ctx context.Context, db *bun.DB, digestID uuid.UUID, rul
 		}
 	}
 	return payload, nil
+}
+
+func newDigestEventSummary(event models.NotificationEvent, payload Payload) DigestEventSummary {
+	eventType := strings.TrimSpace(payload.Event)
+	if eventType == "" || eventType == "notification_event" {
+		eventType = strings.TrimSpace(event.Event)
+	}
+	occurredAt := event.OccurredAt
+	if occurredAt.IsZero() {
+		occurredAt = payload.Timestamp
+	}
+	highestSeverityValue := payload.HighestSeverity
+	if highestSeverityValue == "" {
+		highestSeverityValue = highestSeverity(payload)
+	}
+	return DigestEventSummary{
+		Event:                      eventType,
+		OccurredAt:                 occurredAt,
+		ScanID:                     payload.ScanID,
+		ImageRef:                   payloadImageRef(payload),
+		OrgNames:                   append([]string(nil), payload.OrgNames...),
+		Status:                     payload.Status,
+		ScanProvider:               payload.ScanProvider,
+		HighestSeverity:            highestSeverityValue,
+		HighestCVSS:                payload.HighestCVSS,
+		CriticalCount:              payload.CriticalCount,
+		HighCount:                  payload.HighCount,
+		MediumCount:                payload.MediumCount,
+		LowCount:                   payload.LowCount,
+		UnknownCount:               payload.UnknownCount,
+		SuppressedCount:            payload.SuppressedCount,
+		ComplianceStatus:           payload.ComplianceStatus,
+		ComplianceFailed:           payload.ComplianceFailed,
+		XrayBlocked:                payload.XrayBlocked,
+		PolicyNames:                append([]string(nil), payload.PolicyNames...),
+		XrayPolicyNames:            append([]string(nil), payload.XrayPolicyNames...),
+		XrayWatchNames:             append([]string(nil), payload.XrayWatchNames...),
+		ChangedCVEs:                append([]string(nil), payload.ChangedCVEs...),
+		HistoricalComplianceStatus: payload.HistoricalComplianceStatus,
+		CurrentComplianceStatus:    payload.CurrentComplianceStatus,
+		IntelligenceImpact:         payload.IntelligenceImpact,
+		RescanRequired:             payload.RescanRequired,
+		Tags:                       append([]string(nil), payload.Tags...),
+		ScanURL:                    payload.ScanURL,
+		Details:                    payload.Details,
+	}
 }
 
 func backoffForAttempt(attempt int) time.Duration {

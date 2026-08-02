@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/smtp"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,42 +22,79 @@ import (
 
 // Payload is the structured event data sent to notification channels.
 type Payload struct {
-	Event                      string            `json:"event"`
-	ScanID                     string            `json:"scan_id,omitempty"`
-	UserIDs                    []string          `json:"user_ids,omitempty"`
-	ImageName                  string            `json:"image_name,omitempty"`
-	ImageTag                   string            `json:"image_tag,omitempty"`
-	ImageRef                   string            `json:"image_ref,omitempty"`
-	OrgIDs                     []string          `json:"org_ids,omitempty"`
-	OrgNames                   []string          `json:"org_names,omitempty"`
-	Status                     string            `json:"status,omitempty"`
-	ScanProvider               string            `json:"scan_provider,omitempty"`
-	HighestSeverity            string            `json:"highest_severity,omitempty"`
-	HighestCVSS                float64           `json:"highest_cvss,omitempty"`
-	ComplianceStatus           string            `json:"compliance_status,omitempty"`
-	ComplianceFailed           bool              `json:"compliance_failed,omitempty"`
-	CriticalCount              int               `json:"critical_count,omitempty"`
-	HighCount                  int               `json:"high_count,omitempty"`
-	MediumCount                int               `json:"medium_count,omitempty"`
-	LowCount                   int               `json:"low_count,omitempty"`
-	UnknownCount               int               `json:"unknown_count,omitempty"`
-	SuppressedCount            int               `json:"suppressed_count,omitempty"`
-	XrayBlocked                bool              `json:"xray_blocked,omitempty"`
-	PolicyIDs                  []string          `json:"policy_ids,omitempty"`
-	PolicyNames                []string          `json:"policy_names,omitempty"`
-	ChangedCVEs                []string          `json:"changed_cves,omitempty"`
-	HistoricalComplianceStatus string            `json:"historical_compliance_status,omitempty"`
-	CurrentComplianceStatus    string            `json:"current_compliance_status,omitempty"`
-	IntelligenceImpact         string            `json:"intelligence_impact,omitempty"`
-	RescanRequired             bool              `json:"rescan_required,omitempty"`
-	XrayPolicyNames            []string          `json:"xray_policy_names,omitempty"`
-	XrayWatchNames             []string          `json:"xray_watch_names,omitempty"`
-	Tags                       []string          `json:"tags,omitempty"`
-	ScanURL                    string            `json:"scan_url,omitempty"`
-	Details                    string            `json:"details,omitempty"`
-	Extra                      map[string]string `json:"extra,omitempty"`
-	DedupeKey                  string            `json:"-"`
-	Timestamp                  time.Time         `json:"timestamp"`
+	Event                      string               `json:"event"`
+	ScanID                     string               `json:"scan_id,omitempty"`
+	UserIDs                    []string             `json:"user_ids,omitempty"`
+	ImageName                  string               `json:"image_name,omitempty"`
+	ImageTag                   string               `json:"image_tag,omitempty"`
+	ImageRef                   string               `json:"image_ref,omitempty"`
+	OrgIDs                     []string             `json:"org_ids,omitempty"`
+	OrgNames                   []string             `json:"org_names,omitempty"`
+	Status                     string               `json:"status,omitempty"`
+	ScanProvider               string               `json:"scan_provider,omitempty"`
+	HighestSeverity            string               `json:"highest_severity,omitempty"`
+	HighestCVSS                float64              `json:"highest_cvss,omitempty"`
+	ComplianceStatus           string               `json:"compliance_status,omitempty"`
+	ComplianceFailed           bool                 `json:"compliance_failed,omitempty"`
+	CriticalCount              int                  `json:"critical_count,omitempty"`
+	HighCount                  int                  `json:"high_count,omitempty"`
+	MediumCount                int                  `json:"medium_count,omitempty"`
+	LowCount                   int                  `json:"low_count,omitempty"`
+	UnknownCount               int                  `json:"unknown_count,omitempty"`
+	SuppressedCount            int                  `json:"suppressed_count,omitempty"`
+	XrayBlocked                bool                 `json:"xray_blocked,omitempty"`
+	PolicyIDs                  []string             `json:"policy_ids,omitempty"`
+	PolicyNames                []string             `json:"policy_names,omitempty"`
+	ChangedCVEs                []string             `json:"changed_cves,omitempty"`
+	HistoricalComplianceStatus string               `json:"historical_compliance_status,omitempty"`
+	CurrentComplianceStatus    string               `json:"current_compliance_status,omitempty"`
+	IntelligenceImpact         string               `json:"intelligence_impact,omitempty"`
+	RescanRequired             bool                 `json:"rescan_required,omitempty"`
+	XrayPolicyNames            []string             `json:"xray_policy_names,omitempty"`
+	XrayWatchNames             []string             `json:"xray_watch_names,omitempty"`
+	Tags                       []string             `json:"tags,omitempty"`
+	ScanURL                    string               `json:"scan_url,omitempty"`
+	Details                    string               `json:"details,omitempty"`
+	Extra                      map[string]string    `json:"extra,omitempty"`
+	DedupeKey                  string               `json:"-"`
+	Timestamp                  time.Time            `json:"timestamp"`
+	DigestEvents               []DigestEventSummary `json:"digest_events,omitempty"`
+}
+
+const notificationDigestEvent = "digest"
+
+// DigestEventSummary keeps the event-level context that would otherwise be
+// lost when several notification events are combined into one digest.
+type DigestEventSummary struct {
+	Event                      string    `json:"event"`
+	OccurredAt                 time.Time `json:"occurred_at"`
+	ScanID                     string    `json:"scan_id,omitempty"`
+	ImageRef                   string    `json:"image_ref,omitempty"`
+	OrgNames                   []string  `json:"org_names,omitempty"`
+	Status                     string    `json:"status,omitempty"`
+	ScanProvider               string    `json:"scan_provider,omitempty"`
+	HighestSeverity            string    `json:"highest_severity,omitempty"`
+	HighestCVSS                float64   `json:"highest_cvss,omitempty"`
+	CriticalCount              int       `json:"critical_count,omitempty"`
+	HighCount                  int       `json:"high_count,omitempty"`
+	MediumCount                int       `json:"medium_count,omitempty"`
+	LowCount                   int       `json:"low_count,omitempty"`
+	UnknownCount               int       `json:"unknown_count,omitempty"`
+	SuppressedCount            int       `json:"suppressed_count,omitempty"`
+	ComplianceStatus           string    `json:"compliance_status,omitempty"`
+	ComplianceFailed           bool      `json:"compliance_failed,omitempty"`
+	XrayBlocked                bool      `json:"xray_blocked,omitempty"`
+	PolicyNames                []string  `json:"policy_names,omitempty"`
+	XrayPolicyNames            []string  `json:"xray_policy_names,omitempty"`
+	XrayWatchNames             []string  `json:"xray_watch_names,omitempty"`
+	ChangedCVEs                []string  `json:"changed_cves,omitempty"`
+	HistoricalComplianceStatus string    `json:"historical_compliance_status,omitempty"`
+	CurrentComplianceStatus    string    `json:"current_compliance_status,omitempty"`
+	IntelligenceImpact         string    `json:"intelligence_impact,omitempty"`
+	RescanRequired             bool      `json:"rescan_required,omitempty"`
+	Tags                       []string  `json:"tags,omitempty"`
+	ScanURL                    string    `json:"scan_url,omitempty"`
+	Details                    string    `json:"details,omitempty"`
 }
 
 func SendTest(db *bun.DB, channel models.NotificationChannel, event string) error {
@@ -192,10 +230,26 @@ func enrichPayload(ctx context.Context, db *bun.DB, payload *Payload) {
 		}
 	}
 	if payload.ImageRef == "" {
-		payload.ImageRef = strings.TrimSuffix(strings.TrimSpace(payload.ImageName)+":"+strings.TrimSpace(payload.ImageTag), ":")
+		payload.ImageRef = payloadImageRef(*payload)
 	}
 	if payload.ScanURL == "" {
 		payload.ScanURL = buildScanURL(payload.ScanID)
+	}
+}
+
+func payloadImageRef(payload Payload) string {
+	if imageRef := strings.TrimSpace(payload.ImageRef); imageRef != "" {
+		return imageRef
+	}
+	name := strings.TrimSpace(payload.ImageName)
+	tag := strings.TrimSpace(payload.ImageTag)
+	switch {
+	case name == "":
+		return tag
+	case tag == "":
+		return name
+	default:
+		return name + ":" + tag
 	}
 }
 
@@ -437,11 +491,15 @@ func sendDiscord(cfg models.NotificationConfig, p Payload) error {
 	if cfg.WebhookURL == "" {
 		return fmt.Errorf("discord webhook URL is not configured")
 	}
+	if p.Event == notificationDigestEvent {
+		msg := discordMessage{Username: "JustScan", Embeds: buildDiscordDigestEmbeds(p)}
+		return postJSON(cfg.WebhookURL, nil, msg)
+	}
 	var fields []discordField
-	if p.ImageName != "" {
+	if imageRef := payloadImageRef(p); imageRef != "" {
 		fields = append(fields, discordField{
 			Name:   "Image",
-			Value:  fmt.Sprintf("`%s:%s`", p.ImageName, p.ImageTag),
+			Value:  fmt.Sprintf("`%s`", imageRef),
 			Inline: true,
 		})
 	}
@@ -472,6 +530,230 @@ func sendDiscord(cfg models.NotificationConfig, p Payload) error {
 	}
 	msg := discordMessage{Username: "JustScan", Embeds: []discordEmbed{embed}}
 	return postJSON(cfg.WebhookURL, nil, msg)
+}
+
+const (
+	maxDiscordDigestEmbeds          = 10
+	maxDiscordDigestEventsPerEmbed  = 8
+	maxDiscordDigestEventValueChars = 600
+	maxDiscordTextChars             = 4096
+)
+
+func buildDiscordDigestEmbeds(p Payload) []discordEmbed {
+	totalEvents := digestEventCount(p)
+	if totalEvents == 0 {
+		totalEvents = len(p.DigestEvents)
+	}
+	if len(p.DigestEvents) == 0 {
+		return []discordEmbed{{
+			Title:       "Notification Digest",
+			Description: truncateDiscordText(p.Details, maxDiscordTextChars),
+			Color:       colorForEvent(p.Event),
+			Footer:      discordFooter{Text: "JustScan"},
+			Timestamp:   p.Timestamp.UTC().Format(time.RFC3339),
+		}}
+	}
+
+	maxListedEvents := maxDiscordDigestEmbeds * maxDiscordDigestEventsPerEmbed
+	if maxListedEvents > len(p.DigestEvents) {
+		maxListedEvents = len(p.DigestEvents)
+	}
+	embeds := make([]discordEmbed, 0, maxDiscordDigestEmbeds)
+	for start := 0; start < maxListedEvents; start += maxDiscordDigestEventsPerEmbed {
+		end := start + maxDiscordDigestEventsPerEmbed
+		if end > maxListedEvents {
+			end = maxListedEvents
+		}
+		fields := make([]discordField, 0, maxDiscordDigestEventsPerEmbed+5)
+		if start == 0 {
+			fields = append(fields, digestSummaryFields(p, totalEvents)...)
+		}
+		for index := start; index < end; index++ {
+			fields = append(fields, discordDigestEventField(index, p.DigestEvents[index]))
+		}
+
+		title := fmt.Sprintf("Notification Digest · events %d–%d", start+1, end)
+		if start == 0 {
+			title = fmt.Sprintf("Notification Digest · %d events", totalEvents)
+		}
+		description := "Event details continued below."
+		if start == 0 {
+			description = truncateDiscordText(p.Details, maxDiscordTextChars)
+		}
+		embeds = append(embeds, discordEmbed{
+			Title:       title,
+			Description: description,
+			Color:       colorForEvent(p.Event),
+			Fields:      fields,
+			Footer:      discordFooter{Text: "JustScan"},
+			Timestamp:   p.Timestamp.UTC().Format(time.RFC3339),
+		})
+	}
+
+	if maxListedEvents < len(p.DigestEvents) && len(embeds) > 0 {
+		remaining := len(p.DigestEvents) - maxListedEvents
+		embeds[len(embeds)-1].Fields = append(embeds[len(embeds)-1].Fields, discordField{
+			Name:   "Additional events",
+			Value:  fmt.Sprintf("%d more event(s) were matched but could not be shown in this Discord message.", remaining),
+			Inline: false,
+		})
+	}
+	return embeds
+}
+
+func digestSummaryFields(p Payload, totalEvents int) []discordField {
+	fields := make([]discordField, 0, 5)
+	if ruleName := strings.TrimSpace(p.Extra["rule_name"]); ruleName != "" {
+		fields = append(fields, discordField{Name: "Rule", Value: truncateDiscordText(ruleName, 256), Inline: true})
+	}
+	fields = append(fields, discordField{Name: "Matched events", Value: strconv.Itoa(totalEvents), Inline: true})
+	if window := discordDigestWindow(p); window != "" {
+		fields = append(fields, discordField{Name: "Window", Value: window, Inline: false})
+	}
+	if counts := findingCountsText(p.CriticalCount, p.HighCount, p.MediumCount, p.LowCount, p.UnknownCount, p.SuppressedCount); counts != "" {
+		fields = append(fields, discordField{Name: "Total findings", Value: counts, Inline: true})
+	}
+	severity := p.HighestSeverity
+	if severity == "" {
+		severity = highestSeverity(p)
+	}
+	if severity != "" {
+		fields = append(fields, discordField{Name: "Highest severity", Value: severity, Inline: true})
+	}
+	if p.HighestCVSS > 0 {
+		fields = append(fields, discordField{Name: "Highest CVSS", Value: fmt.Sprintf("%.1f", p.HighestCVSS), Inline: true})
+	}
+	return fields
+}
+
+func discordDigestEventField(index int, event DigestEventSummary) discordField {
+	lines := make([]string, 0, 8)
+	if event.OccurredAt.IsZero() {
+		lines = append(lines, "**When:** unavailable")
+	} else {
+		lines = append(lines, fmt.Sprintf("**When:** <t:%d:F>", event.OccurredAt.Unix()))
+	}
+	if event.ImageRef != "" {
+		lines = append(lines, fmt.Sprintf("**Image:** `%s`", event.ImageRef))
+	}
+	if event.ScanID != "" {
+		scan := fmt.Sprintf("`%s`", event.ScanID)
+		if event.ScanURL != "" {
+			scan = fmt.Sprintf("[%s](%s)", event.ScanID, event.ScanURL)
+		}
+		lines = append(lines, "**Scan:** "+scan)
+	}
+	if len(event.OrgNames) > 0 {
+		lines = append(lines, "**Organizations:** "+strings.Join(event.OrgNames, ", "))
+	}
+	if event.ScanProvider != "" {
+		lines = append(lines, "**Provider:** "+event.ScanProvider)
+	}
+	if event.Status != "" {
+		lines = append(lines, "**Status:** "+event.Status)
+	}
+	if severity := event.HighestSeverity; severity != "" {
+		value := severity
+		if event.HighestCVSS > 0 {
+			value += fmt.Sprintf(" · CVSS %.1f", event.HighestCVSS)
+		}
+		lines = append(lines, "**Severity:** "+value)
+	} else if event.HighestCVSS > 0 {
+		lines = append(lines, fmt.Sprintf("**CVSS:** %.1f", event.HighestCVSS))
+	}
+	if counts := findingCountsText(event.CriticalCount, event.HighCount, event.MediumCount, event.LowCount, event.UnknownCount, event.SuppressedCount); counts != "" {
+		lines = append(lines, "**Findings:** "+counts)
+	}
+	if event.ComplianceStatus != "" {
+		lines = append(lines, "**Compliance:** "+event.ComplianceStatus)
+	} else if event.ComplianceFailed {
+		lines = append(lines, "**Compliance:** failed")
+	}
+	if event.XrayBlocked {
+		lines = append(lines, "**Xray:** blocked by policy")
+	}
+	if len(event.PolicyNames) > 0 {
+		lines = append(lines, "**Policies:** "+strings.Join(event.PolicyNames, ", "))
+	}
+	if len(event.XrayPolicyNames) > 0 {
+		lines = append(lines, "**Xray policies:** "+strings.Join(event.XrayPolicyNames, ", "))
+	}
+	if len(event.XrayWatchNames) > 0 {
+		lines = append(lines, "**Xray watches:** "+strings.Join(event.XrayWatchNames, ", "))
+	}
+	if len(event.ChangedCVEs) > 0 {
+		lines = append(lines, "**Changed CVEs:** "+strings.Join(event.ChangedCVEs, ", "))
+	}
+	if event.IntelligenceImpact != "" {
+		lines = append(lines, "**Intelligence impact:** "+event.IntelligenceImpact)
+	}
+	if event.RescanRequired {
+		lines = append(lines, "**Action:** rescan required")
+	}
+	if len(event.Tags) > 0 {
+		lines = append(lines, "**Tags:** "+strings.Join(event.Tags, ", "))
+	}
+	if event.Details != "" {
+		lines = append(lines, event.Details)
+	}
+	value := truncateDiscordText(strings.Join(lines, "\n"), maxDiscordDigestEventValueChars)
+	if value == "" {
+		value = "No additional event details."
+	}
+	return discordField{
+		Name:   fmt.Sprintf("%02d · %s", index+1, eventTitle(event.Event)),
+		Value:  value,
+		Inline: false,
+	}
+}
+
+func digestEventCount(p Payload) int {
+	if rawCount := strings.TrimSpace(p.Extra["event_count"]); rawCount != "" {
+		if count, err := strconv.Atoi(rawCount); err == nil && count > 0 {
+			return count
+		}
+	}
+	return len(p.DigestEvents)
+}
+
+func discordDigestWindow(p Payload) string {
+	start, startErr := time.Parse(time.RFC3339, p.Extra["digest_window_start"])
+	end, endErr := time.Parse(time.RFC3339, p.Extra["digest_window_end"])
+	if startErr != nil || endErr != nil {
+		return ""
+	}
+	return fmt.Sprintf("<t:%d:F> → <t:%d:F>", start.Unix(), end.Unix())
+}
+
+func truncateDiscordText(value string, maxChars int) string {
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) <= maxChars {
+		return string(runes)
+	}
+	if maxChars <= 1 {
+		return string(runes[:maxChars])
+	}
+	return string(runes[:maxChars-1]) + "…"
+}
+
+func findingCountsText(critical, high, medium, low, unknown, suppressed int) string {
+	counts := make([]string, 0, 6)
+	for _, item := range []struct {
+		label string
+		value int
+	}{
+		{label: "critical", value: critical},
+		{label: "high", value: high},
+		{label: "medium", value: medium},
+		{label: "low", value: low},
+		{label: "unknown", value: unknown},
+		{label: "suppressed", value: suppressed},
+	} {
+		if item.value > 0 {
+			counts = append(counts, fmt.Sprintf("%d %s", item.value, item.label))
+		}
+	}
+	return strings.Join(counts, " · ")
 }
 
 func sendWebhook(cfg models.NotificationConfig, p Payload) error {
@@ -593,35 +875,131 @@ func buildPlainMessage(p Payload) string {
 	var sb strings.Builder
 	sb.WriteString(eventTitle(p.Event) + "\n")
 	sb.WriteString(strings.Repeat("-", 40) + "\n\n")
-	if p.ImageName != "" {
-		sb.WriteString(fmt.Sprintf("Image:   %s:%s\n", p.ImageName, p.ImageTag))
+	if len(p.DigestEvents) > 0 {
+		if p.Details != "" {
+			sb.WriteString(p.Details + "\n\n")
+		}
+		sb.WriteString(fmt.Sprintf("Matched events: %d\n", digestEventCount(p)))
+		if counts := findingCountsText(p.CriticalCount, p.HighCount, p.MediumCount, p.LowCount, p.UnknownCount, p.SuppressedCount); counts != "" {
+			sb.WriteString("Total findings: " + counts + "\n")
+		}
+		severity := p.HighestSeverity
+		if severity == "" {
+			severity = highestSeverity(p)
+		}
+		if severity != "" {
+			sb.WriteString("Highest severity: " + severity + "\n")
+		}
+		if p.HighestCVSS > 0 {
+			sb.WriteString(fmt.Sprintf("Highest CVSS: %.1f\n", p.HighestCVSS))
+		}
+		sb.WriteString("\nEvents:\n")
+		for index, event := range p.DigestEvents {
+			sb.WriteString(formatDigestEventPlainText(index, event))
+		}
+	} else {
+		if imageRef := payloadImageRef(p); imageRef != "" {
+			sb.WriteString(fmt.Sprintf("Image:   %s\n", imageRef))
+		}
+		if p.ScanID != "" {
+			sb.WriteString(fmt.Sprintf("Scan ID: %s\n", p.ScanID))
+		}
+		if len(p.OrgNames) > 0 {
+			sb.WriteString(fmt.Sprintf("Orgs:    %s\n", strings.Join(p.OrgNames, ", ")))
+		} else if len(p.OrgIDs) > 0 {
+			sb.WriteString(fmt.Sprintf("Orgs:    %s\n", strings.Join(p.OrgIDs, ", ")))
+		}
+		if severity := highestSeverity(p); severity != "" {
+			sb.WriteString(fmt.Sprintf("Severity: %s\n", severity))
+		}
+		if p.CriticalCount+p.HighCount+p.MediumCount+p.LowCount+p.UnknownCount > 0 {
+			sb.WriteString(fmt.Sprintf("Counts:  C:%d H:%d M:%d L:%d U:%d\n", p.CriticalCount, p.HighCount, p.MediumCount, p.LowCount, p.UnknownCount))
+		}
+		if p.Details != "" {
+			sb.WriteString(fmt.Sprintf("\n%s\n", p.Details))
+		}
 	}
-	if p.ScanID != "" {
-		sb.WriteString(fmt.Sprintf("Scan ID: %s\n", p.ScanID))
-	}
-	if len(p.OrgNames) > 0 {
-		sb.WriteString(fmt.Sprintf("Orgs:    %s\n", strings.Join(p.OrgNames, ", ")))
-	} else if len(p.OrgIDs) > 0 {
-		sb.WriteString(fmt.Sprintf("Orgs:    %s\n", strings.Join(p.OrgIDs, ", ")))
-	}
-	if severity := highestSeverity(p); severity != "" {
-		sb.WriteString(fmt.Sprintf("Severity: %s\n", severity))
-	}
-	if p.CriticalCount+p.HighCount+p.MediumCount+p.LowCount+p.UnknownCount > 0 {
-		sb.WriteString(fmt.Sprintf("Counts:  C:%d H:%d M:%d L:%d U:%d\n", p.CriticalCount, p.HighCount, p.MediumCount, p.LowCount, p.UnknownCount))
-	}
-	if p.Details != "" {
-		sb.WriteString(fmt.Sprintf("\n%s\n", p.Details))
-	}
-	if p.ScanURL != "" {
+	if p.ScanURL != "" && len(p.DigestEvents) == 0 {
 		sb.WriteString(fmt.Sprintf("\nOpen scan: %s\n", p.ScanURL))
 	}
-	if len(p.Extra) > 0 {
+	if len(p.Extra) > 0 && len(p.DigestEvents) == 0 {
 		for key, value := range p.Extra {
 			sb.WriteString(fmt.Sprintf("%s: %s\n", key, value))
 		}
 	}
 	sb.WriteString(fmt.Sprintf("\nTimestamp: %s\n", p.Timestamp.Format(time.RFC1123)))
+	return sb.String()
+}
+
+func formatDigestEventPlainText(index int, event DigestEventSummary) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("\n%d. %s", index+1, eventTitle(event.Event)))
+	if !event.OccurredAt.IsZero() {
+		sb.WriteString(fmt.Sprintf(" (%s)", event.OccurredAt.Format(time.RFC1123)))
+	}
+	sb.WriteString("\n")
+	if event.ImageRef != "" {
+		sb.WriteString("   Image:   " + event.ImageRef + "\n")
+	}
+	if event.ScanID != "" {
+		sb.WriteString("   Scan ID: " + event.ScanID + "\n")
+	}
+	if event.ScanURL != "" {
+		sb.WriteString("   Scan:    " + event.ScanURL + "\n")
+	}
+	if len(event.OrgNames) > 0 {
+		sb.WriteString("   Organizations: " + strings.Join(event.OrgNames, ", ") + "\n")
+	}
+	if event.ScanProvider != "" {
+		sb.WriteString("   Provider: " + event.ScanProvider + "\n")
+	}
+	if event.Status != "" {
+		sb.WriteString("   Status:   " + event.Status + "\n")
+	}
+	if event.HighestSeverity != "" {
+		sb.WriteString("   Severity: " + event.HighestSeverity)
+		if event.HighestCVSS > 0 {
+			sb.WriteString(fmt.Sprintf(" (CVSS %.1f)", event.HighestCVSS))
+		}
+		sb.WriteString("\n")
+	} else if event.HighestCVSS > 0 {
+		sb.WriteString(fmt.Sprintf("   CVSS: %.1f\n", event.HighestCVSS))
+	}
+	if counts := findingCountsText(event.CriticalCount, event.HighCount, event.MediumCount, event.LowCount, event.UnknownCount, event.SuppressedCount); counts != "" {
+		sb.WriteString("   Findings: " + counts + "\n")
+	}
+	if event.ComplianceStatus != "" {
+		sb.WriteString("   Compliance: " + event.ComplianceStatus + "\n")
+	} else if event.ComplianceFailed {
+		sb.WriteString("   Compliance: failed\n")
+	}
+	if event.XrayBlocked {
+		sb.WriteString("   Xray: blocked by policy\n")
+	}
+	if len(event.PolicyNames) > 0 {
+		sb.WriteString("   Policies: " + strings.Join(event.PolicyNames, ", ") + "\n")
+	}
+	if len(event.XrayPolicyNames) > 0 {
+		sb.WriteString("   Xray policies: " + strings.Join(event.XrayPolicyNames, ", ") + "\n")
+	}
+	if len(event.XrayWatchNames) > 0 {
+		sb.WriteString("   Xray watches: " + strings.Join(event.XrayWatchNames, ", ") + "\n")
+	}
+	if len(event.ChangedCVEs) > 0 {
+		sb.WriteString("   Changed CVEs: " + strings.Join(event.ChangedCVEs, ", ") + "\n")
+	}
+	if event.IntelligenceImpact != "" {
+		sb.WriteString("   Intelligence impact: " + event.IntelligenceImpact + "\n")
+	}
+	if event.RescanRequired {
+		sb.WriteString("   Action: rescan required\n")
+	}
+	if len(event.Tags) > 0 {
+		sb.WriteString("   Tags: " + strings.Join(event.Tags, ", ") + "\n")
+	}
+	if event.Details != "" {
+		sb.WriteString("   Details: " + event.Details + "\n")
+	}
 	return sb.String()
 }
 
@@ -635,6 +1013,8 @@ func eventTitle(event string) string {
 		return "Compliance Policy Failed"
 	case models.NotificationEventIntelligencePolicyImpact:
 		return "CVE Intelligence Changed Policy Impact"
+	case notificationDigestEvent:
+		return "Notification Digest"
 	default:
 		return event
 	}

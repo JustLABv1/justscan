@@ -1,4 +1,4 @@
-FROM reg.mini.dev/node:v26.5.1-dev AS builder
+FROM reg.mini.dev/node:v26.6.0-dev AS builder
 
 USER root
 WORKDIR /app
@@ -16,7 +16,7 @@ ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm run build
 
-FROM reg.mini.dev/node:v26.5.1 AS runner
+FROM reg.mini.dev/node:v26.6.0 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

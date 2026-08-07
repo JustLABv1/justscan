@@ -25,13 +25,16 @@ import (
 )
 
 const (
-	cveHistorySource       = "nvd_cve_history"
-	nvdHistoryURL          = "https://services.nvd.nist.gov/rest/json/cvehistory/2.0"
-	nvdCVEsURL             = "https://services.nvd.nist.gov/rest/json/cves/2.0"
-	officialCVEBaseURL     = "https://cveawg.mitre.org/api/cve"
-	maxNVDHistoryWindow    = 120 * 24 * time.Hour
-	defaultNVDRequestDelay = 6 * time.Second
-	defaultHistoryPageSize = 5000
+	cveHistorySource            = "nvd_cve_history"
+	nvdHistoryURL               = "https://services.nvd.nist.gov/rest/json/cvehistory/2.0"
+	nvdCVEsURL                  = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+	officialCVEBaseURL          = "https://cveawg.mitre.org/api/cve"
+	maxNVDHistoryWindow         = 120 * 24 * time.Hour
+	defaultNVDRequestDelay      = 6 * time.Second
+	defaultCVEHistoryTimeout    = 5 * time.Minute
+	defaultHistoryPageSize      = 2000
+	maxCVEHistoryResponseBytes  = 32 << 20
+	maxCVEHistoryErrorBodyBytes = 2048
 )
 
 var ErrCVEHistorySyncRunning = errors.New("CVE history sync is already running")
@@ -152,16 +155,61 @@ type cveHistoryClient struct {
 }
 
 type cveHistoryHTTPError struct {
-	StatusCode int
-	RetryAfter time.Duration
-	Body       string
+	Endpoint    string
+	StatusCode  int
+	RetryAfter  time.Duration
+	Body        string
+	BodyBytes   int
+	BodyLimited bool
 }
 
 func (e *cveHistoryHTTPError) Error() string {
+	message := fmt.Sprintf("CVE history request %s returned HTTP %d (%s)", e.Endpoint, e.StatusCode, formatCVEHistoryResponseSize(e.BodyBytes, e.BodyLimited))
 	if e.Body == "" {
-		return fmt.Sprintf("CVE history request returned HTTP %d", e.StatusCode)
+		return message
 	}
-	return fmt.Sprintf("CVE history request returned HTTP %d: %s", e.StatusCode, e.Body)
+	return message + ": " + e.Body
+}
+
+type cveHistoryJSONError struct {
+	Endpoint   string
+	StatusCode int
+	BodyBytes  int
+	Cause      error
+}
+
+func (e *cveHistoryJSONError) Error() string {
+	return fmt.Sprintf("decode CVE history response from %s (HTTP %d, %s): %v", e.Endpoint, e.StatusCode, formatCVEHistoryResponseSize(e.BodyBytes, false), e.Cause)
+}
+
+func (e *cveHistoryJSONError) Unwrap() error {
+	return e.Cause
+}
+
+type cveHistoryResponseTooLargeError struct {
+	Endpoint   string
+	StatusCode int
+	BodyBytes  int
+	LimitBytes int
+}
+
+func (e *cveHistoryResponseTooLargeError) Error() string {
+	return fmt.Sprintf("CVE history response from %s returned HTTP %d and exceeded the %d-byte limit (read at least %d bytes)", e.Endpoint, e.StatusCode, e.LimitBytes, e.BodyBytes)
+}
+
+func formatCVEHistoryResponseSize(bodyBytes int, limited bool) string {
+	if limited {
+		return fmt.Sprintf("at least %d response bytes", bodyBytes)
+	}
+	return fmt.Sprintf("%d response bytes", bodyBytes)
+}
+
+func cveHistoryErrorBody(body []byte) string {
+	value := strings.TrimSpace(string(body))
+	if len(value) > maxCVEHistoryErrorBodyBytes {
+		return value[:maxCVEHistoryErrorBodyBytes] + "..."
+	}
+	return value
 }
 
 type nvdHistoryPage struct {
@@ -204,7 +252,7 @@ func newCVEHistoryClient() *cveHistoryClient {
 		nvdCVEsBaseURL:     nvdCVEsURL,
 		officialCVEBaseURL: officialCVEBaseURL,
 		apiKey:             apiKey,
-		httpClient:         &http.Client{Timeout: 60 * time.Second},
+		httpClient:         &http.Client{Timeout: defaultCVEHistoryTimeout},
 		minInterval:        defaultNVDRequestDelay,
 		maxRetries:         3,
 		sleep:              contextSleep,
@@ -230,7 +278,7 @@ func (c *cveHistoryClient) getJSON(ctx context.Context, endpoint string, destina
 		return fmt.Errorf("CVE history client is required")
 	}
 	if c.httpClient == nil {
-		c.httpClient = &http.Client{Timeout: 60 * time.Second}
+		c.httpClient = &http.Client{Timeout: defaultCVEHistoryTimeout}
 	}
 	if c.sleep == nil {
 		c.sleep = contextSleep
@@ -259,7 +307,7 @@ func (c *cveHistoryClient) getJSON(ctx context.Context, endpoint string, destina
 				return ctx.Err()
 			}
 			if attempt == c.maxRetries {
-				return fmt.Errorf("request CVE history endpoint: %w", err)
+				return fmt.Errorf("request CVE history endpoint %s: %w", endpoint, err)
 			}
 			if err := c.sleep(ctx, retryDelay(attempt, 0)); err != nil {
 				return err
@@ -267,16 +315,28 @@ func (c *cveHistoryClient) getJSON(ctx context.Context, endpoint string, destina
 			continue
 		}
 
-		body, readErr := io.ReadAll(io.LimitReader(response.Body, 32<<20))
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, maxCVEHistoryResponseBytes+1))
 		response.Body.Close()
 		if readErr != nil {
-			return fmt.Errorf("read CVE history response: %w", readErr)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if attempt == c.maxRetries {
+				return fmt.Errorf("read CVE history response from %s (HTTP %d, %s): %w", endpoint, response.StatusCode, formatCVEHistoryResponseSize(len(body), false), readErr)
+			}
+			if err := c.sleep(ctx, retryDelay(attempt, 0)); err != nil {
+				return err
+			}
+			continue
 		}
 		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 			httpErr := &cveHistoryHTTPError{
-				StatusCode: response.StatusCode,
-				RetryAfter: parseRetryAfter(response.Header.Get("Retry-After"), time.Now()),
-				Body:       strings.TrimSpace(string(body)),
+				Endpoint:    endpoint,
+				StatusCode:  response.StatusCode,
+				RetryAfter:  parseRetryAfter(response.Header.Get("Retry-After"), time.Now()),
+				Body:        cveHistoryErrorBody(body),
+				BodyBytes:   len(body),
+				BodyLimited: len(body) > maxCVEHistoryResponseBytes,
 			}
 			if !isRetryableCVEHistoryStatus(response.StatusCode) || attempt == c.maxRetries {
 				return httpErr
@@ -287,8 +347,43 @@ func (c *cveHistoryClient) getJSON(ctx context.Context, endpoint string, destina
 			continue
 		}
 
+		if len(body) > maxCVEHistoryResponseBytes {
+			return &cveHistoryResponseTooLargeError{
+				Endpoint:   endpoint,
+				StatusCode: response.StatusCode,
+				BodyBytes:  len(body),
+				LimitBytes: maxCVEHistoryResponseBytes,
+			}
+		}
+
+		if !json.Valid(body) {
+			var raw json.RawMessage
+			decodeErr := json.Unmarshal(body, &raw)
+			if decodeErr == nil {
+				decodeErr = errors.New("invalid JSON")
+			}
+			jsonErr := &cveHistoryJSONError{
+				Endpoint:   endpoint,
+				StatusCode: response.StatusCode,
+				BodyBytes:  len(body),
+				Cause:      decodeErr,
+			}
+			if attempt == c.maxRetries {
+				return jsonErr
+			}
+			if err := c.sleep(ctx, retryDelay(attempt, 0)); err != nil {
+				return err
+			}
+			continue
+		}
+
 		if err := json.Unmarshal(body, destination); err != nil {
-			return fmt.Errorf("decode CVE history response: %w", err)
+			return &cveHistoryJSONError{
+				Endpoint:   endpoint,
+				StatusCode: response.StatusCode,
+				BodyBytes:  len(body),
+				Cause:      err,
+			}
 		}
 		return nil
 	}

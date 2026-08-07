@@ -3,6 +3,7 @@ package scanner
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -56,10 +57,10 @@ func TestCVEHistoryClientFetchHistoryPage(t *testing.T) {
 			t.Errorf("api key header = %q", request.Header.Get("apiKey"))
 		}
 		query := request.URL.Query()
-		if query.Get("changeStartDate") == "" || query.Get("changeEndDate") == "" || query.Get("resultsPerPage") != "5000" || query.Get("startIndex") != "0" {
+		if query.Get("changeStartDate") == "" || query.Get("changeEndDate") == "" || query.Get("resultsPerPage") != "2000" || query.Get("startIndex") != "0" {
 			t.Errorf("unexpected history query: %s", request.URL.RawQuery)
 		}
-		_, _ = writer.Write([]byte(`{"resultsPerPage":5000,"startIndex":0,"totalResults":1,"cveChanges":[{"change":{"cveId":"CVE-2026-0002","eventName":"CVE Rejected","cveChangeId":"change-2","created":"2026-08-01T11:00:00Z","details":[]}}]}`))
+		_, _ = writer.Write([]byte(`{"resultsPerPage":2000,"startIndex":0,"totalResults":1,"cveChanges":[{"change":{"cveId":"CVE-2026-0002","eventName":"CVE Rejected","cveChangeId":"change-2","created":"2026-08-01T11:00:00Z","details":[]}}]}`))
 	}))
 	defer server.Close()
 
@@ -76,6 +77,16 @@ func TestCVEHistoryClientFetchHistoryPage(t *testing.T) {
 	}
 	if len(page.Changes) != 1 || page.Changes[0].EventName != "CVE Rejected" {
 		t.Fatalf("history changes = %#v", page.Changes)
+	}
+}
+
+func TestNewCVEHistoryClientUsesLongRequestTimeout(t *testing.T) {
+	client := newCVEHistoryClient()
+	if client.httpClient == nil {
+		t.Fatal("HTTP client is nil")
+	}
+	if client.httpClient.Timeout != defaultCVEHistoryTimeout {
+		t.Fatalf("HTTP timeout = %v, want %v", client.httpClient.Timeout, defaultCVEHistoryTimeout)
 	}
 }
 
@@ -107,6 +118,90 @@ func TestCVEHistoryClientRetriesRateLimit(t *testing.T) {
 	}
 	if requests.Load() != 2 || len(waits) != 1 || waits[0] != time.Second {
 		t.Fatalf("requests/waits = %d/%v", requests.Load(), waits)
+	}
+}
+
+func TestCVEHistoryClientRetriesMalformedJSONResponse(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if requests.Add(1) < 3 {
+			_, _ = writer.Write([]byte(`{"ok":`))
+			return
+		}
+		_, _ = writer.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	var waits []time.Duration
+	client := &cveHistoryClient{
+		httpClient: server.Client(),
+		maxRetries: 2,
+		sleep: func(_ context.Context, delay time.Duration) error {
+			waits = append(waits, delay)
+			return nil
+		},
+	}
+	var result models.JSONObject
+	if err := client.getJSON(context.Background(), server.URL, &result); err != nil {
+		t.Fatalf("malformed JSON retry: %v", err)
+	}
+	if requests.Load() != 3 || len(waits) != 2 || waits[0] != time.Second || waits[1] != 2*time.Second {
+		t.Fatalf("requests/waits = %d/%v", requests.Load(), waits)
+	}
+	if result["ok"] != true {
+		t.Fatalf("decoded response = %#v", result)
+	}
+}
+
+func TestCVEHistoryClientReportsMalformedJSONResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = writer.Write([]byte(`{"ok":`))
+	}))
+	defer server.Close()
+
+	client := &cveHistoryClient{
+		httpClient: server.Client(),
+		maxRetries: 0,
+		sleep:      func(context.Context, time.Duration) error { return nil },
+	}
+	var result models.JSONObject
+	err := client.getJSON(context.Background(), server.URL, &result)
+	if err == nil {
+		t.Fatal("expected malformed JSON error")
+	}
+	for _, expected := range []string{server.URL, "HTTP 200", "6 response bytes", "unexpected end of JSON input"} {
+		if !strings.Contains(err.Error(), expected) {
+			t.Fatalf("error %q does not contain %q", err, expected)
+		}
+	}
+}
+
+func TestCVEHistoryClientRejectsOversizedResponse(t *testing.T) {
+	var requests atomic.Int32
+	body := strings.Repeat("x", maxCVEHistoryResponseBytes+1)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requests.Add(1)
+		_, _ = writer.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	client := &cveHistoryClient{
+		httpClient: server.Client(),
+		maxRetries: 2,
+		sleep:      func(context.Context, time.Duration) error { return nil },
+	}
+	var result models.JSONObject
+	err := client.getJSON(context.Background(), server.URL, &result)
+	if err == nil {
+		t.Fatal("expected oversized response error")
+	}
+	if requests.Load() != 1 {
+		t.Fatalf("requests = %d, want 1", requests.Load())
+	}
+	for _, expected := range []string{server.URL, "HTTP 200", "exceeded", fmt.Sprintf("%d", maxCVEHistoryResponseBytes)} {
+		if !strings.Contains(err.Error(), expected) {
+			t.Fatalf("error %q does not contain %q", err, expected)
+		}
 	}
 }
 

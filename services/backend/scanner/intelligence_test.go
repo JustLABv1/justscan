@@ -5,9 +5,12 @@ import (
 	"testing"
 	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
 )
 
 func TestDerivePostureState(t *testing.T) {
@@ -128,8 +131,30 @@ func TestDerivePostureStoresConflictingSources(t *testing.T) {
 	if len(posture.ConflictSources) != 2 || posture.ConflictSources[0] != "NVD" || posture.ConflictSources[1] != "OSV" {
 		t.Fatalf("conflict sources = %#v, want [NVD OSV]", posture.ConflictSources)
 	}
+	if posture.FindingID != findingID || posture.ScanID != scanID {
+		t.Fatalf("posture identity = finding %s / scan %s, want finding %s / scan %s", posture.FindingID, posture.ScanID, findingID, scanID)
+	}
 	if posture.Severity != models.SeverityUnknown || posture.CVSSScore != 0 {
 		t.Fatalf("conflicting posture selected a score: severity=%q score=%v", posture.Severity, posture.CVSSScore)
+	}
+}
+
+func TestHistoricalFindingsQueryRequiresExistingScan(t *testing.T) {
+	sqldb, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock database: %v", err)
+	}
+	defer sqldb.Close()
+
+	db := bun.NewDB(sqldb, pgdialect.New())
+	defer db.Close()
+
+	query := historicalFindingsForPostureRefreshQuery(db, []string{"CVE-2026-0001"}).String()
+	if !strings.Contains(query, "JOIN scans AS s ON s.id = v.scan_id") {
+		t.Fatalf("historical finding query does not require a valid scan: %s", query)
+	}
+	if !strings.Contains(query, "v.vuln_id IN") {
+		t.Fatalf("historical finding query lost the vulnerability filter: %s", query)
 	}
 }
 

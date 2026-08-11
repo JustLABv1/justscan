@@ -372,8 +372,8 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 		}
 	}
 
-	var findings []models.Vulnerability
-	if err := db.NewSelect().Model(&findings).Where("vuln_id IN (?)", bun.In(vulnIDs)).Scan(ctx); err != nil {
+	findings, err := loadHistoricalFindingsForPostureRefresh(ctx, db, vulnIDs)
+	if err != nil {
 		return nil, fmt.Errorf("load historical findings for posture refresh: %w", err)
 	}
 
@@ -515,6 +515,28 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 	}
 
 	return changes, nil
+}
+
+// loadHistoricalFindingsForPostureRefresh intentionally joins scans. Older
+// installations can contain vulnerability rows whose scan was deleted before
+// scan deletion consistently removed all dependent rows. Such a row cannot
+// receive a posture because vulnerability_postures.scan_id is required to
+// reference an existing scan; excluding it keeps one orphan from aborting the
+// complete feed refresh.
+func loadHistoricalFindingsForPostureRefresh(ctx context.Context, db bun.IDB, vulnIDs []string) ([]models.Vulnerability, error) {
+	var findings []models.Vulnerability
+	if err := historicalFindingsForPostureRefreshQuery(db, vulnIDs).Scan(ctx, &findings); err != nil {
+		return nil, err
+	}
+	return findings, nil
+}
+
+func historicalFindingsForPostureRefreshQuery(db bun.IDB, vulnIDs []string) *bun.SelectQuery {
+	return db.NewSelect().
+		TableExpr("vulnerabilities AS v").
+		ColumnExpr("v.*").
+		Join("JOIN scans AS s ON s.id = v.scan_id").
+		Where("v.vuln_id IN (?)", bun.In(vulnIDs))
 }
 
 func intelligenceKeyRequested(requestedKeys map[string]bool, finding models.Vulnerability) bool {

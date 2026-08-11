@@ -371,6 +371,7 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 			vulnIDs = append(vulnIDs, key.VulnID)
 		}
 	}
+	sort.Strings(vulnIDs)
 
 	findings, err := loadHistoricalFindingsForPostureRefresh(ctx, db, vulnIDs)
 	if err != nil {
@@ -469,13 +470,29 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 		}
 
 		posture := derivePostureForIdentity(finding, identityByFinding[finding.ID], latest, versionNames)
-		var existing models.VulnerabilityPosture
-		err := db.NewSelect().Model(&existing).Where("finding_id = ?", finding.ID).Scan(ctx)
+		existing, err := loadCurrentPostureForUpdate(ctx, db, finding.ID)
 		if err != nil && err != sql.ErrNoRows {
 			return nil, fmt.Errorf("load current posture for finding %s: %w", finding.ID, err)
 		}
 
 		hasExisting := err == nil
+		if !hasExisting {
+			locked, lockErr := lockFindingForPostureRefresh(ctx, db, finding.ID)
+			if lockErr != nil {
+				return nil, fmt.Errorf("lock finding %s for posture refresh: %w", finding.ID, lockErr)
+			}
+			if !locked {
+				// A scan deletion won the race after the historical finding query.
+				// The finding and its posture are no longer valid write targets.
+				continue
+			}
+
+			existing, err = loadCurrentPostureForUpdate(ctx, db, finding.ID)
+			if err != nil && err != sql.ErrNoRows {
+				return nil, fmt.Errorf("reload current posture for finding %s: %w", finding.ID, err)
+			}
+			hasExisting = err == nil
+		}
 		if hasExisting && !postureChanged(existing, posture) {
 			continue
 		}
@@ -489,8 +506,8 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 				return nil, fmt.Errorf("update posture for finding %s: %w", finding.ID, err)
 			}
 		} else {
-			if _, err := db.NewInsert().Model(&posture).Exec(ctx); err != nil {
-				return nil, fmt.Errorf("create posture for finding %s: %w", finding.ID, err)
+			if _, err := upsertVulnerabilityPostureQuery(db, &posture).Exec(ctx); err != nil {
+				return nil, fmt.Errorf("upsert posture for finding %s: %w", finding.ID, err)
 			}
 		}
 
@@ -515,6 +532,59 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 	}
 
 	return changes, nil
+}
+
+func loadCurrentPostureForUpdate(ctx context.Context, db bun.IDB, findingID uuid.UUID) (models.VulnerabilityPosture, error) {
+	var posture models.VulnerabilityPosture
+	err := currentPostureForUpdateQuery(db, findingID).Scan(ctx, &posture)
+	return posture, err
+}
+
+func currentPostureForUpdateQuery(db bun.IDB, findingID uuid.UUID) *bun.SelectQuery {
+	return db.NewSelect().
+		Model((*models.VulnerabilityPosture)(nil)).
+		Where("finding_id = ?", findingID).
+		For("UPDATE")
+}
+
+func lockFindingForPostureRefresh(ctx context.Context, db bun.IDB, findingID uuid.UUID) (bool, error) {
+	var lockedID uuid.UUID
+	err := db.NewSelect().
+		TableExpr("vulnerabilities").
+		ColumnExpr("id").
+		Where("id = ?", findingID).
+		For("UPDATE").
+		Scan(ctx, &lockedID)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func upsertVulnerabilityPostureQuery(db bun.IDB, posture *models.VulnerabilityPosture) *bun.InsertQuery {
+	return db.NewInsert().
+		Model(posture).
+		On("CONFLICT (finding_id) DO UPDATE").
+		Set(`scan_id = EXCLUDED.scan_id,
+			state = EXCLUDED.state,
+			cve_state = EXCLUDED.cve_state,
+			severity = EXCLUDED.severity,
+			cvss_score = EXCLUDED.cvss_score,
+			cvss_vector = EXCLUDED.cvss_vector,
+			affected_ranges = EXCLUDED.affected_ranges,
+			fixed_versions = EXCLUDED.fixed_versions,
+			exploit_signals = EXCLUDED.exploit_signals,
+			source = EXCLUDED.source,
+			observed_at = EXCLUDED.observed_at,
+			reason = EXCLUDED.reason,
+			intelligence_version_id = EXCLUDED.intelligence_version_id,
+			intelligence_version = EXCLUDED.intelligence_version,
+			conflict_sources = EXCLUDED.conflict_sources,
+			change_event_id = EXCLUDED.change_event_id,
+			updated_at = NOW()`)
 }
 
 // loadHistoricalFindingsForPostureRefresh intentionally joins scans. Older

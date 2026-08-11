@@ -158,6 +158,36 @@ func TestHistoricalFindingsQueryRequiresExistingScan(t *testing.T) {
 	}
 }
 
+func TestPostureInsertUsesAtomicFindingUpsert(t *testing.T) {
+	sqldb, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock database: %v", err)
+	}
+	defer sqldb.Close()
+
+	db := bun.NewDB(sqldb, pgdialect.New())
+	defer db.Close()
+
+	query := upsertVulnerabilityPostureQuery(db, &models.VulnerabilityPosture{
+		FindingID: uuid.New(),
+		ScanID:    uuid.New(),
+	}).String()
+	for _, expected := range []string{
+		"ON CONFLICT (finding_id) DO UPDATE",
+		"scan_id = EXCLUDED.scan_id",
+		"updated_at = NOW()",
+	} {
+		if !strings.Contains(query, expected) {
+			t.Fatalf("posture upsert query missing %q: %s", expected, query)
+		}
+	}
+
+	lockQuery := currentPostureForUpdateQuery(db, uuid.New()).String()
+	if !strings.Contains(lockQuery, "FOR UPDATE") {
+		t.Fatalf("posture lookup does not lock the current row: %s", lockQuery)
+	}
+}
+
 func TestIntelligenceDescriptorUsesFeedVersion(t *testing.T) {
 	updatedAt := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
 	scan := &models.Scan{

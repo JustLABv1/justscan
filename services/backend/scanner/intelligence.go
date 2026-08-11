@@ -97,25 +97,24 @@ func RecordIntelligenceSnapshot(ctx context.Context, db *bun.DB, scan *models.Sc
 		return fmt.Errorf("load scan findings: %w", err)
 	}
 
-	kbByID := make(map[string]models.VulnKBEntry)
-	if len(findings) > 0 {
-		vulnIDs := make([]string, 0, len(findings))
-		seen := make(map[string]bool, len(findings))
-		for _, finding := range findings {
-			if finding.VulnID == "" || seen[finding.VulnID] {
-				continue
-			}
-			seen[finding.VulnID] = true
-			vulnIDs = append(vulnIDs, finding.VulnID)
+	vulnIDs := make([]string, 0, len(findings))
+	seenVulnIDs := make(map[string]bool, len(findings))
+	for _, finding := range findings {
+		if finding.VulnID == "" || seenVulnIDs[finding.VulnID] {
+			continue
 		}
-		if len(vulnIDs) > 0 {
-			var entries []models.VulnKBEntry
-			if err := db.NewSelect().Model(&entries).Where("vuln_id IN (?)", bun.In(vulnIDs)).Scan(ctx); err != nil {
-				return fmt.Errorf("load knowledge-base entries: %w", err)
-			}
-			for _, entry := range entries {
-				kbByID[entry.VulnID] = entry
-			}
+		seenVulnIDs[finding.VulnID] = true
+		vulnIDs = append(vulnIDs, finding.VulnID)
+	}
+
+	kbByID := make(map[string]models.VulnKBEntry)
+	if len(vulnIDs) > 0 {
+		var entries []models.VulnKBEntry
+		if err := db.NewSelect().Model(&entries).Where("vuln_id IN (?)", bun.In(vulnIDs)).Scan(ctx); err != nil {
+			return fmt.Errorf("load knowledge-base entries: %w", err)
+		}
+		for _, entry := range entries {
+			kbByID[entry.VulnID] = entry
 		}
 	}
 
@@ -126,6 +125,32 @@ func RecordIntelligenceSnapshot(ctx context.Context, db *bun.DB, scan *models.Sc
 		version, err := ensureIntelligenceVersion(ctx, tx, descriptor)
 		if err != nil {
 			return err
+		}
+
+		// Evidence rows reference vulnerabilities. Lock every historical finding
+		// that the subsequent posture refresh can touch before inserting evidence,
+		// so this transaction never acquires finding locks after a later posture
+		// refresh has already started acquiring them.
+		historicalFindings, err := loadHistoricalFindingsForPostureRefresh(ctx, tx, vulnIDs)
+		if err != nil {
+			return fmt.Errorf("load historical findings before evidence insert: %w", err)
+		}
+		historicalFindingIDs := make([]uuid.UUID, 0, len(historicalFindings))
+		for _, finding := range historicalFindings {
+			historicalFindingIDs = append(historicalFindingIDs, finding.ID)
+		}
+		lockedFindingIDs, err := lockHistoricalFindingsForPostureRefresh(ctx, tx, historicalFindingIDs)
+		if err != nil {
+			return fmt.Errorf("lock historical findings before evidence insert: %w", err)
+		}
+		if len(lockedFindingIDs) != len(findings) {
+			lockedFindings := make([]models.Vulnerability, 0, len(findings))
+			for _, finding := range findings {
+				if lockedFindingIDs[finding.ID] {
+					lockedFindings = append(lockedFindings, finding)
+				}
+			}
+			findings = lockedFindings
 		}
 
 		link := &models.ScanIntelligenceVersion{
@@ -377,6 +402,25 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 	if err != nil {
 		return nil, fmt.Errorf("load historical findings for posture refresh: %w", err)
 	}
+	findingIDs := make([]uuid.UUID, 0, len(findings))
+	for _, finding := range findings {
+		findingIDs = append(findingIDs, finding.ID)
+	}
+	lockedFindingIDs, err := lockHistoricalFindingsForPostureRefresh(ctx, db, findingIDs)
+	if err != nil {
+		return nil, fmt.Errorf("lock historical findings for posture refresh: %w", err)
+	}
+	if len(lockedFindingIDs) != len(findings) {
+		// A scan deletion may have won a race after the historical finding query.
+		// Keep only rows that still exist and are locked by this transaction.
+		lockedFindings := make([]models.Vulnerability, 0, len(lockedFindingIDs))
+		for _, finding := range findings {
+			if lockedFindingIDs[finding.ID] {
+				lockedFindings = append(lockedFindings, finding)
+			}
+		}
+		findings = lockedFindings
+	}
 
 	identityByFinding := make(map[uuid.UUID]vulnerabilityFindingIdentity, len(findings))
 	for _, finding := range findings {
@@ -391,7 +435,7 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 			VulnerabilityID uuid.UUID `bun:"vulnerability_id"`
 			PackageURL      string    `bun:"package_url"`
 		}
-		findingIDs := make([]uuid.UUID, 0, len(findings))
+		findingIDs = findingIDs[:0]
 		for _, finding := range findings {
 			findingIDs = append(findingIDs, finding.ID)
 		}
@@ -476,23 +520,6 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 		}
 
 		hasExisting := err == nil
-		if !hasExisting {
-			locked, lockErr := lockFindingForPostureRefresh(ctx, db, finding.ID)
-			if lockErr != nil {
-				return nil, fmt.Errorf("lock finding %s for posture refresh: %w", finding.ID, lockErr)
-			}
-			if !locked {
-				// A scan deletion won the race after the historical finding query.
-				// The finding and its posture are no longer valid write targets.
-				continue
-			}
-
-			existing, err = loadCurrentPostureForUpdate(ctx, db, finding.ID)
-			if err != nil && err != sql.ErrNoRows {
-				return nil, fmt.Errorf("reload current posture for finding %s: %w", finding.ID, err)
-			}
-			hasExisting = err == nil
-		}
 		if hasExisting && !postureChanged(existing, posture) {
 			continue
 		}
@@ -547,21 +574,59 @@ func currentPostureForUpdateQuery(db bun.IDB, findingID uuid.UUID) *bun.SelectQu
 		For("UPDATE")
 }
 
-func lockFindingForPostureRefresh(ctx context.Context, db bun.IDB, findingID uuid.UUID) (bool, error) {
-	var lockedID uuid.UUID
-	err := db.NewSelect().
+// lockHistoricalFindingsForPostureRefresh acquires all finding locks before
+// any posture lock. Scan deletion uses the same parent-before-child order,
+// and sorting the lock query prevents two refresh transactions from taking
+// overlapping finding locks in different orders.
+func lockHistoricalFindingsForPostureRefresh(ctx context.Context, db bun.IDB, findingIDs []uuid.UUID) (map[uuid.UUID]bool, error) {
+	locked := make(map[uuid.UUID]bool, len(findingIDs))
+	if len(findingIDs) == 0 {
+		return locked, nil
+	}
+
+	var lockedIDs []uuid.UUID
+	err := findingForPostureRefreshQuery(db, findingIDs).Scan(ctx, &lockedIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, findingID := range lockedIDs {
+		locked[findingID] = true
+	}
+	return locked, nil
+}
+
+func findingForPostureRefreshQuery(db bun.IDB, findingIDs []uuid.UUID) *bun.SelectQuery {
+	return db.NewSelect().
 		TableExpr("vulnerabilities").
 		ColumnExpr("id").
-		Where("id = ?", findingID).
-		For("UPDATE").
-		Scan(ctx, &lockedID)
-	if err == sql.ErrNoRows {
-		return false, nil
+		Where("id IN (?)", bun.In(findingIDs)).
+		OrderExpr("id ASC").
+		For("UPDATE")
+}
+
+// LockVulnerabilitiesForUpdate acquires all vulnerability rows belonging to
+// the given scans in the same order used by posture refreshes. Scan deletion
+// calls this inside its transaction before deleting any dependent rows, which
+// keeps the parent-before-child lock order consistent across both workflows.
+func LockVulnerabilitiesForUpdate(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
+	if len(scanIDs) == 0 {
+		return nil
 	}
-	if err != nil {
-		return false, err
+
+	var findingIDs []uuid.UUID
+	if err := vulnerabilitiesForScanUpdateQuery(db, scanIDs).Scan(ctx, &findingIDs); err != nil {
+		return err
 	}
-	return true, nil
+	return nil
+}
+
+func vulnerabilitiesForScanUpdateQuery(db bun.IDB, scanIDs []uuid.UUID) *bun.SelectQuery {
+	return db.NewSelect().
+		TableExpr("vulnerabilities").
+		ColumnExpr("id").
+		Where("scan_id IN (?)", bun.In(scanIDs)).
+		OrderExpr("id ASC").
+		For("UPDATE")
 }
 
 func upsertVulnerabilityPostureQuery(db bun.IDB, posture *models.VulnerabilityPosture) *bun.InsertQuery {

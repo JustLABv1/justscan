@@ -112,6 +112,10 @@ func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) err
 		return nil
 	}
 
+	if err := scanner.LockVulnerabilitiesForUpdate(ctx, db, scanIDs); err != nil {
+		return fmt.Errorf("lock vulnerabilities before scan deletion: %w", err)
+	}
+
 	for _, table := range []string{
 		"comments",
 		"vulnerabilities",

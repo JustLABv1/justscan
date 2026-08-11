@@ -1,12 +1,14 @@
 package helm
 
 import (
+	"context"
 	"net/http"
 	"sort"
 	"strconv"
 
 	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
+	"justscan-backend/scanner"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -329,45 +331,52 @@ func DeleteRun(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
+		deletedRun := false
 		ctx := c.Request.Context()
-		for _, table := range []string{
-			"comments",
-			"vulnerabilities",
-			"sbom_components",
-			"scan_tags",
-			"org_scans",
-			"scan_manual_findings",
-			"scan_step_logs",
-			"xray_request_logs",
-			"xray_suppressions",
-		} {
-			db.NewDelete().TableExpr(table).Where("scan_id IN (?)", bun.In(scanIDs)).Exec(ctx) //nolint:errcheck
-		}
+		if err := db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+			if err := scanner.LockVulnerabilitiesForUpdate(ctx, tx, scanIDs); err != nil {
+				return err
+			}
 
-		if _, err := db.NewDelete().
-			Model((*models.Scan)(nil)).
-			Where("id IN (?)", bun.In(scanIDs)).
-			Exec(ctx); err != nil {
+			for _, table := range []string{
+				"comments",
+				"vulnerabilities",
+				"sbom_components",
+				"scan_tags",
+				"org_scans",
+				"scan_manual_findings",
+				"scan_step_logs",
+				"xray_request_logs",
+				"xray_suppressions",
+			} {
+				tx.NewDelete().TableExpr(table).Where("scan_id IN (?)", bun.In(scanIDs)).Exec(ctx) //nolint:errcheck
+			}
+
+			if _, err := tx.NewDelete().
+				Model((*models.Scan)(nil)).
+				Where("id IN (?)", bun.In(scanIDs)).
+				Exec(ctx); err != nil {
+				return err
+			}
+
+			remaining, err := tx.NewSelect().
+				Model((*models.Scan)(nil)).
+				Where("helm_scan_run_id = ?", runID).
+				Count(ctx)
+			if err != nil {
+				return err
+			}
+
+			if remaining == 0 {
+				if _, err := tx.NewDelete().Model((*models.HelmScanRun)(nil)).Where("id = ?", runID).Exec(ctx); err != nil {
+					return err
+				}
+				deletedRun = true
+			}
+			return nil
+		}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete Helm run scans"})
 			return
-		}
-
-		remaining, err := db.NewSelect().
-			Model((*models.Scan)(nil)).
-			Where("helm_scan_run_id = ?", runID).
-			Count(ctx)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check Helm run scans"})
-			return
-		}
-
-		deletedRun := false
-		if remaining == 0 {
-			if _, err := db.NewDelete().Model((*models.HelmScanRun)(nil)).Where("id = ?", runID).Exec(ctx); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete Helm run"})
-				return
-			}
-			deletedRun = true
 		}
 
 		c.JSON(http.StatusOK, gin.H{"deleted_scans": len(scanIDs), "deleted_run": deletedRun})

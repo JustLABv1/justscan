@@ -186,6 +186,14 @@ func TestPostureInsertUsesAtomicFindingUpsert(t *testing.T) {
 	if !strings.Contains(lockQuery, "FOR UPDATE") {
 		t.Fatalf("posture lookup does not lock the current row: %s", lockQuery)
 	}
+	findingLockQuery := findingForPostureRefreshQuery(db, []uuid.UUID{uuid.New(), uuid.New()}).String()
+	if !strings.Contains(findingLockQuery, "FOR UPDATE") || !strings.Contains(findingLockQuery, "ORDER BY id ASC") {
+		t.Fatalf("finding lookup does not use deterministic parent-row locking: %s", findingLockQuery)
+	}
+	scanFindingLockQuery := vulnerabilitiesForScanUpdateQuery(db, []uuid.UUID{uuid.New(), uuid.New()}).String()
+	if !strings.Contains(scanFindingLockQuery, "FOR UPDATE") || !strings.Contains(scanFindingLockQuery, "ORDER BY id ASC") {
+		t.Fatalf("scan deletion lookup does not use deterministic parent-row locking: %s", scanFindingLockQuery)
+	}
 }
 
 func TestIntelligenceDescriptorUsesFeedVersion(t *testing.T) {

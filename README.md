@@ -547,6 +547,8 @@ Important values exposed by the chart include:
 - `imagePullSecrets` for private image or chart pulls from GHCR
 - `nameOverride`, `fullnameOverride`, and `serviceAccount.name` for release naming and service account control
 - `backend.config.scanner.enableTrivy`, `backend.config.scanner.trivyPath`, `backend.config.scanner.grypePath`, `backend.config.scanner.enableGrype`, `backend.config.scanner.timeout`, `backend.config.scanner.commandTimeoutSeconds`, `backend.config.scanner.progressHeartbeatSeconds`, `backend.config.scanner.staleTimeoutSeconds`, `backend.config.scanner.concurrency`, `backend.config.scanner.dbMaxAgeHours`, and `backend.config.scanner.enableOsvJavaAugmentation`
+- `backend.config.vulnKb.cacheDays`, `backend.config.vulnKb.cveHistoryEnabled`, `backend.config.vulnKb.cveHistoryIntervalMinutes`, and `backend.config.vulnKb.cveHistoryInitialLookbackHours` for vulnerability knowledge-base caching and CVE history polling
+- `backend.strategy.type` for the backend Deployment strategy (`RollingUpdate` or `Recreate`)
 - `backend.config.oidc.debug`, `backend.config.oidc.adminGroups`, `backend.config.oidc.adminRoles`, `backend.config.oidc.groupsClaim`, and `backend.config.oidc.rolesClaim`
 - `backend.customCAs.configMapName`, `backend.customCAs.secretName`, and `backend.customCAs.bundlePath` for custom trust anchors used by OIDC and other outbound TLS calls
 - `backend.persistence.existingClaim`, `backend.persistence.size`, and `backend.persistence.storageClass`

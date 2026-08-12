@@ -21,6 +21,11 @@ backend:
 
   replicaCount: 1
 
+  # Kubernetes Deployment update strategy. Use Recreate when only one backend
+  # pod may use the persistent data directory at a time.
+  strategy:
+    type: RollingUpdate
+
   # Resource requests & limits
   resources: {}
   #   requests:
@@ -70,6 +75,9 @@ backend:
 
     vulnKb:
       cacheDays: 7
+      cveHistoryEnabled: true
+      cveHistoryIntervalMinutes: 120
+      cveHistoryInitialLookbackHours: 24
 
     # Set to false to disable local username/password authentication.
     # When false, only external identity providers are available.

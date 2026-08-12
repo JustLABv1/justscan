@@ -48,6 +48,9 @@ data:
       # nvd_api_key is injected via BACKEND_VULN_KB_NVD_API_KEY env var
       nvd_api_key: ""
       cache_days: {{ .Values.backend.config.vulnKb.cacheDays }}
+      cve_history_enabled: {{ .Values.backend.config.vulnKb.cveHistoryEnabled }}
+      cve_history_interval_minutes: {{ .Values.backend.config.vulnKb.cveHistoryIntervalMinutes }}
+      cve_history_initial_lookback_hours: {{ .Values.backend.config.vulnKb.cveHistoryInitialLookbackHours }}
 
     local_auth:
       enabled: {{ .Values.backend.config.localAuth.enabled }}

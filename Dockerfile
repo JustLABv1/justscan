@@ -48,6 +48,12 @@ COPY services/backend/ ./
 ARG APP_VERSION=dev
 RUN CGO_ENABLED=0 go build -ldflags="-X main.version=${APP_VERSION}" -o justscan-backend
 
+FROM backend-builder AS helm-builder
+
+# Build Helm under the backend module graph so the patched oras-go version
+# selected by JustScan is also used by the runtime Helm CLI.
+RUN CGO_ENABLED=0 go build -mod=mod -o /out/helm helm.sh/helm/v4/cmd/helm
+
 # Stage 4: Create the final image
 FROM base AS runner
 WORKDIR /app
@@ -56,7 +62,6 @@ WORKDIR /app
 RUN apk add --upgrade --no-cache \
     ca-certificates \
     git \
-    helm \
     tini \
     postgresql-client \
     tzdata \
@@ -65,6 +70,7 @@ RUN apk add --upgrade --no-cache \
 
 COPY --from=trivy-bin /usr/local/bin/trivy /usr/local/bin/trivy
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY --from=helm-builder /out/helm /usr/local/bin/helm
 
 # Create user and group
 RUN addgroup --system --gid 1001 nodejs \

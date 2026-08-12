@@ -16,9 +16,10 @@ RUN CGO_ENABLED=0 go build -ldflags="-X main.version=${APP_VERSION}" -o justscan
 FROM builder AS helm-builder
 
 # Alpine's packaged Helm binary currently embeds older Go dependencies. Build
-# the same Helm release used by the backend instead, so the runtime CLI gets
-# a current, pinned dependency set.
-RUN CGO_ENABLED=0 GOBIN=/out go install helm.sh/helm/v4/cmd/helm@v4.2.3
+# Helm under the backend module graph so Go's minimal-version selection uses the
+# patched oras-go version required by JustScan. `go install pkg@version` would
+# ignore this module graph and restore Helm's oras-go v2.6.1 dependency.
+RUN CGO_ENABLED=0 go build -mod=mod -o /out/helm helm.sh/helm/v4/cmd/helm
 
 FROM alpine:3.24 AS runtime-base
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"

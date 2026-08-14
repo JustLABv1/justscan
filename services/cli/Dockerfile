@@ -1,6 +1,6 @@
 # The runtime includes the Docker client so `justscan scan --local` can use a
 # mounted Docker socket in CI. JustScan itself still performs the scan remotely.
-FROM reg.mini.dev/go:v1.26.5 AS builder
+FROM reg.mini.dev/go:v1.26.6 AS builder
 
 WORKDIR /src
 

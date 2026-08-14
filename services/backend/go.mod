@@ -1,6 +1,6 @@
 module justscan-backend
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
@@ -13,7 +13,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.12.3
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/sirupsen/logrus v1.9.4
+	github.com/sirupsen/logrus v1.10.0
 	github.com/spf13/viper v1.21.0
 	github.com/swaggo/files/v2 v2.0.2
 	github.com/swaggo/gin-swagger v1.6.1
@@ -22,9 +22,9 @@ require (
 	github.com/uptrace/bun/driver/pgdriver v1.2.18
 	github.com/uptrace/bun/extra/bunotel v1.2.18
 	golang.org/x/crypto v0.55.0
-	golang.org/x/net v0.57.0
+	golang.org/x/net v0.58.0
 	golang.org/x/oauth2 v0.36.0
-	helm.sh/helm/v4 v4.2.3
+	helm.sh/helm/v4 v4.2.4
 	sigs.k8s.io/kustomize/api v0.21.1
 	sigs.k8s.io/kustomize/kyaml v0.21.1
 	sigs.k8s.io/yaml v1.6.0

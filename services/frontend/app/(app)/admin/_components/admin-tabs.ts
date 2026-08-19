@@ -1,6 +1,6 @@
 export type AdminArea = 'overview' | 'operations' | 'access' | 'connections' | 'system';
 
-export type AdminTab = 'overview' | 'settings' | 'scanner' | 'vulnerability-intelligence' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights' | 'identity' | 'registries' | 'ai' | 'organizations';
+export type AdminTab = 'overview' | 'settings' | 'scanner' | 'vulnerability-intelligence' | 'users' | 'tokens' | 'autotags' | 'audit' | 'notifications' | 'scans' | 'insights' | 'mcp' | 'identity' | 'registries' | 'ai' | 'organizations';
 
 export interface AdminTabMeta {
   value: AdminTab;
@@ -31,6 +31,7 @@ export const ADMIN_TABS: AdminTabMeta[] = [
   { value: 'vulnerability-intelligence', label: 'CVE Intelligence', href: '/admin/vulnerability-intelligence', blurb: 'CVE change history and feed sync operations.', area: 'operations' },
   { value: 'autotags', label: 'Auto Tags', href: '/admin/autotags', blurb: 'Rule-driven tag automation.', area: 'operations' },
   { value: 'insights', label: 'Observability', href: '/admin/insights', blurb: 'API and xRay telemetry.', area: 'system' },
+  { value: 'mcp', label: 'MCP', href: '/admin/mcp', blurb: 'MCP tool activity, usage, and runtime controls.', area: 'system' },
   { value: 'users', label: 'Users', href: '/admin/users', blurb: 'System user access and state.', area: 'access' },
   { value: 'organizations', label: 'Organizations', href: '/admin/orgs', blurb: 'Organization governance and controls.', area: 'access' },
   { value: 'tokens', label: 'Tokens', href: '/admin/tokens', blurb: 'Service credentials and access keys.', area: 'access' },
@@ -86,7 +87,7 @@ export const ADMIN_AREAS: AdminAreaMeta[] = [
     label: 'System',
     href: '/admin/settings',
     description: 'Platform policy, observability, and audit history.',
-    tabs: [tabMeta('settings'), tabMeta('insights'), tabMeta('audit')],
+    tabs: [tabMeta('settings'), tabMeta('insights'), tabMeta('mcp'), tabMeta('audit')],
   },
 ];
 

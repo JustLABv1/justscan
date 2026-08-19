@@ -11,6 +11,10 @@ import type {
   AdminXRayRequestLog,
   AuditLog,
   AuditLogFilters,
+  MCPActivityFilters,
+  MCPAdminSettings,
+  MCPInteraction,
+  MCPOverview,
   NotificationChannel,
   NotificationDelivery,
   XRayRequestLogFilters,
@@ -40,6 +44,36 @@ type OIDCRegexMatchInput<T extends { match_type: string }> = Omit<Partial<T>, 'm
 };
 
 export const getAdminDashboard = () => req<AdminDashboard>('GET', '/api/v1/admin/dashboard');
+
+export const getAdminMCPOverview = (window = '24h') =>
+  req<MCPOverview>('GET', `/api/v1/admin/mcp?window=${encodeURIComponent(window)}`);
+
+export const listAdminMCPActivity = (
+  page = 1,
+  limit = 50,
+  filters?: MCPActivityFilters,
+  window = '24h'
+) => {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    window,
+  });
+  if (filters?.tool) params.set('tool', filters.tool);
+  if (filters?.transport) params.set('transport', filters.transport);
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.user) params.set('user', filters.user);
+  return req<{ data: MCPInteraction[]; total: number }>(
+    'GET',
+    `/api/v1/admin/mcp/activity?${params}`
+  );
+};
+
+export const getAdminMCPSettings = () =>
+  req<MCPAdminSettings>('GET', '/api/v1/admin/mcp/settings');
+
+export const updateAdminMCPSettings = (mode: MCPAdminSettings['mode']) =>
+  req<MCPAdminSettings>('PUT', '/api/v1/admin/mcp/settings', { mode });
 
 export const adminListOIDCProviders = () =>
   req<{ data: OIDCProviderAdmin[] }>('GET', '/api/v1/admin/oidc-providers').then(

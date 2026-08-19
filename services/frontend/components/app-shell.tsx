@@ -34,6 +34,7 @@ import {
 } from '@heroui/react';
 import {
   AiContentGenerator01Icon,
+  Activity01Icon,
   ArrowDown01Icon,
   Building04Icon,
   BookOpen01Icon,
@@ -153,6 +154,7 @@ const adminItemIcons: Record<AdminTab, SidebarIcon> = {
   ai: AiContentGenerator01Icon,
   audit: FileExportIcon,
   insights: EyeIcon,
+  mcp: Activity01Icon,
   settings: Settings01Icon,
 };
 

@@ -47,6 +47,7 @@ RUN go mod download
 COPY services/backend/ ./
 ARG APP_VERSION=dev
 RUN CGO_ENABLED=0 go build -ldflags="-X main.version=${APP_VERSION}" -o justscan-backend
+RUN CGO_ENABLED=0 go build -o justscan-mcp ./cmd/justscan-mcp
 
 FROM backend-builder AS helm-builder
 
@@ -78,6 +79,7 @@ RUN addgroup --system --gid 1001 nodejs \
 
 # Copy the backend binary
 COPY --from=backend-builder /app/backend/justscan-backend /app/
+COPY --from=backend-builder /app/backend/justscan-mcp /app/
 
 # Copy the frontend build
 COPY --from=frontend-builder /app/frontend/public /app/public

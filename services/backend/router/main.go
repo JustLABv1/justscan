@@ -2,6 +2,7 @@ package router
 
 import (
 	"justscan-backend/config"
+	mcpserver "justscan-backend/mcp"
 	"justscan-backend/middlewares"
 	"net/http"
 	"strconv"
@@ -58,6 +59,9 @@ func StartRouter(db *bun.DB, port int, config *config.RestfulConf) *http.Server 
 		StatusPages(v1, db)
 		Search(v1, db)
 		AI(v1, db)
+		if config.MCP.Enabled && config.MCP.HTTPEnabled {
+			v1.Any(config.MCP.Endpoint, mcpserver.NewGinHandler(db, config.MCP))
+		}
 	}
 
 	server := &http.Server{

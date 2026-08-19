@@ -12,6 +12,7 @@ COPY . .
 
 ARG APP_VERSION=dev
 RUN CGO_ENABLED=0 go build -ldflags="-X main.version=${APP_VERSION}" -o justscan-backend
+RUN CGO_ENABLED=0 go build -o justscan-mcp ./cmd/justscan-mcp
 
 FROM builder AS helm-builder
 
@@ -28,6 +29,7 @@ WORKDIR /app
 RUN apk add --upgrade --no-cache ca-certificates git tzdata libcrypto3 libssl3
 
 COPY --from=builder /app/backend/justscan-backend /app/
+COPY --from=builder /app/backend/justscan-mcp /app/
 COPY --from=helm-builder /out/helm /usr/local/bin/helm
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 

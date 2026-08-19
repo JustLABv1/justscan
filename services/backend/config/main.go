@@ -36,6 +36,7 @@ type RestfulConf struct {
 	Encryption   EncryptionConf `mapstructure:"encryption"`
 	VulnKB       VulnKBConf     `mapstructure:"vuln_kb"`
 	LocalAuth    LocalAuthConf  `mapstructure:"local_auth"`
+	MCP          MCPConf        `mapstructure:"mcp"`
 }
 
 type SecurityConf struct {
@@ -56,6 +57,14 @@ type AIConf struct {
 
 type LocalAuthConf struct {
 	Enabled bool `mapstructure:"enabled"`
+}
+
+type MCPConf struct {
+	Enabled             bool   `mapstructure:"enabled"`
+	HTTPEnabled         bool   `mapstructure:"http_enabled"`
+	Endpoint            string `mapstructure:"endpoint"`
+	MaxPageSize         int    `mapstructure:"max_page_size"`
+	MaxRequestBodyBytes int64  `mapstructure:"max_request_body_bytes"`
 }
 
 type ScannerConf struct {
@@ -152,6 +161,11 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"security.callback_allowed_cidrs":            "BACKEND_SECURITY_CALLBACK_ALLOWED_CIDRS",
 		"runner.shared_runner_secret":                "BACKEND_RUNNER_SHARED_RUNNER_SECRET",
 		"local_auth.enabled":                         "BACKEND_LOCAL_AUTH_ENABLED",
+		"mcp.enabled":                                "BACKEND_MCP_ENABLED",
+		"mcp.http_enabled":                           "BACKEND_MCP_HTTP_ENABLED",
+		"mcp.endpoint":                               "BACKEND_MCP_ENDPOINT",
+		"mcp.max_page_size":                          "BACKEND_MCP_MAX_PAGE_SIZE",
+		"mcp.max_request_body_bytes":                 "BACKEND_MCP_MAX_REQUEST_BODY_BYTES",
 		"vuln_kb.nvd_api_key":                        "BACKEND_VULN_KB_NVD_API_KEY",
 		"vuln_kb.cache_days":                         "BACKEND_VULN_KB_CACHE_DAYS",
 		"vuln_kb.cve_history_enabled":                "BACKEND_VULN_KB_CVE_HISTORY_ENABLED",
@@ -271,11 +285,29 @@ func (cm *ConfigurationManager) setDefaults(config *RestfulConf) {
 	if !cm.viper.IsSet("local_auth.enabled") {
 		config.LocalAuth.Enabled = true
 	}
+	if config.MCP.MaxPageSize == 0 {
+		config.MCP.MaxPageSize = 50
+	}
+	if config.MCP.Endpoint == "" {
+		config.MCP.Endpoint = "/mcp"
+	}
+	if config.MCP.MaxRequestBodyBytes == 0 {
+		config.MCP.MaxRequestBodyBytes = 4 << 20
+	}
 }
 
 func (cm *ConfigurationManager) validate(config *RestfulConf) error {
 	if !config.Scanner.EnableTrivy && config.Scanner.EnableGrype {
 		return fmt.Errorf("invalid scanner configuration: enable_grype requires enable_trivy=true")
+	}
+	if config.MCP.MaxPageSize != 0 && (config.MCP.MaxPageSize < 1 || config.MCP.MaxPageSize > 100) {
+		return fmt.Errorf("invalid mcp configuration: mcp.max_page_size must be between 1 and 100")
+	}
+	if config.MCP.Endpoint != "" && (!strings.HasPrefix(config.MCP.Endpoint, "/") || strings.Contains(config.MCP.Endpoint, "..")) {
+		return fmt.Errorf("invalid mcp configuration: mcp.endpoint must be an absolute path without '..'")
+	}
+	if config.MCP.MaxRequestBodyBytes != 0 && (config.MCP.MaxRequestBodyBytes < 1024 || config.MCP.MaxRequestBodyBytes > 16<<20) {
+		return fmt.Errorf("invalid mcp configuration: mcp.max_request_body_bytes must be between 1024 and 16777216")
 	}
 	if config.Security.AllowInsecureDefaults {
 		return nil

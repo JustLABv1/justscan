@@ -198,6 +198,13 @@ func attachWatchlistPosture(ctx context.Context, db *bun.DB, items []models.Watc
 	return nil
 }
 
+// AttachWatchlistPosture enriches already-authorized watchlist items with
+// their latest scan, CVE Intelligence summary, and visible policy posture.
+// The authorization query remains the caller's responsibility.
+func AttachWatchlistPosture(ctx context.Context, db *bun.DB, items []models.WatchlistItem, isAdmin bool, accessibleOrgIDs []uuid.UUID) error {
+	return attachWatchlistPosture(ctx, db, items, isAdmin, accessibleOrgIDs)
+}
+
 func sortedSetValues(values map[string]struct{}) []string {
 	result := make([]string, 0, len(values))
 	for value := range values {
@@ -474,6 +481,12 @@ func TriggerScan(db *bun.DB) gin.HandlerFunc {
 }
 
 func canWriteWatchlistItem(ctx context.Context, db *bun.DB, item *models.WatchlistItem, userID uuid.UUID, isAdmin bool) bool {
+	return CanWriteWatchlistItem(ctx, db, item, userID, isAdmin)
+}
+
+// CanWriteWatchlistItem checks the same ownership/editor boundary used by the
+// watchlist REST handlers.
+func CanWriteWatchlistItem(ctx context.Context, db *bun.DB, item *models.WatchlistItem, userID uuid.UUID, isAdmin bool) bool {
 	if item == nil {
 		return false
 	}

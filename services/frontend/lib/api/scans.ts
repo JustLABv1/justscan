@@ -40,7 +40,8 @@ export const listScans = (
   from?: string,
   to?: string,
   imageTag?: string,
-  query?: string
+  query?: string,
+  intelligence?: 'changed' | 'confirmation_pending'
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
@@ -52,6 +53,7 @@ export const listScans = (
   if (to) params.set('to', to);
   if (imageTag) params.set('image_tag', imageTag);
   if (query) params.set('q', query);
+  if (intelligence) params.set('intelligence', intelligence);
   appendScope(params);
   return req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?${params}`);
 };
@@ -65,7 +67,8 @@ export const listScanArtifacts = (
   policy?: '' | 'fail',
   image?: string,
   from?: string,
-  to?: string
+  to?: string,
+  intelligence?: 'changed' | 'confirmation_pending'
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (query) params.set('q', query);
@@ -75,6 +78,7 @@ export const listScanArtifacts = (
   if (image) params.set('image', image);
   if (from) params.set('from', from);
   if (to) params.set('to', to);
+  if (intelligence) params.set('intelligence', intelligence);
   appendScope(params);
   return req<{ data: ArtifactSummary[]; total: number; filters: ArtifactFilterOptions }>(
     'GET',
@@ -91,7 +95,8 @@ export const listScanImages = (
   policy?: '' | 'fail',
   from?: string,
   to?: string,
-  sort?: string
+  sort?: string,
+  intelligence?: 'changed' | 'confirmation_pending'
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (query) params.set('q', query);
@@ -101,6 +106,7 @@ export const listScanImages = (
   if (from) params.set('from', from);
   if (to) params.set('to', to);
   if (sort) params.set('sort', sort);
+  if (intelligence) params.set('intelligence', intelligence);
   appendScope(params);
   return req<{ data: ImageOverview[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
 };

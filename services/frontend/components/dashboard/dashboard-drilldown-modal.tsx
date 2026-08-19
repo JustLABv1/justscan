@@ -1,6 +1,7 @@
 'use client';
 
 import { RecentActivityRange, RecentActivityRangePicker } from '@/components/scans/recent-activity';
+import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
 import { StatusBadge } from '@/components/ui/badges';
 import { RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { Scan, WatchlistItem } from '@/lib/api';
@@ -41,6 +42,9 @@ function WatchlistModalRow({ item }: { item: WatchlistItem }) {
             <Chip color={chipColor} size="sm" variant="soft" className="shrink-0">
               {posture.label}
             </Chip>
+            {posture.kind !== 'intelligence_pending' && (
+              <IntelligenceSummaryChip compact summary={item.intelligence_summary} />
+            )}
           </div>
           <p className="mt-1 text-[11px] text-muted">
             {item.enabled ? `Scheduled ${item.schedule}` : 'Paused'} · {item.timezone}
@@ -194,6 +198,7 @@ function CompactScanRow({ scan, showActions = false }: { scan: Scan; showActions
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="text-[11px] text-muted">Started {timeAgo(eventTime)}</span>
+            <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
             {scan.critical_count > 0 && (
               <span
                 className="rounded-md px-1.5 py-0.5 text-[10px] font-mono"

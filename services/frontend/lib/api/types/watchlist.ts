@@ -1,5 +1,5 @@
 import type { OwnerType } from './common';
-import type { Scan } from './scans';
+import type { IntelligenceSummary, Scan } from './scans';
 
 export interface WatchlistComplianceSummary {
   status: 'pass' | 'fail';
@@ -27,4 +27,5 @@ export interface WatchlistItem {
   owner_org_id?: string | null;
   last_scan?: Scan | null;
   compliance_summary?: WatchlistComplianceSummary | null;
+  intelligence_summary?: IntelligenceSummary | null;
 }

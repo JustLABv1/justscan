@@ -59,6 +59,7 @@ type ScanFilters = {
   status: string;
   critical: '' | 'yes' | 'no';
   policy: '' | 'fail';
+  intelligence: '' | 'changed' | 'confirmation_pending';
   range: '' | RecentActivityRange;
   date: string;
   dateTo: string;
@@ -92,6 +93,7 @@ function initialScanFilters(searchParams: { get(name: string): string | null }):
     status: searchParams.get('status') ?? '',
     critical: (searchParams.get('critical') as ScanFilters['critical']) ?? '',
     policy: (searchParams.get('policy') as ScanFilters['policy']) ?? '',
+    intelligence: (searchParams.get('intelligence') as ScanFilters['intelligence']) ?? '',
     range: range === '6h' || range === '24h' || range === '7d' || range === '30d' ? range : '',
     date,
     dateTo: dateTo || date,
@@ -104,7 +106,17 @@ function scanFiltersReducer(
   action: Partial<ScanFilters> | 'reset'
 ): ScanFilters {
   return action === 'reset'
-    ? { query: '', status: '', critical: '', policy: '', range: '', date: '', dateTo: '', sort: '' }
+    ? {
+        query: '',
+        status: '',
+        critical: '',
+        policy: '',
+        intelligence: '',
+        range: '',
+        date: '',
+        dateTo: '',
+        sort: '',
+      }
     : { ...state, ...action };
 }
 
@@ -141,7 +153,7 @@ function ScansPageContent() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [page, setPage] = useState(() => Math.max(1, Number(searchParams.get('page') ?? '1')));
   const [filters, updateFilters] = useReducer(scanFiltersReducer, searchParams, initialScanFilters);
-  const { query, status, critical, policy, range, date, dateTo, sort } = filters;
+  const { query, status, critical, policy, intelligence, range, date, dateTo, sort } = filters;
   const toast = useToast();
 
   const bounds = useMemo(
@@ -154,13 +166,18 @@ function ScansPageContent() {
     const end = getValidCalendarDate(dateTo || date);
     return start && end ? { start: parseDate(start), end: parseDate(end) } : null;
   }, [date, dateTo]);
-  const activeFilters = Boolean(query || status || critical || policy || range || date || sort);
-  const filterCount = [critical, policy, range, date, sort].filter(Boolean).length;
+  const activeFilters = Boolean(
+    query || status || critical || policy || intelligence || range || date || sort
+  );
+  const filterCount = [critical, policy, intelligence, range, date, sort].filter(Boolean).length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const visibleOverview = useMemo(
     () => ({
       critical: images.filter((image) => image.health_critical_count > 0).length,
       policyFailed: images.filter((image) => image.health_policy_failed).length,
+      intelligencePending: images.filter(
+        (image) => image.intelligence_summary?.state === 'confirmation_pending'
+      ).length,
       active: images.filter((image) => ['running', 'pending'].includes(image.latest_status)).length,
     }),
     [images]
@@ -172,20 +189,21 @@ function ScansPageContent() {
     if (status) params.set('status', status);
     if (critical) params.set('critical', critical);
     if (policy) params.set('policy', policy);
+    if (intelligence) params.set('intelligence', intelligence);
     if (range) params.set('range', range);
     if (date) params.set('date', date);
     if (dateTo && dateTo !== date) params.set('dateTo', dateTo);
     if (sort) params.set('sort', sort);
     if (page > 1) params.set('page', String(page));
     router.replace(params.size ? `/scans?${params}` : '/scans', { scroll: false });
-  }, [critical, date, dateTo, page, policy, query, range, router, sort, status]);
+  }, [critical, date, dateTo, intelligence, page, policy, query, range, router, sort, status]);
 
   useEffect(() => {
     syncRoute();
   }, [syncRoute]);
   useEffect(
     () => deferEffect(() => setPage(1)),
-    [query, status, critical, policy, range, date, dateTo, sort]
+    [query, status, critical, policy, intelligence, range, date, dateTo, sort]
   );
   useEffect(
     () =>
@@ -204,7 +222,8 @@ function ScansPageContent() {
           policy,
           bounds?.from,
           bounds?.to,
-          sort || undefined
+          sort || undefined,
+          intelligence || undefined
         )
           .then((response) => {
             if (!cancelled) {
@@ -223,7 +242,19 @@ function ScansPageContent() {
           cancelled = true;
         };
       }),
-    [bounds?.from, bounds?.to, critical, page, policy, query, refreshKey, scopeKey, sort, status]
+    [
+      bounds?.from,
+      bounds?.to,
+      critical,
+      intelligence,
+      page,
+      policy,
+      query,
+      refreshKey,
+      scopeKey,
+      sort,
+      status,
+    ]
   );
 
   function clearFilters() {
@@ -326,6 +357,13 @@ function ScansPageContent() {
           label="Policy failed"
           tone="danger"
           value={visibleOverview.policyFailed}
+        />
+        <Metric
+          description="On this page"
+          icon={<Shield01Icon size={16} />}
+          label="CVE confirmation"
+          tone={visibleOverview.intelligencePending > 0 ? 'danger' : 'default'}
+          value={visibleOverview.intelligencePending}
         />
         <Metric
           description="Running or queued"
@@ -500,6 +538,31 @@ function ScansPageContent() {
                   <ListBox>
                     <ListBox.Item id="__all__">Any policy result</ListBox.Item>
                     <ListBox.Item id="fail">Policy failed</ListBox.Item>
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+              <Select
+                aria-label="CVE intelligence"
+                className="min-w-[200px] flex-1"
+                value={intelligence || '__all__'}
+                onChange={(value) =>
+                  updateFilters({
+                    intelligence: (value === '__all__'
+                      ? ''
+                      : String(value ?? '')) as ScanFilters['intelligence'],
+                  })
+                }
+                variant="secondary"
+              >
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item id="__all__">Any CVE intelligence</ListBox.Item>
+                    <ListBox.Item id="confirmation_pending">Confirmation pending</ListBox.Item>
+                    <ListBox.Item id="changed">Changed</ListBox.Item>
                   </ListBox>
                 </Select.Popover>
               </Select>

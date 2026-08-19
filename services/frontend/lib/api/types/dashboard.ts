@@ -39,6 +39,8 @@ export interface DashboardOperations {
   active_xray_count: number;
   active_xray_step_counts: Record<string, number>;
   active_xray_scans: Scan[] | null;
+  intelligence_changed_count: number;
+  intelligence_pending_count: number;
 }
 
 export interface ScannerHealthWorker {

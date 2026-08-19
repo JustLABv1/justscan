@@ -24,6 +24,7 @@ import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import {
   INTELLIGENCE_FILTER_OPTIONS,
+  IntelligenceSummaryChip,
   IntelligenceStatusChip,
   type IntelligenceFilter,
 } from '@/components/vulnerability-intelligence-status';
@@ -2109,7 +2110,12 @@ export default function ScanDetailPage() {
           { label: scan.image_tag },
         ]}
         icon={<Shield01Icon size={18} />}
-        status={<StatusBadge status={scan.status} externalStatus={scan.external_status} />}
+        status={
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+            <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
+          </div>
+        }
         title={scan.image_tag}
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted">

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"justscan-backend/compliance"
 	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
@@ -36,6 +37,7 @@ type ArtifactSummary struct {
 	MediumCount          int                           `json:"medium_count"`
 	LowCount             int                           `json:"low_count"`
 	ComplianceSummary    *models.ScanComplianceSummary `json:"compliance_summary,omitempty"`
+	IntelligenceSummary  *models.IntelligenceSummary   `json:"intelligence_summary,omitempty"`
 	Tags                 []models.Tag                  `json:"tags,omitempty"`
 }
 
@@ -173,6 +175,17 @@ func ListScanArtifacts(db *bun.DB) gin.HandlerFunc {
 		}
 		scopedOrgID, orgScoped := scopedOrgIDFromRequest(c)
 		policyWhere, policyArgs := artifactPolicyWhere(c.Query("policy"), scopedOrgID, orgScoped)
+		intelligenceWhere := "1=1"
+		var intelligenceArgs []interface{}
+		if intelligence := strings.ToLower(strings.TrimSpace(c.Query("intelligence"))); intelligence != "" {
+			condition, conditionArgs, supported := scanIntelligenceFilterCondition("l.latest_scan_id", intelligence)
+			if !supported {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported intelligence filter"})
+				return
+			}
+			intelligenceWhere = condition
+			intelligenceArgs = conditionArgs
+		}
 
 		baseQuery := `
 WITH ranked AS (
@@ -214,10 +227,11 @@ WITH ranked AS (
 		countQuery := baseQuery + `
 SELECT COUNT(*)
 FROM latest l
-WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + policyWhere
+WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + policyWhere + ` AND ` + intelligenceWhere
 		countArgs := append([]interface{}{}, baseArgs...)
 		countArgs = append(countArgs, latestStatusArgs...)
 		countArgs = append(countArgs, policyArgs...)
+		countArgs = append(countArgs, intelligenceArgs...)
 
 		var total int
 		if err := db.QueryRowContext(c.Request.Context(), countQuery, countArgs...).Scan(&total); err != nil {
@@ -243,12 +257,13 @@ SELECT
     l.medium_count,
     l.low_count
 FROM latest l
-WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + policyWhere + `
+WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + policyWhere + ` AND ` + intelligenceWhere + `
 ORDER BY l.latest_scan_at DESC, l.latest_scan_id DESC
 LIMIT ? OFFSET ?`
 		dataArgs := append([]interface{}{}, baseArgs...)
 		dataArgs = append(dataArgs, latestStatusArgs...)
 		dataArgs = append(dataArgs, policyArgs...)
+		dataArgs = append(dataArgs, intelligenceArgs...)
 		dataArgs = append(dataArgs, limit, offset)
 
 		rows, err := db.QueryContext(c.Request.Context(), dataQuery, dataArgs...)
@@ -333,6 +348,18 @@ LIMIT ? OFFSET ?`
 					if index, ok := artifactIndexByScanID[scanID]; ok {
 						artifacts[index].ComplianceSummary = summary
 					}
+				}
+			}
+			intelligenceSummaries, intelligenceErr := compliance.LoadIntelligenceSummaries(
+				c.Request.Context(), db, scanIDs,
+			)
+			if intelligenceErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load artifact intelligence summaries"})
+				return
+			}
+			for scanID, summary := range intelligenceSummaries {
+				if index, ok := artifactIndexByScanID[scanID]; ok {
+					artifacts[index].IntelligenceSummary = summary
 				}
 			}
 		}

@@ -63,6 +63,17 @@ export interface ScanComplianceSummary {
   evaluated_at?: string | null;
 }
 
+export type IntelligenceSummaryState = 'changed' | 'confirmation_pending';
+
+export interface IntelligenceSummary {
+  state: IntelligenceSummaryState;
+  changed_cve_count: number;
+  changed_finding_count: number;
+  needs_validation_count: number;
+  fix_available_count: number;
+  detected_at?: string | null;
+}
+
 export type IntelligencePolicyImpactState =
   'resolved' | 'new_failure' | 'still_failed' | 'needs_validation';
 
@@ -193,6 +204,7 @@ export interface Scan {
   helm_source_path?: string;
   blocked_policy_details?: BlockedPolicyDetails | null;
   compliance_summary?: ScanComplianceSummary | null;
+  intelligence_summary?: IntelligenceSummary | null;
   pipeline_initiator?: PipelineInitiator | null;
   step_logs?: ScanStepLog[];
 }
@@ -323,6 +335,7 @@ export interface ImageOverview {
   health_medium_count: number;
   health_low_count: number;
   health_policy_failed: boolean;
+  intelligence_summary?: IntelligenceSummary | null;
 }
 
 export interface ImageStats {
@@ -354,6 +367,7 @@ export interface ArtifactSummary {
   medium_count: number;
   low_count: number;
   compliance_summary?: ScanComplianceSummary | null;
+  intelligence_summary?: IntelligenceSummary | null;
   tags?: Tag[];
 }
 

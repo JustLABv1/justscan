@@ -4,6 +4,7 @@ export type WatchlistPostureKind =
   | 'policy_failed'
   | 'blocked'
   | 'scan_failed'
+  | 'intelligence_pending'
   | 'running'
   | 'compliant'
   | 'no_policy'
@@ -77,6 +78,16 @@ export function getWatchlistPosture(item: WatchlistItem): WatchlistPosture {
     };
   }
 
+  if (item.intelligence_summary?.state === 'confirmation_pending') {
+    const count = item.intelligence_summary.changed_cve_count;
+    return {
+      kind: 'intelligence_pending',
+      label: 'CVE confirmation pending',
+      description: `${count} CVE${count === 1 ? '' : 's'} changed; run the next scan to confirm posture`,
+      tone: 'warning',
+    };
+  }
+
   if (item.compliance_summary?.status === 'pass') {
     return {
       kind: 'compliant',
@@ -97,8 +108,15 @@ export function getWatchlistPosture(item: WatchlistItem): WatchlistPosture {
 export function watchlistNeedsPolicyAttention(item: WatchlistItem) {
   const posture = getWatchlistPosture(item);
   return (
-    posture.kind === 'blocked' || posture.kind === 'policy_failed' || posture.kind === 'scan_failed'
+    posture.kind === 'blocked' ||
+    posture.kind === 'policy_failed' ||
+    posture.kind === 'scan_failed' ||
+    item.intelligence_summary?.state === 'confirmation_pending'
   );
+}
+
+export function watchlistNeedsIntelligenceConfirmation(item: WatchlistItem) {
+  return item.enabled && item.intelligence_summary?.state === 'confirmation_pending';
 }
 
 export function getWatchlistPolicyAttentionItems(items: WatchlistItem[]) {
@@ -109,7 +127,8 @@ export function getWatchlistPolicyAttentionItems(items: WatchlistItem[]) {
         const kind = getWatchlistPosture(item).kind;
         if (kind === 'blocked') return 0;
         if (kind === 'policy_failed') return 1;
-        return 2;
+        if (kind === 'scan_failed') return 2;
+        return 3;
       };
       const rankDiff = rank(left) - rank(right);
       if (rankDiff !== 0) return rankDiff;

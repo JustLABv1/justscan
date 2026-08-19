@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"justscan-backend/compliance"
 	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
@@ -93,6 +94,14 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 				q = q.Where("created_at <= ?", t)
 			}
 		}
+		if intelligence := strings.ToLower(strings.TrimSpace(c.Query("intelligence"))); intelligence != "" {
+			condition, conditionArgs, supported := scanIntelligenceFilterCondition("scan.id", intelligence)
+			if !supported {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported intelligence filter"})
+				return
+			}
+			q = q.Where(condition, conditionArgs...)
+		}
 
 		total, err := q.Count(c.Request.Context())
 		if err != nil {
@@ -119,6 +128,20 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 		if err := attachPipelineInitiators(c.Request.Context(), db, scans); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan initiators"})
 			return
+		}
+		if len(scans) > 0 {
+			scanIDs := make([]uuid.UUID, 0, len(scans))
+			for _, scan := range scans {
+				scanIDs = append(scanIDs, scan.ID)
+			}
+			summaries, summaryErr := compliance.LoadIntelligenceSummaries(c.Request.Context(), db, scanIDs)
+			if summaryErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan intelligence summaries"})
+				return
+			}
+			for i := range scans {
+				scans[i].IntelligenceSummary = summaries[scans[i].ID]
+			}
 		}
 
 		if scopedOrgID, scoped := scopedOrgIDFromRequest(c); scoped {

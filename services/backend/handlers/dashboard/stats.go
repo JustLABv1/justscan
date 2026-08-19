@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"justscan-backend/compliance"
 	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
 
@@ -29,12 +30,14 @@ type statsResult struct {
 }
 
 type operationsResult struct {
-	BlockedPolicyCount int            `json:"blocked_policy_count"`
-	XrayBlockedCount   int            `json:"xray_blocked_count"`
-	OrgPolicyFailCount int            `json:"org_policy_fail_count"`
-	ActiveXrayCount    int            `json:"active_xray_count"`
-	ActiveXraySteps    map[string]int `json:"active_xray_step_counts"`
-	ActiveXrayScans    []models.Scan  `json:"active_xray_scans"`
+	BlockedPolicyCount       int            `json:"blocked_policy_count"`
+	XrayBlockedCount         int            `json:"xray_blocked_count"`
+	OrgPolicyFailCount       int            `json:"org_policy_fail_count"`
+	ActiveXrayCount          int            `json:"active_xray_count"`
+	ActiveXraySteps          map[string]int `json:"active_xray_step_counts"`
+	ActiveXrayScans          []models.Scan  `json:"active_xray_scans"`
+	IntelligenceChangedCount int            `json:"intelligence_changed_count"`
+	IntelligencePendingCount int            `json:"intelligence_pending_count"`
 }
 
 type topImage struct {
@@ -112,6 +115,10 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 			result.Operations.XrayBlockedCount = policyCounts.xrayBlocked
 			result.Operations.OrgPolicyFailCount = policyCounts.orgPolicyFailed
 		}
+		if intelligenceCounts, intelligenceErr := loadIntelligenceIssueCounts(c, ctx, db, userID, isAdmin, accessibleOrgIDs); intelligenceErr == nil {
+			result.Operations.IntelligenceChangedCount = intelligenceCounts.changed
+			result.Operations.IntelligencePendingCount = intelligenceCounts.pending
+		}
 
 		// Severity totals across scans with finalized findings.
 		type severityRow struct {
@@ -162,6 +169,17 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		recentQuery.Scan(ctx) //nolint:errcheck
 		if result.RecentScans == nil {
 			result.RecentScans = []models.Scan{}
+		}
+		if len(result.RecentScans) > 0 {
+			scanIDs := make([]uuid.UUID, 0, len(result.RecentScans))
+			for _, scan := range result.RecentScans {
+				scanIDs = append(scanIDs, scan.ID)
+			}
+			if summaries, summaryErr := compliance.LoadIntelligenceSummaries(ctx, db, scanIDs); summaryErr == nil {
+				for index := range result.RecentScans {
+					result.RecentScans[index].IntelligenceSummary = summaries[result.RecentScans[index].ID]
+				}
+			}
 		}
 
 		// Active Xray scans and current-step counts.
@@ -292,6 +310,41 @@ type dashboardPolicyIssueCounts struct {
 	total           int
 	xrayBlocked     int
 	orgPolicyFailed int
+}
+
+type dashboardIntelligenceIssueCounts struct {
+	changed int
+	pending int
+}
+
+func loadIntelligenceIssueCounts(
+	c *gin.Context,
+	ctx context.Context,
+	db *bun.DB,
+	userID uuid.UUID,
+	isAdmin bool,
+	accessibleOrgIDs []uuid.UUID,
+) (dashboardIntelligenceIssueCounts, error) {
+	var counts dashboardIntelligenceIssueCounts
+	postScanChange := "(p.change_event_id IS NOT NULL OR (s.completed_at IS NOT NULL AND p.observed_at > s.completed_at))"
+	query := db.NewSelect().
+		TableExpr("vulnerabilities AS v").
+		ColumnExpr("COUNT(DISTINCT v.scan_id) FILTER (WHERE p.state IS NOT NULL AND p.state <> ? AND "+postScanChange+") AS changed", models.PostureStateUnchanged).
+		ColumnExpr(`COUNT(DISTINCT v.scan_id) FILTER (WHERE `+postScanChange+` AND (
+			p.state IN (?)
+			OR p.cve_state IN (?)
+			OR COALESCE(jsonb_array_length(p.conflict_sources), 0) > 0
+		)) AS pending`,
+			bun.In([]string{models.PostureStateDisputed, models.PostureStateNeedsRescan}),
+			bun.In([]string{models.IntelligenceCVEStateDisputed, models.IntelligenceCVEStateUnknown}),
+		).
+		Join("JOIN vulnerability_postures AS p ON p.finding_id = v.id").
+		Join("JOIN scans AS s ON s.id = v.scan_id").
+		Where("v.scan_id IN (?)", latestVisibleScanIDsQuery(c, db, userID, isAdmin, accessibleOrgIDs, "latest_intelligence_scan"))
+	if err := query.Scan(ctx, &counts); err != nil {
+		return dashboardIntelligenceIssueCounts{}, err
+	}
+	return counts, nil
 }
 
 func loadPolicyIssueCounts(c *gin.Context, ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) (dashboardPolicyIssueCounts, error) {

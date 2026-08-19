@@ -6,9 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"justscan-backend/compliance"
 	"justscan-backend/functions/authz"
+	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
@@ -16,23 +19,24 @@ import (
 // tag participates in the image's health calculation; the most concerning one is
 // returned as the health scan so a newer clean tag cannot hide an older failure.
 type ImageOverview struct {
-	ImageName            string    `json:"image_name"`
-	ScanCount            int       `json:"scan_count"`
-	TagCount             int       `json:"tag_count"`
-	LatestScanID         string    `json:"latest_scan_id"`
-	LatestTag            string    `json:"latest_tag"`
-	LatestStatus         string    `json:"latest_status"`
-	LatestExternalStatus string    `json:"latest_external_status,omitempty"`
-	LatestScanAt         time.Time `json:"latest_scan_at"`
-	HealthScanID         string    `json:"health_scan_id"`
-	HealthTag            string    `json:"health_tag"`
-	HealthStatus         string    `json:"health_status"`
-	HealthExternalStatus string    `json:"health_external_status,omitempty"`
-	HealthCriticalCount  int       `json:"health_critical_count"`
-	HealthHighCount      int       `json:"health_high_count"`
-	HealthMediumCount    int       `json:"health_medium_count"`
-	HealthLowCount       int       `json:"health_low_count"`
-	HealthPolicyFailed   bool      `json:"health_policy_failed"`
+	ImageName            string                      `json:"image_name"`
+	ScanCount            int                         `json:"scan_count"`
+	TagCount             int                         `json:"tag_count"`
+	LatestScanID         string                      `json:"latest_scan_id"`
+	LatestTag            string                      `json:"latest_tag"`
+	LatestStatus         string                      `json:"latest_status"`
+	LatestExternalStatus string                      `json:"latest_external_status,omitempty"`
+	LatestScanAt         time.Time                   `json:"latest_scan_at"`
+	HealthScanID         string                      `json:"health_scan_id"`
+	HealthTag            string                      `json:"health_tag"`
+	HealthStatus         string                      `json:"health_status"`
+	HealthExternalStatus string                      `json:"health_external_status,omitempty"`
+	HealthCriticalCount  int                         `json:"health_critical_count"`
+	HealthHighCount      int                         `json:"health_high_count"`
+	HealthMediumCount    int                         `json:"health_medium_count"`
+	HealthLowCount       int                         `json:"health_low_count"`
+	HealthPolicyFailed   bool                        `json:"health_policy_failed"`
+	IntelligenceSummary  *models.IntelligenceSummary `json:"intelligence_summary,omitempty"`
 }
 
 func parseImageOverviewTime(c *gin.Context) (string, []interface{}) {
@@ -190,6 +194,17 @@ WITH visible AS (
 		if c.Query("policy") == "fail" && orgScoped {
 			policyWhere = "health_policy_failed = true"
 		}
+		intelligenceWhere := "1=1"
+		var intelligenceArgs []interface{}
+		if intelligence := strings.ToLower(strings.TrimSpace(c.Query("intelligence"))); intelligence != "" {
+			condition, conditionArgs, supported := scanIntelligenceFilterCondition("health_scan_id", intelligence)
+			if !supported {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported intelligence filter"})
+				return
+			}
+			intelligenceWhere = condition
+			intelligenceArgs = conditionArgs
+		}
 		args := append([]interface{}{}, baseArgs...)
 		// policyExpression appears three times in the CTE whenever organization policy is enabled.
 		if orgScoped {
@@ -198,7 +213,8 @@ WITH visible AS (
 			args = append(args, policyArgs...)
 		}
 		args = append(args, statusArgs...)
-		where := "health_row = 1 AND " + statusWhere + " AND " + criticalWhere + " AND " + policyWhere
+		where := "health_row = 1 AND " + statusWhere + " AND " + criticalWhere + " AND " + policyWhere + " AND " + intelligenceWhere
+		args = append(args, intelligenceArgs...)
 
 		var total int
 		if err := db.QueryRowContext(c.Request.Context(), baseQuery+"SELECT COUNT(*) FROM overview WHERE "+where, args...).Scan(&total); err != nil {
@@ -224,6 +240,30 @@ WITH visible AS (
 		if err := rows.Err(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read scan images"})
 			return
+		}
+		if len(images) > 0 {
+			scanIDs := make([]uuid.UUID, 0, len(images))
+			imageIndexByScanID := make(map[uuid.UUID]int, len(images))
+			for index := range images {
+				scanID, parseErr := uuid.Parse(images[index].HealthScanID)
+				if parseErr != nil {
+					continue
+				}
+				scanIDs = append(scanIDs, scanID)
+				imageIndexByScanID[scanID] = index
+			}
+			intelligenceSummaries, summaryErr := compliance.LoadIntelligenceSummaries(
+				c.Request.Context(), db, scanIDs,
+			)
+			if summaryErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load image intelligence summaries"})
+				return
+			}
+			for scanID, summary := range intelligenceSummaries {
+				if index, ok := imageIndexByScanID[scanID]; ok {
+					images[index].IntelligenceSummary = summary
+				}
+			}
 		}
 		c.JSON(http.StatusOK, gin.H{"data": images, "total": total, "page": page, "limit": limit})
 	}

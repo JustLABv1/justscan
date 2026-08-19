@@ -1,4 +1,12 @@
 {
   "title": "Integrations",
-  "pages": ["cli", "ci-cd", "github-actions", "gitlab-ci", "callbacks-and-n8n", "api"]
+  "pages": [
+    "cli",
+    "ci-cd",
+    "github-actions",
+    "gitlab-ci",
+    "callbacks-and-n8n",
+    "api",
+    "mcp"
+  ]
 }

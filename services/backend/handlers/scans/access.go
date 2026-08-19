@@ -54,25 +54,36 @@ func LoadAuthorizedScanForWrite(c *gin.Context, db *bun.DB, scanID uuid.UUID) (*
 	return nil, uuid.Nil, false, false
 }
 
-func canReadScan(ctx context.Context, db *bun.DB, scan *models.Scan, userID uuid.UUID, isAdmin bool) bool {
+// ScanAccessContext contains the already-resolved identity used when checking
+// whether a caller can read a scan. Keeping this separate from gin.Context
+// lets non-HTTP integrations, such as the MCP server, reuse the same boundary.
+type ScanAccessContext struct {
+	UserID           uuid.UUID
+	IsAdmin          bool
+	AccessibleOrgIDs []uuid.UUID
+}
+
+// CanReadScan checks scan visibility for an already-authenticated caller.
+// Callers must resolve AccessibleOrgIDs before invoking this function for a
+// non-admin user.
+func CanReadScan(ctx context.Context, db *bun.DB, scan *models.Scan, access ScanAccessContext) bool {
 	if scan == nil {
 		return false
 	}
-	if isAdmin {
+	if access.IsAdmin {
 		return true
 	}
-	if scan.UserID != nil && *scan.UserID == userID {
+	if scan.UserID != nil && *scan.UserID == access.UserID {
 		return true
 	}
-	if scan.OwnerUserID != nil && *scan.OwnerUserID == userID {
+	if scan.OwnerUserID != nil && *scan.OwnerUserID == access.UserID {
 		return true
 	}
-	orgIDs, err := authz.ListAccessibleOrgIDs(ctx, db, userID, false)
-	if err != nil || len(orgIDs) == 0 {
+	if len(access.AccessibleOrgIDs) == 0 {
 		return false
 	}
 	if scan.OwnerOrgID != nil {
-		for _, orgID := range orgIDs {
+		for _, orgID := range access.AccessibleOrgIDs {
 			if orgID == *scan.OwnerOrgID {
 				return true
 			}
@@ -81,28 +92,47 @@ func canReadScan(ctx context.Context, db *bun.DB, scan *models.Scan, userID uuid
 	shared, err := db.NewSelect().
 		TableExpr("org_scans").
 		Where("scan_id = ?", scan.ID).
-		Where("org_id IN (?)", bun.In(orgIDs)).
+		Where("org_id IN (?)", bun.In(access.AccessibleOrgIDs)).
 		Exists(ctx)
 	return err == nil && shared
 }
 
+func canReadScan(ctx context.Context, db *bun.DB, scan *models.Scan, userID uuid.UUID, isAdmin bool) bool {
+	orgIDs, err := authz.ListAccessibleOrgIDs(ctx, db, userID, isAdmin)
+	if err != nil {
+		return false
+	}
+	return CanReadScan(ctx, db, scan, ScanAccessContext{
+		UserID:           userID,
+		IsAdmin:          isAdmin,
+		AccessibleOrgIDs: orgIDs,
+	})
+}
+
 func canWriteScan(ctx context.Context, db *bun.DB, scan *models.Scan, userID uuid.UUID, isAdmin bool) bool {
+	return CanWriteScan(ctx, db, scan, ScanAccessContext{UserID: userID, IsAdmin: isAdmin})
+}
+
+// CanWriteScan checks scan mutation visibility for an already-authenticated
+// caller. It deliberately mirrors the REST rescan permission boundary so
+// integrations cannot mutate scans that the REST API would hide.
+func CanWriteScan(ctx context.Context, db *bun.DB, scan *models.Scan, access ScanAccessContext) bool {
 	if scan == nil {
 		return false
 	}
-	if isAdmin {
+	if access.IsAdmin {
 		return true
 	}
-	if scan.UserID != nil && *scan.UserID == userID {
+	if scan.UserID != nil && *scan.UserID == access.UserID {
 		return true
 	}
-	if scan.OwnerUserID != nil && *scan.OwnerUserID == userID {
+	if scan.OwnerUserID != nil && *scan.OwnerUserID == access.UserID {
 		return true
 	}
 	if scan.OwnerOrgID == nil {
 		return false
 	}
-	roles, err := authz.LoadUserOrgRoles(ctx, db, userID)
+	roles, err := authz.LoadUserOrgRoles(ctx, db, access.UserID)
 	if err != nil {
 		return false
 	}

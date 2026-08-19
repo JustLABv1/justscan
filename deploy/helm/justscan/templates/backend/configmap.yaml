@@ -54,3 +54,10 @@ data:
 
     local_auth:
       enabled: {{ .Values.backend.config.localAuth.enabled }}
+
+    mcp:
+      enabled: {{ .Values.backend.config.mcp.enabled }}
+      http_enabled: {{ .Values.backend.config.mcp.httpEnabled }}
+      endpoint: {{ .Values.backend.config.mcp.endpoint | quote }}
+      max_page_size: {{ .Values.backend.config.mcp.maxPageSize }}
+      max_request_body_bytes: {{ .Values.backend.config.mcp.maxRequestBodyBytes }}

@@ -109,6 +109,79 @@ export interface XRayUsageStats {
   status_breakdown: StatusBucket[];
 }
 
+export type MCPRuntimeMode = 'enabled' | 'read_only' | 'disabled';
+
+export interface MCPAdminSettings {
+  mode: MCPRuntimeMode;
+  actions_enabled: boolean;
+  config_enabled: boolean;
+  http_enabled: boolean;
+  endpoint: string;
+}
+
+export interface MCPMetrics {
+  total_calls: number;
+  successful_calls: number;
+  failed_calls: number;
+  rejected_calls: number;
+  error_rate: number;
+  avg_duration_ms: number;
+  p95_duration_ms: number;
+  active_users: number;
+  action_calls: number;
+  replayed_actions: number;
+}
+
+export interface MCPToolMetric {
+  tool_name: string;
+  calls: number;
+  errors: number;
+  actions: number;
+  replayed_actions: number;
+  avg_duration_ms: number;
+}
+
+export interface MCPTransportMetric {
+  transport: string;
+  calls: number;
+  errors: number;
+  actions: number;
+}
+
+export interface MCPInteraction {
+  id: string;
+  user_id?: string;
+  username?: string;
+  email?: string;
+  transport: string;
+  tool_name: string;
+  status: 'success' | 'error' | 'rejected' | string;
+  duration_ms: number;
+  action: boolean;
+  replayed: boolean;
+  resource_id?: string;
+  error_code?: string;
+  created_at: string;
+}
+
+export interface MCPOverview {
+  'window': string;
+  from: string;
+  to: string;
+  settings: MCPAdminSettings;
+  metrics: MCPMetrics;
+  by_tool: MCPToolMetric[];
+  by_transport: MCPTransportMetric[];
+  recent_activity: MCPInteraction[];
+}
+
+export interface MCPActivityFilters {
+  tool?: string;
+  transport?: string;
+  status?: string;
+  user?: string;
+}
+
 export interface AdminDashboardQueues {
   running: number;
   pending: number;

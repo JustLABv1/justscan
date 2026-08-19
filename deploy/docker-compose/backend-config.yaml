@@ -71,3 +71,12 @@ oidc:
 local_auth:
   enabled: true
   cache_days: 7
+
+mcp:
+  # Start /app/justscan-mcp or expose the HTTP endpoint only after enabling
+  # this explicitly.
+  enabled: false
+  http_enabled: false
+  endpoint: /mcp
+  max_page_size: 50
+  max_request_body_bytes: 4194304

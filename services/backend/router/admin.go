@@ -15,6 +15,19 @@ func Admin(router *gin.RouterGroup, db *bun.DB) {
 		admin.GET("/dashboard", func(c *gin.Context) {
 			admins.GetDashboard(c, db)
 		})
+		// MCP observability and runtime controls
+		admin.GET("/mcp", func(c *gin.Context) {
+			admins.GetMCPOverview(c, db)
+		})
+		admin.GET("/mcp/activity", func(c *gin.Context) {
+			admins.GetMCPActivity(c, db)
+		})
+		admin.GET("/mcp/settings", func(c *gin.Context) {
+			admins.GetMCPSettings(c, db)
+		})
+		admin.PUT("/mcp/settings", func(c *gin.Context) {
+			admins.UpdateMCPSettings(c, db)
+		})
 		// vulnerability intelligence
 		admin.POST("/vulnerability-intelligence", func(c *gin.Context) {
 			admins.IngestVulnerabilityIntelligence(c, db)

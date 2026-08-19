@@ -27,6 +27,11 @@ description: Reference the current backend YAML settings and supported BACKEND_ 
 | `vuln_kb.cve_history_interval_minutes`                      | `120`                     | Interval between CVE change-history sync attempts                   |
 | `vuln_kb.cve_history_initial_lookback_hours`                | `24`                      | History window used by the first sync; capped at 120 days           |
 | `local_auth.enabled`                                        | `true`                    | Enable username/password login                                      |
+| `mcp.enabled`                                               | `false`                   | Enable the JustScan MCP tools                                       |
+| `mcp.http_enabled`                                          | `false`                   | Expose the protected Streamable HTTP MCP endpoint                   |
+| `mcp.endpoint`                                              | `/mcp`                    | MCP endpoint path under `/api/v1`                                   |
+| `mcp.max_page_size`                                         | `50`                      | Maximum results returned by one MCP page                            |
+| `mcp.max_request_body_bytes`                                | `4194304`                 | Maximum MCP HTTP request body size                                  |
 | `security.allow_insecure_defaults`                          | `false`                   | Allow development-only insecure JWT/encryption defaults             |
 | `security.callback_allowed_hosts`, `callback_allowed_cidrs` | Empty                     | Explicit private callback target allowlists                         |
 

@@ -1,0 +1,104 @@
+---
+title: MCP server
+description: Connect AI clients to authorized JustScan scan intelligence and confirming scans.
+---
+
+JustScan exposes its scan inventory, watchlists, and CVE Intelligence impact through the Model Context Protocol (MCP). The server is disabled by default. Every tool call uses the same JustScan user ownership and organization visibility rules as the REST API.
+
+## Local stdio
+
+Enable MCP in the backend configuration used by the MCP process:
+
+```yaml
+mcp:
+  enabled: true
+  max_page_size: 50
+```
+
+Create a personal access token for the user whose visibility should be used. Keep it in a secret manager or process environment.
+
+```sh
+cd services/backend
+go build -o justscan-mcp ./cmd/justscan-mcp
+
+export JUSTSCAN_MCP_TOKEN="<personal-access-token>"
+./justscan-mcp --config /etc/justscan/config.yaml
+```
+
+An MCP client configuration normally points to that process:
+
+```json
+{
+  "mcpServers": {
+    "justscan": {
+      "command": "/absolute/path/to/justscan-mcp",
+      "args": ["--config", "/etc/justscan/config.yaml"],
+      "env": {
+        "JUSTSCAN_MCP_TOKEN": "<personal-access-token>"
+      }
+    }
+  }
+}
+```
+
+The process needs network access to the configured PostgreSQL database. The token grants the same access as the selected JustScan user, so run it only in a trusted environment.
+
+## Protected Streamable HTTP
+
+The backend can expose the same MCP server at `/api/v1/mcp` (or the configured endpoint):
+
+```yaml
+mcp:
+  enabled: true
+  http_enabled: true
+  endpoint: /mcp
+  max_page_size: 50
+  max_request_body_bytes: 4194304
+```
+
+Send a JustScan personal or user bearer token with every request:
+
+```sh
+curl https://justscan.example.com/api/v1/mcp \
+  -H "Authorization: Bearer <personal-access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"example","version":"1"}}}'
+```
+
+The endpoint is stateless: each request is authenticated before the MCP server is constructed. Org-scoped service tokens are not accepted yet. The endpoint currently uses JustScan bearer-token validation; it does not advertise a separate OAuth authorization server or OAuth discovery document. That distinction is intentional because JustScan's existing OIDC flow is browser login, not a resource-token issuer.
+
+## Available tools
+
+Read-only triage tools:
+
+- `list_scans` searches authorized scans by image, tag, status, or intelligence state.
+- `get_scan` returns a scan summary, vulnerability counts, tags, and its intelligence summary.
+- `list_watchlists` returns authorized watchlists with their latest scan, compliance posture, and intelligence summary.
+- `get_watchlist` returns one authorized watchlist and its latest scan state.
+- `get_scan_intelligence` returns changed findings, conflicting sources, validation requirements, and visible policy impacts.
+- `list_intelligence_impacts` gives the actionable queue of impacted scans and identifies watchlists pointing at them.
+
+Controlled actions:
+
+- `rescan_scan` starts a confirming rescan for an authorized scan.
+- `trigger_watchlist_scan` starts an on-demand scan for an authorized watchlist item.
+
+Both actions require `confirm: true` and a caller-generated `idempotency_key`. Repeating an action with the same key returns the original scan instead of enqueueing another one. Each successful action is written to the audit log as `mcp.scan.rescan` or `mcp.watchlist.scan`.
+
+## Admin analytics and runtime control
+
+Administrators can open **Admin → MCP** to see tool-call volume, success and rejection rates, p95 latency, active users, action replays, transport usage, and searchable recent activity for both HTTP and stdio clients. Interaction records contain metadata only: JustScan does not store prompts, tool arguments, tokens, or tool output.
+
+The runtime mode can be changed without restarting a running stdio process:
+
+- **Read + actions** allows read tools and confirmation-gated scan actions.
+- **Read-only** keeps intelligence and inventory tools available while rejecting scan-starting actions.
+- **Disabled** rejects MCP requests and tool calls.
+
+The config-level `mcp.enabled` and `mcp.http_enabled` settings still control whether the process or HTTP route is exposed at startup. The Admin → MCP mode is the operational kill switch once that surface is running.
+
+## Suggested agent workflow
+
+For daily watchlist operation, an agent should call `list_intelligence_impacts` first, inspect each result with `get_scan_intelligence`, and only then call a confirming action when the operator has explicitly confirmed it. A scheduled watchlist scan remains the source of truth; CVE Intelligence changes are an overlay until that scan is rerun.
+
+The MCP surface intentionally does not expose registry credentials, share tokens, ownership identifiers, or raw scanner secrets.

@@ -84,6 +84,14 @@ backend:
     localAuth:
       enabled: true
 
+    # MCP is disabled by default. HTTP also requires httpEnabled=true.
+    mcp:
+      enabled: false
+      httpEnabled: false
+      endpoint: /mcp
+      maxPageSize: 50
+      maxRequestBodyBytes: 4194304
+
   # ------------------------------------------------------------------
   # Secrets
   # ------------------------------------------------------------------

@@ -13,6 +13,12 @@ Connect a Git repository in the application, validate access, then run discovery
 
 After a dry run, review discovered images, select the ones that should be tracked, then create scans. Excluded images remain visible in the review so their deployment context is retained without scheduling future scans.
 
+## Per-image registry and credential
+
+If different discovered images need different registry access, expand the image and choose **Image registry / credential**. The selection is stored for that exact image reference and is used by manual and scheduled repository scans. Choose **Automatic matching** to return to host-based matching and the default behavior.
+
+Registry entries include their credentials, so create a separate entry in **Workspace setup → Registries** when two images use the same registry URL with different tokens. Give the entries distinct names, then assign the appropriate entry to each discovered image. The selected registry must be available in the repository's workspace.
+
 ## Repository-owned configuration
 
 Place a `.justscan.yaml` file at the repository root when one repository mixes Kustomize, direct Helm charts, and selected manifest paths. It takes precedence over the connector's discovery mode.

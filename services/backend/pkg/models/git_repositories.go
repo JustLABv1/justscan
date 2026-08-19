@@ -98,6 +98,21 @@ type GitRepositoryImageExclusion struct {
 	CreatedAt    time.Time `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 }
 
+// GitRepositoryImageRegistryOverride selects a configured image registry for a
+// discovered image. Multiple registry records may point at the same endpoint,
+// which lets one image use a different credential for that endpoint.
+type GitRepositoryImageRegistryOverride struct {
+	bun.BaseModel `bun:"table:git_repository_image_registry_overrides"`
+
+	ID           uuid.UUID `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	RepositoryID uuid.UUID `bun:"repository_id,type:uuid,notnull" json:"repository_id"`
+	FullRef      string    `bun:"full_ref,type:text,notnull" json:"full_ref"`
+	RegistryID   uuid.UUID `bun:"registry_id,type:uuid,notnull" json:"registry_id"`
+	CreatedByID  uuid.UUID `bun:"created_by_id,type:uuid,notnull" json:"created_by_id"`
+	CreatedAt    time.Time `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	UpdatedAt    time.Time `bun:"updated_at,type:timestamptz" json:"updated_at"`
+}
+
 type GitRepositoryDiscoveryRule struct {
 	bun.BaseModel `bun:"table:git_repository_discovery_rules"`
 
@@ -156,13 +171,14 @@ type GitRepositoryRunCandidate struct {
 type GitRepositoryRunImage struct {
 	bun.BaseModel `bun:"table:git_repository_run_images"`
 
-	ID        uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
-	RunID     uuid.UUID  `bun:"run_id,type:uuid,notnull" json:"run_id"`
-	FullRef   string     `bun:"full_ref,type:text,notnull" json:"full_ref"`
-	ImageName string     `bun:"image_name,type:text,notnull" json:"image_name"`
-	ImageTag  string     `bun:"image_tag,type:text,notnull" json:"image_tag"`
-	Locations JSONObject `bun:"locations,type:jsonb,notnull,default:'{}'" json:"locations"`
-	State     string     `bun:"state,type:text,notnull,default:'discovered'" json:"state"`
-	ScanID    *uuid.UUID `bun:"scan_id,type:uuid" json:"scan_id,omitempty"`
-	CreatedAt time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	ID         uuid.UUID  `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	RunID      uuid.UUID  `bun:"run_id,type:uuid,notnull" json:"run_id"`
+	FullRef    string     `bun:"full_ref,type:text,notnull" json:"full_ref"`
+	ImageName  string     `bun:"image_name,type:text,notnull" json:"image_name"`
+	ImageTag   string     `bun:"image_tag,type:text,notnull" json:"image_tag"`
+	Locations  JSONObject `bun:"locations,type:jsonb,notnull,default:'{}'" json:"locations"`
+	State      string     `bun:"state,type:text,notnull,default:'discovered'" json:"state"`
+	ScanID     *uuid.UUID `bun:"scan_id,type:uuid" json:"scan_id,omitempty"`
+	RegistryID *uuid.UUID `bun:"registry_id,type:uuid" json:"registry_id,omitempty"`
+	CreatedAt  time.Time  `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
 }

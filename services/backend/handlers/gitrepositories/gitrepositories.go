@@ -297,6 +297,104 @@ func DeleteImageExclusion(db *bun.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
 	}
 }
+
+func ListImageRegistryOverrides(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok {
+			return
+		}
+		var overrides []models.GitRepositoryImageRegistryOverride
+		if err := db.NewSelect().Model(&overrides).Where("repository_id = ?", item.ID).OrderExpr("full_ref ASC").Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load image registry overrides"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"data": overrides})
+	}
+}
+
+func SetImageRegistryOverride(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok || !requireEdit(c, db, item) {
+			return
+		}
+		var body struct {
+			FullRef    string `json:"full_ref"`
+			RegistryID string `json:"registry_id"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		body.FullRef = strings.TrimSpace(body.FullRef)
+		if body.FullRef == "" || len(body.FullRef) > 2048 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "full_ref is required"})
+			return
+		}
+		registryID, err := uuid.Parse(strings.TrimSpace(body.RegistryID))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "a valid registry_id is required"})
+			return
+		}
+		var registry models.Registry
+		if err := db.NewSelect().Model(&registry).Where("id = ?", registryID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "registry not found"})
+			return
+		}
+		available, err := registryAvailableToRepository(c, db, item, &registry)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check registry access"})
+			return
+		}
+		if !available {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "registry must be available to the same workspace"})
+			return
+		}
+		userID, _, _ := authz.RequireRequestUser(c, db)
+		now := time.Now()
+		override := &models.GitRepositoryImageRegistryOverride{
+			RepositoryID: item.ID,
+			FullRef:      body.FullRef,
+			RegistryID:   registryID,
+			CreatedByID:  userID,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+		if _, err := db.NewInsert().Model(override).
+			On("CONFLICT (repository_id, full_ref) DO UPDATE").
+			Set("registry_id = EXCLUDED.registry_id").
+			Set("updated_at = EXCLUDED.updated_at").
+			Returning("*").
+			Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save image registry override"})
+			return
+		}
+		c.JSON(http.StatusOK, override)
+	}
+}
+
+func DeleteImageRegistryOverride(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok || !requireEdit(c, db, item) {
+			return
+		}
+		overrideID, err := uuid.Parse(c.Param("overrideId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid image registry override ID"})
+			return
+		}
+		if _, err := db.NewDelete().Model((*models.GitRepositoryImageRegistryOverride)(nil)).
+			Where("id = ? AND repository_id = ?", overrideID, item.ID).
+			Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear image registry override"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
+	}
+}
+
 func Discover(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		item, ok := load(c, db)

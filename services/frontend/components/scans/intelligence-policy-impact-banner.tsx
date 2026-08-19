@@ -1,7 +1,7 @@
 'use client';
 
 import type { ScanIntelligencePolicyImpactResponse } from '@/lib/api';
-import { Alert, Button, Chip, Link as HeroLink } from '@heroui/react';
+import { Alert, Button, Chip, Disclosure, Link as HeroLink } from '@heroui/react';
 import { Refresh01Icon, ShieldKeyIcon } from 'hugeicons-react';
 
 interface IntelligencePolicyImpactBannerProps {
@@ -26,35 +26,35 @@ function impactPriority(impact: string) {
   }
 }
 
-function bannerCopy(impact: string) {
+function impactMeta(impact: string) {
   switch (impact) {
     case 'resolved':
       return {
         status: 'success' as const,
-        title: 'Resolved by current intelligence — original scan remains failed',
+        label: 'Would resolve',
         description:
-          'Current CVE data no longer produces the historical policy violation. Run a new scan before treating the policy as passed.',
+          'Current CVE data no longer produces the historical policy violation. Run a confirmation scan before treating the policy as passed.',
       };
     case 'new_failure':
       return {
         status: 'danger' as const,
-        title: 'New policy failure caused by current intelligence',
+        label: 'Would fail',
         description:
-          'A later CVE update now produces a policy violation. The scan result is unchanged, and a new scan is required to confirm the current state.',
+          'A later CVE update now produces a policy violation. The stored result is unchanged until a confirmation scan completes.',
       };
     case 'still_failed':
       return {
         status: 'danger' as const,
-        title: 'Still failing under current intelligence',
+        label: 'Still failing',
         description:
-          'CVE intelligence changed one or more policy inputs, but the affected policies still fail. Run a new scan to confirm the current result.',
+          'CVE intelligence changed one or more policy inputs, but the affected policies still fail. Run a confirmation scan to verify the result.',
       };
     default:
       return {
         status: 'warning' as const,
-        title: 'Needs validation — rescan required',
+        label: 'Needs validation',
         description:
-          'The latest intelligence is disputed, incomplete, or conflicting. The original policy result is preserved until a new scan confirms the current state.',
+          'The latest intelligence is disputed, incomplete, or conflicting. The stored policy result is preserved until a confirmation scan runs.',
       };
   }
 }
@@ -86,26 +86,26 @@ export function IntelligencePolicyImpactBanner({
   const primaryImpact = impact.policies.reduce<string>((current, policy) => {
     return impactPriority(policy.impact) > impactPriority(current) ? policy.impact : current;
   }, impact.policies[0]?.impact ?? 'needs_validation');
-  const copy = bannerCopy(primaryImpact);
+  const meta = impactMeta(primaryImpact);
   const policyNames = Array.from(new Set(impact.policies.map((policy) => policy.policy_name)));
-  const visiblePolicies = impact.policies.slice(0, 4);
-  const remainingPolicies = Math.max(0, impact.policies.length - visiblePolicies.length);
   const cves = Array.from(
     new Set(impact.policies.flatMap((policy) => policy.changed_cves).filter(Boolean))
   );
-  const visibleCVEs = cves.slice(0, 8);
-  const remainingCVEs = Math.max(0, cves.length - visibleCVEs.length);
+  const changedFindingCount = impact.policies.reduce(
+    (total, policy) => total + policy.changed_finding_count,
+    0
+  );
 
   return (
-    <Alert className="items-start gap-3" status={copy.status}>
+    <Alert className="items-start gap-3" status={meta.status}>
       <Alert.Indicator>
         <ShieldKeyIcon size={18} />
       </Alert.Indicator>
-      <Alert.Content className="min-w-0 flex-1 gap-2">
+      <Alert.Content className="min-w-0 flex-1 gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <Alert.Title>{copy.title}</Alert.Title>
-            <Alert.Description className="mt-1 max-w-4xl">{copy.description}</Alert.Description>
+            <Alert.Title>Policy result pending confirmation</Alert.Title>
+            <Alert.Description className="mt-1 max-w-4xl">{meta.description}</Alert.Description>
           </div>
           {canRescan ? (
             <Button
@@ -116,57 +116,70 @@ export function IntelligencePolicyImpactBanner({
               variant="secondary"
             >
               {!rescanPending ? <Refresh01Icon size={15} /> : null}
-              {rescanPending ? 'Queueing…' : 'Rescan now'}
+              {rescanPending ? 'Queueing…' : 'Run confirmation scan'}
             </Button>
           ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-          <span>Policies:</span>
-          {policyNames.map((policyName) => (
-            <Chip key={policyName} color={copy.status} size="sm" variant="soft">
-              {policyName}
-            </Chip>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip color={meta.status} size="sm" variant="soft">
+            {meta.label}
+          </Chip>
+          <Chip color="warning" size="sm" variant="soft">
+            {cves.length} CVE{cves.length === 1 ? '' : 's'} changed
+          </Chip>
+          <Chip color="default" size="sm" variant="soft">
+            {changedFindingCount} finding{changedFindingCount === 1 ? '' : 's'} affected
+          </Chip>
+          <span className="text-xs text-muted">Stored result preserved</span>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          {visiblePolicies.map((policy) => (
-            <div
-              className="rounded-lg border border-divider/60 bg-surface/40 px-3 py-2"
-              key={`${policy.org_id}-${policy.policy_id}`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="font-medium text-foreground">{policy.policy_name}</span>
-                <span className="text-muted">
-                  {formatStatus(policy.historical_status)} → {formatStatus(policy.current_status)}
-                </span>
+        <Disclosure className="border-t border-divider/60 pt-2">
+          <Disclosure.Heading>
+            <Disclosure.Trigger className="w-full justify-between text-left text-xs font-medium text-muted hover:text-foreground">
+              Review policy impact
+              <Disclosure.Indicator />
+            </Disclosure.Trigger>
+          </Disclosure.Heading>
+          <Disclosure.Content>
+            <Disclosure.Body className="space-y-3 pt-3">
+              <div className="space-y-2">
+                {impact.policies.map((policy) => (
+                  <div
+                    className="border-l-2 border-divider pl-3"
+                    key={`${policy.org_id}-${policy.policy_id}`}
+                  >
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                      <span className="font-medium text-foreground">{policy.policy_name}</span>
+                      <span className="text-muted">
+                        {formatStatus(policy.historical_status)} →{' '}
+                        {formatStatus(policy.current_status)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted">{policy.reason}</p>
+                  </div>
+                ))}
               </div>
-              <p className="mt-1 line-clamp-2 text-xs text-muted">{policy.reason}</p>
-            </div>
-          ))}
-          {remainingPolicies > 0 ? (
-            <p className="self-center text-xs text-muted">
-              +{remainingPolicies} more affected {remainingPolicies === 1 ? 'policy' : 'policies'}
-            </p>
-          ) : null}
-        </div>
 
-        {visibleCVEs.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-            <span>Changed CVEs:</span>
-            {visibleCVEs.map((cve) => (
-              <HeroLink
-                key={cve}
-                className="font-mono text-accent underline-offset-2"
-                href={`/vulnkb/${encodeURIComponent(cve)}`}
-              >
-                {cve}
-              </HeroLink>
-            ))}
-            {remainingCVEs > 0 ? <span>+{remainingCVEs} more</span> : null}
-          </div>
-        ) : null}
+              {cves.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                  <span>Changed CVEs:</span>
+                  {cves.map((cve) => (
+                    <HeroLink
+                      key={cve}
+                      className="font-mono text-accent underline-offset-2"
+                      href={`/vulnkb/${encodeURIComponent(cve)}`}
+                    >
+                      {cve}
+                    </HeroLink>
+                  ))}
+                </div>
+              ) : null}
+
+              <p className="text-xs text-muted">Policies: {policyNames.join(', ')}</p>
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure>
 
         {!canRescan && rescanDisabledReason ? (
           <p className="text-xs text-muted">{rescanDisabledReason}</p>

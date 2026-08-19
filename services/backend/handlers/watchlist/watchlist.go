@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"justscan-backend/compliance"
 	"justscan-backend/functions/authz"
 	"justscan-backend/functions/resourceownership"
 	scanhandlers "justscan-backend/handlers/scans"
@@ -75,6 +76,15 @@ func attachWatchlistPosture(ctx context.Context, db *bun.DB, items []models.Watc
 	for index := range items {
 		if items[index].LastScanID != nil {
 			items[index].LastScan = scansByID[*items[index].LastScanID]
+		}
+	}
+	intelligenceSummaries, err := compliance.LoadIntelligenceSummaries(ctx, db, scanIDs)
+	if err != nil {
+		return err
+	}
+	for index := range items {
+		if items[index].LastScanID != nil {
+			items[index].IntelligenceSummary = intelligenceSummaries[*items[index].LastScanID]
 		}
 	}
 

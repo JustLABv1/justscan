@@ -1,6 +1,7 @@
 'use client';
 
 import { ScanTagBadgeList } from '@/components/scans/scan-tag-badge-list';
+import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
 import { SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
@@ -357,6 +358,7 @@ function ArtifactHistoryRows({
                   externalStatus={scan.external_status}
                 />
                 <PolicyFailureChip summary={scan.compliance_summary} />
+                <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
               </div>
               <p className="mt-1 text-xs text-zinc-500" title={fullDate(scan.created_at)}>
                 {timeAgo(scan.created_at)}
@@ -690,6 +692,10 @@ export function ArtifactScansTable({
                               externalStatus={artifact.latest_external_status}
                             />
                             <PolicyFailureChip summary={artifact.compliance_summary} />
+                            <IntelligenceSummaryChip
+                              compact
+                              summary={artifact.intelligence_summary}
+                            />
                           </div>
                           <p className="mt-1 font-mono text-xs text-zinc-500">
                             {artifact.latest_scan_id.slice(0, 8)}…{' '}

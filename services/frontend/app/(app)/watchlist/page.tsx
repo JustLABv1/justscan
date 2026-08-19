@@ -3,6 +3,7 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, StatusBadge } from '@/components/ui/badges';
+import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { StatusAlert } from '@/components/ui/form-alert';
@@ -41,6 +42,7 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   getWatchlistPolicyAttentionItems,
   getWatchlistPosture,
+  watchlistNeedsIntelligenceConfirmation,
   watchlistNeedsPolicyAttention,
   type WatchlistPosture,
 } from '@/lib/watchlist-posture';
@@ -95,11 +97,12 @@ const postureChipColor: Record<
   neutral: 'default',
 };
 
-type WatchlistFocus = 'all' | 'attention' | 'stale' | 'healthy' | 'never_scanned';
+type WatchlistFocus = 'all' | 'attention' | 'intelligence' | 'stale' | 'healthy' | 'never_scanned';
 
 function parseWatchlistFocus(value: string | null): WatchlistFocus {
   switch (value) {
     case 'attention':
+    case 'intelligence':
     case 'stale':
     case 'healthy':
     case 'never_scanned':
@@ -133,11 +136,13 @@ function isHealthyWatchlistItem(item: WatchlistItem, now: number) {
 function getWatchlistOverviewSummary({
   activeCount,
   attentionCount,
+  intelligencePendingCount,
   neverScannedCount,
   staleCount,
 }: {
   activeCount: number;
   attentionCount: number;
+  intelligencePendingCount: number;
   neverScannedCount: number;
   staleCount: number;
 }): {
@@ -156,6 +161,15 @@ function getWatchlistOverviewSummary({
   }
 
   if (attentionCount > 0) {
+    if (intelligencePendingCount > 0) {
+      return {
+        label: 'Confirmation pending',
+        title: 'CVE intelligence changed on the watchlist',
+        description:
+          'The stored policy result is preserved until the next scheduled scan confirms the current CVE state. Use Scan now for an immediate confirmation.',
+        tone: 'warning',
+      };
+    }
     return {
       label: 'Needs action',
       title: 'Policy or scan failures need review',
@@ -249,6 +263,9 @@ function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item:
       <p className="truncate text-xs text-zinc-500" title={policyTitle}>
         {posture.description}
       </p>
+      {posture.kind !== 'intelligence_pending' ? (
+        <IntelligenceSummaryChip compact summary={item.intelligence_summary} />
+      ) : null}
       {criticalCount > 0 || highCount > 0 ? (
         <Chip color="default" variant="soft" size="sm">
           {criticalCount} critical · {highCount} high
@@ -577,6 +594,7 @@ export default function WatchlistPage() {
         const focusMatches =
           focusFilter === 'all' ||
           (focusFilter === 'attention' && item.enabled && watchlistNeedsPolicyAttention(item)) ||
+          (focusFilter === 'intelligence' && watchlistNeedsIntelligenceConfirmation(item)) ||
           (focusFilter === 'stale' && isStaleWatchlistItem(item, postureNow)) ||
           (focusFilter === 'healthy' && isHealthyWatchlistItem(item, postureNow)) ||
           (focusFilter === 'never_scanned' && isNeverScannedItem(item));
@@ -592,9 +610,10 @@ export default function WatchlistPage() {
           if (kind === 'blocked') return 0;
           if (kind === 'policy_failed') return 1;
           if (kind === 'scan_failed') return 2;
-          if (kind === 'never_scanned') return 3;
-          if (kind === 'running') return 4;
-          return 5;
+          if (kind === 'intelligence_pending') return 3;
+          if (kind === 'never_scanned') return 4;
+          if (kind === 'running') return 5;
+          return 6;
         };
         const rankDiff = rank(left) - rank(right);
         if (rankDiff !== 0) return rankDiff;
@@ -606,16 +625,19 @@ export default function WatchlistPage() {
   const neverScannedCount = activeItems.filter((item) => !item.last_scan_id).length;
   const staleItems = activeItems.filter((item) => isStaleWatchlistItem(item, postureNow));
   const staleCount = staleItems.length;
+  const intelligencePendingItems = activeItems.filter(watchlistNeedsIntelligenceConfirmation);
   const healthyItems = activeItems.filter((item) => isHealthyWatchlistItem(item, postureNow));
   const overviewSummary = getWatchlistOverviewSummary({
     activeCount: activeItems.length,
     attentionCount: attentionItems.length,
+    intelligencePendingCount: intelligencePendingItems.length,
     neverScannedCount,
     staleCount,
   });
   const focusCounts: Record<WatchlistFocus, number> = {
     all: items.length,
     attention: attentionItems.length,
+    intelligence: intelligencePendingItems.length,
     stale: staleItems.length,
     healthy: healthyItems.length,
     never_scanned: neverScannedCount,
@@ -727,6 +749,7 @@ export default function WatchlistPage() {
                         {[
                           { id: 'all', label: 'All' },
                           { id: 'attention', label: 'Attention' },
+                          { id: 'intelligence', label: 'CVE confirmation' },
                           { id: 'stale', label: 'Stale' },
                           { id: 'never_scanned', label: 'Never scanned' },
                           { id: 'healthy', label: 'Healthy' },

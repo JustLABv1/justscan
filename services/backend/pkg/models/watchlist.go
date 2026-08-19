@@ -28,8 +28,9 @@ type WatchlistItem struct {
 	UpdatedAt     time.Time  `bun:"updated_at,type:timestamptz" json:"updated_at"`
 
 	// Populated on join
-	LastScan          *Scan                       `bun:"-" json:"last_scan,omitempty"`
-	ComplianceSummary *WatchlistComplianceSummary `bun:"-" json:"compliance_summary,omitempty"`
+	LastScan            *Scan                       `bun:"-" json:"last_scan,omitempty"`
+	ComplianceSummary   *WatchlistComplianceSummary `bun:"-" json:"compliance_summary,omitempty"`
+	IntelligenceSummary *IntelligenceSummary        `bun:"-" json:"intelligence_summary,omitempty"`
 }
 
 type WatchlistComplianceSummary struct {

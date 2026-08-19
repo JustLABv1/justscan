@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"justscan-backend/compliance"
 	"justscan-backend/functions/blockedpolicy"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
@@ -79,6 +80,12 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan intelligence versions"})
 			return
 		}
+		intelligenceSummaries, summaryErr := compliance.LoadIntelligenceSummaries(c.Request.Context(), db, []uuid.UUID{scanID})
+		if summaryErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan intelligence summary"})
+			return
+		}
+		scan.IntelligenceSummary = intelligenceSummaries[scanID]
 
 		c.JSON(http.StatusOK, scan)
 	}

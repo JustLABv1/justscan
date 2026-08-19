@@ -1,5 +1,6 @@
 'use client';
 
+import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
 import { SevCount, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
@@ -116,6 +117,7 @@ export function ImageOverviewTable({
                                 Policy failed
                               </Chip>
                             ) : null}
+                            <IntelligenceSummaryChip compact summary={image.intelligence_summary} />
                           </div>
                           <p
                             className="mt-1 truncate font-mono text-xs text-muted"

@@ -107,7 +107,14 @@ const SEV = [
 ];
 
 type ScanOutcomeSeries = {
-  key: 'completed' | 'org_policy_failed' | 'policy_blocked' | 'failed' | 'running' | 'pending' | 'cancelled';
+  key:
+    | 'completed'
+    | 'org_policy_failed'
+    | 'policy_blocked'
+    | 'failed'
+    | 'running'
+    | 'pending'
+    | 'cancelled';
   label: string;
   color: string;
   status?: string;
@@ -931,11 +938,14 @@ export default function DashboardPage() {
     active_xray_count: 0,
     active_xray_step_counts: {},
     active_xray_scans: [],
+    intelligence_changed_count: 0,
+    intelligence_pending_count: 0,
   };
   const activePolicySignals =
     operations.blocked_policy_count +
     operations.xray_blocked_count +
     operations.org_policy_fail_count;
+  const intelligencePendingCount = operations.intelligence_pending_count ?? 0;
   const gitRepositoryTone: PostureTone =
     gitRepositories.needs_attention > 0
       ? 'danger'
@@ -1109,16 +1119,22 @@ export default function DashboardPage() {
           <Card.Header className="p-0">
             <div className="flex items-center justify-between gap-4">
               <Chip
-                color={policyFailures.today > 0 || activePolicySignals > 0 ? 'warning' : 'success'}
+                color={
+                  policyFailures.today > 0 ||
+                  activePolicySignals > 0 ||
+                  intelligencePendingCount > 0
+                    ? 'warning'
+                    : 'success'
+                }
                 variant="soft"
               >
-                Policy signals
+                Policy &amp; CVE signals
               </Chip>
               <span className="text-xs tabular-nums text-muted">Today</span>
             </div>
             <Card.Title className="mt-4">What merits review</Card.Title>
             <Card.Description>
-              Signals from organization and scanner policy evaluation
+              Signals from policy evaluation and changing CVE intelligence
             </Card.Description>
           </Card.Header>
           <Card.Content className="flex flex-1 flex-col justify-center gap-5 p-0 py-6">
@@ -1154,8 +1170,24 @@ export default function DashboardPage() {
             </div>
             <Separator variant="tertiary" />
             <div className="flex items-start gap-3">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-xs font-semibold text-accent">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-warning/10 text-xs font-semibold text-warning">
                 3
+              </span>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {intelligencePendingCount.toLocaleString()} scans await CVE confirmation
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  {operations.intelligence_changed_count.toLocaleString()} latest scans have
+                  post-scan CVE changes. Pending results stay unchanged until a confirmation scan
+                  runs.
+                </p>
+              </div>
+            </div>
+            <Separator variant="tertiary" />
+            <div className="flex items-start gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-xs font-semibold text-accent">
+                4
               </span>
               <div>
                 <p className="text-sm font-medium text-foreground">

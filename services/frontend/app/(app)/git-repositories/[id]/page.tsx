@@ -45,6 +45,7 @@ import {
   createGitRepositoryImageExclusion,
   deleteGitRepositoryHelmSource,
   deleteGitRepositoryImageExclusion,
+  deleteGitRepositoryImageRegistryOverride,
   discoverGitRepository,
   exportGitRepositoryDiscoveryRules,
   getGitRepository,
@@ -53,20 +54,25 @@ import {
   listGitRepositoryCandidates,
   listGitRepositoryHelmSources,
   listGitRepositoryImageExclusions,
+  listGitRepositoryImageRegistryOverrides,
   listGitRepositoryLatestImageScans,
   listGitRepositoryRuns,
   listHelmRegistryCredentials,
+  listRegistries,
   runGitRepository,
+  setGitRepositoryImageRegistryOverride,
   updateGitRepositoryHelmSource,
   type GitRepository,
   type GitRepositoryHelmSource,
   type GitRepositoryHelmSourceInput,
   type GitRepositoryImageExclusion,
+  type GitRepositoryImageRegistryOverride,
   type GitRepositoryLatestImageScan,
   type GitRepositoryRun,
   type GitRepositoryRunCandidate,
   type GitRepositoryRunImage,
   type HelmRegistryCredential,
+  type Registry,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
@@ -114,6 +120,68 @@ function HelmCredentialSelect({
       </Select.Popover>
       <Description>
         Select a Helm-only credential, or use automatic matching. Image registries are never used.
+      </Description>
+    </Select>
+  );
+}
+
+function ImageRegistrySelect({
+  registries,
+  value,
+  onChange,
+  isDisabled,
+}: {
+  registries: Registry[];
+  value: string | null;
+  onChange: (value: string | null) => void;
+  isDisabled?: boolean;
+}) {
+  return (
+    <Select
+      aria-label="Image registry and credential"
+      className="w-full sm:max-w-xl"
+      isDisabled={isDisabled}
+      value={value ?? 'automatic'}
+      onChange={(nextValue) =>
+        onChange(nextValue && String(nextValue) !== 'automatic' ? String(nextValue) : null)
+      }
+      variant="secondary"
+    >
+      <Label>Image registry / credential</Label>
+      <Select.Trigger>
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          <ListBox.Item id="automatic" textValue="Automatic matching">
+            <div className="flex min-w-0 flex-col items-start gap-0.5">
+              <Label>Automatic matching</Label>
+              <Description className="!block">Match the image host or use the default.</Description>
+            </div>
+            <ListBox.ItemIndicator />
+          </ListBox.Item>
+          {registries.map((registry) => (
+            <ListBox.Item
+              id={registry.id}
+              key={registry.id}
+              textValue={`${registry.name} ${registry.url}`}
+            >
+              <div className="flex min-w-0 flex-col items-start gap-0.5">
+                <Label>{registry.name}</Label>
+                <Description className="!block break-all">
+                  {registry.url} ·{' '}
+                  {registry.scan_provider === 'artifactory_xray' ? 'Xray' : 'Trivy'}
+                </Description>
+              </div>
+              <ListBox.ItemIndicator />
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+      <Description>
+        Choose another configured registry entry when this image needs a different endpoint or
+        token. Create a second entry with the same URL for a second credential.
       </Description>
     </Select>
   );
@@ -169,6 +237,10 @@ export default function GitRepositoryDetailPage() {
   const [selectedCandidateIDs, setSelectedCandidateIDs] = useState<Set<string>>(new Set());
   const [selectedImageRefs, setSelectedImageRefs] = useState<Set<string>>(new Set());
   const [imageExclusions, setImageExclusions] = useState<GitRepositoryImageExclusion[]>([]);
+  const [imageRegistryOverrides, setImageRegistryOverrides] = useState<
+    GitRepositoryImageRegistryOverride[]
+  >([]);
+  const [registries, setRegistries] = useState<Registry[]>([]);
   const [latestImageScans, setLatestImageScans] = useState<GitRepositoryLatestImageScan[]>([]);
   const reviewOverlay = useOverlayState();
   const helmSourceOverlay = useOverlayState();
@@ -178,6 +250,7 @@ export default function GitRepositoryDetailPage() {
   const [startingScan, setStartingScan] = useState(false);
   const [cancellingRun, setCancellingRun] = useState(false);
   const [updatingImageExclusions, setUpdatingImageExclusions] = useState(false);
+  const [savingImageRegistryRef, setSavingImageRegistryRef] = useState<string | null>(null);
   const [savingHelmSource, setSavingHelmSource] = useState(false);
   const { success, error } = useToast();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
@@ -189,6 +262,8 @@ export default function GitRepositoryDetailPage() {
         nextRepository,
         nextRuns,
         nextExclusions,
+        nextImageRegistryOverrides,
+        nextRegistries,
         nextLatestImageScans,
         nextHelmSources,
         nextCredentials,
@@ -196,6 +271,8 @@ export default function GitRepositoryDetailPage() {
         getGitRepository(id),
         listGitRepositoryRuns(id),
         listGitRepositoryImageExclusions(id),
+        listGitRepositoryImageRegistryOverrides(id),
+        listRegistries().catch(() => []),
         listGitRepositoryLatestImageScans(id),
         listGitRepositoryHelmSources(id),
         listHelmRegistryCredentials().catch(() => []),
@@ -203,6 +280,8 @@ export default function GitRepositoryDetailPage() {
       setRepository(nextRepository);
       setRuns(nextRuns);
       setImageExclusions(nextExclusions);
+      setImageRegistryOverrides(nextImageRegistryOverrides);
+      setRegistries(nextRegistries);
       setLatestImageScans(nextLatestImageScans);
       setHelmSources(nextHelmSources);
       setAvailableHelmCredentials(nextCredentials);
@@ -573,6 +652,32 @@ export default function GitRepositoryDetailPage() {
     }
   }
 
+  async function updateImageRegistry(imageRef: string, registryID: string | null) {
+    const current = imageRegistryOverrides.find((override) => override.full_ref === imageRef);
+    if (!registryID && !current) return;
+    setSavingImageRegistryRef(imageRef);
+    try {
+      if (registryID) {
+        const override = await setGitRepositoryImageRegistryOverride(id, imageRef, registryID);
+        setImageRegistryOverrides((overrides) => [
+          override,
+          ...overrides.filter((item) => item.full_ref !== imageRef),
+        ]);
+        success('Image registry override saved.');
+      } else if (current) {
+        await deleteGitRepositoryImageRegistryOverride(id, current.id);
+        setImageRegistryOverrides((overrides) =>
+          overrides.filter((item) => item.id !== current.id)
+        );
+        success('Image registry override cleared.');
+      }
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not update the image registry.');
+    } finally {
+      setSavingImageRegistryRef(null);
+    }
+  }
+
   async function exportRules() {
     try {
       const yaml = await exportGitRepositoryDiscoveryRules(id);
@@ -617,6 +722,14 @@ export default function GitRepositoryDetailPage() {
   const exclusionByRef = useMemo(
     () => new Map(imageExclusions.map((exclusion) => [exclusion.full_ref, exclusion])),
     [imageExclusions]
+  );
+  const imageRegistryOverrideByRef = useMemo(
+    () => new Map(imageRegistryOverrides.map((override) => [override.full_ref, override])),
+    [imageRegistryOverrides]
+  );
+  const registryByID = useMemo(
+    () => new Map(registries.map((registry) => [registry.id, registry])),
+    [registries]
   );
   const latestScanByRef = useMemo(
     () => new Map(latestImageScans.map((scan) => [scan.full_ref, scan])),
@@ -1108,11 +1221,15 @@ export default function GitRepositoryDetailPage() {
                 {filteredPreviewImages.map((image) => {
                   const locations = locationsFor(image);
                   const exclusion = exclusionByRef.get(image.full_ref);
+                  const registryOverride = imageRegistryOverrideByRef.get(image.full_ref);
+                  const selectedRegistry = registryOverride
+                    ? registryByID.get(registryOverride.registry_id)
+                    : undefined;
                   const latestScan = latestScanByRef.get(image.full_ref);
                   return (
                     <div
                       key={image.id}
-                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 border-b border-divider/70 px-4 py-3 last:border-b-0 transition-colors hover:bg-surface-secondary"
+                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 border-b border-divider/70 px-4 py-3 last:border-b-0 transition-colors hover:bg-surface-hovered"
                     >
                       <Checkbox
                         aria-label={`Select ${image.full_ref}`}
@@ -1158,6 +1275,11 @@ export default function GitRepositoryDetailPage() {
                                   Excluded
                                 </Chip>
                               ) : null}
+                              {registryOverride ? (
+                                <Chip className="shrink-0" color="accent" size="sm" variant="soft">
+                                  {selectedRegistry?.name ?? 'Custom registry'}
+                                </Chip>
+                              ) : null}
                               {latestScan ? (
                                 <span className="shrink-0">
                                   <StatusBadge
@@ -1171,6 +1293,16 @@ export default function GitRepositoryDetailPage() {
                           </Accordion.Heading>
                           <Accordion.Panel>
                             <Accordion.Body className="mt-3 border-t border-divider/70 pt-3">
+                              <div className="mb-4 rounded-lg border border-divider/70 bg-surface-secondary p-3">
+                                <ImageRegistrySelect
+                                  registries={registries}
+                                  value={registryOverride?.registry_id ?? null}
+                                  isDisabled={savingImageRegistryRef === image.full_ref}
+                                  onChange={(value) =>
+                                    void updateImageRegistry(image.full_ref, value)
+                                  }
+                                />
+                              </div>
                               <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted">
                                 Deployment locations
                               </p>

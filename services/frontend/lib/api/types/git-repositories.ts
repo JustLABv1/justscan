@@ -53,6 +53,15 @@ export interface GitRepositoryImageExclusion {
   created_at: string;
 }
 
+export interface GitRepositoryImageRegistryOverride {
+  id: string;
+  repository_id: string;
+  full_ref: string;
+  registry_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type GitRepositoryCandidateStatus = 'unresolved' | 'auto_accepted' | 'resolved' | 'ignored';
 
 export interface GitRepositoryRunCandidate {
@@ -135,6 +144,7 @@ export interface GitRepositoryRunImage {
   locations: { items?: GitDiscoveredImage['locations'] };
   state: string;
   scan_id?: string | null;
+  registry_id?: string | null;
 }
 
 export interface GitRepositoryLatestImageScan {

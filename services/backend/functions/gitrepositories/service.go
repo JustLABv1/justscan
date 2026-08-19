@@ -427,28 +427,33 @@ func processRun(runID uuid.UUID) {
 			return
 		}
 	}
-	previous := previousRefs(ctx, db, repository.ID, run.ID)
+	registryOverrides := imageRegistryOverrides(ctx, db, repository.ID)
+	previous := previousRefs(ctx, db, repository.ID, run.ID, registryOverrides)
 	excluded := excludedImageRefs(ctx, db, repository.ID)
 	created := 0
 	for _, image := range images {
 		if runCancelled(ctx, db, run.ID) {
 			return
 		}
+		var registryID *uuid.UUID
+		if override, ok := registryOverrides[image.FullRef]; ok {
+			registryID = &override
+		}
 		stateName := "discovered"
 		if excluded[image.FullRef] {
-			row := &models.GitRepositoryRunImage{RunID: run.ID, FullRef: image.FullRef, ImageName: image.ImageName, ImageTag: image.ImageTag, Locations: models.JSONObject{"items": image.Locations}, State: "excluded", CreatedAt: time.Now()}
+			row := &models.GitRepositoryRunImage{RunID: run.ID, FullRef: image.FullRef, ImageName: image.ImageName, ImageTag: image.ImageTag, Locations: models.JSONObject{"items": image.Locations}, State: "excluded", RegistryID: registryID, CreatedAt: time.Now()}
 			db.NewInsert().Model(row).Exec(ctx) //nolint:errcheck
 			continue
 		}
 		if run.RequestedPolicy == models.GitRepositoryRescanChanged && previous[image.FullRef] {
 			stateName = "unchanged"
 		}
-		row := &models.GitRepositoryRunImage{RunID: run.ID, FullRef: image.FullRef, ImageName: image.ImageName, ImageTag: image.ImageTag, Locations: models.JSONObject{"items": image.Locations}, State: stateName, CreatedAt: time.Now()}
+		row := &models.GitRepositoryRunImage{RunID: run.ID, FullRef: image.FullRef, ImageName: image.ImageName, ImageTag: image.ImageTag, Locations: models.JSONObject{"items": image.Locations}, State: stateName, RegistryID: registryID, CreatedAt: time.Now()}
 		if stateName == "unchanged" {
 			db.NewInsert().Model(row).Exec(ctx)
 			continue
 		}
-		scan, envVars, err := createScan(ctx, db, repository, run.ID, image)
+		scan, envVars, err := createScan(ctx, db, repository, run.ID, image, registryID)
 		if err != nil {
 			row.State = "failed"
 			row.Locations["error"] = err.Error()
@@ -518,8 +523,8 @@ func cancelRepositoryRunScan(ctx context.Context, db *bun.DB, scanID uuid.UUID) 
 	_ = scanner.MarkScanCancelled(ctx, db, scanID, "Cancelled with repository run")
 }
 
-func createScan(ctx context.Context, db *bun.DB, repository models.GitRepository, runID uuid.UUID, image DiscoveredImage) (*models.Scan, []string, error) {
-	registry, envVars, err := scanner.ResolveRegistryForScan(ctx, db, image.ImageName, nil)
+func createScan(ctx context.Context, db *bun.DB, repository models.GitRepository, runID uuid.UUID, image DiscoveredImage, registryID *uuid.UUID) (*models.Scan, []string, error) {
+	registry, envVars, err := scanner.ResolveRegistryForScan(ctx, db, image.ImageName, registryID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -560,16 +565,40 @@ func failRun(ctx context.Context, db *bun.DB, run *models.GitRepositoryRun, err 
 		Exec(ctx)
 }
 
-func previousRefs(ctx context.Context, db *bun.DB, repositoryID, currentRunID uuid.UUID) map[string]bool {
+func previousRefs(ctx context.Context, db *bun.DB, repositoryID, currentRunID uuid.UUID, registryOverrides map[string]uuid.UUID) map[string]bool {
 	var previous models.GitRepositoryRun
-	if err := db.NewSelect().Model(&previous).Where("repository_id = ?", repositoryID).Where("id != ?", currentRunID).Where("status IN (?)", bun.In([]string{models.GitRepositoryRunCompleted, models.GitRepositoryRunPartial})).OrderExpr("created_at DESC").Limit(1).Scan(ctx); err != nil {
+	if err := db.NewSelect().Model(&previous).Where("repository_id = ?", repositoryID).Where("id != ?", currentRunID).Where("trigger != ?", "dry_run").Where("status IN (?)", bun.In([]string{models.GitRepositoryRunCompleted, models.GitRepositoryRunPartial})).OrderExpr("created_at DESC").Limit(1).Scan(ctx); err != nil {
 		return map[string]bool{}
 	}
-	var refs []string
-	_ = db.NewSelect().Table("git_repository_run_images").Column("full_ref").Where("run_id = ?", previous.ID).Scan(ctx, &refs)
+	var refs []struct {
+		FullRef    string     `bun:"full_ref"`
+		RegistryID *uuid.UUID `bun:"registry_id"`
+	}
+	if err := db.NewSelect().Table("git_repository_run_images").Column("full_ref", "registry_id").Where("run_id = ?", previous.ID).Scan(ctx, &refs); err != nil {
+		return map[string]bool{}
+	}
 	result := make(map[string]bool, len(refs))
 	for _, ref := range refs {
-		result[ref] = true
+		if override, ok := registryOverrides[ref.FullRef]; ok {
+			if ref.RegistryID == nil || *ref.RegistryID != override {
+				continue
+			}
+		} else if ref.RegistryID != nil {
+			continue
+		}
+		result[ref.FullRef] = true
+	}
+	return result
+}
+
+func imageRegistryOverrides(ctx context.Context, db *bun.DB, repositoryID uuid.UUID) map[string]uuid.UUID {
+	var overrides []models.GitRepositoryImageRegistryOverride
+	if err := db.NewSelect().Model(&overrides).Where("repository_id = ?", repositoryID).Scan(ctx); err != nil {
+		return map[string]uuid.UUID{}
+	}
+	result := make(map[string]uuid.UUID, len(overrides))
+	for _, override := range overrides {
+		result[override.FullRef] = override.RegistryID
 	}
 	return result
 }

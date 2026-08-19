@@ -7,6 +7,7 @@ import type {
   GitRepositoryHelmSource,
   GitRepositoryHelmSourceInput,
   GitRepositoryImageExclusion,
+  GitRepositoryImageRegistryOverride,
   GitRepositoryLatestImageScan,
   GitRepositoryRun,
   GitRepositoryRunCandidate,
@@ -67,6 +68,26 @@ export const deleteGitRepositoryImageExclusion = (id: string, exclusionId: strin
   req<{ result: string }>(
     'DELETE',
     `/api/v1/git-repositories/${id}/image-exclusions/${exclusionId}`
+  );
+export const listGitRepositoryImageRegistryOverrides = (id: string) =>
+  req<{ data: GitRepositoryImageRegistryOverride[] }>(
+    'GET',
+    `/api/v1/git-repositories/${id}/image-registry-overrides`
+  ).then((result) => result.data ?? []);
+export const setGitRepositoryImageRegistryOverride = (
+  id: string,
+  full_ref: string,
+  registry_id: string
+) =>
+  req<GitRepositoryImageRegistryOverride>(
+    'PUT',
+    `/api/v1/git-repositories/${id}/image-registry-overrides`,
+    { full_ref, registry_id }
+  );
+export const deleteGitRepositoryImageRegistryOverride = (id: string, overrideId: string) =>
+  req<{ result: string }>(
+    'DELETE',
+    `/api/v1/git-repositories/${id}/image-registry-overrides/${overrideId}`
   );
 export const discoverGitRepository = (id: string) =>
   req<{ run: GitRepositoryRun; images: GitDiscoveredImage[] }>(

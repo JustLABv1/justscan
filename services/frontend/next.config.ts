@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Node can resolve @swc/helpers through its module-sync export at runtime,
+  // so keep the ESM helpers in the standalone trace alongside the CJS files.
+  outputFileTracingIncludes: {
+    '/*': ['./node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/esm/**/*'],
+  },
   async rewrites() {
     const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
     const docs = process.env.DOCS_INTERNAL_URL ?? 'http://127.0.0.1:3001';

@@ -1,6 +1,6 @@
 module github.com/JustLABv1/justscan/services/cli
 
-go 1.26.6
+go 1.27.0
 
 require (
 	github.com/google/uuid v1.6.0

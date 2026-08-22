@@ -14,7 +14,7 @@ import (
 	"justscan-backend/pkg/models"
 )
 
-func TestScanDeletionExplicitlyRemovesFindingAndSBOMDependents(t *testing.T) {
+func TestScanDeletionExplicitlyRemovesCurrentAndLegacyDependents(t *testing.T) {
 	sqldb, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("failed to create mock database: %v", err)
@@ -23,12 +23,12 @@ func TestScanDeletionExplicitlyRemovesFindingAndSBOMDependents(t *testing.T) {
 	db := bun.NewDB(sqldb, pgdialect.New())
 	defer db.Close()
 
-	for range 4 {
-		mock.ExpectQuery("SELECT to_regclass").
+	for range 5 {
+		mock.ExpectQuery("SELECT EXISTS").
 			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 		mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, 1))
 	}
-	mock.ExpectQuery("SELECT to_regclass").
+	mock.ExpectQuery("SELECT EXISTS").
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 	mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -38,6 +38,30 @@ func TestScanDeletionExplicitlyRemovesFindingAndSBOMDependents(t *testing.T) {
 	}
 	if err := deleteScanSBOMDependents(context.Background(), db, scanIDs); err != nil {
 		t.Fatalf("delete SBOM dependents: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClearScanReferencesSkipsMissingLegacyColumns(t *testing.T) {
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock database: %v", err)
+	}
+	defer sqldb.Close()
+	db := bun.NewDB(sqldb, pgdialect.New())
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT EXISTS").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectQuery("SELECT EXISTS").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	mock.ExpectExec("UPDATE git_repository_run_images").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	if err := clearScanReferences(context.Background(), db, []uuid.UUID{uuid.New()}); err != nil {
+		t.Fatalf("clear scan references: %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

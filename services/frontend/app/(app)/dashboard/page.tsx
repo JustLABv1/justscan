@@ -53,7 +53,6 @@ import {
   ScannerHealth,
   WatchlistItem,
 } from '@/lib/api';
-import { deferEffect } from '@/lib/defer-effect';
 import { getWatchlistPolicyAttentionItems } from '@/lib/watchlist-posture';
 import { Button, Card, Chip, ProgressBar, Separator, useOverlayState } from '@heroui/react';
 import {
@@ -65,7 +64,7 @@ import {
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // ── severity config ──────────────────────────────────────────────────
 const SEV = [
@@ -166,6 +165,13 @@ function toTimestamp(value?: string | null): number | null {
   if (!value) return null;
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : parsed;
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof Error && error.name === 'AbortError') ||
+    (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
+  );
 }
 
 function sumAvgFindings(point: DashboardVulnTrendPoint): number {
@@ -754,6 +760,26 @@ export default function DashboardPage() {
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [watchlistError, setWatchlistError] = useState('');
+  const dashboardRequestRef = useRef<{
+    controller: AbortController;
+    version: number;
+  } | null>(null);
+  const dashboardRequestVersionRef = useRef(0);
+  const vulnTrendRequestRef = useRef<{
+    controller: AbortController;
+    version: number;
+  } | null>(null);
+  const vulnTrendRequestVersionRef = useRef(0);
+  const statsRefreshRequestRef = useRef<{
+    controller: AbortController;
+    version: number;
+  } | null>(null);
+  const statsRefreshVersionRef = useRef(0);
+  const drilldownRequestRef = useRef<{
+    controller: AbortController;
+    version: number;
+  } | null>(null);
+  const drilldownRequestVersionRef = useRef(0);
   const currentUser = getUser() as { role?: string } | null;
   const isAdmin = currentUser?.role === 'admin' || getTokenType() === 'admin';
 
@@ -770,66 +796,174 @@ export default function DashboardPage() {
     (scan) => scan.status === 'pending' || scan.status === 'running'
   );
   const refreshStats = useCallback(() => {
-    getStats()
-      .then(setStats)
-      .catch(() => {});
+    statsRefreshRequestRef.current?.controller.abort();
+    const controller = new AbortController();
+    const version = ++statsRefreshVersionRef.current;
+    statsRefreshRequestRef.current = { controller, version };
+    getStats({ signal: controller.signal })
+      .then((nextStats) => {
+        if (statsRefreshRequestRef.current?.version === version) {
+          setStats(nextStats);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (statsRefreshRequestRef.current?.version !== version || isAbortError(reason)) return;
+      })
+      .finally(() => {
+        if (statsRefreshRequestRef.current?.version === version) {
+          statsRefreshRequestRef.current = null;
+        }
+      });
   }, []);
 
   useConditionalInterval(refreshStats, hasActiveScans, 5000);
 
   useEffect(() => {
+    statsRefreshRequestRef.current?.controller.abort();
+    statsRefreshRequestRef.current = null;
+    dashboardRequestRef.current?.controller.abort();
+    const controller = new AbortController();
+    const requestVersion = ++dashboardRequestVersionRef.current;
+    dashboardRequestRef.current = { controller, version: requestVersion };
     const healthPromise = isAdmin
-      ? getScannerHealth()
+      ? getScannerHealth({ signal: controller.signal })
           .then((health) => ({ health, error: '' }))
-          .catch((e: Error) => ({ health: null, error: e.message }))
+          .catch((reason: unknown) => {
+            if (isAbortError(reason)) throw reason;
+            return {
+              health: null,
+              error: reason instanceof Error ? reason.message : 'Failed to load scanner health',
+            };
+          })
       : Promise.resolve({ health: null, error: '' });
 
     Promise.all([
-      getStats(),
-      getDashboardTrends(scanOutcomeRange).catch(() => [] as DashboardTrendPoint[]),
-      getDashboardVulnTrends(vulnTrendPeriod).catch(() => [] as DashboardVulnTrendPoint[]),
+      getStats({ signal: controller.signal }),
+      getDashboardTrends(scanOutcomeRange, { signal: controller.signal }).catch(
+        (reason: unknown) => {
+          if (isAbortError(reason)) throw reason;
+          return [] as DashboardTrendPoint[];
+        }
+      ),
       healthPromise,
     ])
-      .then(([s, t, vt, healthResult]) => {
+      .then(([s, t, healthResult]) => {
+        if (dashboardRequestRef.current?.version !== requestVersion) return;
         setStats(s);
         setTrends(t);
-        setVulnTrends(vt);
         setScannerHealth(healthResult.health);
         setScannerHealthError(healthResult.error);
         setChartRefreshKey((current) => current + 1);
       })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [isAdmin, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+      .catch((reason: unknown) => {
+        if (dashboardRequestRef.current?.version !== requestVersion || isAbortError(reason)) return;
+        setError(reason instanceof Error ? reason.message : 'Failed to load dashboard data');
+      })
+      .finally(() => {
+        if (dashboardRequestRef.current?.version !== requestVersion) return;
+        dashboardRequestRef.current = null;
+        setScanOutcomeLoading(false);
+        setLoading(false);
+      });
+
+    return () => {
+      if (dashboardRequestRef.current?.version === requestVersion) {
+        controller.abort();
+      }
+    };
+  }, [isAdmin, scanOutcomeRange, scopeKey]);
 
   useEffect(() => {
-    return deferEffect(() => {
-      listWatchlist()
-        .then((items) => setWatchlistOverviewItems(items))
-        .catch((watchlistLoadError: Error) => {
-          setWatchlistOverviewItems([]);
-          console.warn('Failed to load watchlist overview', watchlistLoadError);
-        });
-    });
+    vulnTrendRequestRef.current?.controller.abort();
+    const controller = new AbortController();
+    const requestVersion = ++vulnTrendRequestVersionRef.current;
+    vulnTrendRequestRef.current = { controller, version: requestVersion };
+    getDashboardVulnTrends(vulnTrendPeriod, { signal: controller.signal })
+      .then((nextTrends) => {
+        if (vulnTrendRequestRef.current?.version === requestVersion) {
+          setVulnTrends(nextTrends);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (vulnTrendRequestRef.current?.version !== requestVersion || isAbortError(reason)) return;
+        setVulnTrends([]);
+      })
+      .finally(() => {
+        if (vulnTrendRequestRef.current?.version === requestVersion) {
+          vulnTrendRequestRef.current = null;
+        }
+      });
+
+    return () => {
+      if (vulnTrendRequestRef.current?.version === requestVersion) {
+        controller.abort();
+      }
+    };
+  }, [scopeKey, vulnTrendPeriod]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+    void listWatchlist({ signal: controller.signal })
+      .then((items) => {
+        if (!cancelled) setWatchlistOverviewItems(items);
+      })
+      .catch((reason: unknown) => {
+        if (cancelled || isAbortError(reason)) return;
+        setWatchlistOverviewItems([]);
+        console.warn('Failed to load watchlist overview', reason);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [scopeKey]);
 
   useEffect(() => {
-    if (!activeDrilldown || !drilldownModal.isOpen) return;
-
-    if (activeDrilldown === 'watchlist') {
-      listWatchlist()
-        .then((items) => setWatchlistItems(items))
-        .catch((watchlistLoadError: Error) => {
-          setWatchlistItems([]);
-          setWatchlistError(watchlistLoadError.message);
-        })
-        .finally(() => setWatchlistLoading(false));
+    drilldownRequestRef.current?.controller.abort();
+    if (!activeDrilldown || !drilldownModal.isOpen) {
+      drilldownRequestRef.current = null;
       return;
+    }
+
+    const controller = new AbortController();
+    const requestVersion = ++drilldownRequestVersionRef.current;
+    drilldownRequestRef.current = { controller, version: requestVersion };
+
+    if (activeDrilldown === 'watchlist' || activeDrilldown === 'watchlist_attention') {
+      listWatchlist({ signal: controller.signal })
+        .then((items) => {
+          if (drilldownRequestRef.current?.version !== requestVersion) return;
+          setWatchlistItems(
+            activeDrilldown === 'watchlist_attention'
+              ? getWatchlistPolicyAttentionItems(items)
+              : items
+          );
+        })
+        .catch((reason: unknown) => {
+          if (drilldownRequestRef.current?.version !== requestVersion || isAbortError(reason)) {
+            return;
+          }
+          setWatchlistItems([]);
+          setWatchlistError(
+            reason instanceof Error ? reason.message : 'Failed to load watchlist items'
+          );
+        })
+        .finally(() => {
+          if (drilldownRequestRef.current?.version !== requestVersion) return;
+          drilldownRequestRef.current = null;
+          setWatchlistLoading(false);
+        });
+      return () => {
+        if (drilldownRequestRef.current?.version === requestVersion) {
+          controller.abort();
+        }
+      };
     }
 
     const { from, to } = getRecentActivityBounds(recentActivityRange);
 
-    const request = listScans(
+    listScans(
       1,
       50,
       undefined,
@@ -838,33 +972,43 @@ export default function DashboardPage() {
       undefined,
       undefined,
       from,
-      to
-    ).then((result) => result.data ?? []);
-
-    request
-      .then((scans) => setModalScans(scans))
-      .catch((modalError: Error) => {
-        setModalScans([]);
-        setModalScansError(modalError.message);
+      to,
+      undefined,
+      undefined,
+      undefined,
+      { signal: controller.signal }
+    )
+      .then((result) => {
+        if (drilldownRequestRef.current?.version === requestVersion) {
+          setModalScans(result.data ?? []);
+        }
       })
-      .finally(() => setModalScansLoading(false));
+      .catch((reason: unknown) => {
+        if (drilldownRequestRef.current?.version !== requestVersion || isAbortError(reason)) return;
+        setModalScans([]);
+        setModalScansError(reason instanceof Error ? reason.message : 'Failed to load scans');
+      })
+      .finally(() => {
+        if (drilldownRequestRef.current?.version !== requestVersion) return;
+        drilldownRequestRef.current = null;
+        setModalScansLoading(false);
+      });
+
+    return () => {
+      if (drilldownRequestRef.current?.version === requestVersion) {
+        controller.abort();
+      }
+    };
   }, [activeDrilldown, drilldownModal.isOpen, recentActivityRange, scopeKey]);
 
   function handleVulnPeriodChange(days: number) {
     setVulnTrendPeriod(days);
-    getDashboardVulnTrends(days)
-      .then(setVulnTrends)
-      .catch(() => setVulnTrends([]));
   }
 
   function handleScanOutcomeRangeChange(range: RecentActivityRange) {
     if (range === scanOutcomeRange) return;
     setScanOutcomeRange(range);
     setScanOutcomeLoading(true);
-    getDashboardTrends(range)
-      .then(setTrends)
-      .catch(() => setTrends([]))
-      .finally(() => setScanOutcomeLoading(false));
   }
 
   function openScanOutcomeStatus(filters: { status?: string; policy?: string }) {
@@ -968,7 +1112,7 @@ export default function DashboardPage() {
           .join(' · ');
 
   function prepareDrilldown(card: DashboardDrilldownKey) {
-    if (card === 'watchlist') {
+    if (card === 'watchlist' || card === 'watchlist_attention') {
       setWatchlistLoading(true);
       setWatchlistError('');
       return;
@@ -1204,7 +1348,7 @@ export default function DashboardPage() {
               Review scan outcomes
               <ArrowRight01Icon size={15} />
             </Button>
-            <Button onPress={() => openDrilldown('watchlist')} variant="ghost">
+            <Button onPress={() => openDrilldown('watchlist_attention')} variant="ghost">
               Open watchlist attention
             </Button>
           </Card.Footer>
@@ -1338,7 +1482,11 @@ export default function DashboardPage() {
         activeCard={activeDrilldown}
         totalScans={stats.total_scans}
         completedCount={completedCount}
-        watchlistCount={stats.watchlist_count}
+        watchlistCount={
+          activeDrilldown === 'watchlist_attention'
+            ? watchlistAttentionCount
+            : stats.watchlist_count
+        }
         recentActivityRange={recentActivityRange}
         onRecentActivityRangeChange={handleRecentActivityRangeChange}
         recentActivityRangeLabel={recentActivityRangeLabel}

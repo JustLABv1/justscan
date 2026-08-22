@@ -25,11 +25,18 @@ type CapabilitySnapshot struct {
 }
 
 func TrivyEnabled() bool {
-	return config.Config != nil && config.Config.Scanner.EnableTrivy
+	if config.Config == nil {
+		return false
+	}
+	return effectiveScannerSettings().EnableTrivy
 }
 
 func GrypeEnabled() bool {
-	return config.Config != nil && config.Config.Scanner.EnableTrivy && config.Config.Scanner.EnableGrype
+	if config.Config == nil {
+		return false
+	}
+	settings := effectiveScannerSettings()
+	return settings.EnableTrivy && settings.EnableGrype
 }
 
 func ScannerCapabilities() CapabilitySnapshot {

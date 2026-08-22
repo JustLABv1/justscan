@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"justscan-backend/config"
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
@@ -26,33 +25,15 @@ const (
 )
 
 func scanCommandTimeout() time.Duration {
-	if config.Config != nil {
-		if seconds := config.Config.Scanner.CommandTimeoutSeconds; seconds > 0 {
-			return time.Duration(seconds) * time.Second
-		}
-		if seconds := config.Config.Scanner.Timeout; seconds > 0 {
-			return time.Duration(seconds) * time.Second
-		}
-	}
-	return defaultScanCommandTimeout
+	return time.Duration(effectiveScannerSettings().CommandTimeoutSeconds) * time.Second
 }
 
 func scanProgressHeartbeatInterval() time.Duration {
-	if config.Config != nil {
-		if seconds := config.Config.Scanner.ProgressHeartbeatSeconds; seconds > 0 {
-			return time.Duration(seconds) * time.Second
-		}
-	}
-	return defaultScanProgressHeartbeat
+	return time.Duration(effectiveScannerSettings().ProgressHeartbeatSeconds) * time.Second
 }
 
 func scanStaleTimeout() time.Duration {
-	if config.Config != nil {
-		if seconds := config.Config.Scanner.StaleTimeoutSeconds; seconds > 0 {
-			return time.Duration(seconds) * time.Second
-		}
-	}
-	return defaultScanStaleTimeout
+	return time.Duration(effectiveScannerSettings().StaleTimeoutSeconds) * time.Second
 }
 
 func xraySummaryWaitWindow() time.Duration {
@@ -101,7 +82,7 @@ func touchScanProgress(ctx context.Context, db *bun.DB, scanID uuid.UUID, progre
 	}
 	if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
 		Set("last_progress_at = ?", progressedAt).
-		Where("id = ?", scanID).
+		Where("id = ? AND status IN (?)", scanID, bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
 		Exec(ctx); err != nil {
 		return fmt.Errorf("failed to update last progress for scan %s: %w", scanID, err)
 	}
@@ -182,13 +163,19 @@ func recoverInterruptedScans(ctx context.Context, db *bun.DB, now time.Time) (in
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	staleTimeout := scanStaleTimeout()
+	if staleTimeout <= 0 {
+		return 0, nil
+	}
+	cutoff := now.Add(-staleTimeout)
 
 	var scans []models.Scan
 	if err := db.NewSelect().Model(&scans).
 		Column("id", "scan_provider", "external_status", "current_step", "status", "last_progress_at").
-		Where("status IN (?)", bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
+		Where("status = ?", models.ScanStatusRunning).
+		Where("last_progress_at IS NULL OR last_progress_at < ?", cutoff).
 		Scan(ctx); err != nil {
-		return 0, fmt.Errorf("failed to query interrupted scans: %w", err)
+		return 0, fmt.Errorf("failed to query interrupted running scans: %w", err)
 	}
 
 	recovered := 0
@@ -209,13 +196,21 @@ func recoverInterruptedScans(ctx context.Context, db *bun.DB, now time.Time) (in
 			columns = append(columns, "external_status")
 		}
 
-		if _, err := db.NewUpdate().Model(scan).
+		result, err := db.NewUpdate().Model(scan).
 			Column(columns...).
-			Where("id = ?", scan.ID).
-			Exec(ctx); err != nil {
+			Where("id = ? AND status = ?", scan.ID, models.ScanStatusRunning).
+			Where("last_progress_at IS NULL OR last_progress_at < ?", cutoff).
+			Exec(ctx)
+		if err != nil {
 			return recovered, fmt.Errorf("failed to mark interrupted scan %s as failed: %w", scan.ID, err)
 		}
-		recovered++
+		rows, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return recovered, fmt.Errorf("failed to count interrupted scan %s update: %w", scan.ID, rowsErr)
+		}
+		if rows == 1 {
+			recovered++
+		}
 	}
 
 	return recovered, nil
@@ -237,7 +232,7 @@ func failStaleScans(ctx context.Context, db *bun.DB, now time.Time, staleTimeout
 	var scans []models.Scan
 	if err := db.NewSelect().Model(&scans).
 		Where("status IN (?)", bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
-		Where("last_progress_at < ?", cutoff).
+		Where("last_progress_at IS NULL OR last_progress_at < ?", cutoff).
 		Scan(ctx); err != nil {
 		return fmt.Errorf("failed to query stale scans: %w", err)
 	}
@@ -247,7 +242,10 @@ func failStaleScans(ctx context.Context, db *bun.DB, now time.Time, staleTimeout
 		if scan.Status == models.ScanStatusRunning {
 			CancelScan(scan.ID)
 		}
-		setFailed(db, scan, staleScanFailureMessage(scan, staleTimeout, now))
+		message := staleScanFailureMessage(scan, staleTimeout, now)
+		if persistFailedScan(ctx, db, scan, message, &cutoff) {
+			finishFailedScan(ctx, db, scan, message)
+		}
 	}
 	return nil
 }

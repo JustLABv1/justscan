@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"context"
-	"regexp"
 	"testing"
 	"time"
 
@@ -65,30 +64,27 @@ func TestStaleScanFailureMessageIncludesElapsedProgressGap(t *testing.T) {
 	}
 }
 
-func TestRecoverInterruptedScansMarksPendingAndRunningScansFailed(t *testing.T) {
+func TestRecoverInterruptedScansLeavesPendingScansDurable(t *testing.T) {
 	db, mock, cleanup := newMockBunDB(t)
 	defer cleanup()
 
 	now := time.Date(2026, time.May, 4, 10, 30, 0, 0, time.UTC)
-	pendingID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	runningID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
-	lastProgress := now.Add(-15 * time.Second)
+	lastProgress := now.Add(-3 * time.Hour)
 
-	mock.ExpectQuery(`SELECT .* FROM "scans" AS "scan" WHERE \(status IN \('pending', 'running'\)\)`).WillReturnRows(
+	mock.ExpectQuery(`SELECT .* FROM "scans" AS "scan" WHERE \(status = 'running'\).*last_progress_at IS NULL OR last_progress_at <`).WillReturnRows(
 		sqlmock.NewRows([]string{"id", "scan_provider", "external_status", "current_step", "status", "last_progress_at"}).
-			AddRow(pendingID.String(), models.ScanProviderTrivy, "", models.ScanStepQueued, models.ScanStatusPending, lastProgress).
 			AddRow(runningID.String(), models.ScanProviderArtifactoryXray, "waiting_for_xray", models.ScanStepWaitingForXray, models.ScanStatusRunning, lastProgress),
 	)
 
-	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "scans" AS "scan" SET "status" = 'failed', "current_step" = 'failed', "error_message" = 'scan interrupted because the backend restarted while in queued', "completed_at" = `) + `.*WHERE \(id = '11111111-1111-1111-1111-111111111111'\)`).WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`UPDATE "scans" AS "scan" SET .*"status" = 'failed'.*"current_step" = 'failed'.*"error_message" = 'scan interrupted because the backend restarted while in waiting for xray'.*"completed_at" = .*"last_progress_at" = .*"external_status" = 'failed'.*WHERE \(id = '22222222-2222-2222-2222-222222222222'\)`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE "scans" AS "scan" SET .*"status" = 'failed'.*"current_step" = 'failed'.*"error_message" = 'scan interrupted because the backend restarted while in waiting for xray'.*"completed_at" = .*"last_progress_at" = .*"external_status" = 'failed'.*WHERE \(id = '22222222-2222-2222-2222-222222222222' AND status = 'running'\).*last_progress_at IS NULL OR last_progress_at <`).WillReturnResult(sqlmock.NewResult(0, 1))
 
 	recovered, err := recoverInterruptedScans(context.TODO(), db, now)
 	if err != nil {
 		t.Fatalf("recoverInterruptedScans returned error: %v", err)
 	}
-	if recovered != 2 {
-		t.Fatalf("recoverInterruptedScans() recovered %d scans, want 2", recovered)
+	if recovered != 1 {
+		t.Fatalf("recoverInterruptedScans() recovered %d scans, want 1 running scan", recovered)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet SQL expectations: %v", err)

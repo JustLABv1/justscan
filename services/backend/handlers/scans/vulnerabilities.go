@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"justscan-backend/functions/authz"
 	effectivesuppressions "justscan-backend/functions/suppressions"
+	vulnerabilityintelligence "justscan-backend/functions/vulnerabilityintelligence"
 	"justscan-backend/functions/vulnerabilityview"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
@@ -88,20 +90,38 @@ func applyIntelligenceFilter(q *bun.SelectQuery, filter string) *bun.SelectQuery
 }
 
 func intelligenceFilterCondition(filter string) (string, []interface{}, bool) {
+	prefix := "EXISTS (SELECT 1 FROM vulnerability_postures p JOIN scans intelligence_scan ON intelligence_scan.id = p.scan_id WHERE p.finding_id = v.id AND " + vulnerabilityintelligence.PostScanChangeCondition("p", "intelligence_scan") + " AND "
 	switch filter {
 	case "changed":
-		return "EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state IS NOT NULL AND p.state <> ?)", []interface{}{models.PostureStateUnchanged}, true
+		return prefix + "p.state IS NOT NULL AND p.state <> ?)", []interface{}{models.PostureStateUnchanged}, true
 	case models.PostureStateNeedsRescan:
-		return "EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state = ?)", []interface{}{models.PostureStateNeedsRescan}, true
+		return prefix + "p.state = ?)", []interface{}{models.PostureStateNeedsRescan}, true
 	case models.PostureStateFixAvailable:
-		return "EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state = ?)", []interface{}{models.PostureStateFixAvailable}, true
+		return prefix + "p.state = ?)", []interface{}{models.PostureStateFixAvailable}, true
 	case models.PostureStateNotAffected:
-		return "EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state = ?)", []interface{}{models.PostureStateNotAffected}, true
+		return prefix + "p.state = ?)", []interface{}{models.PostureStateNotAffected}, true
 	case "disputed_rejected":
-		return "EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state IN (?))", []interface{}{bun.In([]string{models.PostureStateDisputed, models.PostureStateRejected})}, true
+		return prefix + "p.state IN (?))", []interface{}{bun.In([]string{models.PostureStateDisputed, models.PostureStateRejected})}, true
 	default:
 		return "", nil, false
 	}
+}
+
+// buildFirstSeenVulnerabilityQuery returns only vulnerability history that the
+// requesting principal is allowed to see.  A scan's image name is not an
+// authorization boundary: scans with the same image can belong to different
+// users or organizations.  Keep the visibility predicate on the joined scan
+// rows so a private scan cannot disclose its completed_at timestamp.
+func buildFirstSeenVulnerabilityQuery(db *bun.DB, scanID uuid.UUID, imageName string, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) *bun.SelectQuery {
+	q := db.NewSelect().
+		TableExpr("vulnerabilities AS v").
+		ColumnExpr("v.vuln_id, v.pkg_name, MIN(s.completed_at) AS first_seen_at").
+		Join("JOIN scans AS s ON s.id = v.scan_id").
+		Where("s.image_name = ?", imageName).
+		Where("s.status = ?", models.ScanStatusCompleted).
+		Where("s.id != ?", scanID)
+
+	return authz.ApplyOwnershipVisibility(q, "s", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
 }
 
 func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
@@ -125,7 +145,7 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 		}
 		offset := (page - 1) * limit
 
-		scan, _, _, ok := LoadAuthorizedScan(c, db, scanID)
+		scan, userID, isAdmin, ok := LoadAuthorizedScan(c, db, scanID)
 		if !ok {
 			return
 		}
@@ -207,15 +227,16 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			FirstSeenAt *time.Time `bun:"first_seen_at"`
 		}
 		var firstSeenRows []firstSeenRow
-		db.NewRaw(`
-			SELECT v.vuln_id, v.pkg_name, MIN(s.completed_at) AS first_seen_at
-			FROM vulnerabilities v
-			JOIN scans s ON s.id = v.scan_id
-			WHERE s.image_name = (SELECT image_name FROM scans WHERE id = ?)
-			  AND s.status = 'completed'
-			  AND s.id != ?
-			GROUP BY v.vuln_id, v.pkg_name
-		`, scanID, scanID).Scan(c.Request.Context(), &firstSeenRows) //nolint:errcheck
+		accessibleOrgIDs, err := authz.ListAccessibleOrgIDs(c.Request.Context(), db, userID, isAdmin)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve vulnerability history visibility"})
+			return
+		}
+		firstSeenQuery := buildFirstSeenVulnerabilityQuery(db, scanID, scan.ImageName, userID, isAdmin, accessibleOrgIDs)
+		if err := firstSeenQuery.GroupExpr("v.vuln_id, v.pkg_name").Scan(c.Request.Context(), &firstSeenRows); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load vulnerability history"})
+			return
+		}
 
 		firstSeenMap := make(map[string]*time.Time, len(firstSeenRows))
 		for i := range firstSeenRows {
@@ -261,6 +282,8 @@ func GetVulnerabilitySummary(db *bun.DB) gin.HandlerFunc {
 			TableExpr("vulnerabilities AS v").
 			Where("v.scan_id = ?", scanID)
 		baseQuery = applyVulnerabilityFilters(c, baseQuery)
+		postScanChange := vulnerabilityintelligence.PostScanChangeCondition("p", "intelligence_scan")
+		postScanExists := "EXISTS (SELECT 1 FROM vulnerability_postures p JOIN scans intelligence_scan ON intelligence_scan.id = p.scan_id WHERE p.finding_id = v.id AND " + postScanChange + " AND "
 
 		var summary VulnerabilitySummary
 		if err := baseQuery.
@@ -275,9 +298,9 @@ func GetVulnerabilitySummary(db *bun.DB) gin.HandlerFunc {
 					OR COALESCE(jsonb_array_length(v.xray_watch_names), 0) > 0
 					OR COALESCE(jsonb_array_length(v.xray_watch_policy_matches), 0) > 0
 			) AS xray_policy`).
-			ColumnExpr("COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state IS NOT NULL AND p.state <> ?)) AS intelligence_changed", models.PostureStateUnchanged).
-			ColumnExpr("COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state = ?)) AS intelligence_needs_rescan", models.PostureStateNeedsRescan).
-			ColumnExpr("COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM vulnerability_postures p WHERE p.finding_id = v.id AND p.state = ?)) AS intelligence_fix_available", models.PostureStateFixAvailable).
+			ColumnExpr("COUNT(*) FILTER (WHERE "+postScanExists+"p.state IS NOT NULL AND p.state <> ?)) AS intelligence_changed", models.PostureStateUnchanged).
+			ColumnExpr("COUNT(*) FILTER (WHERE "+postScanExists+"p.state = ?)) AS intelligence_needs_rescan", models.PostureStateNeedsRescan).
+			ColumnExpr("COUNT(*) FILTER (WHERE "+postScanExists+"p.state = ?)) AS intelligence_fix_available", models.PostureStateFixAvailable).
 			Scan(c.Request.Context(), &summary); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to summarize vulnerabilities"})
 			return

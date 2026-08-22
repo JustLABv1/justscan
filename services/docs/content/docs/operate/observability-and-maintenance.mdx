@@ -7,11 +7,14 @@ Treat JustScan as a release-decision service once CI depends on policy outcomes.
 
 ## Signals to review
 
-- **Backend health:** query `/api/v1/health` through the same route used by users and CI.
+- **Backend health:** use `/api/v1/livez` for process liveness and `/api/v1/readyz` for dependency-aware readiness. `/api/v1/health` remains a compatibility endpoint. Readiness checks PostgreSQL and checks local Trivy only when Trivy is enabled; an Xray-only backend does not require a Trivy binary or local database.
 - **Scan activity:** review pending, active, stale, and failed scans; inspect scan step progress and backend logs before changing global timeouts.
 - **Scanner readiness:** use the administration scanner health view and confirm registry reachability, database freshness, and available worker capacity.
+- **Queue capacity:** administrators can use the scan queue summary's queue depth, oldest queued lag, active workers, and utilization fields. Non-administrators receive only workspace-scoped durable activity, so one workspace cannot infer another workspace's queue.
 - **Notifications:** test channels and inspect delivery logs and queued delivery state after configuration changes.
 - **Audit records:** review organization and administrator activity when investigating access, ownership, policy, or token changes.
+
+The admin scanner settings API applies engine toggles, command timeout, scanner database age, and OSV Java enrichment on subsequent work. Worker concurrency is fixed when the backend starts and is reported as restart-required; pending durable scans are requeued during startup and by the recovery dispatcher.
 
 ## CVE Intelligence health
 

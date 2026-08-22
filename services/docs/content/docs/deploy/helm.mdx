@@ -52,4 +52,4 @@ kubectl get pods --namespace justscan
 helm status justscan --namespace justscan
 ```
 
-Verify the public hostname returns `/`, `/docs`, `/swagger`, and `/api/v1/health`, then follow [first-time setup](/setup/quick-start) to create the initial administrator. Use the same command with the new chart version for upgrades, and review [upgrades and maintenance](/operate/upgrades-and-maintenance) before changing persistent releases.
+Verify the public hostname returns `/`, `/docs`, `/swagger`, and `/api/v1/health`. The chart probes `/api/v1/livez` for liveness and `/api/v1/readyz` for dependency-aware readiness. Then follow [first-time setup](/setup/quick-start) to create the initial administrator. Use the same command with the new chart version for upgrades, and review [upgrades and maintenance](/operate/upgrades-and-maintenance) before changing persistent releases.

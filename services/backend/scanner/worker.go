@@ -3,15 +3,16 @@ package scanner
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"justscan-backend/compliance"
-	"justscan-backend/config"
 	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/notifications"
 	"justscan-backend/pipelines"
@@ -33,16 +34,60 @@ type ScanJob struct {
 
 var jobQueue chan ScanJob
 
+var (
+	activeWorkers  atomic.Int64
+	workerPoolSize atomic.Int64
+	completedJobs  atomic.Uint64
+	queuedScanIDs  sync.Map
+)
+
+var (
+	ErrScanQueueUnavailable = errors.New("scanner queue is not initialized")
+	ErrScanQueueFull        = errors.New("scanner queue is full")
+)
+
+// QueueStats is a lightweight operational view of the in-process worker pool.
+// Queue depth is intentionally paired with the durable workspace-scoped counts
+// in the queue summary handler; it is not used for authorization decisions.
+type QueueStats struct {
+	Depth             int
+	Capacity          int
+	ActiveWorkers     int
+	WorkerUtilization float64
+	CompletedJobs     uint64
+}
+
+func GetQueueStats() QueueStats {
+	capacity := 0
+	depth := 0
+	if jobQueue != nil {
+		capacity = cap(jobQueue)
+		depth = len(jobQueue)
+	}
+	active := int(activeWorkers.Load())
+	utilization := 0.0
+	if capacity > 0 {
+		poolSize := int(workerPoolSize.Load())
+		if poolSize <= 0 {
+			poolSize = WorkerConcurrency()
+		}
+		utilization = float64(active) / float64(poolSize)
+		if utilization > 1 {
+			utilization = 1
+		}
+	}
+	return QueueStats{
+		Depth:             depth,
+		Capacity:          capacity,
+		ActiveWorkers:     active,
+		WorkerUtilization: utilization,
+		CompletedJobs:     completedJobs.Load(),
+	}
+}
+
 // WorkerConcurrency returns the instance-wide number of shared scan workers.
 func WorkerConcurrency() int {
-	if config.Config == nil {
-		return 2
-	}
-	concurrency := config.Config.Scanner.Concurrency
-	if concurrency <= 0 {
-		return 2
-	}
-	return concurrency
+	return effectiveScannerSettings().Concurrency
 }
 
 // cancelMap stores cancel functions for in-progress scans so they can be interrupted.
@@ -69,12 +114,7 @@ func InitWorker(db *bun.DB) {
 	concurrency := WorkerConcurrency()
 
 	jobQueue = make(chan ScanJob, 64)
-
-	if recovered, err := recoverInterruptedScans(context.Background(), db, time.Now()); err != nil {
-		log.Warnf("Scanner startup recovery failed: %v", err)
-	} else if recovered > 0 {
-		log.Warnf("Scanner startup marked %d interrupted scans as failed", recovered)
-	}
+	workerPoolSize.Store(int64(concurrency))
 
 	for i := 0; i < concurrency; i++ {
 		cacheDir := workerCacheDir(i)
@@ -103,6 +143,21 @@ func InitWorker(db *bun.DB) {
 		go workerLoop(i)
 	}
 
+	// Workers are ready before recovery starts so a large durable backlog is
+	// drained continuously instead of filling the bounded channel once and
+	// leaving later rows stranded.
+	if requeued, recovered, err := recoverScansAfterRestart(context.Background(), db, time.Now()); err != nil {
+		log.Warnf("Scanner startup recovery failed: %v", err)
+	} else {
+		if requeued > 0 {
+			log.Infof("Scanner startup requeued %d pending scans", requeued)
+		}
+		if recovered > 0 {
+			log.Warnf("Scanner startup marked %d interrupted scans as failed", recovered)
+		}
+	}
+	startPendingScanRecovery(db)
+
 	log.Infof("Scanner worker pool started with concurrency=%d", concurrency)
 	startScanStaleWatchdog(db)
 	StartCVEHistorySync(db)
@@ -112,7 +167,7 @@ func InitWorker(db *bun.DB) {
 	// warmup failed due to the network not being ready yet).
 	if TrivyEnabled() {
 		go func() {
-			refreshInterval := time.Duration(config.Config.Scanner.DBMaxAgeHours) * time.Hour
+			refreshInterval := time.Duration(effectiveScannerSettings().DBMaxAgeHours) * time.Hour
 			if refreshInterval <= 0 {
 				refreshInterval = 12 * time.Hour
 			}
@@ -142,20 +197,223 @@ func InitWorker(db *bun.DB) {
 
 // EnqueueScan queues a scan job. The scan row must already exist in the DB with status=pending.
 func EnqueueScan(scanID uuid.UUID, db *bun.DB, envVars []string, platform, archivePath string) error {
-	if err := setScanStepByID(context.Background(), db, scanID, models.ScanStepQueued); err != nil {
+	return EnqueueScanContext(context.Background(), scanID, db, envVars, platform, archivePath)
+}
+
+// EnqueueScanContext performs a bounded, non-blocking queue send. Callers can
+// turn ErrScanQueueFull into a deferred response (or an HTTP 503) instead of
+// tying up a request goroutine while the scanner is saturated. The scan row
+// remains pending for the recovery dispatcher.
+func EnqueueScanContext(ctx context.Context, scanID uuid.UUID, db *bun.DB, envVars []string, platform, archivePath string) error {
+	if db == nil || jobQueue == nil {
+		return ErrScanQueueUnavailable
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	if _, loaded := queuedScanIDs.LoadOrStore(scanID, struct{}{}); loaded {
+		// Queueing is idempotent: a retry of the same dispatch request must not
+		// turn the already-owned scan into a failure in its caller.
+		return nil
+	}
+	reserved := true
+	defer func() {
+		if reserved {
+			queuedScanIDs.Delete(scanID)
+		}
+	}()
+	if err := setScanStepByID(ctx, db, scanID, models.ScanStepQueued); err != nil {
 		return err
 	}
-	recordScanStepOutput(context.Background(), db, scanID, "Scan accepted and queued for execution.")
-	jobQueue <- ScanJob{ScanID: scanID, DB: db, EnvVars: envVars, Platform: platform, ArchivePath: archivePath}
-	return nil
+	recordScanStepOutput(ctx, db, scanID, "Scan accepted and queued for execution.")
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case jobQueue <- ScanJob{ScanID: scanID, DB: db, EnvVars: envVars, Platform: platform, ArchivePath: archivePath}:
+		reserved = false
+		return nil
+	default:
+		return ErrScanQueueFull
+	}
 }
 
 func workerLoop(id int) {
 	log.Infof("Scanner worker %d ready", id)
 	cacheDir := workerCacheDir(id)
 	for job := range jobQueue {
+		queuedScanIDs.Delete(job.ScanID)
+		activeWorkers.Add(1)
 		processScan(job, cacheDir)
+		activeWorkers.Add(-1)
+		completedJobs.Add(1)
 	}
+}
+
+// startPendingScanRecovery retries durable pending rows left behind when the
+// initial bounded queue was full. The in-memory set prevents duplicate queue
+// entries within this process; claimScanForWorker remains the cross-instance
+// guard when two processes recover the same durable row.
+func startPendingScanRecovery(db *bun.DB) {
+	if db == nil {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			recoverPendingScanBatch(db)
+		}
+	}()
+}
+
+func recoverPendingScanBatch(db *bun.DB) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var scans []models.Scan
+	if err := db.NewSelect().Model(&scans).
+		Where("status = ?", models.ScanStatusPending).
+		OrderExpr("created_at ASC").
+		Limit(64).
+		Scan(ctx); err != nil {
+		log.Warnf("Scanner pending recovery query failed: %v", err)
+		return
+	}
+	for i := range scans {
+		scan := &scans[i]
+		if _, queued := queuedScanIDs.Load(scan.ID); queued {
+			continue
+		}
+		var envVars []string
+		if scan.ScanProvider == models.ScanProviderTrivy || scan.ScanProvider == "" {
+			_, resolvedEnvVars, resolveErr := ResolveRegistryForScan(ctx, db, scan.ImageName, scan.RegistryID)
+			if resolveErr != nil {
+				log.Warnf("Scanner pending recovery could not resolve registry for %s: %v", scan.ID, resolveErr)
+				continue
+			}
+			envVars = resolvedEnvVars
+		}
+		archivePath := ""
+		if scan.ScanSource == models.ScanSourceUploadedArchive {
+			archivePath = scan.ImageLocation
+			if !archiveFileAvailable(archivePath) {
+				log.Warnf("Scanner pending recovery is waiting for local archive for %s: %s", scan.ID, archivePath)
+				continue
+			}
+		}
+		if err := EnqueueScanContext(ctx, scan.ID, db, envVars, scan.Platform, archivePath); err != nil {
+			if !errors.Is(err, ErrScanQueueFull) {
+				log.Warnf("Scanner pending recovery could not enqueue %s: %v", scan.ID, err)
+			}
+			return
+		}
+	}
+}
+
+// recoverScansAfterRestart preserves durable pending work and re-enqueues it,
+// while only scans that were actually running are failed as interrupted. This
+// avoids turning a full queue or a process restart into silent data loss.
+func recoverScansAfterRestart(ctx context.Context, db *bun.DB, now time.Time) (int, int, error) {
+	if db == nil {
+		return 0, 0, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	// Normalize pending rows left between insert and queue handoff. They remain
+	// pending and are then re-enqueued below; terminal rows are not touched.
+	if _, err := db.NewUpdate().Model((*models.Scan)(nil)).
+		Set("current_step = ?", models.ScanStepQueued).
+		Set("last_progress_at = ?", now).
+		Where("status = ?", models.ScanStatusPending).
+		Exec(ctx); err != nil {
+		return 0, 0, fmt.Errorf("normalize pending scans: %w", err)
+	}
+
+	var pending []models.Scan
+	if err := db.NewSelect().Model(&pending).
+		Where("status = ?", models.ScanStatusPending).
+		OrderExpr("created_at ASC").
+		Scan(ctx); err != nil {
+		return 0, 0, fmt.Errorf("load pending scans for recovery: %w", err)
+	}
+	requeued := 0
+	for i := range pending {
+		scan := &pending[i]
+		var envVars []string
+		if scan.ScanProvider == models.ScanProviderTrivy || scan.ScanProvider == "" {
+			_, resolvedEnvVars, resolveErr := ResolveRegistryForScan(ctx, db, scan.ImageName, scan.RegistryID)
+			if resolveErr != nil {
+				log.Warnf("Scanner startup could not resolve registry for %s: %v", scan.ID, resolveErr)
+				continue
+			}
+			envVars = resolvedEnvVars
+		}
+		archivePath := ""
+		if scan.ScanSource == models.ScanSourceUploadedArchive {
+			archivePath = scan.ImageLocation
+			if !archiveFileAvailable(archivePath) {
+				log.Warnf("Scanner startup is waiting for local archive for %s: %s", scan.ID, archivePath)
+				continue
+			}
+		}
+		if err := EnqueueScanContext(ctx, scan.ID, db, envVars, scan.Platform, archivePath); err != nil {
+			if errors.Is(err, ErrScanQueueFull) {
+				log.Warnf("Scanner startup queue full; leaving pending scan %s for a later recovery pass", scan.ID)
+				break
+			}
+			log.Warnf("Scanner startup could not requeue pending scan %s: %v", scan.ID, err)
+			continue
+		}
+		requeued++
+	}
+
+	// A process restart must not finalize work that another replica is still
+	// executing. Without an owner lease, the only safe recovery signal is a
+	// heartbeat that is older than the configured stale window (or is missing).
+	// Keep the status predicate in the UPDATE as well because a worker or
+	// watchdog may win the race after this SELECT.
+	staleTimeout := scanStaleTimeout()
+	if staleTimeout <= 0 {
+		return requeued, 0, nil
+	}
+	cutoff := now.Add(-staleTimeout)
+	var running []models.Scan
+	if err := db.NewSelect().Model(&running).
+		Where("status = ?", models.ScanStatusRunning).
+		Where("last_progress_at IS NULL OR last_progress_at < ?", cutoff).
+		Scan(ctx); err != nil {
+		return requeued, 0, fmt.Errorf("load stale running scans for recovery: %w", err)
+	}
+	recovered := 0
+	for i := range running {
+		scan := &running[i]
+		message := interruptedScanFailureMessage(scan)
+		result, err := db.NewUpdate().Model((*models.Scan)(nil)).
+			Set("status = ?", models.ScanStatusFailed).
+			Set("current_step = ?", models.ScanStepFailed).
+			Set("error_message = ?", message).
+			Set("completed_at = ?", now).
+			Set("last_progress_at = ?", now).
+			Where("id = ? AND status = ?", scan.ID, models.ScanStatusRunning).
+			Where("last_progress_at IS NULL OR last_progress_at < ?", cutoff).
+			Exec(ctx)
+		if err != nil {
+			return requeued, recovered, fmt.Errorf("mark interrupted scan %s: %w", scan.ID, err)
+		}
+		rows, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return requeued, recovered, rowsErr
+		}
+		if rows == 1 {
+			recovered++
+		}
+	}
+	return requeued, recovered, nil
 }
 
 func processScan(job ScanJob, cacheDir string) {
@@ -169,17 +427,42 @@ func processScan(job ScanJob, cacheDir string) {
 		return
 	}
 
-	// If the scan was cancelled before a worker picked it up, skip processing.
-	if scan.Status == models.ScanStatusCancelled {
-		log.Infof("Worker: scan %s was cancelled before processing, skipping", scanID)
-		return
-	}
+	cleanupArchive := false
+	cleanupArchivePath := ""
 	if scan.ScanSource == models.ScanSourceUploadedArchive {
 		if job.ArchivePath == "" {
 			job.ArchivePath = scan.ImageLocation
 		}
-		defer cleanupScanArchive(scan.ID, job.ArchivePath)
+		// Register cleanup before checking cancellation. A queued upload can be
+		// cancelled before a worker picks it up and must not strand its archive.
+		cleanupArchivePath = job.ArchivePath
+		defer func() {
+			if cleanupArchive {
+				CleanupScanArchive(context.Background(), db, scan.ID, cleanupArchivePath)
+			}
+		}()
 	}
+
+	// Claim atomically. A stale queue entry must never resurrect a cancelled,
+	// failed, or completed scan after another request/watchdog has finalized it.
+	now := time.Now()
+	claimed, err := claimScanForWorker(context.Background(), db, scanID, now)
+	if err != nil {
+		log.Errorf("Worker: failed to claim scan %s: %v", scanID, err)
+		return
+	}
+	if !claimed {
+		log.Infof("Worker: scan %s is no longer pending, skipping", scanID)
+		// A duplicate queue entry can observe a scan already running in another
+		// worker. It must not remove that worker's archive; a terminal/cancelled
+		// row, however, still owns cleanup for this stale queue entry.
+		var currentStatus string
+		if statusErr := db.NewSelect().Model((*models.Scan)(nil)).Column("status").Where("id = ?", scanID).Scan(context.Background(), &currentStatus); statusErr == nil {
+			cleanupArchive = currentStatus != models.ScanStatusRunning
+		}
+		return
+	}
+	cleanupArchive = true
 
 	// Create a cancellable context so this scan can be interrupted via CancelScan().
 	ctx, cancel := context.WithCancel(context.Background())
@@ -192,16 +475,24 @@ func processScan(job ScanJob, cacheDir string) {
 		delete(cancelMap, scanID)
 		cancelMu.Unlock()
 	}()
+	// Cancellation can win immediately after the atomic claim but before the
+	// in-process cancel function is registered. Re-read the state once so that
+	// race cannot start provider work after a committed cancellation.
+	var currentStatus string
+	if err := db.NewSelect().Model((*models.Scan)(nil)).Column("status").Where("id = ?", scanID).Scan(ctx, &currentStatus); err != nil {
+		log.Warnf("Worker: failed to confirm claimed scan %s is still running: %v", scanID, err)
+		return
+	}
+	if currentStatus != models.ScanStatusRunning {
+		log.Infof("Worker: scan %s was finalized during claim, skipping", scanID)
+		return
+	}
 
-	// Mark as running
-	now := time.Now()
+	// The database claim above is the state transition; keep the in-memory copy
+	// in sync for the provider flow and completion logic.
 	scan.Status = models.ScanStatusRunning
 	scan.StartedAt = &now
 	scan.LastProgressAt = &now
-	if _, err := db.NewUpdate().Model(scan).Column("status", "started_at", "last_progress_at").Where("id = ?", scanID).Exec(ctx); err != nil {
-		log.Errorf("Worker: failed to update scan status to running: %v", err)
-		return
-	}
 
 	imageRef := buildImageRef(scan.ImageName, scan.ImageTag)
 	log.Infof("Worker: starting scan %s for %s", scanID, imageRef)
@@ -434,6 +725,7 @@ func processScan(job ScanJob, cacheDir string) {
 	completedAt := time.Now()
 	scan.Status = models.ScanStatusCompleted
 	scan.CompletedAt = &completedAt
+	scan.LastProgressAt = &completedAt
 	scan.CurrentStep = models.ScanStepCompleted
 	if runtimeInfo != nil && runtimeInfo.Version != "" {
 		scan.TrivyVersion = runtimeInfo.Version
@@ -468,14 +760,29 @@ func processScan(job ScanJob, cacheDir string) {
 		recordScanStepOutput(context.Background(), db, scanID, fmt.Sprintf("Suppression count recalculated: %d findings suppressed.", suppressedCount))
 	}
 
-	if _, err := db.NewUpdate().Model(scan).
-		Column("status", "completed_at", "trivy_version", "grype_version", "image_digest",
+	result, err := db.NewUpdate().Model(scan).
+		Column("status", "current_step", "last_progress_at", "completed_at", "trivy_version", "grype_version", "image_digest",
 			"trivy_vuln_db_updated_at", "trivy_vuln_db_downloaded_at",
 			"trivy_java_db_updated_at", "trivy_java_db_downloaded_at",
 			"critical_count", "high_count", "medium_count", "low_count", "unknown_count", "suppressed_count",
 			"architecture", "os_family", "os_name").
-		Where("id = ?", scanID).Exec(context.Background()); err != nil {
+		Where("id = ? AND status = ?", scanID, models.ScanStatusRunning).Exec(context.Background())
+	if err != nil {
 		log.Errorf("Worker: failed to mark scan %s as completed: %v", scanID, err)
+		return
+	}
+	rows, rowsErr := result.RowsAffected()
+	if rowsErr != nil {
+		log.Errorf("Worker: failed to confirm terminal transition for scan %s: %v", scanID, rowsErr)
+		return
+	}
+	if rows == 0 {
+		// Cancellation or the stale watchdog won the terminal-state race.
+		log.Infof("Worker: scan %s was finalized before completion could be persisted", scanID)
+		return
+	}
+	if err := appendTerminalScanStepLog(context.Background(), db, scanID, models.ScanStepCompleted); err != nil {
+		log.Errorf("Worker: failed to record completed step for scan %s: %v", scanID, err)
 		return
 	}
 	if err := RecordIntelligenceSnapshot(context.Background(), db, scan); err != nil {
@@ -483,10 +790,6 @@ func processScan(job ScanJob, cacheDir string) {
 		recordScanStepOutput(context.Background(), db, scanID, fmt.Sprintf("Scan-time intelligence snapshot failed, but the scan result remains available: %v", err))
 	} else {
 		recordScanStepOutput(context.Background(), db, scanID, "Stored scan-time vulnerability intelligence and refreshed current posture.")
-	}
-	if err := setScanStep(context.Background(), db, scan, models.ScanStepCompleted); err != nil {
-		log.Errorf("Worker: failed to record completed step for scan %s: %v", scanID, err)
-		return
 	}
 	recordScanStepOutput(context.Background(), db, scanID, fmt.Sprintf("Scan completed with %d total findings.", len(vulns)+len(osvVulns)))
 	recordScanStepOutput(context.Background(), db, scanID, "Queued compliance evaluation, auto-tagging, and completion notifications.")
@@ -540,22 +843,59 @@ func matchesPattern(pattern, s string) bool {
 func setFailed(db *bun.DB, scan *models.Scan, msg string) {
 	ctx := context.Background()
 	log.Errorf("Worker: scan %s failed: %s", scan.ID, msg)
+	if !persistFailedScan(ctx, db, scan, msg, nil) {
+		return
+	}
+	finishFailedScan(ctx, db, scan, msg)
+}
+
+// persistFailedScan applies a conditional terminal transition. staleBefore,
+// when provided, makes the watchdog re-check last_progress_at in the same SQL
+// statement so a heartbeat committed after its initial SELECT wins the race.
+func persistFailedScan(ctx context.Context, db *bun.DB, scan *models.Scan, msg string, staleBefore *time.Time) bool {
+	if db == nil || scan == nil {
+		return false
+	}
 	scan.Status = models.ScanStatusFailed
 	scan.CurrentStep = models.ScanStepFailed
 	scan.ErrorMessage = msg
 	completedAt := time.Now()
 	scan.CompletedAt = &completedAt
-	columns := []string{"status", "error_message", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "suppressed_count"}
+	scan.LastProgressAt = &completedAt
+	columns := []string{"status", "current_step", "last_progress_at", "error_message", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "suppressed_count"}
 	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
 		if !preserveXrayExternalStatusOnFailure(scan.ExternalStatus) {
 			scan.ExternalStatus = models.ScanStatusFailed
 		}
 		columns = append(columns, "external_status")
 	}
-	db.NewUpdate().Model(scan).
+	query := db.NewUpdate().Model(scan).
 		Column(columns...).
-		Where("id = ?", scan.ID).Exec(ctx) //nolint:errcheck
-	if err := setScanStep(ctx, db, scan, models.ScanStepFailed); err != nil {
+		Where("id = ? AND status IN (?)", scan.ID, bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning}))
+	if staleBefore != nil {
+		query = query.Where("last_progress_at IS NULL OR last_progress_at < ?", *staleBefore)
+	}
+	result, err := query.Exec(ctx)
+	if err != nil {
+		log.Warnf("Worker: failed to persist failure for scan %s: %v", scan.ID, err)
+		return false
+	}
+	rows, rowsErr := result.RowsAffected()
+	if rowsErr != nil {
+		log.Warnf("Worker: failed to confirm failure transition for scan %s: %v", scan.ID, rowsErr)
+		return false
+	}
+	if rows == 0 {
+		// A terminal writer (usually cancellation) won the race. Do not append
+		// a failed step or emit a duplicate failure notification/callback.
+		log.Infof("Worker: scan %s was already terminal; failure result discarded", scan.ID)
+		return false
+	}
+	return true
+}
+
+func finishFailedScan(ctx context.Context, db *bun.DB, scan *models.Scan, msg string) {
+	if err := appendTerminalScanStepLog(ctx, db, scan.ID, models.ScanStepFailed); err != nil {
 		log.Warnf("Worker: failed to persist failed step for scan %s: %v", scan.ID, err)
 	}
 	recordScanStepOutput(ctx, db, scan.ID, msg)
@@ -581,16 +921,115 @@ func preserveXrayExternalStatusOnFailure(status string) bool {
 	}
 }
 
-func cleanupScanArchive(scanID uuid.UUID, archivePath string) {
+// CleanupScanArchive removes an uploaded archive only after proving ownership
+// of its immediate upload directory. One-shot uploads use scanID as the
+// directory ID; resumable uploads use archive_upload_sessions.scan_id to bind
+// the session directory to this scan. A UUID-shaped path by itself is not
+// sufficient because a corrupted scan row could otherwise delete another
+// user's upload directory.
+func CleanupScanArchive(ctx context.Context, db *bun.DB, scanID uuid.UUID, archivePath string) {
 	trimmed := strings.TrimSpace(archivePath)
-	if trimmed == "" {
+	if trimmed == "" || scanID == uuid.Nil {
 		return
 	}
-	if err := os.Remove(trimmed); err != nil && !os.IsNotExist(err) {
-		log.Warnf("Worker: failed to remove uploaded archive for scan %s at %s: %v", scanID, trimmed, err)
-	} else {
-		log.Infof("Worker: removed uploaded archive for scan %s at %s", scanID, trimmed)
+	root, uploadID, ok := validatedUploadDirectoryWithID(trimmed)
+	if !ok {
+		log.Warnf("Worker: refusing to remove archive outside a validated upload directory for scan %s: %s", scanID, trimmed)
+		return
 	}
+	if uploadID != scanID {
+		if db == nil || ctx == nil {
+			log.Warnf("Worker: refusing to remove resumable archive without ownership lookup for scan %s: %s", scanID, trimmed)
+			return
+		}
+		var session struct {
+			ID          uuid.UUID  `bun:"id"`
+			ScanID      *uuid.UUID `bun:"scan_id"`
+			ArchivePath string     `bun:"archive_path"`
+		}
+		err := db.NewSelect().TableExpr("archive_upload_sessions").
+			Column("id", "scan_id", "archive_path").
+			Where("id = ? AND scan_id = ? AND archive_path = ?", uploadID, scanID, filepath.Clean(trimmed)).
+			Scan(ctx, &session)
+		if err != nil {
+			log.Warnf("Worker: refusing to remove archive without matching upload session for scan %s at %s: %v", scanID, trimmed, err)
+			return
+		}
+	}
+	if err := os.RemoveAll(root); err != nil {
+		log.Warnf("Worker: failed to remove uploaded archive directory for scan %s at %s: %v", scanID, root, err)
+	} else {
+		log.Infof("Worker: removed uploaded archive directory for scan %s at %s", scanID, root)
+		if uploadID != scanID && db != nil {
+			if _, err := db.NewDelete().TableExpr("archive_upload_sessions").
+				Where("id = ? AND scan_id = ? AND archive_path = ?", uploadID, scanID, filepath.Clean(trimmed)).
+				Exec(ctx); err != nil {
+				log.Warnf("Worker: failed to remove archive upload session for scan %s: %v", scanID, err)
+			}
+		}
+	}
+}
+
+// cleanupScanArchive is retained for package-local callers/tests and is
+// intentionally strict: without the session table it can only remove a
+// one-shot directory whose UUID is exactly the scan ID.
+func cleanupScanArchive(scanID uuid.UUID, archivePath string) {
+	CleanupScanArchive(context.Background(), nil, scanID, archivePath)
+}
+
+func validatedUploadDirectoryWithID(archivePath string) (string, uuid.UUID, bool) {
+	uploadsRoot := filepath.Join(os.TempDir(), "justscan", "uploads")
+	cleanPath := filepath.Clean(strings.TrimSpace(archivePath))
+	relativeToUploads, err := filepath.Rel(uploadsRoot, cleanPath)
+	if err != nil || relativeToUploads == "." || filepath.IsAbs(relativeToUploads) || relativeToUploads == ".." || strings.HasPrefix(relativeToUploads, ".."+string(filepath.Separator)) {
+		return "", uuid.Nil, false
+	}
+	parts := strings.Split(relativeToUploads, string(filepath.Separator))
+	if len(parts) < 2 {
+		return "", uuid.Nil, false
+	}
+	uploadID, err := uuid.Parse(parts[0])
+	if err != nil {
+		return "", uuid.Nil, false
+	}
+	return filepath.Join(uploadsRoot, parts[0]), uploadID, true
+}
+
+func validatedUploadDirectory(archivePath string) (string, bool) {
+	root, _, ok := validatedUploadDirectoryWithID(archivePath)
+	return root, ok
+}
+
+// archiveFileAvailable shares containment validation with cleanup but is read-only.
+func archiveFileAvailable(archivePath string) bool {
+	if _, ok := validatedUploadDirectory(archivePath); !ok {
+		return false
+	}
+	info, err := os.Stat(filepath.Clean(archivePath))
+	return err == nil && !info.IsDir()
+}
+
+// claimScanForWorker performs the only pending -> running transition. Rows
+// affected is deliberately checked so a queued duplicate cannot overwrite a
+// terminal state that was committed by cancellation or the watchdog.
+func claimScanForWorker(ctx context.Context, db *bun.DB, scanID uuid.UUID, startedAt time.Time) (bool, error) {
+	if db == nil || scanID == uuid.Nil {
+		return false, fmt.Errorf("database and scan ID are required")
+	}
+	result, err := db.NewUpdate().Model((*models.Scan)(nil)).
+		Set("status = ?", models.ScanStatusRunning).
+		Set("started_at = ?", startedAt).
+		Set("last_progress_at = ?", startedAt).
+		Where("id = ? AND status = ?", scanID, models.ScanStatusPending).
+		Exec(ctx)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rows == 1, nil
 }
 
 // backfillKB populates vuln_kb from the existing vulnerabilities table for any

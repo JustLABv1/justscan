@@ -1,4 +1,4 @@
-const DEFAULT_API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+const DEFAULT_API = process.env.NEXT_PUBLIC_API_URL?.trim() || 'http://localhost:8080';
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
@@ -20,6 +20,13 @@ function shouldUseConfiguredApiInBrowser(configuredApi: string): boolean {
     if (configuredIsLocal && currentIsLocal) {
       return configured.port !== current.port || configured.protocol !== current.protocol;
     }
+
+    // An explicitly configured non-local API is the backend for remote deployments. Keep using
+    // it even when the frontend itself is served from another origin; otherwise browser requests
+    // silently fall back to the frontend origin and bypass the configured backend entirely.
+    if (!configuredIsLocal) {
+      return true;
+    }
   } catch {
     return false;
   }
@@ -36,4 +43,3 @@ export function getApiBase(): string {
   // Same-origin in browser by default for multi-ingress host affinity.
   return '';
 }
-

@@ -535,8 +535,10 @@ func createUploadedArchiveScan(db *bun.DB, orgInPath bool) gin.HandlerFunc {
 		}
 
 		if err := scanner.DispatchScan(c.Request.Context(), db, scan, nil, platform); err != nil {
-			_ = os.Remove(archivePath)
 			log.Warnf("CreateUploadedArchiveScan dispatch failed for %s: %v", scan.ID, err)
+			if !scanner.IsScanQueueCapacityError(err) {
+				_ = os.RemoveAll(filepath.Dir(archivePath))
+			}
 			if markErr := scanner.MarkScanFailed(c.Request.Context(), db, scan.ID, err.Error()); markErr != nil {
 				log.Errorf("CreateUploadedArchiveScan failed to persist dispatch error for %s: %v", scan.ID, markErr)
 			}

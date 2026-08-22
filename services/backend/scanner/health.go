@@ -3,8 +3,6 @@ package scanner
 import (
 	"context"
 	"time"
-
-	"justscan-backend/config"
 )
 
 type WorkerHealth struct {
@@ -39,13 +37,14 @@ type HealthReport struct {
 
 func GetHealthReport(ctx context.Context) HealthReport {
 	concurrency := WorkerConcurrency()
+	settings := effectiveScannerSettings()
 
 	report := HealthReport{
 		LocalScannerEnabled: TrivyEnabled(),
 		GrypeEnabled:        GrypeEnabled(),
 		GeneratedAt:         time.Now().UTC(),
 		CacheRoot:           trivyCacheRoot(),
-		MaxAllowedAgeHours:  config.Config.Scanner.DBMaxAgeHours,
+		MaxAllowedAgeHours:  settings.DBMaxAgeHours,
 		TotalWorkers:        concurrency,
 		Workers:             make([]WorkerHealth, 0, concurrency),
 	}

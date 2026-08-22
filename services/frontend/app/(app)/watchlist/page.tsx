@@ -447,9 +447,14 @@ export default function WatchlistPage() {
       variant: 'danger',
     });
     if (!ok) return;
-    await deleteWatchlistItem(id).catch(() => {});
-    toast.success('Removed from watchlist');
-    load();
+    try {
+      await deleteWatchlistItem(id);
+      await load();
+      toast.success('Removed from watchlist');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to remove from watchlist');
+      await load();
+    }
   }
   async function handleTrigger(id: string) {
     const item = items.find((candidate) => candidate.id === id);
@@ -457,12 +462,13 @@ export default function WatchlistPage() {
     setTriggering(id);
     try {
       await triggerWatchlistScan(id);
+      await load();
       toast.success('Scan triggered');
-    } catch {
-      /* ignore */
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to trigger scan');
+      await load();
     } finally {
       setTriggering('');
-      load();
     }
   }
 
@@ -1052,12 +1058,6 @@ export default function WatchlistPage() {
                   </div>
                   {registryOptions.length > 0 && (
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium">
-                        Registry{' '}
-                        <span className="text-zinc-400 dark:text-zinc-600 font-normal">
-                          (optional)
-                        </span>
-                      </label>
                       <Select
                         value={registryId || '__none__'}
                         onChange={(value) =>
@@ -1065,6 +1065,12 @@ export default function WatchlistPage() {
                         }
                         className="pt-1"
                       >
+                        <Label className="text-sm font-medium">
+                          Registry{' '}
+                          <span className="text-zinc-400 dark:text-zinc-600 font-normal">
+                            (optional)
+                          </span>
+                        </Label>
                         <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
                           <Select.Value />
                           <Select.Indicator />

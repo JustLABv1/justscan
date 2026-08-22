@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"justscan-backend/compliance"
 	"justscan-backend/functions/blockedpolicy"
@@ -99,7 +102,13 @@ func DeleteScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if _, _, _, ok := LoadAuthorizedScanForWrite(c, db, scanID); !ok {
+		scan, _, _, ok := LoadAuthorizedScanForWrite(c, db, scanID)
+		if !ok {
+			return
+		}
+		archiveSessions, err := loadArchiveUploadSessionsForScans(c.Request.Context(), db, []uuid.UUID{scanID})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve uploaded archive cleanup"})
 			return
 		}
 
@@ -109,9 +118,42 @@ func DeleteScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete scan"})
 			return
 		}
+		_ = cleanupArchiveUploadSessions(archiveSessions)
+		_ = cleanupQueuedUploadedArchiveScan(scan)
 
 		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
 	}
+}
+
+// cleanupQueuedUploadedArchiveScan only removes the private directory created
+// for this scan. In particular, it never trusts an arbitrary image_location
+// value from the database or request body as a path to delete.
+func cleanupQueuedUploadedArchiveScan(scan *models.Scan) error {
+	if scan == nil || scan.ScanSource != models.ScanSourceUploadedArchive {
+		return nil
+	}
+	if scan.Status != models.ScanStatusPending || scan.CurrentStep != models.ScanStepQueued {
+		return nil
+	}
+	if !isControlledUploadedArchivePath(scan.ImageLocation) {
+		return nil
+	}
+	root := filepath.Join(os.TempDir(), "justscan", "uploads")
+	relative, err := filepath.Rel(root, filepath.Clean(scan.ImageLocation))
+	if err != nil {
+		return nil
+	}
+	parts := strings.Split(relative, string(filepath.Separator))
+	if len(parts) != 2 {
+		return nil
+	}
+	directoryID, err := uuid.Parse(parts[0])
+	if err != nil || directoryID != scan.ID {
+		// This fallback is for one-shot uploads, whose directory is the scan
+		// UUID. Resumable uploads are cleaned through their session row.
+		return nil
+	}
+	return os.RemoveAll(filepath.Dir(filepath.Clean(scan.ImageLocation)))
 }
 
 func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
@@ -122,9 +164,17 @@ func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) err
 	if err := scanner.LockVulnerabilitiesForUpdate(ctx, db, scanIDs); err != nil {
 		return fmt.Errorf("lock vulnerabilities before scan deletion: %w", err)
 	}
+	if err := deleteScanFindingDependents(ctx, db, scanIDs); err != nil {
+		return err
+	}
+	if err := deleteScanSBOMDependents(ctx, db, scanIDs); err != nil {
+		return err
+	}
 
 	for _, table := range []string{
+		"archive_upload_sessions",
 		"comments",
+		"scan_intelligence_versions",
 		"vulnerabilities",
 		"sbom_components",
 		"sbom_documents",
@@ -154,6 +204,56 @@ func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) err
 	_, err := db.NewDelete().Model((*models.Scan)(nil)).Where("id IN (?)", bun.In(scanIDs)).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("delete scans: %w", err)
+	}
+	return nil
+}
+
+// deleteScanFindingDependents keeps deletion reliable on upgraded databases
+// whose older intelligence constraints may not have ON DELETE CASCADE.
+func deleteScanFindingDependents(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
+	for _, relation := range []struct {
+		table  string
+		column string
+	}{
+		{table: "vulnerability_posture_events", column: "finding_id"},
+		{table: "vulnerability_postures", column: "finding_id"},
+		{table: "vulnerability_intelligence_evidence", column: "finding_id"},
+		{table: "vulnerability_component_links", column: "vulnerability_id"},
+	} {
+		exists, err := scanDeletionTableExists(ctx, db, relation.table)
+		if err != nil {
+			return fmt.Errorf("check %s: %w", relation.table, err)
+		}
+		if !exists {
+			continue
+		}
+		if _, err := db.NewDelete().
+			TableExpr(relation.table).
+			Where(relation.column+" IN (SELECT id FROM vulnerabilities WHERE scan_id IN (?))", bun.In(scanIDs)).
+			Exec(ctx); err != nil {
+			return fmt.Errorf("delete %s: %w", relation.table, err)
+		}
+	}
+	return nil
+}
+
+// deleteScanSBOMDependents handles installations created before all SBOM graph
+// foreign keys consistently cascaded.
+func deleteScanSBOMDependents(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
+	exists, err := scanDeletionTableExists(ctx, db, "sbom_dependencies")
+	if err != nil {
+		return fmt.Errorf("check sbom_dependencies: %w", err)
+	}
+	if !exists {
+		return nil
+	}
+	_, err = db.NewDelete().TableExpr("sbom_dependencies").Where(`
+		document_id IN (SELECT id FROM sbom_documents WHERE scan_id IN (?))
+		OR from_component_id IN (SELECT id FROM sbom_components WHERE scan_id IN (?))
+		OR to_component_id IN (SELECT id FROM sbom_components WHERE scan_id IN (?))
+	`, bun.In(scanIDs), bun.In(scanIDs), bun.In(scanIDs)).Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("delete sbom_dependencies: %w", err)
 	}
 	return nil
 }

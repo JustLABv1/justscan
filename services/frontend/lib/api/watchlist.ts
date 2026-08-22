@@ -1,15 +1,18 @@
-import { req } from './core';
+import { req, type ApiRequestOptions } from './core';
 import { appendScope } from './scope';
 import type { ResourceShare } from './types/orgs';
 import type { WatchlistItem } from './types/watchlist';
 
-export const listWatchlist = () => {
+export const listWatchlist = (options?: ApiRequestOptions) => {
   const params = new URLSearchParams();
   appendScope(params);
   const qs = params.toString();
-  return req<{ data: WatchlistItem[] }>('GET', `/api/v1/watchlist/${qs ? `?${qs}` : ''}`).then(
-    (result) => result.data ?? []
-  );
+  return req<{ data: WatchlistItem[] }>(
+    'GET',
+    `/api/v1/watchlist/${qs ? `?${qs}` : ''}`,
+    undefined,
+    options
+  ).then((result) => result.data ?? []);
 };
 
 export const createWatchlistItem = (data: Partial<WatchlistItem> & { org_id?: string }) =>

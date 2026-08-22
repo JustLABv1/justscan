@@ -14,6 +14,7 @@ func init() {
 				id UUID PRIMARY KEY,
 				org_id UUID NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
 				user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+				scan_id UUID NULL REFERENCES scans(id) ON DELETE SET NULL,
 				filename TEXT NOT NULL,
 				image_name TEXT NOT NULL DEFAULT '',
 				image_tag TEXT NOT NULL DEFAULT '',
@@ -28,6 +29,7 @@ func init() {
 			)`,
 			`CREATE INDEX IF NOT EXISTS idx_archive_upload_sessions_org_status ON archive_upload_sessions(org_id, status)`,
 			`CREATE INDEX IF NOT EXISTS idx_archive_upload_sessions_expires_at ON archive_upload_sessions(expires_at)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_archive_upload_sessions_scan_id ON archive_upload_sessions(scan_id) WHERE scan_id IS NOT NULL`,
 		}
 		for _, statement := range statements {
 			if _, err := db.NewRaw(statement).Exec(ctx); err != nil {

@@ -22,6 +22,7 @@ type SettingResolver struct {
 
 type cachedSetting struct {
 	value     string
+	found     bool
 	expiresAt time.Time
 }
 
@@ -50,7 +51,10 @@ func GetResolver() *SettingResolver {
 // GetString returns the string value for key, falling back to fallback if no DB
 // override exists.
 func (r *SettingResolver) GetString(key, fallback string) string {
-	if v, ok := r.fromCache(key); ok {
+	if v, found, hit := r.fromCache(key); hit {
+		if !found {
+			return fallback
+		}
 		return v
 	}
 	val, found := r.fromDB(key)
@@ -58,6 +62,27 @@ func (r *SettingResolver) GetString(key, fallback string) string {
 		return fallback
 	}
 	return val
+}
+
+// GetStringAny returns the first explicitly persisted value for keys in order.
+// It lets runtime callers prefer a canonical key while still honouring a
+// legacy key during a setting rename.
+func (r *SettingResolver) GetStringAny(keys []string, fallback string) string {
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		if value, found, hit := r.fromCache(key); hit {
+			if found {
+				return value
+			}
+			continue
+		}
+		if value, found := r.fromDB(key); found {
+			return value
+		}
+	}
+	return fallback
 }
 
 // GetBool returns the bool value for key, falling back to fallback.
@@ -70,9 +95,29 @@ func (r *SettingResolver) GetBool(key string, fallback bool) bool {
 	return v
 }
 
+// GetBoolAny is the boolean counterpart to GetStringAny.
+func (r *SettingResolver) GetBoolAny(keys []string, fallback bool) bool {
+	s := r.GetStringAny(keys, strconv.FormatBool(fallback))
+	v, err := strconv.ParseBool(s)
+	if err != nil {
+		return fallback
+	}
+	return v
+}
+
 // GetInt returns the int value for key, falling back to fallback.
 func (r *SettingResolver) GetInt(key string, fallback int) int {
 	s := r.GetString(key, strconv.Itoa(fallback))
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return fallback
+	}
+	return v
+}
+
+// GetIntAny is the integer counterpart to GetStringAny.
+func (r *SettingResolver) GetIntAny(keys []string, fallback int) int {
+	s := r.GetStringAny(keys, strconv.Itoa(fallback))
 	v, err := strconv.Atoi(s)
 	if err != nil {
 		return fallback
@@ -109,14 +154,14 @@ func (r *SettingResolver) Invalidate(key string) {
 }
 
 // fromCache returns a cached value if it exists and has not expired.
-func (r *SettingResolver) fromCache(key string) (string, bool) {
+func (r *SettingResolver) fromCache(key string) (string, bool, bool) {
 	r.mu.RLock()
 	entry, ok := r.cache[key]
 	r.mu.RUnlock()
 	if ok && time.Now().Before(entry.expiresAt) {
-		return entry.value, true
+		return entry.value, entry.found, true
 	}
-	return "", false
+	return "", false, false
 }
 
 // fromDB fetches a value from the database and populates the cache.
@@ -126,12 +171,12 @@ func (r *SettingResolver) fromDB(key string) (string, bool) {
 	if err != nil {
 		// Key not in DB — cache a sentinel so we don't hammer the DB for missing keys.
 		r.mu.Lock()
-		r.cache[key] = cachedSetting{value: "", expiresAt: time.Now().Add(r.ttl)}
+		r.cache[key] = cachedSetting{value: "", found: false, expiresAt: time.Now().Add(r.ttl)}
 		r.mu.Unlock()
 		return "", false
 	}
 	r.mu.Lock()
-	r.cache[key] = cachedSetting{value: value, expiresAt: time.Now().Add(r.ttl)}
+	r.cache[key] = cachedSetting{value: value, found: true, expiresAt: time.Now().Add(r.ttl)}
 	r.mu.Unlock()
 	log.Debugf("setting resolved from DB: %s = %s", key, value)
 	return value, true

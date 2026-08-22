@@ -30,7 +30,7 @@ services:
       - ./backend-config.yaml:/etc/justscan/config.yaml
       - backend_data:/app/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/readyz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5

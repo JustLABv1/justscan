@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	vulnerabilityintelligence "justscan-backend/functions/vulnerabilityintelligence"
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
@@ -34,7 +35,7 @@ func LoadIntelligenceSummaries(
 	}
 
 	rows := make([]summaryRow, 0, len(scanIDs))
-	postScanChange := "(p.change_event_id IS NOT NULL OR (s.completed_at IS NOT NULL AND p.observed_at > s.completed_at))"
+	postScanChange := vulnerabilityintelligence.PostScanChangeCondition("p", "s")
 	query := db.NewSelect().
 		TableExpr("vulnerabilities AS v").
 		ColumnExpr("v.scan_id").

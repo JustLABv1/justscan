@@ -152,8 +152,10 @@ func CreatePipelineScan(db *bun.DB) gin.HandlerFunc {
 			if markErr := scanner.MarkScanFailed(c.Request.Context(), db, scan.ID, err.Error()); markErr != nil {
 				log.Errorf("CreatePipelineScan failed to persist dispatch error for %s: %v", scan.ID, markErr)
 			}
-			if queueErr := pipelines.QueueCallbackForScan(c.Request.Context(), db, scan.ID.String()); queueErr != nil && queueErr != sql.ErrNoRows {
-				log.Warnf("CreatePipelineScan failed to queue callback for %s: %v", scan.ID, queueErr)
+			if !scanner.IsScanQueueCapacityError(err) {
+				if queueErr := pipelines.QueueCallbackForScan(c.Request.Context(), db, scan.ID.String()); queueErr != nil && queueErr != sql.ErrNoRows {
+					log.Warnf("CreatePipelineScan failed to queue callback for %s: %v", scan.ID, queueErr)
+				}
 			}
 		}
 

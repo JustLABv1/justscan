@@ -704,7 +704,7 @@ func shouldRefreshDatabases(info *TrivyRuntimeInfo) bool {
 	if info == nil {
 		return true
 	}
-	maxAge := time.Duration(config.Config.Scanner.DBMaxAgeHours) * time.Hour
+	maxAge := time.Duration(effectiveScannerSettings().DBMaxAgeHours) * time.Hour
 	if maxAge <= 0 {
 		maxAge = 24 * time.Hour
 	}

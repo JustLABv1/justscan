@@ -68,6 +68,11 @@ func deleteScanGroup(db *bun.DB, requireTag bool) gin.HandlerFunc {
 			}
 			scanIDs = append(scanIDs, scans[index].ID)
 		}
+		archiveSessions, err := loadArchiveUploadSessionsForScans(c.Request.Context(), db, scanIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve uploaded archive cleanup"})
+			return
+		}
 
 		if err := db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
 			return deleteScanRecords(ctx, tx, scanIDs)
@@ -75,6 +80,10 @@ func deleteScanGroup(db *bun.DB, requireTag bool) gin.HandlerFunc {
 			log.WithError(err).Errorf("delete scan group failed for %s", imageName)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete scan group"})
 			return
+		}
+		_ = cleanupArchiveUploadSessions(archiveSessions)
+		for index := range scans {
+			_ = cleanupQueuedUploadedArchiveScan(&scans[index])
 		}
 
 		auditTarget := imageName

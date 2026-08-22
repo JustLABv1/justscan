@@ -79,6 +79,7 @@ import {
   useAIContextBridge,
 } from '@/components/assistant/ai-context-bridge';
 import { ADMIN_AREAS, type AdminTab } from '@/app/(app)/admin/_components/admin-tabs';
+import { BackgroundProcessCenter } from '@/components/background-process-center';
 import { Logo } from '@/components/logo';
 import { ToastProvider } from '@/components/toast';
 
@@ -1237,6 +1238,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       <Kbd.Content>K</Kbd.Content>
                     </Kbd>
                   </Button>
+
+                  <BackgroundProcessCenter />
 
                   <div className="md:hidden">
                   <Dropdown>

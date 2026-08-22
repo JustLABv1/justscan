@@ -13,7 +13,16 @@ import {
   RECENT_ACTIVITY_RANGE_OPTIONS,
   type RecentActivityRange,
 } from '@/components/scans/recent-activity';
-import { deleteScanImageGroup, listScanImages, type ImageOverview } from '@/lib/api';
+import {
+  BACKGROUND_JOB_FINISHED_EVENT,
+  announceBackgroundJobEnqueued,
+  deleteScanImageGroup,
+  isScanGroupDeletionJob,
+  listScanImages,
+  openBackgroundProcessCenter,
+  type BackgroundJob,
+  type ImageOverview,
+} from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { useToast } from '@/components/toast';
 import { StatusAlert } from '@/components/ui/form-alert';
@@ -152,11 +161,43 @@ function ScansPageContent() {
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState<ImageOverview | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [queuedImageDeletes, setQueuedImageDeletes] = useState<Map<string, string>>(
+    () => new Map()
+  );
   const [refreshKey, setRefreshKey] = useState(0);
   const [page, setPage] = useState(() => Math.max(1, Number(searchParams.get('page') ?? '1')));
   const [filters, updateFilters] = useReducer(scanFiltersReducer, searchParams, initialScanFilters);
   const { query, status, critical, policy, intelligence, range, date, dateTo, sort } = filters;
   const toast = useToast();
+  const queuedImageNames = useMemo(
+    () => new Set(queuedImageDeletes.values()),
+    [queuedImageDeletes]
+  );
+
+  useEffect(() => {
+    function handleFinished(event: Event) {
+      const job = (event as CustomEvent<{ job?: BackgroundJob }>).detail?.job;
+      if (!job) return;
+
+      const matchingJobIds = new Set<string>();
+      for (const [jobId, imageName] of queuedImageDeletes) {
+        if (jobId === job.id && isScanGroupDeletionJob(job, imageName)) {
+          matchingJobIds.add(jobId);
+        }
+      }
+      if (matchingJobIds.size === 0) return;
+
+      setQueuedImageDeletes((current) => {
+        const next = new Map(current);
+        matchingJobIds.forEach((jobId) => next.delete(jobId));
+        return next;
+      });
+      setRefreshKey((current) => current + 1);
+    }
+
+    window.addEventListener(BACKGROUND_JOB_FINISHED_EVENT, handleFinished);
+    return () => window.removeEventListener(BACKGROUND_JOB_FINISHED_EVENT, handleFinished);
+  }, [queuedImageDeletes]);
 
   const bounds = useMemo(
     () => (date ? getScanDateBounds(date, dateTo) : range ? getRecentActivityBounds(range) : null),
@@ -269,15 +310,17 @@ function ScansPageContent() {
     setDeleting(true);
     try {
       const result = await deleteScanImageGroup(pendingDelete.image_name);
-      toast.success(
-        `Deleted ${result.deleted} scan${result.deleted === 1 ? '' : 's'} and all image tags`
-      );
+      announceBackgroundJobEnqueued(result.job);
+      setQueuedImageDeletes((current) => {
+        const next = new Map(current);
+        next.set(result.job.id, pendingDelete.image_name);
+        return next;
+      });
       setPendingDelete(null);
-      if (images.length === 1 && page > 1) {
-        setPage((current) => current - 1);
-      } else {
-        setRefreshKey((current) => current + 1);
-      }
+      toast.success('Image deletion queued', {
+        description: 'The image and its scan history will be removed in the background.',
+        action: { label: 'View progress', onPress: openBackgroundProcessCenter },
+      });
     } catch (reason) {
       toast.error(reason instanceof Error ? reason.message : 'Failed to delete scan group');
     } finally {
@@ -649,6 +692,7 @@ function ScansPageContent() {
           images={images}
           loading={loading && images.length === 0}
           onDeleteImage={setPendingDelete}
+          queuedImageNames={queuedImageNames}
         />
       </Card>
       {total > 0 ? (

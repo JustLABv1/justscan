@@ -58,6 +58,7 @@ type ArtifactScansTableProps = {
   onTransferToWorkspace: (scanIds: string[]) => void;
   selectedScans: Set<string>;
   hideImageName?: boolean;
+  queuedArtifactKeys?: ReadonlySet<string>;
 };
 
 function artifactKey(imageName: string, imageTag: string) {
@@ -81,7 +82,8 @@ function ArtifactReference({
   image_tag: imageTag,
   scan_count: scanCount,
   hideImageName = false,
-}: ArtifactSummary & { hideImageName?: boolean }) {
+  deletionQueued = false,
+}: ArtifactSummary & { hideImageName?: boolean; deletionQueued?: boolean }) {
   const { registryHost, repositoryPath } = splitImageReference(imageName);
   const reference = `${imageName}:${imageTag}`;
 
@@ -104,6 +106,11 @@ function ArtifactReference({
         <Chip className="text-[10px] font-semibold" color="accent" size="sm" variant="soft">
           {scanCount} run{scanCount === 1 ? '' : 's'}
         </Chip>
+        {deletionQueued ? (
+          <Chip className="text-[10px] font-semibold" color="warning" size="sm" variant="soft">
+            Deletion queued
+          </Chip>
+        ) : null}
       </div>
     </div>
   );
@@ -474,6 +481,7 @@ export function ArtifactScansTable({
   onTransferToWorkspace,
   selectedScans,
   hideImageName = false,
+  queuedArtifactKeys,
 }: ArtifactScansTableProps) {
   const router = useRouter();
   const toast = useToast();
@@ -626,9 +634,13 @@ export function ArtifactScansTable({
                 </Table.Cell>
               </Table.Row>
             ) : (
-              <Table.Collection items={artifacts} dependencies={[selectedScans]}>
+              <Table.Collection
+                items={artifacts}
+                dependencies={[selectedScans, queuedArtifactKeys]}
+              >
                 {(artifact) => {
                   const key = artifactKey(artifact.image_name, artifact.image_tag);
+                  const deletionQueued = queuedArtifactKeys?.has(key) ?? false;
                   const openLatestScan = () =>
                     router.push(`/scans/details/${artifact.latest_scan_id}`);
                   return (
@@ -676,7 +688,11 @@ export function ArtifactScansTable({
                           className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                           href={`/scans/details/${artifact.latest_scan_id}`}
                         >
-                          <ArtifactReference {...artifact} hideImageName={hideImageName} />
+                          <ArtifactReference
+                            {...artifact}
+                            deletionQueued={deletionQueued}
+                            hideImageName={hideImageName}
+                          />
                         </Link>
                       </Table.Cell>
                       <Table.Cell>
@@ -776,9 +792,12 @@ export function ArtifactScansTable({
                                 ? [
                                     {
                                       id: 'delete-artifact',
-                                      label: 'Delete tag history',
+                                      label: deletionQueued
+                                        ? 'Deletion queued'
+                                        : 'Delete tag history',
                                       icon: <Delete01Icon size={14} aria-hidden />,
                                       variant: 'danger' as const,
+                                      disabled: deletionQueued,
                                       onAction: () => onDeleteArtifact(artifact),
                                     },
                                   ]

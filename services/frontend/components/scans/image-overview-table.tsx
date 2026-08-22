@@ -39,11 +39,13 @@ export function ImageOverviewTable({
   loading,
   hasActiveFilters,
   onDeleteImage,
+  queuedImageNames,
 }: {
   images: ImageOverview[];
   loading: boolean;
   hasActiveFilters: boolean;
   onDeleteImage: (image: ImageOverview) => void;
+  queuedImageNames?: ReadonlySet<string>;
 }) {
   const router = useRouter();
 
@@ -92,6 +94,7 @@ export function ImageOverviewTable({
               <Table.Collection items={images}>
                 {(image) => {
                   const href = imageHref(image.image_name);
+                  const deletionQueued = queuedImageNames?.has(image.image_name) ?? false;
                   return (
                     <Table.Row id={image.image_name} className="group">
                       <Table.Cell className="w-px min-w-[20rem] max-w-[40rem] align-top">
@@ -100,6 +103,11 @@ export function ImageOverviewTable({
                           className="block rounded-lg -mx-2 -my-1 px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent"
                         >
                           <ImageName imageName={image.image_name} />
+                          {deletionQueued ? (
+                            <Chip className="mt-2" color="warning" size="sm" variant="soft">
+                              Deletion queued
+                            </Chip>
+                          ) : null}
                         </Link>
                       </Table.Cell>
                       <Table.Cell>
@@ -179,9 +187,10 @@ export function ImageOverviewTable({
                               },
                               {
                                 id: 'delete',
-                                label: 'Delete image group',
+                                label: deletionQueued ? 'Deletion queued' : 'Delete image group',
                                 icon: <Delete01Icon size={14} aria-hidden />,
                                 variant: 'danger',
+                                disabled: deletionQueued,
                                 onAction: () => onDeleteImage(image),
                               },
                             ]}

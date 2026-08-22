@@ -104,6 +104,12 @@ func CreatePipelineScan(db *bun.DB) gin.HandlerFunc {
 			OwnerOrgID:   &orgID,
 			CreatedAt:    now,
 		}
+		// Keep the initiating user on the scan when a user token submitted the
+		// organization-scoped pipeline request. Organization tokens have no user
+		// identity and remain workspace-scoped only.
+		if userID != uuid.Nil {
+			scan.UserID = &userID
+		}
 		if registry != nil {
 			scan.RegistryID = &registry.ID
 		}

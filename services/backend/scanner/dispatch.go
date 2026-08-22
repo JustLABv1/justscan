@@ -45,6 +45,9 @@ func DispatchScan(ctx context.Context, db *bun.DB, scan *models.Scan, envVars []
 	if err := ValidateProviderSelection(provider); err != nil {
 		return err
 	}
+	if err := enqueueScanBackgroundJob(ctx, db, scan); err != nil {
+		return err
+	}
 
 	var err error
 	switch provider {

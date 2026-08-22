@@ -8,6 +8,13 @@ import {
 } from '@/components/scans/recent-activity';
 import { useToast } from '@/components/toast';
 import {
+  BACKGROUND_JOB_FINISHED_EVENT,
+  announceBackgroundJobEnqueued,
+  isScanGroupDeletionJob,
+  openBackgroundProcessCenter,
+} from '@/lib/api/background-jobs';
+import type { BackgroundJob } from '@/lib/api/types/background-jobs';
+import {
   filterDisclosureBodyClassName,
   FilterDisclosureTrigger,
 } from '@/components/ui/filter-toolbar';
@@ -55,6 +62,13 @@ type MetricTone = 'neutral' | 'danger' | 'success';
 type PendingDelete =
   { kind: 'image' } | { kind: 'tag'; artifact: ArtifactSummary } | { kind: 'scan'; scan: Scan };
 
+type QueuedDeletion = {
+  jobId: string;
+  kind: 'image' | 'tag';
+  imageName: string;
+  imageTag?: string;
+};
+
 const STATUS_OPTIONS = [
   { id: '', label: 'Any state' },
   { id: 'failed', label: 'Failed' },
@@ -91,11 +105,18 @@ function visiblePageNumbers(totalPages: number, currentPage: number) {
   return Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => start + index);
 }
 
-function pendingDeleteScanCount(pendingDelete: PendingDelete | null, imageScanCount: number | undefined) {
+function pendingDeleteScanCount(
+  pendingDelete: PendingDelete | null,
+  imageScanCount: number | undefined
+) {
   if (!pendingDelete) return 0;
   if (pendingDelete.kind === 'scan') return 1;
   if (pendingDelete.kind === 'tag') return pendingDelete.artifact.scan_count;
   return imageScanCount ?? 0;
+}
+
+function artifactKey(imageName: string, imageTag: string) {
+  return JSON.stringify([imageName, imageTag]);
 }
 
 function Metric({
@@ -148,6 +169,9 @@ export default function ImageScansPage() {
   const [selectedScans, setSelectedScans] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [queuedDeletions, setQueuedDeletions] = useState<Map<string, QueuedDeletion>>(
+    () => new Map()
+  );
   const [refreshKey, setRefreshKey] = useState(0);
   const toast = useToast();
   const bounds = useMemo(() => (range ? getRecentActivityBounds(range) : null), [range]);
@@ -155,6 +179,54 @@ export default function ImageScansPage() {
   const hasFilters = Boolean(query || status || critical || policy || range);
   const artifactTotalPages = Math.max(1, Math.ceil(total / ARTIFACT_PAGE_SIZE));
   const pendingScanCount = pendingDeleteScanCount(pendingDelete, stats?.total_scans);
+  const queuedImageDeletion = useMemo(
+    () => Array.from(queuedDeletions.values()).some((deletion) => deletion.kind === 'image'),
+    [queuedDeletions]
+  );
+  const queuedArtifactKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const deletion of queuedDeletions.values()) {
+      if (deletion.kind === 'tag' && deletion.imageTag) {
+        keys.add(artifactKey(deletion.imageName, deletion.imageTag));
+      }
+      if (deletion.kind === 'image') {
+        artifacts.forEach((artifact) =>
+          keys.add(artifactKey(artifact.image_name, artifact.image_tag))
+        );
+      }
+    }
+    return keys;
+  }, [artifacts, queuedDeletions]);
+
+  useEffect(() => {
+    function handleFinished(event: Event) {
+      const job = (event as CustomEvent<{ job?: BackgroundJob }>).detail?.job;
+      if (!job) return;
+
+      const matching = Array.from(queuedDeletions.entries()).filter(([, deletion]) => {
+        if (job.id !== deletion.jobId) return false;
+        return isScanGroupDeletionJob(job, deletion.imageName, deletion.imageTag);
+      });
+      if (matching.length === 0) return;
+
+      const hasImageDeletion = matching.some(([, deletion]) => deletion.kind === 'image');
+      setQueuedDeletions((current) => {
+        const next = new Map(current);
+        matching.forEach(([jobId]) => next.delete(jobId));
+        return next;
+      });
+
+      const succeeded = job.status === 'succeeded' || job.status === 'completed';
+      if (hasImageDeletion && succeeded) {
+        router.replace('/scans');
+      } else {
+        setRefreshKey((current) => current + 1);
+      }
+    }
+
+    window.addEventListener(BACKGROUND_JOB_FINISHED_EVENT, handleFinished);
+    return () => window.removeEventListener(BACKGROUND_JOB_FINISHED_EVENT, handleFinished);
+  }, [queuedDeletions, router]);
 
   useEffect(
     () =>
@@ -259,23 +331,36 @@ export default function ImageScansPage() {
         return;
       }
 
+      const deleteTarget = pendingDelete;
       const result =
-        pendingDelete.kind === 'image'
+        deleteTarget.kind === 'image'
           ? await deleteScanImageGroup(imageName)
-          : await deleteScanArtifactGroup(imageName, pendingDelete.artifact.image_tag);
-      toast.success(
-        pendingDelete.kind === 'image'
-          ? `Deleted ${result.deleted} scan${result.deleted === 1 ? '' : 's'} and all tags`
-          : `Deleted ${result.deleted} scan${result.deleted === 1 ? '' : 's'} for ${pendingDelete.artifact.image_tag}`
-      );
+          : await deleteScanArtifactGroup(imageName, deleteTarget.artifact.image_tag);
+      const queuedDeletion: QueuedDeletion =
+        deleteTarget.kind === 'image'
+          ? { jobId: result.job.id, kind: 'image', imageName }
+          : {
+              jobId: result.job.id,
+              kind: 'tag',
+              imageName,
+              imageTag: deleteTarget.artifact.image_tag,
+            };
+      announceBackgroundJobEnqueued(result.job);
+      setQueuedDeletions((current) => {
+        const next = new Map(current);
+        next.set(result.job.id, queuedDeletion);
+        return next;
+      });
       setPendingDelete(null);
       setSelectedScans(new Set());
       setExpanded(new Set());
-      if (pendingDelete.kind === 'image' || (!hasFilters && total === 1)) {
-        router.replace('/scans');
-      } else {
-        setRefreshKey((current) => current + 1);
-      }
+      toast.success(
+        deleteTarget.kind === 'image' ? 'Image deletion queued' : 'Tag history deletion queued',
+        {
+          description: 'The cleanup will finish in the background.',
+          action: { label: 'View progress', onPress: openBackgroundProcessCenter },
+        }
+      );
     } catch (reason) {
       toast.error(reason instanceof Error ? reason.message : 'Failed to delete scan group');
     } finally {
@@ -303,9 +388,13 @@ export default function ImageScansPage() {
               <ArrowLeft01Icon size={16} />
               All images
             </Button>
-            <Button onPress={() => setPendingDelete({ kind: 'image' })} variant="danger">
+            <Button
+              isDisabled={queuedImageDeletion}
+              onPress={() => setPendingDelete({ kind: 'image' })}
+              variant="danger"
+            >
               <Delete01Icon size={16} />
-              Delete image
+              {queuedImageDeletion ? 'Deletion queued' : 'Delete image'}
             </Button>
           </>
         }
@@ -366,7 +455,8 @@ export default function ImageScansPage() {
                       </>
                     ) : (
                       <>
-                        This removes scan <strong>{pendingDelete?.scan.id.slice(0, 8)}…</strong> from{' '}
+                        This removes scan <strong>{pendingDelete?.scan.id.slice(0, 8)}…</strong>{' '}
+                        from{' '}
                         <strong>
                           {imageName}:{pendingDelete?.scan.image_tag}
                         </strong>
@@ -395,6 +485,22 @@ export default function ImageScansPage() {
           </AlertDialog.Container>
         </AlertDialog.Backdrop>
       </AlertDialog>
+      {queuedDeletions.size > 0 ? (
+        <Card className="flex flex-wrap items-center justify-between gap-3 border-warning/30 bg-warning/5 p-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <Spinner aria-hidden className="mt-0.5 shrink-0" color="warning" size="sm" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Deletion queued</p>
+              <p className="mt-1 text-xs leading-5 text-muted">
+                This page stays available while cleanup runs. The row will refresh when it finishes.
+              </p>
+            </div>
+          </div>
+          <Button onPress={openBackgroundProcessCenter} size="sm" variant="secondary">
+            View progress
+          </Button>
+        </Card>
+      ) : null}
       {statsLoading ? (
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {Array.from({ length: 4 }, (_, index) => (
@@ -618,6 +724,7 @@ export default function ImageScansPage() {
           onSelectedScansChange={setSelectedScans}
           onShareToWorkspace={() => {}}
           onTransferToWorkspace={() => {}}
+          queuedArtifactKeys={queuedArtifactKeys}
           selectedScans={selectedScans}
         />
       </Card>

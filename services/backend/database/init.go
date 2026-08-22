@@ -32,11 +32,6 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 		pgdriver.WithDatabase(dbName),
 		pgdriver.WithApplicationName("exflow"),
 		pgdriver.WithTLSConfig(nil),
-		// A group-history deletion can legitimately hold a transaction while it
-		// removes a large number of findings and their dependents. The handler
-		// applies its own 30-minute context deadline; keep the transport deadline
-		// aligned with it so pgdriver does not abort the operation first.
-		pgdriver.WithReadTimeout(30*time.Minute),
 	)
 
 	sqldb := sql.OpenDB(pgconn)

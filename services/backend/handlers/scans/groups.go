@@ -2,6 +2,7 @@ package scans
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	workerjobs "justscan-backend/backgroundjobs"
 	"justscan-backend/functions/audit"
 	"justscan-backend/functions/authz"
 	"justscan-backend/pkg/models"
@@ -19,7 +21,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-const scanGroupDeletionTimeout = 30 * time.Minute
+const scanDeletionBatchSize = 8
 
 // DeleteScanImageGroup deletes every writable scan for an image in the active scope.
 func DeleteScanImageGroup(db *bun.DB) gin.HandlerFunc {
@@ -56,7 +58,7 @@ func deleteScanGroup(db *bun.DB, requireTag bool) gin.HandlerFunc {
 		if requireTag {
 			query = query.Where("image_tag = ?", imageTag)
 		}
-		if err := query.Scan(c.Request.Context()); err != nil {
+		if err := query.OrderExpr("created_at ASC, id ASC").Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scans"})
 			return
 		}
@@ -73,38 +75,206 @@ func deleteScanGroup(db *bun.DB, requireTag bool) gin.HandlerFunc {
 			}
 			scanIDs = append(scanIDs, scans[index].ID)
 		}
-		archiveSessions, err := loadArchiveUploadSessionsForScans(c.Request.Context(), db, scanIDs)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve uploaded archive cleanup"})
-			return
-		}
 
-		deleteCtx, cancelDelete := context.WithTimeout(c.Request.Context(), scanGroupDeletionTimeout)
-		deletionStartedAt := time.Now()
-		err = db.RunInTx(deleteCtx, nil, func(ctx context.Context, tx bun.Tx) error {
-			return deleteScanRecords(ctx, tx, scanIDs)
-		})
-		cancelDelete()
-		if err != nil {
-			log.WithError(err).Errorf("delete scan group failed for %s", imageName)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": scanGroupDeletionErrorMessage(err)})
-			return
+		scopeType, scopeRef := scanDeletionJobScope(c, userID)
+		scopeLabel := strings.TrimSpace(c.Query("scope"))
+		if scopeLabel == "" {
+			scopeLabel = "all"
 		}
-		log.WithField("duration", time.Since(deletionStartedAt)).Infof("deleted scan group for %s", imageName)
-		_ = cleanupArchiveUploadSessions(archiveSessions)
-		for index := range scans {
-			_ = cleanupQueuedUploadedArchiveScan(&scans[index])
-		}
-
 		auditTarget := imageName
 		if requireTag {
 			auditTarget += ":" + imageTag
 		}
-		go audit.Write(context.Background(), db, userID.String(), "scan.group_delete",
-			fmt.Sprintf("Deleted %d scans for %s", len(scanIDs), auditTarget))
+		job, err := workerjobs.Enqueue(c.Request.Context(), db, workerjobs.EnqueueRequest{
+			UserID:        userID,
+			ScopeType:     scopeType,
+			ScopeRef:      scopeRef,
+			Type:          models.BackgroundJobTypeScanGroupDeletion,
+			Title:         "Delete scan group",
+			Description:   fmt.Sprintf("Delete scans for %s", auditTarget),
+			ProgressTotal: len(scanIDs),
+			Phase:         "queued",
+			Metadata: models.JSONObject{
+				"image_name":  imageName,
+				"image_tag":   imageTag,
+				"require_tag": requireTag,
+				"scope":       scopeLabel,
+				"scan_count":  len(scanIDs),
+			},
+			Payload: models.JSONObject{
+				"scan_ids":    scanIDStrings(scanIDs),
+				"image_name":  imageName,
+				"image_tag":   imageTag,
+				"require_tag": requireTag,
+			},
+			DedupeKey: workerjobs.BuildDedupeKey(
+				models.BackgroundJobTypeScanGroupDeletion,
+				scopeType,
+				scopeRef,
+				imageName,
+				imageTag,
+			),
+		})
+		if err != nil {
+			log.WithError(err).Errorf("enqueue scan group deletion failed for %s", imageName)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to queue scan group deletion"})
+			return
+		}
 
-		c.JSON(http.StatusOK, gin.H{"deleted": len(scanIDs)})
+		c.JSON(http.StatusAccepted, gin.H{"job": job})
 	}
+}
+
+func scanDeletionJobScope(c *gin.Context, userID uuid.UUID) (string, string) {
+	scope := strings.TrimSpace(c.Query("scope"))
+	if scope == "" || scope == "personal" {
+		return models.BackgroundJobScopeUser, userID.String()
+	}
+	if orgID, err := uuid.Parse(scope); err == nil {
+		return models.BackgroundJobScopeOrg, orgID.String()
+	}
+	// scanScopeWhere intentionally treats malformed scopes as unscoped for
+	// backwards compatibility. Keep the durable job private in that case.
+	return models.BackgroundJobScopeUser, userID.String()
+}
+
+func scanIDStrings(scanIDs []uuid.UUID) []string {
+	result := make([]string, 0, len(scanIDs))
+	for _, scanID := range scanIDs {
+		result = append(result, scanID.String())
+	}
+	return result
+}
+
+// ProcessScanGroupDeletion executes one bounded batch at a time. The
+// remaining ID list is persisted together with progress, so a worker restart
+// can safely resume after any completed batch and missing rows are treated as
+// already completed.
+func ProcessScanGroupDeletion(ctx context.Context, db *bun.DB, job *models.BackgroundJob) error {
+	if job == nil {
+		return errors.New("scan deletion job is missing")
+	}
+	remaining, err := scanIDsFromPayload(job.Payload)
+	if err != nil {
+		return workerjobs.NewSafeError("scan deletion job could not be resumed", err)
+	}
+	total := job.ProgressTotal
+	if total < len(remaining)+job.ProgressCurrent {
+		total = len(remaining) + job.ProgressCurrent
+	}
+	if total == 0 {
+		return nil
+	}
+	current := job.ProgressCurrent
+	for len(remaining) > 0 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		batchSize := scanDeletionBatchSize
+		if len(remaining) < batchSize {
+			batchSize = len(remaining)
+		}
+		batch := append([]uuid.UUID(nil), remaining[:batchSize]...)
+		batchStart := current + 1
+		batchEnd := current + batchSize
+		if batchEnd > total {
+			batchEnd = total
+		}
+		phase := fmt.Sprintf("Deleting scans %d–%d of %d", batchStart, batchEnd, total)
+		if err := workerjobs.UpdateProgress(ctx, db, job.ID, job.LeaseOwner, current, total, phase, nil); err != nil {
+			return err
+		}
+		job.Phase = phase
+
+		var scans []models.Scan
+		if err := db.NewSelect().Model(&scans).Where("id IN (?)", bun.In(batch)).Scan(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return workerjobs.NewSafeError("failed to load a scan deletion batch", err)
+		}
+		if len(scans) > 0 {
+			archiveSessions, err := loadArchiveUploadSessionsForScans(ctx, db, batch)
+			if err != nil {
+				return workerjobs.NewSafeError("failed to resolve uploaded archive cleanup", err)
+			}
+			batchCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			err = db.RunInTx(batchCtx, nil, func(txCtx context.Context, tx bun.Tx) error {
+				return deleteScanRecords(txCtx, tx, batch)
+			})
+			cancel()
+			if err != nil {
+				return workerjobs.NewSafeError(scanGroupDeletionErrorMessage(err), err)
+			}
+			if cleanupErr := cleanupArchiveUploadSessions(archiveSessions); cleanupErr != nil {
+				log.WithError(cleanupErr).WithField("job_id", job.ID).Warn("scan deletion archive cleanup failed")
+			}
+			for index := range scans {
+				if cleanupErr := cleanupQueuedUploadedArchiveScan(&scans[index]); cleanupErr != nil {
+					log.WithError(cleanupErr).WithField("job_id", job.ID).Warn("scan deletion upload cleanup failed")
+				}
+			}
+		}
+
+		remaining = remaining[batchSize:]
+		current += batchSize
+		if current > total {
+			current = total
+		}
+		job.Payload["scan_ids"] = scanIDStrings(remaining)
+		phase = fmt.Sprintf("Deleted %d of %d scans", current, total)
+		if err := workerjobs.UpdateProgress(ctx, db, job.ID, job.LeaseOwner, current, total, phase, job.Payload); err != nil {
+			return err
+		}
+		job.ProgressCurrent = current
+		job.ProgressTotal = total
+		job.Phase = phase
+	}
+
+	go audit.Write(context.Background(), db, job.UserID.String(), "scan.group_delete",
+		fmt.Sprintf("Deleted %d scans for %s", total, deletionAuditTarget(job)))
+	return nil
+}
+
+func deletionAuditTarget(job *models.BackgroundJob) string {
+	if job == nil {
+		return "scan group"
+	}
+	if imageName, ok := job.Metadata["image_name"].(string); ok && strings.TrimSpace(imageName) != "" {
+		if imageTag, ok := job.Metadata["image_tag"].(string); ok && strings.TrimSpace(imageTag) != "" {
+			return imageName + ":" + imageTag
+		}
+		return imageName
+	}
+	return "scan group"
+}
+
+func scanIDsFromPayload(payload models.JSONObject) ([]uuid.UUID, error) {
+	raw, ok := payload["scan_ids"]
+	if !ok {
+		return nil, errors.New("scan deletion payload has no scan IDs")
+	}
+	values, ok := raw.([]interface{})
+	if !ok {
+		if stringsList, stringOK := raw.([]string); stringOK {
+			values = make([]interface{}, len(stringsList))
+			for index := range stringsList {
+				values[index] = stringsList[index]
+			}
+		} else {
+			return nil, errors.New("scan deletion payload has invalid scan IDs")
+		}
+	}
+	result := make([]uuid.UUID, 0, len(values))
+	for _, value := range values {
+		rawID, ok := value.(string)
+		if !ok {
+			return nil, errors.New("scan deletion payload has an invalid scan ID")
+		}
+		id, err := uuid.Parse(rawID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid scan ID in deletion payload: %w", err)
+		}
+		result = append(result, id)
+	}
+	return result, nil
 }
 
 func scanGroupDeletionErrorMessage(err error) string {

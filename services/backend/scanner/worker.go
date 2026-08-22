@@ -112,6 +112,7 @@ func CancelScan(scanID uuid.UUID) bool {
 // InitWorker initializes the scan worker pool and starts it
 func InitWorker(db *bun.DB) {
 	concurrency := WorkerConcurrency()
+	startScanBackgroundJobReconciler(db)
 
 	jobQueue = make(chan ScanJob, 64)
 	workerPoolSize.Store(int64(concurrency))

@@ -42,8 +42,8 @@ importers:
         specifier: ^0.4.0
         version: 0.4.0(react@19.2.8)
       motion:
-        specifier: ^13.1.0
-        version: 13.1.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: ^13.1.1
+        version: 13.1.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       next:
         specifier: 16.3.1
         version: 16.3.1(@babel/core@7.29.0(supports-color@7.2.0))(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -52,7 +52,7 @@ importers:
         version: 0.4.6(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       nextstepjs:
         specifier: ^2.3.0
-        version: 2.3.0(motion@13.1.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(next@16.3.1(@babel/core@7.29.0(supports-color@7.2.0))(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 2.3.0(motion@13.1.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(next@16.3.1(@babel/core@7.29.0(supports-color@7.2.0))(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       ogl:
         specifier: ^1.0.11
         version: 1.0.11
@@ -1640,6 +1640,7 @@ packages:
   eslint@9.39.4:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -1721,8 +1722,8 @@ packages:
     resolution: {integrity: sha512-dKx12eRCVIzqCxFGplyFKJMPvLEWgmNtUrpTiJIR5u97zEhRG8ySrtboPHZXx7daLxQVrl643cTzbab2tkQjxg==}
     engines: {node: '>= 0.4'}
 
-  framer-motion@13.1.0:
-    resolution: {integrity: sha512-QSZrF0Id3QGuHJ+OL+9PSY9pk86C8ERFalwAGSchzTm65+ZoGH/RM26lmEARLljcHj2lqhv0jZOOks+EI3COOw==}
+  framer-motion@13.1.1:
+    resolution: {integrity: sha512-B/xn2TPS4f61cEBLFjiYlQFnBZUW1YVj/LM+C+N4OP8Rs95VLEI2ot/RlfBg111la/EiyECFaJJi/A3FWA8MUA==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
@@ -2158,14 +2159,14 @@ packages:
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
 
-  motion-dom@13.0.0:
-    resolution: {integrity: sha512-Xk+SJas70uMAUIApg+m3lZDShxI3LBFHq7mFGbBKoRXc2PVPDyAKmzN64Bbzt4CZdP/CItTiJxWtn4TA0v53Ng==}
+  motion-dom@13.1.1:
+    resolution: {integrity: sha512-XSf8VYWSB6G/0IY3rWVbyLcxWXtAVHkN1PQE2agTaCv3u8RGvbwu56TyyR/MNzBqqNavEBTZzErcxI1TxBrjcA==}
 
   motion-utils@13.0.0:
     resolution: {integrity: sha512-7DnN7TmbLcYXcG4RVadXIihWlyuM9afoUww8Y5Agg431kGKiuL2/OMyP4mJ5wLz+pvN3t5ySClLOaVXJ+wekRQ==}
 
-  motion@13.1.0:
-    resolution: {integrity: sha512-qtvscq59uCPdWnNW4SdSkrxR+BS/QYsa923bx7ocA+4p+ZGNbbVQwkSnG4aukB81QWjtl3AxX36plxNyZLmHCA==}
+  motion@13.1.1:
+    resolution: {integrity: sha512-WNZoK6xiF+kkTqkZ5K7FDDh6A8BG4i5Hc7KXtW8gtTxkpJFds+hIOrDaQGKjQj/AE/i4hJqAaUHEqp/Qo02y6Q==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
@@ -2822,7 +2823,7 @@ snapshots:
       '@react-types/shared': 3.36.1(react@19.2.8)
       '@spectrum-icons/ui': 3.7.0(@adobe/react-spectrum@3.47.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@spectrum-icons/workflow': 4.3.0(@adobe/react-spectrum@3.47.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       client-only: 0.0.1
       clsx: 2.1.1
       react: 19.2.8
@@ -3221,16 +3222,16 @@ snapshots:
 
   '@internationalized/message@3.1.9':
     dependencies:
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       intl-messageformat: 10.7.18
 
   '@internationalized/number@3.6.7':
     dependencies:
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
 
   '@internationalized/string@3.2.10':
     dependencies:
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
 
   '@internationalized/string@3.2.9':
     dependencies:
@@ -3386,21 +3387,21 @@ snapshots:
       '@internationalized/date': 3.12.3
       '@internationalized/message': 3.1.9
       '@internationalized/string': 3.2.10
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       react: 19.2.8
       react-aria: 3.51.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react-dom: 19.2.8(react@19.2.8)
 
   '@react-aria/ssr@3.10.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       react: 19.2.8
       react-aria: 3.51.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react-dom: 19.2.8(react@19.2.8)
 
   '@react-aria/utils@3.34.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       react: 19.2.8
       react-aria: 3.51.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react-dom: 19.2.8(react@19.2.8)
@@ -3417,7 +3418,7 @@ snapshots:
   '@react-spectrum/provider@3.11.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@adobe/react-spectrum': 3.47.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
@@ -3491,7 +3492,7 @@ snapshots:
       '@adobe/react-spectrum': 3.47.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@adobe/react-spectrum-ui': 1.2.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@babel/runtime': 7.29.2
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
@@ -3499,7 +3500,7 @@ snapshots:
     dependencies:
       '@adobe/react-spectrum': 3.47.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@adobe/react-spectrum-workflow': 2.3.5(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
@@ -4547,9 +4548,9 @@ snapshots:
     dependencies:
       is-callable: 1.2.7
 
-  framer-motion@13.1.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  framer-motion@13.1.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
-      motion-dom: 13.0.0
+      motion-dom: 13.1.1
       motion-utils: 13.0.0
       tslib: 2.8.1
     optionalDependencies:
@@ -4957,15 +4958,15 @@ snapshots:
 
   minimist@1.2.8: {}
 
-  motion-dom@13.0.0:
+  motion-dom@13.1.1:
     dependencies:
       motion-utils: 13.0.0
 
   motion-utils@13.0.0: {}
 
-  motion@13.1.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  motion@13.1.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
-      framer-motion: 13.1.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      framer-motion: 13.1.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       tslib: 2.8.1
     optionalDependencies:
       react: 19.2.8
@@ -5011,9 +5012,9 @@ snapshots:
       - '@types/node'
       - babel-plugin-macros
 
-  nextstepjs@2.3.0(motion@13.1.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(next@16.3.1(@babel/core@7.29.0(supports-color@7.2.0))(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  nextstepjs@2.3.0(motion@13.1.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(next@16.3.1(@babel/core@7.29.0(supports-color@7.2.0))(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
-      motion: 13.1.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      motion: 13.1.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
     optionalDependencies:
@@ -5143,7 +5144,7 @@ snapshots:
     dependencies:
       '@internationalized/date': 3.12.3
       '@react-types/shared': 3.36.1(react@19.2.8)
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       client-only: 0.0.1
       react: 19.2.8
       react-aria: 3.48.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -5155,7 +5156,7 @@ snapshots:
       '@internationalized/date': 3.12.3
       '@internationalized/string': 3.2.10
       '@react-types/shared': 3.36.1(react@19.2.8)
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       client-only: 0.0.1
       react: 19.2.8
       react-aria: 3.51.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -5168,7 +5169,7 @@ snapshots:
       '@internationalized/number': 3.6.7
       '@internationalized/string': 3.2.10
       '@react-types/shared': 3.36.1(react@19.2.8)
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       aria-hidden: 1.2.6
       clsx: 2.1.1
       react: 19.2.8
@@ -5182,7 +5183,7 @@ snapshots:
       '@internationalized/number': 3.6.7
       '@internationalized/string': 3.2.10
       '@react-types/shared': 3.36.1(react@19.2.8)
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       aria-hidden: 1.2.6
       clsx: 2.1.1
       react: 19.2.8
@@ -5212,7 +5213,7 @@ snapshots:
       '@internationalized/number': 3.6.7
       '@internationalized/string': 3.2.10
       '@react-types/shared': 3.36.1(react@19.2.8)
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       react: 19.2.8
       use-sync-external-store: 1.6.0(react@19.2.8)
 
@@ -5232,7 +5233,7 @@ snapshots:
       '@internationalized/number': 3.6.7
       '@internationalized/string': 3.2.10
       '@react-types/shared': 3.36.1(react@19.2.8)
-      '@swc/helpers': 0.5.21
+      '@swc/helpers': 0.5.23
       react: 19.2.8
       use-sync-external-store: 1.6.0(react@19.2.8)
 

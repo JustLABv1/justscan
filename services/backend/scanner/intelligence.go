@@ -622,20 +622,27 @@ func LockVulnerabilitiesForUpdate(ctx context.Context, db bun.IDB, scanIDs []uui
 		return nil
 	}
 
-	var findingIDs []uuid.UUID
-	if err := vulnerabilitiesForScanUpdateQuery(db, scanIDs).Scan(ctx, &findingIDs); err != nil {
+	// The rows stay locked until the surrounding transaction completes. Count
+	// them inside PostgreSQL so large history groups return one value instead of
+	// streaming every finding UUID over the database connection.
+	var lockedCount int
+	if err := vulnerabilitiesForScanUpdateQuery(db, scanIDs).Scan(ctx, &lockedCount); err != nil {
 		return err
 	}
 	return nil
 }
 
-func vulnerabilitiesForScanUpdateQuery(db bun.IDB, scanIDs []uuid.UUID) *bun.SelectQuery {
-	return db.NewSelect().
-		TableExpr("vulnerabilities").
-		ColumnExpr("id").
-		Where("scan_id IN (?)", bun.In(scanIDs)).
-		OrderExpr("id ASC").
-		For("UPDATE")
+func vulnerabilitiesForScanUpdateQuery(db bun.IDB, scanIDs []uuid.UUID) *bun.RawQuery {
+	return db.NewRaw(`
+		WITH locked_vulnerabilities AS MATERIALIZED (
+			SELECT id
+			FROM vulnerabilities
+			WHERE scan_id IN (?)
+			ORDER BY id ASC
+			FOR UPDATE
+		)
+		SELECT COUNT(*) FROM locked_vulnerabilities
+	`, bun.In(scanIDs))
 }
 
 func upsertVulnerabilityPostureQuery(db bun.IDB, posture *models.VulnerabilityPosture) *bun.InsertQuery {

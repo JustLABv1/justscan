@@ -2,7 +2,9 @@ package scans
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 
@@ -78,7 +80,7 @@ func deleteScanGroup(db *bun.DB, requireTag bool) gin.HandlerFunc {
 			return deleteScanRecords(ctx, tx, scanIDs)
 		}); err != nil {
 			log.WithError(err).Errorf("delete scan group failed for %s", imageName)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete scan group"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": scanGroupDeletionErrorMessage(err)})
 			return
 		}
 		_ = cleanupArchiveUploadSessions(archiveSessions)
@@ -95,4 +97,13 @@ func deleteScanGroup(db *bun.DB, requireTag bool) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{"deleted": len(scanIDs)})
 	}
+}
+
+func scanGroupDeletionErrorMessage(err error) string {
+	var networkError net.Error
+	if strings.Contains(err.Error(), "lock vulnerabilities before scan deletion") &&
+		(errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &networkError) && networkError.Timeout())) {
+		return "database timed out while preparing scan history deletion; please retry"
+	}
+	return "failed to delete scan group"
 }

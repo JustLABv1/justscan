@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -193,6 +194,34 @@ func TestPostureInsertUsesAtomicFindingUpsert(t *testing.T) {
 	scanFindingLockQuery := vulnerabilitiesForScanUpdateQuery(db, []uuid.UUID{uuid.New(), uuid.New()}).String()
 	if !strings.Contains(scanFindingLockQuery, "FOR UPDATE") || !strings.Contains(scanFindingLockQuery, "ORDER BY id ASC") {
 		t.Fatalf("scan deletion lookup does not use deterministic parent-row locking: %s", scanFindingLockQuery)
+	}
+	if !strings.Contains(scanFindingLockQuery, "SELECT COUNT(*) FROM locked_vulnerabilities") {
+		t.Fatalf("scan deletion lookup streams finding IDs instead of returning one aggregate: %s", scanFindingLockQuery)
+	}
+}
+
+func TestLockVulnerabilitiesForLargeScanGroupReturnsOneAggregate(t *testing.T) {
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock database: %v", err)
+	}
+	defer sqldb.Close()
+
+	db := bun.NewDB(sqldb, pgdialect.New())
+	defer db.Close()
+
+	scanIDs := make([]uuid.UUID, 87)
+	for index := range scanIDs {
+		scanIDs[index] = uuid.New()
+	}
+	mock.ExpectQuery("WITH locked_vulnerabilities AS MATERIALIZED").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(250_000))
+
+	if err := LockVulnerabilitiesForUpdate(context.Background(), db, scanIDs); err != nil {
+		t.Fatalf("lock vulnerabilities for large scan group: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }
 

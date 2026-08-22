@@ -7,7 +7,7 @@ import (
 )
 
 func TestScanGroupDeletionErrorExplainsLockTimeout(t *testing.T) {
-	err := fmt.Errorf("lock vulnerabilities before scan deletion: %w", context.DeadlineExceeded)
+	err := fmt.Errorf("lock vulnerability mutations before scan deletion: %w", context.DeadlineExceeded)
 	message := scanGroupDeletionErrorMessage(err)
 	if message != "database timed out while preparing scan history deletion; please retry" {
 		t.Fatalf("unexpected timeout message: %q", message)

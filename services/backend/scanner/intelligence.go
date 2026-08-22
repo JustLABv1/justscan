@@ -128,19 +128,14 @@ func RecordIntelligenceSnapshot(ctx context.Context, db *bun.DB, scan *models.Sc
 			return err
 		}
 
-		// Evidence rows reference vulnerabilities. Lock every historical finding
-		// that the subsequent posture refresh can touch before inserting evidence,
-		// so this transaction never acquires finding locks after a later posture
-		// refresh has already started acquiring them.
+		// Evidence rows reference vulnerabilities. Serialize every affected scan
+		// before inserting evidence so a group deletion cannot interleave with
+		// this refresh.
 		historicalFindings, err := loadHistoricalFindingsForPostureRefresh(ctx, tx, vulnIDs)
 		if err != nil {
 			return fmt.Errorf("load historical findings before evidence insert: %w", err)
 		}
-		historicalFindingIDs := make([]uuid.UUID, 0, len(historicalFindings))
-		for _, finding := range historicalFindings {
-			historicalFindingIDs = append(historicalFindingIDs, finding.ID)
-		}
-		lockedFindingIDs, err := lockHistoricalFindingsForPostureRefresh(ctx, tx, historicalFindingIDs)
+		lockedFindingIDs, err := lockHistoricalFindingsForPostureRefresh(ctx, tx, historicalFindings)
 		if err != nil {
 			return fmt.Errorf("lock historical findings before evidence insert: %w", err)
 		}
@@ -403,11 +398,7 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 	if err != nil {
 		return nil, fmt.Errorf("load historical findings for posture refresh: %w", err)
 	}
-	findingIDs := make([]uuid.UUID, 0, len(findings))
-	for _, finding := range findings {
-		findingIDs = append(findingIDs, finding.ID)
-	}
-	lockedFindingIDs, err := lockHistoricalFindingsForPostureRefresh(ctx, db, findingIDs)
+	lockedFindingIDs, err := lockHistoricalFindingsForPostureRefresh(ctx, db, findings)
 	if err != nil {
 		return nil, fmt.Errorf("lock historical findings for posture refresh: %w", err)
 	}
@@ -428,6 +419,7 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 	}
 
 	identityByFinding := make(map[uuid.UUID]vulnerabilityFindingIdentity, len(findings))
+	findingIDs := make([]uuid.UUID, 0, len(findings))
 	for _, finding := range findings {
 		identityByFinding[finding.ID] = vulnerabilityFindingIdentity{
 			PackageName:      finding.PkgName,
@@ -583,66 +575,66 @@ func currentPostureForUpdateQuery(db bun.IDB, findingID uuid.UUID) *bun.SelectQu
 		For("UPDATE")
 }
 
-// lockHistoricalFindingsForPostureRefresh acquires all finding locks before
-// any posture lock. Scan deletion uses the same parent-before-child order,
-// and sorting the lock query prevents two refresh transactions from taking
-// overlapping finding locks in different orders.
-func lockHistoricalFindingsForPostureRefresh(ctx context.Context, db bun.IDB, findingIDs []uuid.UUID) (map[uuid.UUID]bool, error) {
-	locked := make(map[uuid.UUID]bool, len(findingIDs))
-	if len(findingIDs) == 0 {
+// lockHistoricalFindingsForPostureRefresh serializes vulnerability mutations
+// per scan before any posture row is read or written. Using scan-scoped
+// advisory locks avoids materializing and row-locking an entire historical
+// image group just to coordinate it with scan deletion.
+func lockHistoricalFindingsForPostureRefresh(ctx context.Context, db bun.IDB, findings []models.Vulnerability) (map[uuid.UUID]bool, error) {
+	locked := make(map[uuid.UUID]bool, len(findings))
+	if len(findings) == 0 {
 		return locked, nil
 	}
 
-	var lockedIDs []uuid.UUID
-	err := findingForPostureRefreshQuery(db, findingIDs).Scan(ctx, &lockedIDs)
-	if err != nil {
+	scanIDs := make([]uuid.UUID, 0, len(findings))
+	for _, finding := range findings {
+		scanIDs = append(scanIDs, finding.ScanID)
+	}
+	if err := LockVulnerabilityMutationScans(ctx, db, scanIDs); err != nil {
 		return nil, err
 	}
-	for _, findingID := range lockedIDs {
-		locked[findingID] = true
+	for _, finding := range findings {
+		locked[finding.ID] = true
 	}
 	return locked, nil
 }
 
-func findingForPostureRefreshQuery(db bun.IDB, findingIDs []uuid.UUID) *bun.SelectQuery {
-	return db.NewSelect().
-		TableExpr("vulnerabilities").
-		ColumnExpr("id").
-		Where("id IN (?)", bun.In(findingIDs)).
-		OrderExpr("id ASC").
-		For("UPDATE")
-}
+const vulnerabilityMutationLockNamespace = 1_741_311
 
-// LockVulnerabilitiesForUpdate acquires all vulnerability rows belonging to
-// the given scans in the same order used by posture refreshes. Scan deletion
-// calls this inside its transaction before deleting any dependent rows, which
-// keeps the parent-before-child lock order consistent across both workflows.
-func LockVulnerabilitiesForUpdate(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
-	if len(scanIDs) == 0 {
-		return nil
-	}
-
-	// The rows stay locked until the surrounding transaction completes. Count
-	// them inside PostgreSQL so large history groups return one value instead of
-	// streaming every finding UUID over the database connection.
-	var lockedCount int
-	if err := vulnerabilitiesForScanUpdateQuery(db, scanIDs).Scan(ctx, &lockedCount); err != nil {
-		return err
+// LockVulnerabilityMutationScans acquires transaction-scoped PostgreSQL
+// advisory locks in a deterministic order. Every flow that changes
+// vulnerabilities or their postures uses this helper, so a group deletion and
+// CVE refresh cannot interleave. Unlike SELECT ... FOR UPDATE across every
+// finding, this has constant memory and does not wait one row at a time.
+// Call it only from within a transaction; PostgreSQL releases xact locks when
+// that transaction completes.
+func LockVulnerabilityMutationScans(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
+	for _, scanID := range sortedUniqueScanIDs(scanIDs) {
+		var acquired int
+		if err := db.NewRaw(`
+			SELECT 1
+			FROM (SELECT pg_advisory_xact_lock(hashtext(?), ?)) AS vulnerability_lock
+		`, scanID.String(), vulnerabilityMutationLockNamespace).Scan(ctx, &acquired); err != nil {
+			return fmt.Errorf("acquire vulnerability mutation lock for scan %s: %w", scanID, err)
+		}
 	}
 	return nil
 }
 
-func vulnerabilitiesForScanUpdateQuery(db bun.IDB, scanIDs []uuid.UUID) *bun.RawQuery {
-	return db.NewRaw(`
-		WITH locked_vulnerabilities AS MATERIALIZED (
-			SELECT id
-			FROM vulnerabilities
-			WHERE scan_id IN (?)
-			ORDER BY id ASC
-			FOR UPDATE
-		)
-		SELECT COUNT(*) FROM locked_vulnerabilities
-	`, bun.In(scanIDs))
+func sortedUniqueScanIDs(scanIDs []uuid.UUID) []uuid.UUID {
+	unique := make(map[uuid.UUID]struct{}, len(scanIDs))
+	for _, scanID := range scanIDs {
+		if scanID != uuid.Nil {
+			unique[scanID] = struct{}{}
+		}
+	}
+	ordered := make([]uuid.UUID, 0, len(unique))
+	for scanID := range unique {
+		ordered = append(ordered, scanID)
+	}
+	sort.Slice(ordered, func(left, right int) bool {
+		return ordered[left].String() < ordered[right].String()
+	})
+	return ordered
 }
 
 func upsertVulnerabilityPostureQuery(db bun.IDB, posture *models.VulnerabilityPosture) *bun.InsertQuery {

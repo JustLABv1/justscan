@@ -334,7 +334,7 @@ func DeleteRun(db *bun.DB) gin.HandlerFunc {
 		deletedRun := false
 		ctx := c.Request.Context()
 		if err := db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-			if err := scanner.LockVulnerabilitiesForUpdate(ctx, tx, scanIDs); err != nil {
+			if err := scanner.LockVulnerabilityMutationScans(ctx, tx, scanIDs); err != nil {
 				return err
 			}
 

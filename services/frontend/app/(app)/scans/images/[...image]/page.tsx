@@ -36,6 +36,7 @@ import {
   SearchField,
   Select,
   Skeleton,
+  Spinner,
 } from '@heroui/react';
 import {
   ArrowLeft01Icon,
@@ -88,6 +89,13 @@ function visiblePageNumbers(totalPages: number, currentPage: number) {
   const start = Math.max(1, currentPage - 2);
   const end = Math.min(totalPages, currentPage + 2);
   return Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => start + index);
+}
+
+function pendingDeleteScanCount(pendingDelete: PendingDelete | null, imageScanCount: number | undefined) {
+  if (!pendingDelete) return 0;
+  if (pendingDelete.kind === 'scan') return 1;
+  if (pendingDelete.kind === 'tag') return pendingDelete.artifact.scan_count;
+  return imageScanCount ?? 0;
 }
 
 function Metric({
@@ -146,6 +154,7 @@ export default function ImageScansPage() {
   const filterCount = [policy, range].filter(Boolean).length;
   const hasFilters = Boolean(query || status || critical || policy || range);
   const artifactTotalPages = Math.max(1, Math.ceil(total / ARTIFACT_PAGE_SIZE));
+  const pendingScanCount = pendingDeleteScanCount(pendingDelete, stats?.total_scans);
 
   useEffect(
     () =>
@@ -310,47 +319,76 @@ export default function ImageScansPage() {
         <AlertDialog.Backdrop variant="blur">
           <AlertDialog.Container placement="center">
             <AlertDialog.Dialog className="sm:max-w-[440px]">
-              <AlertDialog.CloseTrigger />
+              {!deleting ? <AlertDialog.CloseTrigger /> : null}
               <AlertDialog.Header>
                 <AlertDialog.Icon status="danger" />
                 <AlertDialog.Heading>
-                  {pendingDelete?.kind === 'image'
-                    ? 'Delete image scan group?'
-                    : pendingDelete?.kind === 'tag'
-                      ? 'Delete tag scan history?'
-                      : 'Delete scan history item?'}
+                  {deleting
+                    ? 'Deleting scan history…'
+                    : pendingDelete?.kind === 'image'
+                      ? 'Delete image scan group?'
+                      : pendingDelete?.kind === 'tag'
+                        ? 'Delete tag scan history?'
+                        : 'Delete scan history item?'}
                 </AlertDialog.Heading>
               </AlertDialog.Header>
               <AlertDialog.Body>
-                <p className="text-sm leading-6 text-muted">
-                  {pendingDelete?.kind === 'image' ? (
-                    <>
-                      This removes <strong>{imageName}</strong>, including every tag and scan run in
-                      this workspace. This cannot be undone.
-                    </>
-                  ) : pendingDelete?.kind === 'tag' ? (
-                    <>
-                      This removes <strong>{pendingDelete?.artifact.image_tag}</strong> and all{' '}
-                      {pendingDelete?.artifact.scan_count ?? 0} of its historical scan runs. This
-                      cannot be undone.
-                    </>
-                  ) : (
-                    <>
-                      This removes scan <strong>{pendingDelete?.scan.id.slice(0, 8)}…</strong> from{' '}
-                      <strong>
-                        {imageName}:{pendingDelete?.scan.image_tag}
-                      </strong>
-                      . This cannot be undone.
-                    </>
-                  )}
-                </p>
+                {deleting ? (
+                  <div
+                    aria-busy="true"
+                    aria-live="polite"
+                    className="flex items-start gap-3 rounded-xl border border-danger/20 bg-danger/5 p-3"
+                    role="status"
+                  >
+                    <Spinner aria-label="Deleting scan history" color="danger" size="md" />
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-medium text-foreground">
+                        Deleting {pendingScanCount} scan {pendingScanCount === 1 ? 'run' : 'runs'}…
+                      </p>
+                      <p className="text-sm leading-6 text-muted">
+                        Large histories can take a little while. Keep this window open until the
+                        deletion finishes.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm leading-6 text-muted">
+                    {pendingDelete?.kind === 'image' ? (
+                      <>
+                        This removes <strong>{imageName}</strong>, including every tag and scan run
+                        in this workspace. This cannot be undone.
+                      </>
+                    ) : pendingDelete?.kind === 'tag' ? (
+                      <>
+                        This removes <strong>{pendingDelete?.artifact.image_tag}</strong> and all{' '}
+                        {pendingDelete?.artifact.scan_count ?? 0} of its historical scan runs. This
+                        cannot be undone.
+                      </>
+                    ) : (
+                      <>
+                        This removes scan <strong>{pendingDelete?.scan.id.slice(0, 8)}…</strong> from{' '}
+                        <strong>
+                          {imageName}:{pendingDelete?.scan.image_tag}
+                        </strong>
+                        . This cannot be undone.
+                      </>
+                    )}
+                  </p>
+                )}
               </AlertDialog.Body>
               <AlertDialog.Footer>
-                <Button isDisabled={deleting} slot="close" variant="tertiary">
-                  Cancel
-                </Button>
-                <Button isPending={deleting} onPress={() => void confirmDelete()} variant="danger">
-                  Delete
+                {!deleting ? (
+                  <Button slot="close" variant="tertiary">
+                    Cancel
+                  </Button>
+                ) : null}
+                <Button
+                  isDisabled={deleting}
+                  isPending={deleting}
+                  onPress={() => void confirmDelete()}
+                  variant="danger"
+                >
+                  {deleting ? 'Deleting scan history…' : 'Delete'}
                 </Button>
               </AlertDialog.Footer>
             </AlertDialog.Dialog>

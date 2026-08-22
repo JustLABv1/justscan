@@ -31,6 +31,7 @@ import {
   RangeCalendar,
   SearchField,
   Select,
+  Spinner,
 } from '@heroui/react';
 import { Clock01Icon, GitCompareIcon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -311,28 +312,54 @@ function ScansPageContent() {
         <AlertDialog.Backdrop variant="blur">
           <AlertDialog.Container placement="center">
             <AlertDialog.Dialog className="sm:max-w-[440px]">
-              <AlertDialog.CloseTrigger />
+              {!deleting ? <AlertDialog.CloseTrigger /> : null}
               <AlertDialog.Header>
                 <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Delete image scan group?</AlertDialog.Heading>
+                <AlertDialog.Heading>
+                  {deleting ? 'Deleting image scan group…' : 'Delete image scan group?'}
+                </AlertDialog.Heading>
               </AlertDialog.Header>
               <AlertDialog.Body>
-                <p className="text-sm leading-6 text-muted">
-                  This removes <strong>{pendingDelete?.image_name}</strong>, including all{' '}
-                  {pendingDelete?.tag_count ?? 0} tags and {pendingDelete?.scan_count ?? 0} scan
-                  runs in this workspace. This cannot be undone.
-                </p>
+                {deleting ? (
+                  <div
+                    aria-busy="true"
+                    aria-live="polite"
+                    className="flex items-start gap-3 rounded-xl border border-danger/20 bg-danger/5 p-3"
+                    role="status"
+                  >
+                    <Spinner aria-label="Deleting image scan history" color="danger" size="md" />
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-medium text-foreground">
+                        Deleting {pendingDelete?.scan_count ?? 0} scan{' '}
+                        {(pendingDelete?.scan_count ?? 0) === 1 ? 'run' : 'runs'}…
+                      </p>
+                      <p className="text-sm leading-6 text-muted">
+                        Large histories can take a little while. Keep this window open until the
+                        deletion finishes.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm leading-6 text-muted">
+                    This removes <strong>{pendingDelete?.image_name}</strong>, including all{' '}
+                    {pendingDelete?.tag_count ?? 0} tags and {pendingDelete?.scan_count ?? 0} scan
+                    runs in this workspace. This cannot be undone.
+                  </p>
+                )}
               </AlertDialog.Body>
               <AlertDialog.Footer>
-                <Button isDisabled={deleting} slot="close" variant="tertiary">
-                  Cancel
-                </Button>
+                {!deleting ? (
+                  <Button slot="close" variant="tertiary">
+                    Cancel
+                  </Button>
+                ) : null}
                 <Button
+                  isDisabled={deleting}
                   isPending={deleting}
                   onPress={() => void confirmDeleteImage()}
                   variant="danger"
                 >
-                  Delete image group
+                  {deleting ? 'Deleting scan history…' : 'Delete image group'}
                 </Button>
               </AlertDialog.Footer>
             </AlertDialog.Dialog>

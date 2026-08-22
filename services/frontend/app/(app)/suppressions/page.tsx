@@ -5,13 +5,15 @@ import { useToast } from '@/components/toast';
 import { OwnershipBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { useClientAuth } from '@/hooks/use-client-auth';
+import { useClientNow } from '@/hooks/use-client-now';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   deleteSuppressionById,
-  getTokenType,
   listAllSuppressions,
   listSuppressionImages,
   listSuppressionShares,
@@ -24,7 +26,7 @@ import {
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
-import { fullDate, timeAgo } from '@/lib/time';
+import { formatDateOnly, fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
@@ -35,7 +37,6 @@ import {
   SearchField,
   Select,
   Separator,
-  Spinner,
   Table,
   useOverlayState,
 } from '@heroui/react';
@@ -93,12 +94,15 @@ export default function SuppressionsPage() {
   const [imagesTotal, setImagesTotal] = useState(0);
   const [imagesLoading, setImagesLoading] = useState(false);
   const [imagesError, setImagesError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
   const shareModal = useOverlayState();
   const imagesModal = useOverlayState();
-  const isPlatformAdmin = getTokenType() === 'admin';
+  const now = useClientNow();
+  const { isPlatformAdmin } = useClientAuth();
   const orgRoleById = useMemo(
     () => new Map(orgs.map((org) => [org.id, org.current_user_role] as const)),
     [orgs]
@@ -108,15 +112,19 @@ export default function SuppressionsPage() {
   );
 
   const load = useCallback(async (p: number, status: string, q: string) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
+    setError('');
     try {
       const res = await listAllSuppressions(p, LIMIT, status || undefined, q || undefined);
+      if (requestId !== requestIdRef.current) return;
       setSuppressions(res.data ?? []);
       setTotal(res.total);
     } catch (e: unknown) {
+      if (requestId !== requestIdRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load suppressions');
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
 
@@ -271,9 +279,17 @@ export default function SuppressionsPage() {
       variant: 'danger',
     });
     if (!ok) return;
-    await deleteSuppressionById(s.id).catch(() => {});
-    toast.success(`Suppression for ${s.vuln_id} removed`);
-    load(page, statusFilter, searchQuery);
+    if (deletingId) return;
+    setDeletingId(s.id);
+    try {
+      await deleteSuppressionById(s.id);
+      toast.success(`Suppression for ${s.vuln_id} removed`);
+      await load(page, statusFilter, searchQuery);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove suppression');
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
@@ -315,8 +331,6 @@ export default function SuppressionsPage() {
         }
       />
 
-      {error && <FormAlert description={error} title="Suppressions loading failed" />}
-
       <>
         <Card className="p-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -328,6 +342,7 @@ export default function SuppressionsPage() {
               <SearchField.Group>
                 <SearchField.SearchIcon />
                 <SearchField.Input
+                  aria-label="Search suppressions by CVE ID"
                   placeholder="Search CVE ID..."
                   value={searchQuery}
                   onChange={(e) => {
@@ -344,6 +359,7 @@ export default function SuppressionsPage() {
               </SearchField.Group>
             </SearchField>
             <Select
+              aria-label="Filter suppressions by status"
               value={statusFilter || '__all__'}
               onChange={(value) => {
                 const v = String(value === '__all__' ? '' : (value ?? ''));
@@ -370,49 +386,51 @@ export default function SuppressionsPage() {
             </Select>
           </div>
         </Card>
-        <Card className="overflow-hidden">
-          <Table variant="secondary">
-            <Table.ScrollContainer>
-              <Table.Content aria-label="Suppressions" className="min-w-[840px]">
-                <Table.Header>
-                  <Table.Column isRowHeader>Vulnerability</Table.Column>
-                  <Table.Column>Status</Table.Column>
-                  <Table.Column>Reason</Table.Column>
-                  <Table.Column>Ownership</Table.Column>
-                  <Table.Column className="flex justify-end">Actions</Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {loading ? (
-                    <Table.Row key="loading-row" id="loading">
-                      <Table.Cell colSpan={5}>
-                        <div className="flex justify-center py-16">
-                          <Spinner color="accent" size="sm" />
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ) : suppressions.length === 0 ? (
-                    <Table.Row key="empty-row" id="empty">
-                      <Table.Cell colSpan={5}>
-                        <div className="flex flex-col items-center gap-3 py-16 text-center">
-                          <SecurityLockIcon
-                            size={32}
-                            className="text-zinc-400 dark:text-zinc-600"
-                          />
-                          <p className="text-sm text-zinc-500">
-                            {searchQuery || statusFilter
-                              ? 'No suppressions match your filters.'
-                              : 'No suppressions found.'}
-                          </p>
-                          {!searchQuery && !statusFilter && (
-                            <p className="text-xs text-zinc-400">
-                              Suppressions allow you to acknowledge known vulnerabilities in a scan.
-                            </p>
-                          )}
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ) : (
-                    suppressions.map((s) => (
+        <LoadableCollectionState
+          emptyState={
+            <Card className="overflow-hidden">
+              <div className="flex flex-col items-center gap-3 py-16 text-center">
+                <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
+                <p className="text-sm text-zinc-500">
+                  {searchQuery || statusFilter
+                    ? 'No suppressions match your filters.'
+                    : 'No suppressions found.'}
+                </p>
+                {!searchQuery && !statusFilter && (
+                  <p className="text-xs text-zinc-400">
+                    Suppressions allow you to acknowledge known vulnerabilities in a scan.
+                  </p>
+                )}
+              </div>
+            </Card>
+          }
+          error={error || undefined}
+          errorTitle="Suppressions loading failed"
+          isEmpty={suppressions.length === 0}
+          loading={loading}
+          loadingFallback={
+            <Card className="overflow-hidden">
+              <div className="flex justify-center py-16" role="status">
+                <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                <span className="sr-only">Loading suppressions</span>
+              </div>
+            </Card>
+          }
+          retry={() => void load(page, statusFilter, searchQuery)}
+        >
+          <Card className="overflow-hidden">
+            <Table variant="secondary">
+              <Table.ScrollContainer>
+                <Table.Content aria-label="Suppressions" className="min-w-[840px]">
+                  <Table.Header>
+                    <Table.Column isRowHeader>Vulnerability</Table.Column>
+                    <Table.Column>Status</Table.Column>
+                    <Table.Column>Reason</Table.Column>
+                    <Table.Column>Ownership</Table.Column>
+                    <Table.Column className="flex justify-end">Actions</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {suppressions.map((s) => (
                       <Table.Row id={s.id} key={s.id} className="hover:bg-[var(--row-hover)]">
                         <Table.Cell>
                           <div className="space-y-1.5">
@@ -472,13 +490,13 @@ export default function SuppressionsPage() {
                             {s.expires_at ? (
                               <span
                                 className={
-                                  new Date(s.expires_at) < new Date()
+                                  now !== null && new Date(s.expires_at) < now
                                     ? 'text-red-400'
                                     : 'text-zinc-500'
                                 }
                                 title={fullDate(s.expires_at)}
                               >
-                                {new Date(s.expires_at).toLocaleDateString()}
+                                {formatDateOnly(s.expires_at)}
                               </span>
                             ) : (
                               <span className="text-xs text-muted">Never expires</span>
@@ -508,6 +526,8 @@ export default function SuppressionsPage() {
                                           label: 'Remove suppression',
                                           icon: <Delete01Icon size={14} />,
                                           variant: 'danger' as const,
+                                          pending: deletingId === s.id,
+                                          disabled: deletingId !== null && deletingId !== s.id,
                                           onAction: () => {
                                             void handleDelete(s);
                                           },
@@ -522,57 +542,57 @@ export default function SuppressionsPage() {
                           )}
                         </Table.Cell>
                       </Table.Row>
-                    ))
-                  )}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-            {totalPages > 1 ? (
-              <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-                <span className="text-xs text-zinc-500 whitespace-nowrap">
-                  Showing {total === 0 ? 0 : (page - 1) * LIMIT + 1}-{Math.min(page * LIMIT, total)}{' '}
-                  of {total}
-                </span>
-                <Pagination size="sm" className="justify-self-center">
-                  <Pagination.Content>
-                    <Pagination.Item>
-                      <Pagination.Previous
-                        isDisabled={page === 1}
-                        onPress={() => setPage((previous) => Math.max(1, previous - 1))}
-                      >
-                        <Pagination.PreviousIcon />
-                        <span>Previous</span>
-                      </Pagination.Previous>
-                    </Pagination.Item>
-                    {paginationItems.map((item, index) =>
-                      item === 'ellipsis' ? (
-                        <Pagination.Item key={`suppressions-ellipsis-${index}`}>
-                          <Pagination.Ellipsis />
-                        </Pagination.Item>
-                      ) : (
-                        <Pagination.Item key={`suppressions-page-${item}`}>
-                          <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
-                            {item}
-                          </Pagination.Link>
-                        </Pagination.Item>
-                      )
-                    )}
-                    <Pagination.Item>
-                      <Pagination.Next
-                        isDisabled={page === totalPages}
-                        onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-                      >
-                        <span>Next</span>
-                        <Pagination.NextIcon />
-                      </Pagination.Next>
-                    </Pagination.Item>
-                  </Pagination.Content>
-                </Pagination>
-                <div />
-              </Table.Footer>
-            ) : null}
-          </Table>
-        </Card>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+              {totalPages > 1 ? (
+                <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
+                  <span className="text-xs text-zinc-500 whitespace-nowrap">
+                    Showing {total === 0 ? 0 : (page - 1) * LIMIT + 1}-
+                    {Math.min(page * LIMIT, total)} of {total}
+                  </span>
+                  <Pagination size="sm" className="justify-self-center">
+                    <Pagination.Content>
+                      <Pagination.Item>
+                        <Pagination.Previous
+                          isDisabled={page === 1}
+                          onPress={() => setPage((previous) => Math.max(1, previous - 1))}
+                        >
+                          <Pagination.PreviousIcon />
+                          <span>Previous</span>
+                        </Pagination.Previous>
+                      </Pagination.Item>
+                      {paginationItems.map((item, index) =>
+                        item === 'ellipsis' ? (
+                          <Pagination.Item key={`suppressions-ellipsis-${index}`}>
+                            <Pagination.Ellipsis />
+                          </Pagination.Item>
+                        ) : (
+                          <Pagination.Item key={`suppressions-page-${item}`}>
+                            <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
+                              {item}
+                            </Pagination.Link>
+                          </Pagination.Item>
+                        )
+                      )}
+                      <Pagination.Item>
+                        <Pagination.Next
+                          isDisabled={page === totalPages}
+                          onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
+                        >
+                          <span>Next</span>
+                          <Pagination.NextIcon />
+                        </Pagination.Next>
+                      </Pagination.Item>
+                    </Pagination.Content>
+                  </Pagination>
+                  <div />
+                </Table.Footer>
+              ) : null}
+            </Table>
+          </Card>
+        </LoadableCollectionState>
       </>
 
       <ManageSuppressionAccessModal
@@ -654,6 +674,19 @@ export default function SuppressionsPage() {
                   {imagesLoading ? (
                     <div className="flex justify-center py-8">
                       <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                    </div>
+                  ) : imagesError ? (
+                    <div className="flex flex-col items-center gap-3 py-8 text-center">
+                      <p className="text-sm text-zinc-500">Could not load matching images.</p>
+                      <Button
+                        variant="secondary"
+                        isPending={imagesLoading}
+                        onPress={() => {
+                          if (imagesTarget) void loadAppliedImages(imagesTarget.id);
+                        }}
+                      >
+                        Retry
+                      </Button>
                     </div>
                   ) : appliedImages.length === 0 ? (
                     <p className="text-sm text-zinc-500">No matching images were found.</p>

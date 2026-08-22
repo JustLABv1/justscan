@@ -48,6 +48,7 @@ import {
 } from '@/lib/watchlist-posture';
 import {
   Alert,
+  buttonVariants,
   Button,
   Card,
   Checkbox,
@@ -288,6 +289,9 @@ export default function WatchlistPage() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [registryLoading, setRegistryLoading] = useState(true);
+  const [registryError, setRegistryError] = useState('');
+  const [registryRetryKey, setRegistryRetryKey] = useState(0);
   const [editing, setEditing] = useState<WatchlistItem | null>(null);
   const [imageName, setImageName] = useState('');
   const [imageTag, setImageTag] = useState('latest');
@@ -328,6 +332,7 @@ export default function WatchlistPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       setItems(await listWatchlist());
     } catch (e: unknown) {
@@ -337,19 +342,30 @@ export default function WatchlistPage() {
     }
   }, []);
 
+  const loadRegistries = useCallback(async () => {
+    setRegistryLoading(true);
+    setRegistryError('');
+    try {
+      const response = await listRegistriesWithCapabilities();
+      setRegistries(response.data);
+      setCapabilities(response.capabilities);
+      const defaultReg = response.data.find((registry) => registry.is_default);
+      if (defaultReg) setRegistryId((prev) => prev || defaultReg.id);
+    } catch (reason: unknown) {
+      setRegistryError(
+        reason instanceof Error ? reason.message : 'Failed to load scanner capabilities'
+      );
+    } finally {
+      setRegistryLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     return deferEffect(() => {
       void load();
-      void listRegistriesWithCapabilities()
-        .then((response) => {
-          setRegistries(response.data);
-          setCapabilities(response.capabilities);
-          const defaultReg = response.data.find((registry) => registry.is_default);
-          if (defaultReg) setRegistryId((prev) => prev || defaultReg.id);
-        })
-        .catch(() => {});
+      void loadRegistries();
     });
-  }, [load, scopeKey]);
+  }, [load, loadRegistries, registryRetryKey, scopeKey]);
 
   const updateFocusFilter = useCallback(
     (focus: WatchlistFocus) => {
@@ -459,6 +475,7 @@ export default function WatchlistPage() {
   async function handleTrigger(id: string) {
     const item = items.find((candidate) => candidate.id === id);
     if (item && !canMutateItem(item)) return;
+    if (triggering) return;
     setTriggering(id);
     try {
       await triggerWatchlistScan(id);
@@ -659,7 +676,9 @@ export default function WatchlistPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Dropdown>
-              <Button variant="secondary">View settings</Button>
+              <Dropdown.Trigger className={buttonVariants({ variant: 'secondary' })}>
+                View settings
+              </Dropdown.Trigger>
               <Dropdown.Popover placement="bottom end">
                 <Dropdown.Menu
                   aria-label="Watchlist view settings"
@@ -706,17 +725,47 @@ export default function WatchlistPage() {
       ) : null}
 
       {error ? (
-        <StatusAlert status="danger" title="Watchlist failed to load" description={error} />
+        <StatusAlert
+          status="danger"
+          title="Watchlist failed to load"
+          description={error}
+          action={
+            <Button size="sm" variant="secondary" onPress={load}>
+              Retry
+            </Button>
+          }
+        />
       ) : null}
 
-      {!loading && items.length === 0 ? (
+      {registryError ? (
+        <StatusAlert
+          status="warning"
+          title="Scanner capabilities unavailable"
+          description={registryError}
+          action={
+            <Button
+              size="sm"
+              variant="secondary"
+              onPress={() => {
+                setRegistryError('');
+                setRegistryLoading(true);
+                setRegistryRetryKey((current) => current + 1);
+              }}
+            >
+              Retry
+            </Button>
+          }
+        />
+      ) : null}
+
+      {!loading && !error && items.length === 0 ? (
         <EmptyState
           icon={<EyeIcon size={28} />}
           title="No images being watched"
           description="Add a Docker image to scan it on a recurring schedule and receive follow-up when its posture changes."
           action={canMutateActiveScope ? { label: 'Add Image', onClick: openCreate } : undefined}
         />
-      ) : (
+      ) : error ? null : (
         <>
           <Card className="p-3">
             <Disclosure
@@ -725,7 +774,12 @@ export default function WatchlistPage() {
               className="contents"
             >
               <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-                <SearchField name="watchlist-search" variant="secondary" className="min-w-0 flex-1">
+                <SearchField
+                  name="watchlist-search"
+                  aria-label="Search watchlist images"
+                  variant="secondary"
+                  className="min-w-0 flex-1"
+                >
                   <SearchField.Group>
                     <SearchField.SearchIcon />
                     <SearchField.Input
@@ -817,13 +871,13 @@ export default function WatchlistPage() {
                 <Table.Content aria-label="Watchlist images" className="min-w-[900px]">
                   <Table.Header>
                     <Table.Column isRowHeader>Image</Table.Column>
-                    <Table.Column>Schedule</Table.Column>
+                    <Table.Column className="hidden md:table-cell">Schedule</Table.Column>
                     <Table.Column>Latest scan</Table.Column>
-                    <Table.Column>Coverage</Table.Column>
+                    <Table.Column className="hidden lg:table-cell">Coverage</Table.Column>
                     <Table.Column className="flex justify-end">Actions</Table.Column>
                   </Table.Header>
                   <Table.Body
-                    items={loading ? [] : filteredItems}
+                    items={filteredItems}
                     renderEmptyState={() =>
                       loading ? (
                         <div className="flex min-h-48 items-center justify-center">
@@ -863,7 +917,8 @@ export default function WatchlistPage() {
                                   ) : (
                                     <PlayIcon size={15} />
                                   ),
-                                disabled: triggering === item.id,
+                                disabled: Boolean(triggering),
+                                pending: triggering === item.id,
                                 onAction: () => {
                                   void handleTrigger(item.id);
                                 },
@@ -921,7 +976,7 @@ export default function WatchlistPage() {
                               />
                             </div>
                           </Table.Cell>
-                          <Table.Cell>
+                          <Table.Cell className="hidden md:table-cell">
                             <div className="space-y-1.5" title={item.schedule}>
                               <div className="flex items-center gap-1.5 text-xs text-accent">
                                 <Clock01Icon size={12} className="shrink-0" />
@@ -938,7 +993,7 @@ export default function WatchlistPage() {
                           <Table.Cell>
                             <LastScanState item={item} hourCycle={hourCycle} />
                           </Table.Cell>
-                          <Table.Cell>
+                          <Table.Cell className="hidden lg:table-cell">
                             <div className="space-y-2">
                               <Chip
                                 color={item.enabled ? 'success' : 'default'}
@@ -1059,11 +1114,13 @@ export default function WatchlistPage() {
                   {registryOptions.length > 0 && (
                     <div className="space-y-1.5">
                       <Select
+                        aria-label="Watchlist registry"
                         value={registryId || '__none__'}
                         onChange={(value) =>
                           setRegistryId(String(value === '__none__' ? '' : (value ?? '')))
                         }
                         className="pt-1"
+                        isDisabled={registryLoading}
                       >
                         <Label className="text-sm font-medium">
                           Registry{' '}
@@ -1118,7 +1175,9 @@ export default function WatchlistPage() {
                 <Button
                   type="submit"
                   form="watchlist-form"
-                  isDisabled={saving || xrayOnlyWithoutRegistries}
+                  isDisabled={
+                    saving || registryLoading || Boolean(registryError) || xrayOnlyWithoutRegistries
+                  }
                   variant="primary"
                 >
                   {saving && (

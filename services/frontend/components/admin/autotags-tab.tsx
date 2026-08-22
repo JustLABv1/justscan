@@ -1,6 +1,7 @@
 'use client';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { useToast } from '@/components/toast';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
@@ -44,8 +45,10 @@ export function AutoTagsTab() {
   const [formError, setFormError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const toast = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +86,7 @@ export function AutoTagsTab() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (saving) return;
     setFormError('');
     setSaving(true);
     try {
@@ -105,8 +109,17 @@ export function AutoTagsTab() {
       variant: 'danger',
     });
     if (!ok) return;
-    await deleteAutoTagRule(id).catch(() => {});
-    await load();
+    if (pendingAction) return;
+    setPendingAction(`delete:${id}`);
+    try {
+      await deleteAutoTagRule(id);
+      toast.success('Auto-tag rule deleted');
+      await load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete auto-tag rule');
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   const tagById = useCallback((id: string) => tags.find((tag) => tag.id === id), [tags]);
@@ -126,7 +139,10 @@ export function AutoTagsTab() {
 
   const totalPages = Math.max(1, Math.ceil(filteredRules.length / PAGE_SIZE));
   const effectivePage = Math.min(page, totalPages);
-  const pagedRules = filteredRules.slice((effectivePage - 1) * PAGE_SIZE, effectivePage * PAGE_SIZE);
+  const pagedRules = filteredRules.slice(
+    (effectivePage - 1) * PAGE_SIZE,
+    effectivePage * PAGE_SIZE
+  );
 
   const paginationItems = useMemo(() => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -142,7 +158,9 @@ export function AutoTagsTab() {
 
   return (
     <div className="space-y-4">
-      {error ? <StatusAlert status="danger" title="Auto-tag rules failed to load" description={error} /> : null}
+      {error ? (
+        <StatusAlert status="danger" title="Auto-tag rules failed to load" description={error} />
+      ) : null}
 
       <div className="flex justify-end">
         <Button onPress={openCreate} variant="secondary">
@@ -152,10 +170,15 @@ export function AutoTagsTab() {
       </div>
 
       <Card className="space-y-4">
-        <SearchField name="admin-autotags-search" variant="secondary" className="w-full sm:max-w-md">
+        <SearchField
+          name="admin-autotags-search"
+          variant="secondary"
+          className="w-full sm:max-w-md"
+        >
           <SearchField.Group>
             <SearchField.SearchIcon />
             <SearchField.Input
+              aria-label="Filter auto-tag rules"
               placeholder="Filter by pattern or tag..."
               value={searchQuery}
               onChange={(event) => {
@@ -223,6 +246,9 @@ export function AutoTagsTab() {
                                 label: 'Delete rule',
                                 icon: <Delete01Icon size={15} />,
                                 variant: 'danger',
+                                pending: pendingAction === `delete:${rule.id}`,
+                                disabled:
+                                  pendingAction !== null && pendingAction !== `delete:${rule.id}`,
                                 onAction: () => {
                                   void handleDelete(rule.id);
                                 },
@@ -260,7 +286,10 @@ export function AutoTagsTab() {
                     </Pagination.Item>
                   ) : (
                     <Pagination.Item key={`autotags-page-${item}`}>
-                      <Pagination.Link isActive={item === effectivePage} onPress={() => setPage(item)}>
+                      <Pagination.Link
+                        isActive={item === effectivePage}
+                        onPress={() => setPage(item)}
+                      >
                         {item}
                       </Pagination.Link>
                     </Pagination.Item>
@@ -287,13 +316,16 @@ export function AutoTagsTab() {
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>
-                <Modal.Heading>{isCreate ? 'Add Auto-Tag Rule' : 'Edit Auto-Tag Rule'}</Modal.Heading>
+                <Modal.Heading>
+                  {isCreate ? 'Add Auto-Tag Rule' : 'Edit Auto-Tag Rule'}
+                </Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
               <Modal.Body>
                 <form id="autotag-form" onSubmit={handleSubmit} className="space-y-4">
                   {formError && <p className="text-sm text-danger">{formError}</p>}
                   <Input
+                    aria-label="Auto-tag image pattern"
                     value={formPattern}
                     onChange={(event) => setFormPattern(event.target.value)}
                     placeholder="nginx/*"
@@ -303,7 +335,13 @@ export function AutoTagsTab() {
                   {tags.length === 0 ? (
                     <p className="text-sm text-zinc-500">No tags available. Create tags first.</p>
                   ) : (
-                    <Select value={formTagId} onChange={(value) => setFormTagId(String(value))} variant="secondary" isRequired>
+                    <Select
+                      aria-label="Tag applied by this auto-tag rule"
+                      value={formTagId}
+                      onChange={(value) => setFormTagId(String(value))}
+                      variant="secondary"
+                      isRequired
+                    >
                       <Select.Trigger>
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                           <span className="shrink-0 text-zinc-400">
@@ -327,9 +365,17 @@ export function AutoTagsTab() {
                 </form>
               </Modal.Body>
               <Modal.Footer>
-                <Button variant="secondary" onPress={modal.close}>Cancel</Button>
-                <Button type="submit" form="autotag-form" variant="primary" isDisabled={saving || tags.length === 0}>
-                  {saving ? 'Saving...' : isCreate ? 'Create' : 'Save'}
+                <Button variant="secondary" onPress={modal.close}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  form="autotag-form"
+                  variant="primary"
+                  isPending={saving}
+                  isDisabled={tags.length === 0}
+                >
+                  {isCreate ? 'Create' : 'Save'}
                 </Button>
               </Modal.Footer>
             </Modal.Dialog>

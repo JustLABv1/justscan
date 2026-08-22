@@ -6,6 +6,10 @@ type FormatOptions = {
 };
 
 const formatterCache = new Map<string, Intl.DateTimeFormat>();
+const stableDateFormatter = new Intl.DateTimeFormat('en-US', {
+  dateStyle: 'medium',
+  timeZone: 'UTC',
+});
 
 function hour12FromPreference(hourCycle?: HourCyclePreference): boolean | undefined {
   if (hourCycle === '12') return true;
@@ -13,7 +17,10 @@ function hour12FromPreference(hourCycle?: HourCyclePreference): boolean | undefi
   return undefined;
 }
 
-function getFormatter(options: Intl.DateTimeFormatOptions, formatOptions?: FormatOptions): Intl.DateTimeFormat {
+function getFormatter(
+  options: Intl.DateTimeFormatOptions,
+  formatOptions?: FormatOptions
+): Intl.DateTimeFormat {
   const hour12 = hour12FromPreference(formatOptions?.hourCycle);
   const timeZone = formatOptions?.timeZone;
   const key = JSON.stringify({ options, hour12, timeZone });
@@ -29,7 +36,11 @@ function getFormatter(options: Intl.DateTimeFormatOptions, formatOptions?: Forma
   return formatter;
 }
 
-function formatLocaleDate(date: Date, options: Intl.DateTimeFormatOptions, formatOptions?: FormatOptions): string {
+function formatLocaleDate(
+  date: Date,
+  options: Intl.DateTimeFormatOptions,
+  formatOptions?: FormatOptions
+): string {
   return getFormatter(options, formatOptions).format(date);
 }
 
@@ -37,7 +48,10 @@ function formatLocaleDate(date: Date, options: Intl.DateTimeFormatOptions, forma
  * Returns a relative time string for dates within the last 7 days,
  * and falls back to a locale date string for older dates.
  */
-export function timeAgo(dateString: string | null | undefined, formatOptions?: FormatOptions): string {
+export function timeAgo(
+  dateString: string | null | undefined,
+  formatOptions?: FormatOptions
+): string {
   if (!dateString) return '—';
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
@@ -62,7 +76,10 @@ export function timeAgo(dateString: string | null | undefined, formatOptions?: F
  * Returns a relative time string for a future date (e.g. "in 30 days", "in 2 months").
  * Falls back to a locale date string for dates more than a year away.
  */
-export function timeUntil(dateString: string | null | undefined, formatOptions?: FormatOptions): string {
+export function timeUntil(
+  dateString: string | null | undefined,
+  formatOptions?: FormatOptions
+): string {
   if (!dateString) return '—';
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
@@ -93,9 +110,24 @@ export function timeUntil(dateString: string | null | undefined, formatOptions?:
 /**
  * Returns a full locale date+time string (for titles/tooltips).
  */
-export function fullDate(dateString: string | null | undefined, formatOptions?: FormatOptions): string {
+export function fullDate(
+  dateString: string | null | undefined,
+  formatOptions?: FormatOptions
+): string {
   if (!dateString) return '';
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
   return formatLocaleDate(date, { dateStyle: 'medium', timeStyle: 'short' }, formatOptions);
+}
+
+/**
+ * Formats a calendar date deterministically for server-rendered markup.
+ * The explicit locale and UTC timezone prevent hydration differences between
+ * the server and a user's browser locale/timezone.
+ */
+export function formatDateOnly(dateString: string | null | undefined): string {
+  if (!dateString) return '—';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  return stableDateFormatter.format(date);
 }

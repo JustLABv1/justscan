@@ -4,6 +4,7 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
 import { EmptyState } from '@/components/ui/empty-state';
+import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -54,8 +55,13 @@ export default function HelmRegistryCredentialsPage() {
   const modal = useOverlayState();
   const shareModal = useOverlayState();
   const [items, setItems] = useState<HelmRegistryCredential[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState<HelmRegistryCredential | null>(null);
   const [shares, setShares] = useState<ResourceShare[]>([]);
+  const [sharesLoading, setSharesLoading] = useState(false);
+  const [sharesError, setSharesError] = useState('');
+  const [sharePending, setSharePending] = useState<string | null>(null);
   const [shareTarget, setShareTarget] = useState<HelmRegistryCredential | null>(null);
   const [shareOrgID, setShareOrgID] = useState('');
   const [transferOrgID, setTransferOrgID] = useState('');
@@ -68,6 +74,7 @@ export default function HelmRegistryCredentialsPage() {
   const [username, setUsername] = useState('');
   const [secret, setSecret] = useState('');
   const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [protocolFilter, setProtocolFilter] = useState<'all' | 'oci' | 'http'>('all');
   const [healthFilter, setHealthFilter] = useState<'all' | 'healthy' | 'unhealthy' | 'unknown'>(
@@ -76,12 +83,16 @@ export default function HelmRegistryCredentialsPage() {
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
     try {
       setItems(await listHelmRegistryCredentials());
     } catch (caught) {
-      error(caught instanceof Error ? caught.message : 'Could not load Helm credentials.');
+      setLoadError(caught instanceof Error ? caught.message : 'Could not load Helm credentials.');
+    } finally {
+      setLoading(false);
     }
-  }, [error]);
+  }, []);
   useEffect(() => deferEffect(() => void load()), [load, scopeKey]);
 
   const filteredItems = useMemo(() => {
@@ -109,6 +120,7 @@ export default function HelmRegistryCredentialsPage() {
     modal.open();
   }
   async function save() {
+    if (saving) return;
     const data: HelmRegistryCredentialInput = {
       name,
       url,
@@ -141,15 +153,23 @@ export default function HelmRegistryCredentialsPage() {
       }))
     )
       return;
+    const actionKey = `delete:${item.id}`;
+    if (pendingAction) return;
+    setPendingAction(actionKey);
     try {
       await deleteHelmRegistryCredential(item.id);
       await load();
       success('Helm credential deleted.');
     } catch (caught) {
       error(caught instanceof Error ? caught.message : 'Could not delete Helm credential.');
+    } finally {
+      setPendingAction(null);
     }
   }
   async function test(item: HelmRegistryCredential) {
+    const actionKey = `test:${item.id}`;
+    if (pendingAction) return;
+    setPendingAction(actionKey);
     try {
       const result = await testHelmRegistryCredential(item.id);
       setItems((current) =>
@@ -162,38 +182,65 @@ export default function HelmRegistryCredentialsPage() {
       );
     } catch (caught) {
       error(caught instanceof Error ? caught.message : 'Credential test failed.');
+    } finally {
+      setPendingAction(null);
     }
   }
   async function openShares(item: HelmRegistryCredential) {
     setShareTarget(item);
     setShareOrgID('');
     setTransferOrgID('');
+    setShares([]);
+    setSharesError('');
+    setSharesLoading(true);
     shareModal.open();
     try {
       setShares(await listHelmRegistryCredentialShares(item.id));
     } catch (caught) {
-      error(caught instanceof Error ? caught.message : 'Could not load access grants.');
+      setSharesError(caught instanceof Error ? caught.message : 'Could not load access grants.');
+    } finally {
+      setSharesLoading(false);
+    }
+  }
+  async function reloadShares() {
+    if (!shareTarget) return;
+    setSharesLoading(true);
+    setSharesError('');
+    try {
+      setShares(await listHelmRegistryCredentialShares(shareTarget.id));
+    } catch (caught) {
+      setSharesError(caught instanceof Error ? caught.message : 'Could not load access grants.');
+    } finally {
+      setSharesLoading(false);
     }
   }
   async function grant() {
     if (!shareTarget || !shareOrgID) return;
+    if (sharePending) return;
+    setSharePending('grant');
     try {
       await shareHelmRegistryCredential(shareTarget.id, shareOrgID);
-      setShares(await listHelmRegistryCredentialShares(shareTarget.id));
+      await reloadShares();
       setShareOrgID('');
       success('Access granted.');
     } catch (caught) {
       error(caught instanceof Error ? caught.message : 'Could not grant access.');
+    } finally {
+      setSharePending(null);
     }
   }
   async function revoke(orgID: string) {
     if (!shareTarget) return;
+    if (sharePending) return;
+    setSharePending(`revoke:${orgID}`);
     try {
       await unshareHelmRegistryCredential(shareTarget.id, orgID);
-      setShares(await listHelmRegistryCredentialShares(shareTarget.id));
+      await reloadShares();
       success('Access revoked.');
     } catch (caught) {
       error(caught instanceof Error ? caught.message : 'Could not revoke access.');
+    } finally {
+      setSharePending(null);
     }
   }
   async function transfer() {
@@ -207,6 +254,8 @@ export default function HelmRegistryCredentialsPage() {
       }))
     )
       return;
+    if (sharePending) return;
+    setSharePending('transfer');
     try {
       await transferHelmRegistryCredentialOwnership(shareTarget.id, transferOrgID);
       shareModal.close();
@@ -214,6 +263,8 @@ export default function HelmRegistryCredentialsPage() {
       success('Credential ownership transferred.');
     } catch (caught) {
       error(caught instanceof Error ? caught.message : 'Could not transfer ownership.');
+    } finally {
+      setSharePending(null);
     }
   }
 
@@ -228,15 +279,32 @@ export default function HelmRegistryCredentialsPage() {
           </Button>
         }
       />
-      {items.length === 0 ? (
-        <EmptyState
-          icon={<Key01Icon size={28} />}
-          eyebrow="Helm dependencies"
-          title="No Helm credentials yet"
-          description="Add a private OCI or HTTP chart credential to resolve protected dependencies without exposing it in image-scanning workflows."
-          action={{ label: 'Add credential', onClick: () => open() }}
-        />
-      ) : (
+      <LoadableCollectionState
+        emptyState={
+          <EmptyState
+            icon={<Key01Icon size={28} />}
+            eyebrow="Helm dependencies"
+            title="No Helm credentials yet"
+            description="Add a private OCI or HTTP chart credential to resolve protected dependencies without exposing it in image-scanning workflows."
+            action={{ label: 'Add credential', onClick: () => open() }}
+          />
+        }
+        error={loadError || undefined}
+        errorTitle="Helm credentials failed to load"
+        isEmpty={items.length === 0}
+        loading={loading}
+        retry={() => void load()}
+        loadingFallback={
+          <Card>
+            <Card.Content
+              className="flex min-h-48 items-center justify-center text-sm text-muted"
+              role="status"
+            >
+              Loading Helm credentials…
+            </Card.Content>
+          </Card>
+        }
+      >
         <Card className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <SearchField
@@ -247,6 +315,7 @@ export default function HelmRegistryCredentialsPage() {
               <SearchField.Group>
                 <SearchField.SearchIcon />
                 <SearchField.Input
+                  aria-label="Search Helm credentials"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Search name, URL, username, or authentication..."
@@ -256,6 +325,7 @@ export default function HelmRegistryCredentialsPage() {
             </SearchField>
             <div className="flex w-full gap-2 sm:w-auto">
               <Select
+                aria-label="Filter Helm credentials by protocol"
                 value={protocolFilter}
                 onChange={(value) =>
                   setProtocolFilter(value === 'oci' || value === 'http' ? value : 'all')
@@ -276,6 +346,7 @@ export default function HelmRegistryCredentialsPage() {
                 </Select.Popover>
               </Select>
               <Select
+                aria-label="Filter Helm credentials by health"
                 value={healthFilter}
                 onChange={(value) =>
                   setHealthFilter(
@@ -319,12 +390,12 @@ export default function HelmRegistryCredentialsPage() {
           ) : (
             <Table variant="secondary">
               <Table.ScrollContainer>
-                <Table.Content aria-label="Helm registry credentials" className="min-w-[780px]">
+                <Table.Content aria-label="Helm registry credentials" className="md:min-w-[780px]">
                   <Table.Header>
                     <Table.Column isRowHeader>Credential</Table.Column>
-                    <Table.Column>Endpoint</Table.Column>
-                    <Table.Column>Authentication</Table.Column>
-                    <Table.Column>Health</Table.Column>
+                    <Table.Column className="hidden md:table-cell">Endpoint</Table.Column>
+                    <Table.Column className="hidden md:table-cell">Authentication</Table.Column>
+                    <Table.Column className="hidden md:table-cell">Health</Table.Column>
                     <Table.Column className="flex justify-end">Actions</Table.Column>
                   </Table.Header>
                   <Table.Body>
@@ -336,14 +407,18 @@ export default function HelmRegistryCredentialsPage() {
                             <Chip size="sm" variant="soft">
                               {item.protocol.toUpperCase()}
                             </Chip>
+                            <p className="truncate text-xs text-muted md:hidden">{item.url}</p>
+                            <p className="text-xs capitalize text-muted md:hidden">
+                              {item.auth_type.replace('_', ' ')} · {item.health_status}
+                            </p>
                           </div>
                         </Table.Cell>
-                        <Table.Cell>
+                        <Table.Cell className="hidden md:table-cell">
                           <p className="max-w-md break-all font-mono text-xs text-muted">
                             {item.url}
                           </p>
                         </Table.Cell>
-                        <Table.Cell>
+                        <Table.Cell className="hidden md:table-cell">
                           <div className="space-y-1">
                             <p className="text-sm">{item.auth_type.replace('_', ' ')}</p>
                             {item.username ? (
@@ -351,7 +426,7 @@ export default function HelmRegistryCredentialsPage() {
                             ) : null}
                           </div>
                         </Table.Cell>
-                        <Table.Cell>
+                        <Table.Cell className="hidden md:table-cell">
                           <div className="space-y-1">
                             <Chip
                               color={
@@ -380,6 +455,9 @@ export default function HelmRegistryCredentialsPage() {
                                   id: 'test',
                                   label: 'Test credential',
                                   icon: <RefreshIcon size={15} />,
+                                  pending: pendingAction === `test:${item.id}`,
+                                  disabled:
+                                    pendingAction !== null && pendingAction !== `test:${item.id}`,
                                   onAction: () => void test(item),
                                 },
                                 {
@@ -399,6 +477,9 @@ export default function HelmRegistryCredentialsPage() {
                                   label: 'Delete',
                                   icon: <Delete01Icon size={15} />,
                                   variant: 'danger',
+                                  pending: pendingAction === `delete:${item.id}`,
+                                  disabled:
+                                    pendingAction !== null && pendingAction !== `delete:${item.id}`,
                                   onAction: () => void remove(item),
                                 },
                               ]}
@@ -413,7 +494,7 @@ export default function HelmRegistryCredentialsPage() {
             </Table>
           )}
         </Card>
-      )}
+      </LoadableCollectionState>
       <Modal isOpen={modal.isOpen} onOpenChange={modal.setOpen}>
         <Modal.Backdrop>
           <Modal.Container>
@@ -516,52 +597,82 @@ export default function HelmRegistryCredentialsPage() {
                 <Modal.CloseTrigger />
               </Modal.Header>
               <Modal.Body className="space-y-3">
-                <Select
-                  value={shareOrgID}
-                  onChange={(value) => setShareOrgID(String(value))}
-                  variant="secondary"
-                >
-                  <Label>Share with organization</Label>
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      {orgs.map((org) => (
-                        <ListBox.Item id={org.id} key={org.id}>
-                          {org.name}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-                <Button variant="secondary" isDisabled={!shareOrgID} onPress={() => void grant()}>
-                  Grant access
-                </Button>
-                {shares.map((share) => (
-                  <div
-                    className="flex items-center justify-between rounded-lg border border-divider/70 px-3 py-2"
-                    key={share.org_id}
-                  >
-                    <span className="text-sm">
-                      {share.org_name}
-                      {share.is_owner ? ' (owner)' : ''}
-                    </span>
-                    {!share.is_owner ? (
-                      <Button
-                        size="sm"
-                        variant="tertiary"
-                        onPress={() => void revoke(share.org_id)}
-                      >
-                        Revoke
-                      </Button>
-                    ) : null}
+                {sharesError ? (
+                  <div className="flex flex-col items-center gap-2 rounded-xl border border-danger/30 bg-danger/5 px-4 py-5 text-center">
+                    <p className="text-sm text-danger">{sharesError}</p>
+                    <Button
+                      variant="secondary"
+                      isPending={sharesLoading}
+                      onPress={() => void reloadShares()}
+                    >
+                      Retry
+                    </Button>
                   </div>
-                ))}
+                ) : sharesLoading ? (
+                  <div className="py-8 text-center text-sm text-muted">Loading access grants…</div>
+                ) : (
+                  <>
+                    <Select
+                      aria-label="Share Helm credential with organization"
+                      value={shareOrgID}
+                      onChange={(value) => setShareOrgID(String(value))}
+                      variant="secondary"
+                    >
+                      <Label>Share with organization</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {orgs.map((org) => (
+                            <ListBox.Item id={org.id} key={org.id}>
+                              {org.name}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <Button
+                      variant="secondary"
+                      isPending={sharePending === 'grant'}
+                      isDisabled={!shareOrgID || sharePending !== null}
+                      onPress={() => void grant()}
+                    >
+                      Grant access
+                    </Button>
+                    {shares.length === 0 ? (
+                      <p className="text-sm text-muted">No organizations have access yet.</p>
+                    ) : (
+                      shares.map((share) => (
+                        <div
+                          className="flex items-center justify-between rounded-lg border border-divider/70 px-3 py-2"
+                          key={share.org_id}
+                        >
+                          <span className="text-sm">
+                            {share.org_name}
+                            {share.is_owner ? ' (owner)' : ''}
+                          </span>
+                          {!share.is_owner ? (
+                            <Button
+                              size="sm"
+                              variant="tertiary"
+                              isPending={sharePending === `revoke:${share.org_id}`}
+                              isDisabled={sharePending !== null}
+                              onPress={() => void revoke(share.org_id)}
+                            >
+                              Revoke
+                            </Button>
+                          ) : null}
+                        </div>
+                      ))
+                    )}
+                  </>
+                )}
                 {shareTarget?.owner_type === 'org' ? (
                   <div className="space-y-2 border-t border-divider/70 pt-3">
                     <Select
+                      aria-label="Transfer Helm credential ownership"
                       value={transferOrgID}
                       onChange={(value) => setTransferOrgID(String(value))}
                       variant="secondary"
@@ -583,7 +694,8 @@ export default function HelmRegistryCredentialsPage() {
                     </Select>
                     <Button
                       variant="danger-soft"
-                      isDisabled={!transferOrgID}
+                      isPending={sharePending === 'transfer'}
+                      isDisabled={!transferOrgID || sharePending !== null}
                       onPress={() => void transfer()}
                     >
                       Transfer ownership

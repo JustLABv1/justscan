@@ -1,6 +1,5 @@
 'use client';
 
-import { WorkspaceTourProvider } from '@/components/workspace-tour';
 import {
   clearToken,
   clearUser,
@@ -67,6 +66,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   type ComponentType,
   type CSSProperties,
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -78,11 +79,37 @@ import {
   useAIContextBridge,
 } from '@/components/assistant/ai-context-bridge';
 import { ADMIN_AREAS, type AdminTab } from '@/app/(app)/admin/_components/admin-tabs';
-import { FloatingAIChat } from '@/components/assistant/floating-ai-chat';
 import { Logo } from '@/components/logo';
-import { SearchModal } from '@/components/search';
 import { ToastProvider } from '@/components/toast';
 
+const LazyWorkspaceTourProvider = lazy(() =>
+  import('@/components/workspace-tour').then((module) => ({
+    default: module.WorkspaceTourProvider,
+  }))
+);
+const LazyFloatingAIChat = lazy(() =>
+  import('@/components/assistant/floating-ai-chat').then((module) => ({
+    default: module.FloatingAIChat,
+  }))
+);
+const LazySearchModal = lazy(() =>
+  import('@/components/search').then((module) => ({ default: module.SearchModal }))
+);
+
+type WorkspaceTourProviderProps = {
+  children: React.ReactNode;
+  includeAssistant: boolean;
+  startSignal: number;
+  onFinish: () => void;
+};
+
+function DeferredWorkspaceTourProvider(props: WorkspaceTourProviderProps) {
+  return (
+    <Suspense fallback={props.children}>
+      <LazyWorkspaceTourProvider {...props} />
+    </Suspense>
+  );
+}
 type SidebarIcon = ComponentType<{
   size?: number;
   className?: string;
@@ -625,13 +652,17 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   }
 
   return (
-    <WorkspaceTourProvider
+    <DeferredWorkspaceTourProvider
       includeAssistant={aiEnabled === true}
       startSignal={workspaceTourCompleted ? 0 : workspaceTourStartSignal}
       onFinish={handleWorkspaceTourFinished}
     >
       <ToastProvider>
-        {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
+        {searchOpen ? (
+          <Suspense fallback={null}>
+            <LazySearchModal onClose={() => setSearchOpen(false)} />
+          </Suspense>
+        ) : null}
           <div id="tour-main-shell" className="flex h-dvh app-bg overflow-hidden">
             <Surface
               className={`relative hidden border-r border-border md:flex shrink-0 flex-col overflow-hidden transition-[width] duration-200 ease-out ${
@@ -1209,7 +1240,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
 
                   <div className="md:hidden">
                   <Dropdown>
-                    <Dropdown.Trigger id="tour-user-menu">
+                    <Dropdown.Trigger id="tour-user-menu" aria-label="Open user menu">
                       <Avatar variant="soft" color="accent" className="size-9">
                         <Avatar.Fallback>{initials}</Avatar.Fallback>
                       </Avatar>
@@ -1286,8 +1317,12 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               </main>
             </div>
           </div>
-          {!isAssistantRoute && !isAdminRoute ? <FloatingAIChat /> : null}
+          {!isAssistantRoute && !isAdminRoute && aiEnabled === true ? (
+            <Suspense fallback={null}>
+              <LazyFloatingAIChat />
+            </Suspense>
+          ) : null}
       </ToastProvider>
-    </WorkspaceTourProvider>
+    </DeferredWorkspaceTourProvider>
   );
 }

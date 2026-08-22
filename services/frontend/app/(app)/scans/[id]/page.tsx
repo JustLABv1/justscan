@@ -14,7 +14,7 @@ import {
   StatusBadge,
   SuppressionSourceBadge,
 } from '@/components/ui/badges';
-import { FormAlert } from '@/components/ui/form-alert';
+import { FormAlert, StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageTitle } from '@/components/ui/page-header';
@@ -93,6 +93,7 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   Accordion,
   Alert,
+  buttonVariants,
   Button,
   Calendar,
   Card,
@@ -134,7 +135,15 @@ import {
   ShieldKeyIcon,
 } from 'hugeicons-react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  Fragment,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
 
 const inputCls = nativeFieldClassName;
@@ -504,6 +513,14 @@ function ScanOverviewMetric({
 }
 
 export default function ScanDetailPage() {
+  return (
+    <Suspense fallback={<ScanDetailSkeleton />}>
+      <ScanDetailContent />
+    </Suspense>
+  );
+}
+
+function ScanDetailContent() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { setRouteContext, setOverlayContext } = useAIContextBridge();
@@ -562,10 +579,12 @@ export default function ScanDetailPage() {
   );
   const [allOrgs, setAllOrgs] = useState<Org[]>([]);
   const [complianceLoading, setComplianceLoading] = useState(false);
+  const [complianceError, setComplianceError] = useState('');
   const [selectedOrgToAssign, setSelectedOrgToAssign] = useState('');
   const [complianceVulnById, setComplianceVulnById] = useState<Record<string, Vulnerability[]>>({});
   const [complianceVulnLoading, setComplianceVulnLoading] = useState(false);
   const [complianceVulnLoaded, setComplianceVulnLoaded] = useState(false);
+  const [complianceVulnError, setComplianceVulnError] = useState('');
   const [reScanning, setReScanning] = useState(false);
   const [xrayPolicyRefreshing, setXrayPolicyRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -773,8 +792,22 @@ export default function ScanDetailPage() {
           complianceRequestRef.current.version === requestVersion
         ) {
           setCompliance(results);
+          setComplianceError('');
         }
         return results;
+      })
+      .catch((reason: unknown) => {
+        if (
+          currentScanIdRef.current === scanId &&
+          complianceRequestRef.current?.id === scanId &&
+          complianceRequestRef.current.version === requestVersion &&
+          !isAbortError(reason)
+        ) {
+          setComplianceError(
+            reason instanceof Error ? reason.message : 'Failed to load compliance'
+          );
+        }
+        throw reason;
       })
       .finally(() => {
         if (
@@ -831,6 +864,7 @@ export default function ScanDetailPage() {
       setComplianceVulnLoaded(false);
       setComplianceVulnLoading(false);
       setComplianceLoading(false);
+      setComplianceError('');
       setPolicyImpact(null);
       appliedRouteVulnerabilityFocusKeyRef.current = '';
     });
@@ -1336,6 +1370,7 @@ export default function ScanDetailPage() {
       if (complianceVulnLoaded || complianceVulnLoading) return;
 
       setComplianceVulnLoading(true);
+      setComplianceVulnError('');
       (async () => {
         try {
           const pageSize = 200;
@@ -1369,8 +1404,11 @@ export default function ScanDetailPage() {
 
           setComplianceVulnById(byId);
           setComplianceVulnLoaded(true);
-        } catch {
+        } catch (reason: unknown) {
           if (!cancelled) {
+            setComplianceVulnError(
+              reason instanceof Error ? reason.message : 'Failed to load compliance vulnerabilities'
+            );
             setComplianceVulnLoaded(true);
           }
         } finally {
@@ -1909,16 +1947,35 @@ export default function ScanDetailPage() {
   if (error)
     return (
       <div className="p-6">
-        <div
-          className="rounded-xl px-4 py-3 text-sm"
-          style={{
-            background: 'rgba(239,68,68,0.08)',
-            border: '1px solid rgba(239,68,68,0.18)',
-            color: '#f87171',
-          }}
-        >
-          {error}
-        </div>
+        <StatusAlert
+          status="danger"
+          title="Scan unavailable"
+          description={error}
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" onPress={() => router.push('/scans')}>
+                Back to scans
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onPress={() => {
+                  setLoading(true);
+                  setError('');
+                  void loadScan()
+                    .catch((reason: unknown) => {
+                      if (!isAbortError(reason)) {
+                        setError(reason instanceof Error ? reason.message : 'Failed to load scan');
+                      }
+                    })
+                    .finally(() => setLoading(false));
+                }}
+              >
+                Retry
+              </Button>
+            </div>
+          }
+        />
       </div>
     );
 
@@ -2162,23 +2219,23 @@ export default function ScanDetailPage() {
       </Button>
       <div className="relative">
         <Dropdown>
-          <Dropdown.Trigger>
-            <Button
-              aria-label="Open scan actions"
-              className="btn-icon-subtle size-10"
-              isIconOnly
-              style={
-                shareModal.isOpen
-                  ? {
-                      color: 'color-mix(in srgb, var(--accent) 78%, white)',
-                      borderColor: 'color-mix(in srgb, var(--accent) 25%, transparent)',
-                    }
-                  : undefined
-              }
-              variant="secondary"
-            >
-              <MoreVerticalIcon size={16} />
-            </Button>
+          <Dropdown.Trigger
+            aria-label="Open scan actions"
+            className={buttonVariants({
+              className: 'btn-icon-subtle size-10',
+              isIconOnly: true,
+              variant: 'secondary',
+            })}
+            style={
+              shareModal.isOpen
+                ? {
+                    color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                    borderColor: 'color-mix(in srgb, var(--accent) 25%, transparent)',
+                  }
+                : undefined
+            }
+          >
+            <MoreVerticalIcon size={16} />
           </Dropdown.Trigger>
           <Dropdown.Popover className="min-w-[220px]">
             <Dropdown.Menu
@@ -2632,9 +2689,11 @@ export default function ScanDetailPage() {
                   </Chip>
                 ) : null}
                 <Dropdown>
-                  <Button size="sm" variant="tertiary">
-                    View
-                  </Button>
+                  <Dropdown.Trigger>
+                    <Button size="sm" variant="tertiary">
+                      View
+                    </Button>
+                  </Dropdown.Trigger>
                   <Dropdown.Popover className="min-w-56">
                     <Dropdown.Menu
                       onAction={(key) => {
@@ -2721,7 +2780,12 @@ export default function ScanDetailPage() {
                 ))}
               </Tabs>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <SearchField name="scan-vuln-search" className="min-w-0 flex-1" variant="primary">
+                <SearchField
+                  aria-label="Search packages"
+                  name="scan-vuln-search"
+                  className="min-w-0 flex-1"
+                  variant="primary"
+                >
                   <SearchField.Group>
                     <SearchField.SearchIcon />
                     <SearchField.Input
@@ -2769,6 +2833,7 @@ export default function ScanDetailPage() {
                       </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <SearchField
+                          aria-label="Search CVE identifiers"
                           name="scan-vuln-cve-search"
                           className="min-w-0 w-full"
                           variant="secondary"
@@ -2933,12 +2998,33 @@ export default function ScanDetailPage() {
               className="mx-4 mt-4"
               title="Vulnerability triage failed to load"
               description={vulnError}
+              action={
+                <Button size="sm" variant="secondary" onPress={loadVulns}>
+                  Retry
+                </Button>
+              }
             />
           ) : null}
 
           <Table variant="secondary">
             <Table.ScrollContainer>
-              <Table.Content aria-label="Scan vulnerabilities" className="min-w-[880px]">
+              <Table.Content
+                aria-label="Scan vulnerabilities"
+                aria-busy={vulnLoading}
+                className="min-w-[640px] md:min-w-[880px]"
+                sortDescriptor={{
+                  column: sortBy,
+                  direction: sortDir === 'asc' ? 'ascending' : 'descending',
+                }}
+                onSortChange={(descriptor) => {
+                  const nextColumn = String(
+                    descriptor.column
+                  ) as VulnerabilityViewSettings['sort_by'];
+                  setSortBy(nextColumn);
+                  setSortDir(descriptor.direction === 'ascending' ? 'asc' : 'desc');
+                  setPage(1);
+                }}
+              >
                 <Table.Header>
                   {(
                     [
@@ -2956,36 +3042,25 @@ export default function ScanDetailPage() {
                     return (
                       <Table.Column
                         key={key}
+                        allowsSorting
                         isRowHeader={key === 'vuln_id'}
-                        onClick={() => {
-                          if (active) {
-                            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-                          } else {
-                            setSortBy(key);
-                            setSortDir('asc');
-                          }
-                          setPage(1);
-                        }}
-                        className={`cursor-pointer select-none transition-colors ${
+                        className={`${key === 'fixed_version' ? 'hidden md:table-cell' : ''} ${
                           align === 'right' ? 'text-right' : 'text-left'
                         }`}
                         style={{ color: active ? 'var(--color-accent)' : undefined }}
                       >
-                        <span className="inline-flex items-center gap-1">
-                          {label}
-                          <span
-                            className={`transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`}
-                          >
-                            {active && sortDir === 'desc' ? '↓' : '↑'}
-                          </span>
-                        </span>
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {label}
+                          </Table.SortableColumnHeader>
+                        )}
                       </Table.Column>
                     );
                   })}
                   <Table.Column className="text-left">Signals & notes</Table.Column>
                 </Table.Header>
                 <Table.Body>
-                  {vulnLoading || vulns.length === 0 ? (
+                  {vulnError && vulns.length === 0 ? null : vulns.length === 0 ? (
                     <Table.Row key="vuln-state" id="vuln-state">
                       <Table.Cell colSpan={5}>
                         {vulnLoading ? (
@@ -3076,7 +3151,7 @@ export default function ScanDetailPage() {
                                 </span>
                               </div>
                             </Table.Cell>
-                            <Table.Cell>
+                            <Table.Cell className="hidden md:table-cell">
                               {v.fixed_version ? (
                                 <div>
                                   <p className="text-xs font-medium text-success">
@@ -3639,6 +3714,22 @@ export default function ScanDetailPage() {
         <div className="space-y-4">
           <Card>
             <Card.Content className="space-y-3">
+              {complianceError ? (
+                <StatusAlert
+                  status="danger"
+                  title="Compliance results unavailable"
+                  description={complianceError}
+                  action={
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onPress={() => void loadComplianceForScan(id).catch(() => {})}
+                    >
+                      Retry
+                    </Button>
+                  }
+                />
+              ) : null}
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                   Non-compliant findings
@@ -3652,6 +3743,25 @@ export default function ScanDetailPage() {
                   {complianceLoading ? '…' : 'Re-evaluate'}
                 </Button>
               </div>
+              {complianceVulnError ? (
+                <StatusAlert
+                  status="warning"
+                  title="Compliance vulnerability details unavailable"
+                  description={complianceVulnError}
+                  action={
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onPress={() => {
+                        setComplianceVulnError('');
+                        setComplianceVulnLoaded(false);
+                      }}
+                    >
+                      Retry
+                    </Button>
+                  }
+                />
+              ) : null}
               <div className="flex gap-2">
                 <Select
                   value={selectedOrgToAssign || '__none__'}

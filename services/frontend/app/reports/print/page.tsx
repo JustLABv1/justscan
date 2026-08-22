@@ -8,13 +8,32 @@ import {
   Switch,
   useOverlayState,
 } from '@heroui/react';
+import { getToken, req, type ApiRequestOptions } from '@/lib/api';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
-import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Fragment,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 const SCAN_PAGE_SIZE = 100;
 const VULN_PAGE_SIZE = 500;
 const PAGE_BATCH_SIZE = 4;
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function subscribeToAuth(onChange: () => void) {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('storage', onChange);
+  return () => window.removeEventListener('storage', onChange);
+}
 
 interface Comment {
   id: string;
@@ -528,49 +547,38 @@ async function fetchPaginatedCollection<T>(
   return allItems;
 }
 
-async function fetchScan(api: string, headers: HeadersInit, scanId: string): Promise<Scan | null> {
-  const response = await fetch(`${api}/api/v1/scans/${scanId}`, { headers });
-  if (!response.ok) {
-    return null;
-  }
-
-  return response.json();
+async function fetchScan(scanId: string, options?: ApiRequestOptions): Promise<Scan> {
+  return req<Scan>('GET', `/api/v1/scans/${scanId}`, undefined, options);
 }
 
 async function fetchAllVulnerabilities(
-  api: string,
-  headers: HeadersInit,
-  scanId: string
+  scanId: string,
+  options?: ApiRequestOptions
 ): Promise<Vulnerability[]> {
   return fetchPaginatedCollection<Vulnerability>(async (page) => {
-    const response = await fetch(
-      `${api}/api/v1/scans/${scanId}/vulnerabilities?page=${page}&limit=${VULN_PAGE_SIZE}`,
-      { headers }
+    return req<PaginatedResponse<Vulnerability>>(
+      'GET',
+      `/api/v1/scans/${scanId}/vulnerabilities?page=${page}&limit=${VULN_PAGE_SIZE}`,
+      undefined,
+      options
     );
-    if (!response.ok) {
-      throw new Error(`Failed to load vulnerabilities for scan ${scanId}`);
-    }
-
-    return response.json();
   }, VULN_PAGE_SIZE);
 }
 
 async function fetchCompliance(
-  api: string,
-  headers: HeadersInit,
-  scanId: string
+  scanId: string,
+  options?: ApiRequestOptions
 ): Promise<ComplianceResult[]> {
-  const response = await fetch(`${api}/api/v1/scans/${scanId}/compliance`, { headers });
-  if (!response.ok) return [];
-  const body: { data?: ComplianceResult[] } = await response.json();
+  const body = await req<{ data?: ComplianceResult[] }>(
+    'GET',
+    `/api/v1/scans/${scanId}/compliance`,
+    undefined,
+    options
+  );
   return body.data ?? [];
 }
 
-async function fetchAllChartScans(
-  api: string,
-  headers: HeadersInit,
-  helmChart: string
-): Promise<Scan[]> {
+async function fetchAllChartScans(helmChart: string, options?: ApiRequestOptions): Promise<Scan[]> {
   return fetchPaginatedCollection<Scan>(async (page) => {
     const params = new URLSearchParams({
       page: String(page),
@@ -578,22 +586,22 @@ async function fetchAllChartScans(
       helm_chart: helmChart,
     });
 
-    const response = await fetch(`${api}/api/v1/scans/?${params.toString()}`, { headers });
-    if (!response.ok) {
-      throw new Error('Failed to load Helm chart scans');
-    }
-
-    return response.json();
+    return req<PaginatedResponse<Scan>>(
+      'GET',
+      `/api/v1/scans/?${params.toString()}`,
+      undefined,
+      options
+    );
   }, SCAN_PAGE_SIZE);
 }
 
-async function fetchRunScans(api: string, headers: HeadersInit, helmRun: string): Promise<Scan[]> {
-  const response = await fetch(`${api}/api/v1/helm/runs/${helmRun}`, { headers });
-  if (!response.ok) {
-    throw new Error('Failed to load Helm run');
-  }
-
-  const detail: HelmRunDetailResponse = await response.json();
+async function fetchRunScans(helmRun: string, options?: ApiRequestOptions): Promise<Scan[]> {
+  const detail = await req<HelmRunDetailResponse>(
+    'GET',
+    `/api/v1/helm/runs/${helmRun}`,
+    undefined,
+    options
+  );
   return (detail.items ?? []).map((item) => item.latest_scan);
 }
 
@@ -823,266 +831,270 @@ function ReportVulnerabilitySection({
           No vulnerabilities match current filters.
         </p>
       ) : (
-        <table
-          className="report-findings-table"
-          style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            tableLayout: 'fixed',
-            fontSize: 12,
-            marginBottom: 24,
-          }}
-        >
-          <colgroup>
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '27%' }} />
-            <col style={{ width: '18%' }} />
-            <col style={{ width: '18%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '9%' }} />
-          </colgroup>
-          <thead>
-            <tr style={{ background: '#f9fafb' }}>
-              {['CVE ID', 'Package', 'Installed', 'Fixed In', 'Severity', 'CVSS'].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    padding: '7px 10px',
-                    textAlign: 'left',
-                    border: '1px solid #e5e7eb',
-                    fontWeight: 600,
-                    color: '#374151',
-                    fontSize: 12,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                  }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {findings.map((finding, index) => {
-              const vulnerability = finding.vulnerability;
-              const rowBackground = index % 2 === 0 ? '#fff' : '#fafafa';
-              const detailBackground = index % 2 === 0 ? '#fafafa' : '#f5f5f5';
-              return (
-                <Fragment key={vulnerability.id}>
-                  <tr style={{ background: rowBackground }}>
-                    <td
-                      style={{
-                        padding: '6px 8px',
-                        border: '1px solid #e5e7eb',
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        color: 'var(--accent)',
-                        fontWeight: 600,
-                        overflowWrap: 'anywhere',
-                      }}
-                    >
-                      {vulnerability.vuln_id || '-'}
-                    </td>
-                    <td
-                      style={{
-                        padding: '6px 8px',
-                        border: '1px solid #e5e7eb',
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        overflowWrap: 'anywhere',
-                      }}
-                    >
-                      {finding.packages.map((item) => (
-                        <div key={`${item.name}-${item.installedVersion}-${item.fixedVersion}`}>
-                          {item.name || '-'}
-                        </div>
-                      ))}
-                    </td>
-                    <td
-                      style={{
-                        padding: '6px 8px',
-                        border: '1px solid #e5e7eb',
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        color: '#6b7280',
-                        overflowWrap: 'anywhere',
-                      }}
-                    >
-                      {finding.packages.map((item) => (
-                        <div key={`${item.name}-${item.installedVersion}`}>
-                          {item.installedVersion || '-'}
-                        </div>
-                      ))}
-                    </td>
-                    <td
-                      style={{
-                        padding: '6px 8px',
-                        border: '1px solid #e5e7eb',
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        color: '#15803d',
-                        fontWeight: finding.packages.some((item) => item.fixedVersion) ? 600 : 400,
-                        overflowWrap: 'anywhere',
-                      }}
-                    >
-                      {finding.packages.map((item) => (
-                        <div key={`${item.name}-${item.fixedVersion}`}>
-                          {item.fixedVersion || '-'}
-                        </div>
-                      ))}
-                    </td>
-                    <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb' }}>
-                      <SevBadge s={vulnerability.severity} />
-                    </td>
-                    <td
-                      style={{
-                        padding: '6px 10px',
-                        border: '1px solid #e5e7eb',
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        textAlign: 'right',
-                        fontWeight: vulnerability.cvss_score >= 7 ? 700 : 400,
-                        color:
-                          vulnerability.cvss_score >= 9
-                            ? '#dc2626'
-                            : vulnerability.cvss_score >= 7
-                              ? '#ea580c'
-                              : '#374151',
-                      }}
-                    >
-                      {vulnerability.cvss_score ? vulnerability.cvss_score.toFixed(1) : '-'}
-                    </td>
-                  </tr>
-                  {(filters.showDescription ||
-                    filters.showReferences ||
-                    filters.showComments ||
-                    filters.showPolicyDetails ||
-                    finding.affectedImages.length > 0) && (
-                    <tr style={{ background: detailBackground }}>
-                      <td colSpan={6} className="report-detail-cell">
-                        <div style={{ marginBottom: 5 }}>
-                          <strong style={{ color: '#111827' }}>Affected images:</strong>{' '}
-                          {finding.affectedImages.join(' · ')}
-                        </div>
-                        {filters.showDescription && vulnerability.title && (
-                          <strong style={{ color: '#111827' }}>{vulnerability.title} - </strong>
-                        )}
-                        {filters.showDescription &&
-                          vulnerability.description &&
-                          (vulnerability.description.length > 400
-                            ? vulnerability.description.slice(0, 400) + '…'
-                            : vulnerability.description)}
-                        {filters.showReferences && vulnerability.references?.length > 0 && (
-                          <span
-                            style={{
-                              color: 'var(--accent)',
-                              marginLeft: 8,
-                              fontSize: 12,
-                              overflowWrap: 'anywhere',
-                              wordBreak: 'break-all',
-                            }}
-                          >
-                            {vulnerability.references.slice(0, 2).join(' · ')}
-                          </span>
-                        )}
-                        {filters.showPolicyDetails &&
-                          (finding.xrayPolicyLabels.length > 0 ||
-                            finding.orgPolicyLabels.length > 0) && (
-                            <div
-                              style={{ marginTop: 5, display: 'flex', flexWrap: 'wrap', gap: 4 }}
-                            >
-                              {finding.xrayPolicyLabels.map((label) => (
-                                <span
-                                  key={`xray-${label}`}
-                                  style={{
-                                    padding: '2px 5px',
-                                    borderRadius: 3,
-                                    background: '#fff7ed',
-                                    color: '#9a3412',
-                                    border: '1px solid #fed7aa',
-                                  }}
-                                >
-                                  Xray: {label}
-                                </span>
-                              ))}
-                              {finding.orgPolicyLabels.map((label) => (
-                                <span
-                                  key={`org-${label}`}
-                                  style={{
-                                    padding: '2px 5px',
-                                    borderRadius: 3,
-                                    background: '#fef2f2',
-                                    color: '#991b1b',
-                                    border: '1px solid #fecaca',
-                                  }}
-                                >
-                                  Org: {label}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        {filters.showComments &&
-                          vulnerability.comments &&
-                          vulnerability.comments.length > 0 && (
-                            <div style={{ marginTop: '6px' }}>
-                              {vulnerability.comments.map((comment) => (
-                                <div
-                                  key={comment.id}
-                                  style={{
-                                    marginTop: '4px',
-                                    background: '#fffbeb',
-                                    border: '1px solid #fde68a',
-                                    borderLeft: '3px solid #f59e0b',
-                                    borderRadius: '3px',
-                                    padding: '6px 8px',
-                                  }}
-                                >
-                                  <p
-                                    style={{
-                                      margin: '0 0 2px',
-                                      fontSize: '12px',
-                                      fontWeight: 700,
-                                      color: '#92400e',
-                                      textTransform: 'uppercase',
-                                      letterSpacing: '0.06em',
-                                    }}
-                                  >
-                                    Analyst Note
-                                    {comment.username && (
-                                      <span
-                                        style={{
-                                          fontWeight: 400,
-                                          marginLeft: '5px',
-                                          textTransform: 'none',
-                                          letterSpacing: 0,
-                                        }}
-                                      >
-                                        - {comment.username}
-                                      </span>
-                                    )}
-                                  </p>
-                                  <p
-                                    style={{
-                                      margin: 0,
-                                      fontSize: '12px',
-                                      color: '#78350f',
-                                      lineHeight: 1.5,
-                                    }}
-                                  >
-                                    {comment.content}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+        <div className="report-table-scroll">
+          <table
+            className="report-findings-table"
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              tableLayout: 'fixed',
+              fontSize: 12,
+              marginBottom: 24,
+            }}
+          >
+            <colgroup>
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '27%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '9%' }} />
+            </colgroup>
+            <thead>
+              <tr style={{ background: '#f9fafb' }}>
+                {['CVE ID', 'Package', 'Installed', 'Fixed In', 'Severity', 'CVSS'].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: '7px 10px',
+                      textAlign: 'left',
+                      border: '1px solid #e5e7eb',
+                      fontWeight: 600,
+                      color: '#374151',
+                      fontSize: 12,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {findings.map((finding, index) => {
+                const vulnerability = finding.vulnerability;
+                const rowBackground = index % 2 === 0 ? '#fff' : '#fafafa';
+                const detailBackground = index % 2 === 0 ? '#fafafa' : '#f5f5f5';
+                return (
+                  <Fragment key={vulnerability.id}>
+                    <tr style={{ background: rowBackground }}>
+                      <td
+                        style={{
+                          padding: '6px 8px',
+                          border: '1px solid #e5e7eb',
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          color: 'var(--accent)',
+                          fontWeight: 600,
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {vulnerability.vuln_id || '-'}
+                      </td>
+                      <td
+                        style={{
+                          padding: '6px 8px',
+                          border: '1px solid #e5e7eb',
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {finding.packages.map((item) => (
+                          <div key={`${item.name}-${item.installedVersion}-${item.fixedVersion}`}>
+                            {item.name || '-'}
+                          </div>
+                        ))}
+                      </td>
+                      <td
+                        style={{
+                          padding: '6px 8px',
+                          border: '1px solid #e5e7eb',
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          color: '#6b7280',
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {finding.packages.map((item) => (
+                          <div key={`${item.name}-${item.installedVersion}`}>
+                            {item.installedVersion || '-'}
+                          </div>
+                        ))}
+                      </td>
+                      <td
+                        style={{
+                          padding: '6px 8px',
+                          border: '1px solid #e5e7eb',
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          color: '#15803d',
+                          fontWeight: finding.packages.some((item) => item.fixedVersion)
+                            ? 600
+                            : 400,
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {finding.packages.map((item) => (
+                          <div key={`${item.name}-${item.fixedVersion}`}>
+                            {item.fixedVersion || '-'}
+                          </div>
+                        ))}
+                      </td>
+                      <td style={{ padding: '6px 10px', border: '1px solid #e5e7eb' }}>
+                        <SevBadge s={vulnerability.severity} />
+                      </td>
+                      <td
+                        style={{
+                          padding: '6px 10px',
+                          border: '1px solid #e5e7eb',
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          textAlign: 'right',
+                          fontWeight: vulnerability.cvss_score >= 7 ? 700 : 400,
+                          color:
+                            vulnerability.cvss_score >= 9
+                              ? '#dc2626'
+                              : vulnerability.cvss_score >= 7
+                                ? '#ea580c'
+                                : '#374151',
+                        }}
+                      >
+                        {vulnerability.cvss_score ? vulnerability.cvss_score.toFixed(1) : '-'}
                       </td>
                     </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                    {(filters.showDescription ||
+                      filters.showReferences ||
+                      filters.showComments ||
+                      filters.showPolicyDetails ||
+                      finding.affectedImages.length > 0) && (
+                      <tr style={{ background: detailBackground }}>
+                        <td colSpan={6} className="report-detail-cell">
+                          <div style={{ marginBottom: 5 }}>
+                            <strong style={{ color: '#111827' }}>Affected images:</strong>{' '}
+                            {finding.affectedImages.join(' · ')}
+                          </div>
+                          {filters.showDescription && vulnerability.title && (
+                            <strong style={{ color: '#111827' }}>{vulnerability.title} - </strong>
+                          )}
+                          {filters.showDescription &&
+                            vulnerability.description &&
+                            (vulnerability.description.length > 400
+                              ? vulnerability.description.slice(0, 400) + '…'
+                              : vulnerability.description)}
+                          {filters.showReferences && vulnerability.references?.length > 0 && (
+                            <span
+                              style={{
+                                color: 'var(--accent)',
+                                marginLeft: 8,
+                                fontSize: 12,
+                                overflowWrap: 'anywhere',
+                                wordBreak: 'break-all',
+                              }}
+                            >
+                              {vulnerability.references.slice(0, 2).join(' · ')}
+                            </span>
+                          )}
+                          {filters.showPolicyDetails &&
+                            (finding.xrayPolicyLabels.length > 0 ||
+                              finding.orgPolicyLabels.length > 0) && (
+                              <div
+                                style={{ marginTop: 5, display: 'flex', flexWrap: 'wrap', gap: 4 }}
+                              >
+                                {finding.xrayPolicyLabels.map((label) => (
+                                  <span
+                                    key={`xray-${label}`}
+                                    style={{
+                                      padding: '2px 5px',
+                                      borderRadius: 3,
+                                      background: '#fff7ed',
+                                      color: '#9a3412',
+                                      border: '1px solid #fed7aa',
+                                    }}
+                                  >
+                                    Xray: {label}
+                                  </span>
+                                ))}
+                                {finding.orgPolicyLabels.map((label) => (
+                                  <span
+                                    key={`org-${label}`}
+                                    style={{
+                                      padding: '2px 5px',
+                                      borderRadius: 3,
+                                      background: '#fef2f2',
+                                      color: '#991b1b',
+                                      border: '1px solid #fecaca',
+                                    }}
+                                  >
+                                    Org: {label}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          {filters.showComments &&
+                            vulnerability.comments &&
+                            vulnerability.comments.length > 0 && (
+                              <div style={{ marginTop: '6px' }}>
+                                {vulnerability.comments.map((comment) => (
+                                  <div
+                                    key={comment.id}
+                                    style={{
+                                      marginTop: '4px',
+                                      background: '#fffbeb',
+                                      border: '1px solid #fde68a',
+                                      borderLeft: '3px solid #f59e0b',
+                                      borderRadius: '3px',
+                                      padding: '6px 8px',
+                                    }}
+                                  >
+                                    <p
+                                      style={{
+                                        margin: '0 0 2px',
+                                        fontSize: '12px',
+                                        fontWeight: 700,
+                                        color: '#92400e',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.06em',
+                                      }}
+                                    >
+                                      Analyst Note
+                                      {comment.username && (
+                                        <span
+                                          style={{
+                                            fontWeight: 400,
+                                            marginLeft: '5px',
+                                            textTransform: 'none',
+                                            letterSpacing: 0,
+                                          }}
+                                        >
+                                          - {comment.username}
+                                        </span>
+                                      )}
+                                    </p>
+                                    <p
+                                      style={{
+                                        margin: 0,
+                                        fontSize: '12px',
+                                        color: '#78350f',
+                                        lineHeight: 1.5,
+                                      }}
+                                    >
+                                      {comment.content}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );
@@ -1117,55 +1129,92 @@ function ScanSection({
   });
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [newCustomField, setNewCustomField] = useState<CustomField>({ label: '', value: '' });
-  const apiRef = useRef(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080');
-  const tokenRef = useRef(
-    typeof window !== 'undefined' ? (localStorage.getItem('justscan_token') ?? '') : ''
-  );
+  const [manualLoading, setManualLoading] = useState(true);
+  const [manualSaving, setManualSaving] = useState(false);
+  const [deletingFindingId, setDeletingFindingId] = useState<string | null>(null);
+  const [manualError, setManualError] = useState('');
+  const [manualRetryNonce, setManualRetryNonce] = useState(0);
+  const [locationError, setLocationError] = useState('');
+
+  const retryManualFindings = useCallback(() => {
+    setManualError('');
+    setManualLoading(true);
+    setManualRetryNonce((value) => value + 1);
+  }, []);
 
   useEffect(() => {
-    const headers = { Authorization: `Bearer ${tokenRef.current}` };
-    fetch(`${apiRef.current}/api/v1/scans/${scan.id}/manual-findings`, { headers })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => setManualFindings(Array.isArray(data) ? data : []))
-      .catch(() => {});
-  }, [scan.id]);
+    const controller = new AbortController();
+
+    req<ManualFinding[]>('GET', `/api/v1/scans/${scan.id}/manual-findings`, undefined, {
+      signal: controller.signal,
+    })
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setManualFindings(Array.isArray(data) ? data : []);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted && !isAbortError(error)) {
+          setManualError(
+            error instanceof Error ? error.message : 'Failed to load manual findings.'
+          );
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setManualLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [manualRetryNonce, scan.id]);
 
   const patchImageLocation = useCallback(
-    (value: string) => {
+    async (value: string) => {
+      if (savingLocation) return;
       setSavingLocation(true);
-      fetch(`${apiRef.current}/api/v1/scans/${scan.id}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${tokenRef.current}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ image_location: value }),
-      }).finally(() => setSavingLocation(false));
+      setLocationError('');
+      try {
+        await req<Scan>('PATCH', `/api/v1/scans/${scan.id}`, { image_location: value });
+      } catch (error: unknown) {
+        setLocationError(error instanceof Error ? error.message : 'Failed to save image location.');
+      } finally {
+        setSavingLocation(false);
+      }
     },
-    [scan.id]
+    [savingLocation, scan.id]
   );
 
   async function submitManualFinding() {
-    if (!newFinding.vuln_id) return;
-    const res = await fetch(`${apiRef.current}/api/v1/scans/${scan.id}/manual-findings`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(newFinding),
-    });
-    if (res.ok) {
-      const created: ManualFinding = await res.json();
+    if (!newFinding.vuln_id || manualSaving) return;
+    setManualSaving(true);
+    setManualError('');
+    try {
+      const created = await req<ManualFinding>(
+        'POST',
+        `/api/v1/scans/${scan.id}/manual-findings`,
+        newFinding
+      );
       setManualFindings((prev) => [...prev, created]);
       setNewFinding({ severity: 'HIGH', cvss_score: 0 });
       setShowAddFinding(false);
+    } catch (error: unknown) {
+      setManualError(error instanceof Error ? error.message : 'Failed to save manual finding.');
+    } finally {
+      setManualSaving(false);
     }
   }
 
   async function deleteManualFinding(findingId: string) {
-    await fetch(`${apiRef.current}/api/v1/scans/${scan.id}/manual-findings/${findingId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${tokenRef.current}` },
-    });
-    setManualFindings((prev) => prev.filter((f) => f.id !== findingId));
+    if (deletingFindingId) return;
+    setDeletingFindingId(findingId);
+    setManualError('');
+    try {
+      await req<void>('DELETE', `/api/v1/scans/${scan.id}/manual-findings/${findingId}`);
+      setManualFindings((prev) => prev.filter((f) => f.id !== findingId));
+    } catch (error: unknown) {
+      setManualError(error instanceof Error ? error.message : 'Failed to delete manual finding.');
+    } finally {
+      setDeletingFindingId(null);
+    }
   }
 
   return (
@@ -1306,162 +1355,222 @@ function ScanSection({
       </div>
 
       {/* Metadata */}
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          fontSize: 12,
-          marginBottom: 20,
-          border: '1px solid #e5e7eb',
-        }}
-      >
-        <tbody>
-          {(
-            [
-              ...(filters.showScanId
-                ? [['Scan ID', scan.id, true] as [string, string, boolean]]
-                : []),
-              ...(filters.showStarted
-                ? [['Started', fmt(scan.started_at), false] as [string, string, boolean]]
-                : []),
-              ...(filters.showCompleted
-                ? [['Completed', fmt(scan.completed_at), false] as [string, string, boolean]]
-                : []),
-              ...(filters.showTrivyVersion
-                ? [
-                    [
-                      'Scanner Versions',
+      <div className="report-table-scroll">
+        <table
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            fontSize: 12,
+            marginBottom: 20,
+            border: '1px solid #e5e7eb',
+          }}
+        >
+          <tbody>
+            {(
+              [
+                ...(filters.showScanId
+                  ? [['Scan ID', scan.id, true] as [string, string, boolean]]
+                  : []),
+                ...(filters.showStarted
+                  ? [['Started', fmt(scan.started_at), false] as [string, string, boolean]]
+                  : []),
+                ...(filters.showCompleted
+                  ? [['Completed', fmt(scan.completed_at), false] as [string, string, boolean]]
+                  : []),
+                ...(filters.showTrivyVersion
+                  ? [
                       [
-                        scan.trivy_version ? `Trivy ${scan.trivy_version}` : '',
-                        scan.grype_version ? `Grype ${scan.grype_version}` : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' · ') || '-',
-                      false,
-                    ] as [string, string, boolean],
-                  ]
-                : []),
-              ...(scan.helm_chart
-                ? [['Helm Chart', scan.helm_chart, true] as [string, string, boolean]]
-                : []),
-              ...(scan.helm_source_path
-                ? [['Helm Source', scan.helm_source_path, false] as [string, string, boolean]]
-                : []),
-              ...(scan.os_family
-                ? [
-                    ['OS', `${scan.os_family} ${scan.os_name}`.trim(), false] as [
-                      string,
-                      string,
-                      boolean,
-                    ],
-                  ]
-                : []),
-              ...(scan.architecture
-                ? [['Architecture', scan.architecture, false] as [string, string, boolean]]
-                : []),
-              ...[
-                [
-                  'Provider / Source',
+                        'Scanner Versions',
+                        [
+                          scan.trivy_version ? `Trivy ${scan.trivy_version}` : '',
+                          scan.grype_version ? `Grype ${scan.grype_version}` : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || '-',
+                        false,
+                      ] as [string, string, boolean],
+                    ]
+                  : []),
+                ...(scan.helm_chart
+                  ? [['Helm Chart', scan.helm_chart, true] as [string, string, boolean]]
+                  : []),
+                ...(scan.helm_source_path
+                  ? [['Helm Source', scan.helm_source_path, false] as [string, string, boolean]]
+                  : []),
+                ...(scan.os_family
+                  ? [
+                      ['OS', `${scan.os_family} ${scan.os_name}`.trim(), false] as [
+                        string,
+                        string,
+                        boolean,
+                      ],
+                    ]
+                  : []),
+                ...(scan.architecture
+                  ? [['Architecture', scan.architecture, false] as [string, string, boolean]]
+                  : []),
+                ...[
                   [
-                    scan.scan_provider === 'artifactory_xray' ? 'Artifactory Xray' : 'Trivy',
-                    scan.scan_source === 'uploaded_archive'
-                      ? 'Uploaded archive'
-                      : filters.hideRegistryData
-                        ? ''
-                        : 'Registry',
-                  ]
-                    .filter(Boolean)
-                    .join(' / '),
-                  false,
-                ] as [string, string, boolean],
-              ],
-              ...(scan.tags && scan.tags.length > 0
-                ? [
-                    ['Tags', scan.tags.map((t) => t.name).join(', '), false] as [
-                      string,
-                      string,
-                      boolean,
-                    ],
-                  ]
-                : []),
-              ...customFields.map((f) => [f.label, f.value, false] as [string, string, boolean]),
-            ] as [string, string, boolean][]
-          ).map(([label, value, mono]) => (
-            <tr key={label}>
-              <td
-                style={{
-                  padding: '5px 12px',
-                  fontWeight: 600,
-                  color: '#374151',
-                  background: '#f9fafb',
-                  width: 140,
-                  borderBottom: '1px solid #e5e7eb',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {label}
-              </td>
-              <td
-                style={{
-                  padding: '5px 12px',
-                  color: '#111827',
-                  fontFamily: mono ? 'monospace' : 'inherit',
-                  fontSize: mono ? 10 : 12,
-                  wordBreak: 'break-all',
-                  borderBottom: '1px solid #e5e7eb',
-                }}
-              >
-                {value}
-              </td>
-            </tr>
-          ))}
-          {!filters.hideRegistryData && (
-            <tr>
-              <td
-                style={{
-                  padding: '5px 12px',
-                  fontWeight: 600,
-                  color: '#374151',
-                  background: '#f9fafb',
-                  width: 140,
-                  borderBottom: '1px solid #e5e7eb',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Registry / Location
-              </td>
-              <td style={{ padding: '3px 8px', borderBottom: '1px solid #e5e7eb' }}>
-                <span className="print:hidden">
-                  <input
-                    type="text"
-                    value={imageLocation}
-                    onChange={(e) => setImageLocation(e.target.value)}
-                    onBlur={() => patchImageLocation(imageLocation)}
-                    placeholder="e.g. registry.example.com/myapp"
-                    style={{
-                      width: '100%',
-                      border: '1px solid #d1d5db',
-                      borderRadius: 4,
-                      padding: '3px 6px',
-                      fontSize: 12,
-                      boxSizing: 'border-box',
-                      color: '#374151',
-                    }}
-                  />
-                  {savingLocation && (
-                    <span style={{ fontSize: 12, color: '#9ca3af', marginLeft: 4 }}>Saving…</span>
-                  )}
-                </span>
-                {imageLocation && (
-                  <span className="hidden print:inline" style={{ fontSize: 12, color: '#111827' }}>
-                    {imageLocation}
+                    'Provider / Source',
+                    [
+                      scan.scan_provider === 'artifactory_xray' ? 'Artifactory Xray' : 'Trivy',
+                      scan.scan_source === 'uploaded_archive'
+                        ? 'Uploaded archive'
+                        : filters.hideRegistryData
+                          ? ''
+                          : 'Registry',
+                    ]
+                      .filter(Boolean)
+                      .join(' / '),
+                    false,
+                  ] as [string, string, boolean],
+                ],
+                ...(scan.tags && scan.tags.length > 0
+                  ? [
+                      ['Tags', scan.tags.map((t) => t.name).join(', '), false] as [
+                        string,
+                        string,
+                        boolean,
+                      ],
+                    ]
+                  : []),
+                ...customFields.map((f) => [f.label, f.value, false] as [string, string, boolean]),
+              ] as [string, string, boolean][]
+            ).map(([label, value, mono]) => (
+              <tr key={label}>
+                <td
+                  style={{
+                    padding: '5px 12px',
+                    fontWeight: 600,
+                    color: '#374151',
+                    background: '#f9fafb',
+                    width: 140,
+                    borderBottom: '1px solid #e5e7eb',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {label}
+                </td>
+                <td
+                  style={{
+                    padding: '5px 12px',
+                    color: '#111827',
+                    fontFamily: mono ? 'monospace' : 'inherit',
+                    fontSize: mono ? 10 : 12,
+                    wordBreak: 'break-all',
+                    borderBottom: '1px solid #e5e7eb',
+                  }}
+                >
+                  {value}
+                </td>
+              </tr>
+            ))}
+            {!filters.hideRegistryData && (
+              <tr>
+                <td
+                  style={{
+                    padding: '5px 12px',
+                    fontWeight: 600,
+                    color: '#374151',
+                    background: '#f9fafb',
+                    width: 140,
+                    borderBottom: '1px solid #e5e7eb',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Registry / Location
+                </td>
+                <td style={{ padding: '3px 8px', borderBottom: '1px solid #e5e7eb' }}>
+                  <span className="print:hidden">
+                    <label htmlFor={`image-location-${scan.id}`} className="sr-only">
+                      Registry or image location
+                    </label>
+                    <input
+                      id={`image-location-${scan.id}`}
+                      type="text"
+                      value={imageLocation}
+                      onChange={(e) => setImageLocation(e.target.value)}
+                      onBlur={() => patchImageLocation(imageLocation)}
+                      placeholder="e.g. registry.example.com/myapp"
+                      style={{
+                        width: '100%',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 4,
+                        padding: '3px 6px',
+                        fontSize: 12,
+                        boxSizing: 'border-box',
+                        color: '#374151',
+                      }}
+                    />
+                    {savingLocation && (
+                      <span
+                        role="status"
+                        aria-live="polite"
+                        style={{ fontSize: 12, color: '#9ca3af', marginLeft: 4 }}
+                      >
+                        Saving…
+                      </span>
+                    )}
+                    {locationError && (
+                      <span
+                        role="alert"
+                        style={{ display: 'block', fontSize: 12, color: '#dc2626' }}
+                      >
+                        {locationError}
+                      </span>
+                    )}
                   </span>
-                )}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+                  {imageLocation && (
+                    <span
+                      className="hidden print:inline"
+                      style={{ fontSize: 12, color: '#111827' }}
+                    >
+                      {imageLocation}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {manualLoading && (
+        <p
+          role="status"
+          aria-live="polite"
+          style={{ marginBottom: 12, fontSize: 12, color: '#6b7280' }}
+        >
+          Loading manual findings…
+        </p>
+      )}
+      {manualError && (
+        <div
+          role="alert"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 12,
+            fontSize: 12,
+            color: '#dc2626',
+          }}
+        >
+          <span>{manualError}</span>
+          <button
+            type="button"
+            onClick={retryManualFindings}
+            style={{
+              border: '1px solid #dc2626',
+              borderRadius: 4,
+              padding: '2px 7px',
+              color: '#dc2626',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {filters.showPolicyDetails && (scan.compliance_summary || scan.blocked_policy_details) && (
         <div
@@ -1539,6 +1648,8 @@ function ScanSection({
               <strong>{cf.label}:</strong> {cf.value}
             </span>
             <button
+              type="button"
+              aria-label={`Remove custom field ${cf.label}`}
               onClick={() => setCustomFields((prev) => prev.filter((_, j) => j !== i))}
               style={{
                 background: 'none',
@@ -1563,6 +1674,7 @@ function ScanSection({
           }}
         >
           <input
+            aria-label="Custom field label"
             type="text"
             value={newCustomField.label}
             onChange={(e) => setNewCustomField((f) => ({ ...f, label: e.target.value }))}
@@ -1576,6 +1688,7 @@ function ScanSection({
             }}
           />
           <input
+            aria-label="Custom field value"
             type="text"
             value={newCustomField.value}
             onChange={(e) => setNewCustomField((f) => ({ ...f, value: e.target.value }))}
@@ -1589,6 +1702,7 @@ function ScanSection({
             }}
           />
           <button
+            type="button"
             onClick={() => {
               if (!newCustomField.label) return;
               setCustomFields((prev) => [...prev, newCustomField]);
@@ -1643,6 +1757,9 @@ function ScanSection({
               }}
             >
               <button
+                type="button"
+                aria-label={`Delete manual finding ${f.vuln_id}`}
+                disabled={deletingFindingId === f.id}
                 className="print:hidden"
                 onClick={() => deleteManualFinding(f.id)}
                 style={{
@@ -1746,6 +1863,9 @@ function ScanSection({
       {/* Add Manual CVE form (screen only) */}
       <div className="print:hidden" style={{ marginBottom: 20 }}>
         <button
+          type="button"
+          aria-expanded={showAddFinding}
+          aria-controls={`manual-finding-form-${scan.id}`}
           onClick={() => setShowAddFinding((v) => !v)}
           style={{
             background: showAddFinding ? '#f3f4f6' : 'var(--accent)',
@@ -1762,6 +1882,7 @@ function ScanSection({
         </button>
         {showAddFinding && (
           <div
+            id={`manual-finding-form-${scan.id}`}
             style={{
               marginTop: 10,
               border: '1px solid #e5e7eb',
@@ -1782,10 +1903,20 @@ function ScanSection({
               ] as [keyof ManualFinding, string][]
             ).map(([field, label]) => (
               <div key={field}>
-                <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>
+                <label
+                  htmlFor={`manual-finding-${scan.id}-${field}`}
+                  style={{
+                    display: 'block',
+                    fontSize: 12,
+                    color: '#6b7280',
+                    margin: '0 0 2px',
+                    fontWeight: 600,
+                  }}
+                >
                   {label}
-                </p>
+                </label>
                 <input
+                  id={`manual-finding-${scan.id}-${field}`}
                   type="text"
                   value={((newFinding as Record<string, string | number>)[field] as string) ?? ''}
                   onChange={(e) => setNewFinding((f) => ({ ...f, [field]: e.target.value }))}
@@ -1801,10 +1932,20 @@ function ScanSection({
               </div>
             ))}
             <div>
-              <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>
+              <label
+                htmlFor={`manual-finding-${scan.id}-severity`}
+                style={{
+                  display: 'block',
+                  fontSize: 12,
+                  color: '#6b7280',
+                  margin: '0 0 2px',
+                  fontWeight: 600,
+                }}
+              >
                 Severity
-              </p>
+              </label>
               <select
+                id={`manual-finding-${scan.id}-severity`}
                 value={newFinding.severity ?? 'HIGH'}
                 onChange={(e) => setNewFinding((f) => ({ ...f, severity: e.target.value }))}
                 style={{
@@ -1822,10 +1963,20 @@ function ScanSection({
               </select>
             </div>
             <div>
-              <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>
+              <label
+                htmlFor={`manual-finding-${scan.id}-cvss-score`}
+                style={{
+                  display: 'block',
+                  fontSize: 12,
+                  color: '#6b7280',
+                  margin: '0 0 2px',
+                  fontWeight: 600,
+                }}
+              >
                 CVSS Score
-              </p>
+              </label>
               <input
+                id={`manual-finding-${scan.id}-cvss-score`}
                 type="number"
                 min={0}
                 max={10}
@@ -1845,10 +1996,20 @@ function ScanSection({
               />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 2px', fontWeight: 600 }}>
+              <label
+                htmlFor={`manual-finding-${scan.id}-justification`}
+                style={{
+                  display: 'block',
+                  fontSize: 12,
+                  color: '#6b7280',
+                  margin: '0 0 2px',
+                  fontWeight: 600,
+                }}
+              >
                 Justification - Why is this CVE accepted / not a risk?
-              </p>
+              </label>
               <textarea
+                id={`manual-finding-${scan.id}-justification`}
                 value={newFinding.justification ?? ''}
                 onChange={(e) => setNewFinding((f) => ({ ...f, justification: e.target.value }))}
                 rows={2}
@@ -1865,8 +2026,10 @@ function ScanSection({
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <button
+                type="button"
                 onClick={submitManualFinding}
-                disabled={!newFinding.vuln_id}
+                disabled={!newFinding.vuln_id || manualSaving}
+                aria-busy={manualSaving}
                 style={{
                   background: newFinding.vuln_id ? 'var(--accent)' : '#e5e7eb',
                   color: newFinding.vuln_id ? '#fff' : '#9ca3af',
@@ -1878,7 +2041,7 @@ function ScanSection({
                   cursor: newFinding.vuln_id ? 'pointer' : 'not-allowed',
                 }}
               >
-                Save Finding
+                {manualSaving ? 'Saving…' : 'Save Finding'}
               </button>
             </div>
           </div>
@@ -1891,95 +2054,99 @@ function ScanSection({
           <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 8 }}>
             Suppressed ({suppressedVulns.length})
           </p>
-          <table
-            className="report-suppressed-table"
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              tableLayout: 'fixed',
-              fontSize: 12,
-            }}
-          >
-            <thead>
-              <tr style={{ background: '#f9fafb' }}>
-                {['CVE ID', 'Package', 'Severity', 'Status', 'Source', 'Justification'].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: '5px 8px',
-                      textAlign: 'left',
-                      border: '1px solid #e5e7eb',
-                      fontWeight: 600,
-                      color: '#6b7280',
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {suppressedVulns.map((v) => {
-                const statusLabel: Record<string, string> = {
-                  accepted: 'Accepted',
-                  wont_fix: "Won't Fix",
-                  false_positive: 'False Positive',
-                  xray_ignore: 'Xray Ignore',
-                };
-                return (
-                  <tr key={v.id} style={{ color: '#6b7280' }}>
-                    <td
-                      style={{
-                        padding: '4px 8px',
-                        border: '1px solid #e5e7eb',
-                        fontFamily: 'monospace',
-                        overflowWrap: 'anywhere',
-                      }}
-                    >
-                      {v.vuln_id}
-                    </td>
-                    <td
-                      style={{
-                        padding: '4px 8px',
-                        border: '1px solid #e5e7eb',
-                        overflowWrap: 'anywhere',
-                      }}
-                    >
-                      {v.pkg_name}
-                    </td>
-                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>
-                      {v.severity}
-                    </td>
-                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>
-                      {v.suppression
-                        ? (statusLabel[v.suppression.status] ?? v.suppression.status)
-                        : '-'}
-                    </td>
-                    <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>
-                      {v.suppression?.source ?? 'local'}
-                    </td>
-                    <td
-                      style={{
-                        padding: '4px 8px',
-                        border: '1px solid #e5e7eb',
-                        color: '#374151',
-                        overflowWrap: 'anywhere',
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      {[
-                        v.suppression?.justification,
-                        v.suppression?.xray_policy_name,
-                        v.suppression?.xray_watch_name,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ') || '-'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="report-table-scroll">
+            <table
+              className="report-suppressed-table"
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                tableLayout: 'fixed',
+                fontSize: 12,
+              }}
+            >
+              <thead>
+                <tr style={{ background: '#f9fafb' }}>
+                  {['CVE ID', 'Package', 'Severity', 'Status', 'Source', 'Justification'].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        style={{
+                          padding: '5px 8px',
+                          textAlign: 'left',
+                          border: '1px solid #e5e7eb',
+                          fontWeight: 600,
+                          color: '#6b7280',
+                        }}
+                      >
+                        {h}
+                      </th>
+                    )
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {suppressedVulns.map((v) => {
+                  const statusLabel: Record<string, string> = {
+                    accepted: 'Accepted',
+                    wont_fix: "Won't Fix",
+                    false_positive: 'False Positive',
+                    xray_ignore: 'Xray Ignore',
+                  };
+                  return (
+                    <tr key={v.id} style={{ color: '#6b7280' }}>
+                      <td
+                        style={{
+                          padding: '4px 8px',
+                          border: '1px solid #e5e7eb',
+                          fontFamily: 'monospace',
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {v.vuln_id}
+                      </td>
+                      <td
+                        style={{
+                          padding: '4px 8px',
+                          border: '1px solid #e5e7eb',
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {v.pkg_name}
+                      </td>
+                      <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>
+                        {v.severity}
+                      </td>
+                      <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>
+                        {v.suppression
+                          ? (statusLabel[v.suppression.status] ?? v.suppression.status)
+                          : '-'}
+                      </td>
+                      <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>
+                        {v.suppression?.source ?? 'local'}
+                      </td>
+                      <td
+                        style={{
+                          padding: '4px 8px',
+                          border: '1px solid #e5e7eb',
+                          color: '#374151',
+                          overflowWrap: 'anywhere',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {[
+                          v.suppression?.justification,
+                          v.suppression?.xray_policy_name,
+                          v.suppression?.xray_watch_name,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -1992,16 +2159,17 @@ function PrintReport() {
   const helmChart = params.get('helmChart') ?? '';
   const helmRun = params.get('helmRun') ?? '';
   const scanIds = scansParam.split(',').filter(Boolean);
-  const token = typeof window !== 'undefined' ? localStorage.getItem('justscan_token') : null;
   const hasRequestTarget = scanIds.length > 0 || Boolean(helmChart) || Boolean(helmRun);
-  const requestError = !hasRequestTarget
-    ? 'No scan IDs, Helm chart, or Helm run provided.'
-    : token
-      ? ''
-      : 'Not authenticated.';
 
   const [data, setData] = useState<ScanData[]>([]);
   const [error, setError] = useState('');
+  const authReady = useSyncExternalStore(
+    subscribeToAuth,
+    () => true,
+    () => false
+  );
+  const token = useSyncExternalStore(subscribeToAuth, getToken, () => null);
+  const [retryNonce, setRetryNonce] = useState(0);
   const [filters, setFilters] = useState<Filters>({
     minCvss: 0,
     severities: [],
@@ -2022,26 +2190,32 @@ function PrintReport() {
     hideRegistryData: false,
   });
 
+  const requestError = !hasRequestTarget
+    ? 'No scan IDs, Helm chart, or Helm run provided.'
+    : authReady && !token
+      ? 'Not authenticated.'
+      : '';
+
   useEffect(() => {
-    if (requestError || !token) {
+    if (!authReady || requestError || !token) {
       return;
     }
 
     const requestedScanIds = scansParam.split(',').filter(Boolean);
-
-    const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
-    const headers = { Authorization: `Bearer ${token}` };
+    const controller = new AbortController();
+    let active = true;
 
     async function loadReport() {
       setError('');
+      setData([]);
 
       const scansToLoad = requestedScanIds.length
-        ? (
-            await Promise.all(requestedScanIds.map((scanId) => fetchScan(api, headers, scanId)))
-          ).filter((scan): scan is Scan => scan !== null)
+        ? await Promise.all(
+            requestedScanIds.map((scanId) => fetchScan(scanId, { signal: controller.signal }))
+          )
         : helmRun
-          ? await fetchRunScans(api, headers, helmRun)
-          : await fetchAllChartScans(api, headers, helmChart);
+          ? await fetchRunScans(helmRun, { signal: controller.signal })
+          : await fetchAllChartScans(helmChart, { signal: controller.signal });
 
       if (!scansToLoad.length) {
         setError(
@@ -2058,18 +2232,27 @@ function PrintReport() {
       const results = await Promise.all(
         scansToLoad.map(async (scan): Promise<ScanData> => {
           const [vulns, compliance] = await Promise.all([
-            fetchAllVulnerabilities(api, headers, scan.id),
-            fetchCompliance(api, headers, scan.id),
+            fetchAllVulnerabilities(scan.id, { signal: controller.signal }),
+            fetchCompliance(scan.id, { signal: controller.signal }),
           ]);
           return { scan, vulns, compliance };
         })
       );
 
-      setData(results);
+      if (active) setData(results);
     }
 
-    loadReport().catch((e) => setError(e instanceof Error ? e.message : 'Failed to load report.'));
-  }, [helmChart, helmRun, requestError, scansParam, token]);
+    loadReport().catch((loadError: unknown) => {
+      if (active && !isAbortError(loadError)) {
+        setError(loadError instanceof Error ? loadError.message : 'Failed to load report.');
+      }
+    });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [authReady, helmChart, helmRun, requestError, retryNonce, scansParam, token]);
 
   if (requestError)
     return (
@@ -2079,13 +2262,32 @@ function PrintReport() {
     );
   if (error)
     return (
-      <div style={{ padding: 40, color: '#dc2626', fontFamily: 'sans-serif' }}>
+      <div style={{ padding: 40, color: '#dc2626', fontFamily: 'sans-serif' }} role="alert">
         <strong>Error:</strong> {error}
+        <button
+          type="button"
+          onClick={() => {
+            setError('');
+            setRetryNonce((value) => value + 1);
+          }}
+          style={{
+            display: 'block',
+            marginTop: 12,
+            border: '1px solid #dc2626',
+            borderRadius: 4,
+            padding: '4px 10px',
+            color: '#dc2626',
+          }}
+        >
+          Retry report
+        </button>
       </div>
     );
   if (!data.length)
     return (
       <div
+        role="status"
+        aria-live="polite"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -2133,6 +2335,7 @@ function PrintReport() {
             overflow-wrap: anywhere !important;
             word-break: break-word;
           }
+          .report-table-scroll { overflow: visible; }
         }
         * { box-sizing: border-box; }
         html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
@@ -2141,6 +2344,7 @@ function PrintReport() {
         .report-detail-cell { padding: 5px 10px 8px; border: 1px solid #e5e7eb; border-top: none; color: #4b5563; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word; }
         .report-workspace { margin: 0 auto; max-width: 178mm; padding: 24px 16px 32px; }
         .report-document { width: 100%; }
+        .report-table-scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .report-filter-panel { display: none; }
         .report-filter-trigger { position: fixed; right: 16px; bottom: 16px; z-index: 20; }
         @media (min-width: 1280px) {
@@ -2300,114 +2504,116 @@ function PrintReport() {
                 >
                   Summary
                 </p>
-                <table
-                  style={{
-                    width: '100%',
-                    borderCollapse: 'collapse',
-                    fontSize: 12,
-                    tableLayout: 'fixed',
-                  }}
-                >
-                  <thead>
-                    <tr style={{ background: '#f9fafb' }}>
-                      {['Image', 'Status', 'Critical', 'High', 'Medium', 'Low'].map((h) => (
-                        <th
-                          key={h}
-                          style={{
-                            padding: '7px 10px',
-                            textAlign: h === 'Image' ? 'left' : 'center',
-                            border: '1px solid #e5e7eb',
-                            fontWeight: 600,
-                            color: '#374151',
-                            fontSize: 12,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                          }}
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.map(({ scan }) => (
-                      <tr key={scan.id}>
-                        <td
-                          style={{
-                            padding: '6px 10px',
-                            border: '1px solid #e5e7eb',
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            wordBreak: 'break-all',
-                            overflowWrap: 'anywhere',
-                          }}
-                        >
-                          <a
-                            href={`#scan-${scan.id}`}
+                <div className="report-table-scroll">
+                  <table
+                    style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      fontSize: 12,
+                      tableLayout: 'fixed',
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ background: '#f9fafb' }}>
+                        {['Image', 'Status', 'Critical', 'High', 'Medium', 'Low'].map((h) => (
+                          <th
+                            key={h}
                             style={{
-                              color: 'var(--accent)',
-                              textDecoration: 'none',
+                              padding: '7px 10px',
+                              textAlign: h === 'Image' ? 'left' : 'center',
+                              border: '1px solid #e5e7eb',
+                              fontWeight: 600,
+                              color: '#374151',
+                              fontSize: 12,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.04em',
+                            }}
+                          >
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.map(({ scan }) => (
+                        <tr key={scan.id}>
+                          <td
+                            style={{
+                              padding: '6px 10px',
+                              border: '1px solid #e5e7eb',
+                              fontFamily: 'monospace',
+                              fontSize: 12,
                               wordBreak: 'break-all',
                               overflowWrap: 'anywhere',
                             }}
                           >
-                            {scan.image_name}:{scan.image_tag}
-                          </a>
-                        </td>
-                        <td
-                          style={{
-                            padding: '6px 10px',
-                            border: '1px solid #e5e7eb',
-                            textAlign: 'center',
-                          }}
-                        >
-                          {(() => {
-                            const displayStatus = reportStatus(scan);
-                            const statusColors = statusChipColors(displayStatus);
-                            return (
-                              <span
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  padding: '2px 8px',
-                                  borderRadius: 999,
-                                  background: statusColors.background,
-                                  color: statusColors.color,
-                                }}
-                              >
-                                {formatStatusLabel(displayStatus)}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                        {[
-                          scan.critical_count,
-                          scan.high_count,
-                          scan.medium_count,
-                          scan.low_count,
-                        ].map((n, i) => {
-                          const colors = ['#dc2626', '#ea580c', '#d97706', '#2563eb'];
-                          return (
-                            <td
-                              key={i}
+                            <a
+                              href={`#scan-${scan.id}`}
                               style={{
-                                padding: '6px 10px',
-                                border: '1px solid #e5e7eb',
-                                textAlign: 'center',
-                                fontWeight: n > 0 ? 700 : 400,
-                                color: n > 0 ? colors[i] : '#9ca3af',
-                                fontFamily: 'monospace',
-                                fontSize: 12,
+                                color: 'var(--accent)',
+                                textDecoration: 'none',
+                                wordBreak: 'break-all',
+                                overflowWrap: 'anywhere',
                               }}
                             >
-                              {n}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                              {scan.image_name}:{scan.image_tag}
+                            </a>
+                          </td>
+                          <td
+                            style={{
+                              padding: '6px 10px',
+                              border: '1px solid #e5e7eb',
+                              textAlign: 'center',
+                            }}
+                          >
+                            {(() => {
+                              const displayStatus = reportStatus(scan);
+                              const statusColors = statusChipColors(displayStatus);
+                              return (
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    padding: '2px 8px',
+                                    borderRadius: 999,
+                                    background: statusColors.background,
+                                    color: statusColors.color,
+                                  }}
+                                >
+                                  {formatStatusLabel(displayStatus)}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          {[
+                            scan.critical_count,
+                            scan.high_count,
+                            scan.medium_count,
+                            scan.low_count,
+                          ].map((n, i) => {
+                            const colors = ['#dc2626', '#ea580c', '#d97706', '#2563eb'];
+                            return (
+                              <td
+                                key={i}
+                                style={{
+                                  padding: '6px 10px',
+                                  border: '1px solid #e5e7eb',
+                                  textAlign: 'center',
+                                  fontWeight: n > 0 ? 700 : 400,
+                                  color: n > 0 ? colors[i] : '#9ca3af',
+                                  fontFamily: 'monospace',
+                                  fontSize: 12,
+                                }}
+                              >
+                                {n}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 

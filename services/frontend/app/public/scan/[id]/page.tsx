@@ -27,11 +27,17 @@ import {
   Table,
   useOverlayState,
 } from '@heroui/react';
-import { ArrowLeft01Icon, Bug02Icon, CpuIcon, FileExportIcon, Refresh01Icon } from 'hugeicons-react';
+import {
+  ArrowLeft01Icon,
+  Bug02Icon,
+  CpuIcon,
+  FileExportIcon,
+  Refresh01Icon,
+} from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
 
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -152,6 +158,12 @@ function ScannerDatabaseCard({
 
 const LIMIT = 25;
 
+function subscribeToAuth(onChange: () => void) {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('storage', onChange);
+  return () => window.removeEventListener('storage', onChange);
+}
+
 type ResultTab = 'overview' | 'timeline';
 
 function publicScanStatusTone(status?: string | null): {
@@ -172,6 +184,13 @@ function publicScanStatusTone(status?: string | null): {
 
 function publicScanProviderLabel(scanProvider?: string | null): string {
   return scanProvider === 'artifactory_xray' ? 'Artifactory Xray' : 'Built-in scanner';
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof Error && error.name === 'AbortError') ||
+    (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
+  );
 }
 
 export default function PublicScanResultPage() {
@@ -196,42 +215,80 @@ export default function PublicScanResultPage() {
   const [sortBy, setSortBy] = useState('severity');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [vulnLoading, setVulnLoading] = useState(false);
+  const [vulnError, setVulnError] = useState('');
+  const [vulnRetryKey, setVulnRetryKey] = useState(0);
   const [reScanning, setReScanning] = useState(false);
-  const [isLoggedIn] = useState(() => !!getToken());
+  const isLoggedIn = useSyncExternalStore(
+    subscribeToAuth,
+    () => Boolean(getToken()),
+    () => false
+  );
   const [activeTab, setActiveTab] = useState<ResultTab>('overview');
   const vulnerabilityDetailsModal = useOverlayState();
   const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    function fetchScan() {
-      getPublicScan(id)
-        .then((s) => {
-          setScan(s);
+    const controller = new AbortController();
+    let stopped = false;
+    let terminal = false;
+    let inFlight = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const stopPolling = () => {
+      terminal = true;
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const poll = () => {
+      if (stopped || controller.signal.aborted || inFlight || terminal) return;
+      inFlight = true;
+
+      void getPublicScan(id, { signal: controller.signal })
+        .then((result) => {
+          if (stopped) return;
+          setError('');
+          setScan(result);
           setActionError('');
-          if (s.status === 'completed' || s.status === 'failed') {
-            if (pollRef.current) clearInterval(pollRef.current);
+          if (result.status === 'completed' || result.status === 'failed') {
+            stopPolling();
             updatePublicHistoryEntry(id, {
-              status: s.status,
-              critical_count: s.critical_count ?? 0,
-              high_count: s.high_count ?? 0,
-              medium_count: s.medium_count ?? 0,
-              low_count: s.low_count ?? 0,
-              unknown_count: s.unknown_count ?? 0,
+              status: result.status,
+              critical_count: result.critical_count ?? 0,
+              high_count: result.high_count ?? 0,
+              medium_count: result.medium_count ?? 0,
+              low_count: result.low_count ?? 0,
+              unknown_count: result.unknown_count ?? 0,
             });
           }
         })
-        .catch((e) => {
-          setError(e.message);
-          if (pollRef.current) clearInterval(pollRef.current);
+        .catch((error: unknown) => {
+          if (
+            stopped ||
+            controller.signal.aborted ||
+            (error instanceof Error && error.name === 'AbortError')
+          ) {
+            return;
+          }
+          stopPolling();
+          setError(error instanceof Error ? error.message : 'Failed to load public scan.');
+        })
+        .finally(() => {
+          inFlight = false;
         });
-    }
-    fetchScan();
-    pollRef.current = setInterval(fetchScan, 2500);
+    };
+
+    void poll();
+    intervalId = setInterval(() => void poll(), 2500);
+
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      stopped = true;
+      controller.abort();
+      stopPolling();
     };
   }, [id]);
 
@@ -264,8 +321,15 @@ export default function PublicScanResultPage() {
         (scan.status !== 'completed' && scan.external_status !== 'blocked_by_xray_policy')
       )
         return;
+
+      const controller = new AbortController();
       setVulnLoading(true);
-      const loadVulnerabilities = async () => {
+      setVulnError('');
+      const requestOptions = { signal: controller.signal };
+      const loadVulnerabilities = async (): Promise<{
+        data: Vulnerability[];
+        total: number;
+      } | null> => {
         const normalizedCveFilter = cveFilter.trim().toUpperCase();
         const baseArgs = [
           severityFilter || undefined,
@@ -277,21 +341,33 @@ export default function PublicScanResultPage() {
         ] as const;
 
         if (!normalizedCveFilter) {
-          const res = await listPublicVulnerabilities(id, page, LIMIT, ...baseArgs);
-          setVulns(res.data ?? []);
-          setVulnTotal(res.total);
-          return;
+          const res = await listPublicVulnerabilities(id, page, LIMIT, ...baseArgs, requestOptions);
+          return controller.signal.aborted ? null : { data: res.data ?? [], total: res.total };
         }
 
         const PAGE_SIZE = 100;
-        const first = await listPublicVulnerabilities(id, 1, PAGE_SIZE, ...baseArgs);
+        const first = await listPublicVulnerabilities(
+          id,
+          1,
+          PAGE_SIZE,
+          ...baseArgs,
+          requestOptions
+        );
+        if (controller.signal.aborted) return null;
         const firstData = first.data ?? [];
         const allRows: Vulnerability[] = [...firstData];
         const total = Math.max(first.total ?? firstData.length, firstData.length);
         const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
         for (let currentPage = 2; currentPage <= maxPage; currentPage += 1) {
-          const next = await listPublicVulnerabilities(id, currentPage, PAGE_SIZE, ...baseArgs);
+          const next = await listPublicVulnerabilities(
+            id,
+            currentPage,
+            PAGE_SIZE,
+            ...baseArgs,
+            requestOptions
+          );
+          if (controller.signal.aborted) return null;
           const nextData = next.data ?? [];
           allRows.push(...nextData);
           if (nextData.length < PAGE_SIZE) {
@@ -303,15 +379,43 @@ export default function PublicScanResultPage() {
           (row.vuln_id ?? '').toUpperCase().includes(normalizedCveFilter)
         );
         const start = (page - 1) * LIMIT;
-        setVulnTotal(filtered.length);
-        setVulns(filtered.slice(start, start + LIMIT));
+        return {
+          data: filtered.slice(start, start + LIMIT),
+          total: filtered.length,
+        };
       };
 
       loadVulnerabilities()
-        .catch(() => {})
-        .finally(() => setVulnLoading(false));
+        .then((result) => {
+          if (!result || controller.signal.aborted) return;
+          setVulns(result.data);
+          setVulnTotal(result.total);
+        })
+        .catch((reason: unknown) => {
+          if (controller.signal.aborted || isAbortError(reason)) return;
+          setVulnError(
+            reason instanceof Error ? reason.message : 'Failed to load vulnerabilities.'
+          );
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setVulnLoading(false);
+        });
+
+      return () => controller.abort();
     });
-  }, [id, scan, page, severityFilter, pkgFilter, cveFilter, minCvss, hasFix, sortBy, sortDir]);
+  }, [
+    id,
+    scan,
+    page,
+    severityFilter,
+    pkgFilter,
+    cveFilter,
+    minCvss,
+    hasFix,
+    sortBy,
+    sortDir,
+    vulnRetryKey,
+  ]);
 
   async function handleRescan() {
     setReScanning(true);
@@ -338,6 +442,10 @@ export default function PublicScanResultPage() {
     setSelectedVulnerability(null);
   }
 
+  function retryVulnerabilities() {
+    setVulnRetryKey((current) => current + 1);
+  }
+
   if (error)
     return (
       <div
@@ -345,7 +453,9 @@ export default function PublicScanResultPage() {
         style={{ background: 'var(--app-bg)' }}
       >
         <div className="text-center space-y-3">
-          <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>
+          <p role="alert" className="text-red-500 dark:text-red-400 text-sm">
+            {error}
+          </p>
           <Link
             href="/public/scan/image"
             className="text-accent dark:text-accent text-sm hover:underline"
@@ -717,7 +827,11 @@ export default function PublicScanResultPage() {
                           </Select.Popover>
                         </Select>
                         <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_150px_150px_120px_120px]">
-                          <SearchField name="public-scan-vuln-search" className="w-full">
+                          <SearchField
+                            aria-label="Search packages"
+                            name="public-scan-vuln-search"
+                            className="w-full"
+                          >
                             <SearchField.Group className="h-11">
                               <SearchField.SearchIcon />
                               <SearchField.Input
@@ -728,7 +842,11 @@ export default function PublicScanResultPage() {
                               <SearchField.ClearButton />
                             </SearchField.Group>
                           </SearchField>
-                          <SearchField name="public-scan-vuln-cve-search" className="w-full">
+                          <SearchField
+                            aria-label="Search CVE identifiers"
+                            name="public-scan-vuln-cve-search"
+                            className="w-full"
+                          >
                             <SearchField.Group className="h-11">
                               <SearchField.SearchIcon />
                               <SearchField.Input
@@ -817,8 +935,28 @@ export default function PublicScanResultPage() {
                   </div>
 
                   {/* Table */}
+                  {vulnError && vulns.length > 0 && (
+                    <div
+                      role="alert"
+                      aria-live="assertive"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300"
+                    >
+                      <span>
+                        Couldn&apos;t refresh vulnerabilities: {vulnError} Showing the last
+                        successful results.
+                      </span>
+                      <Button
+                        aria-label="Retry loading vulnerabilities"
+                        onPress={retryVulnerabilities}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  )}
                   <div
-                    className="rounded-2xl overflow-hidden"
+                    className="max-w-full overflow-x-auto rounded-2xl"
                     style={{
                       background: 'var(--surface-bg)',
                       border: '1px solid var(--surface-border)',
@@ -828,6 +966,7 @@ export default function PublicScanResultPage() {
                       <Table.ScrollContainer>
                         <Table.Content
                           aria-label="Public scan vulnerabilities"
+                          aria-busy={vulnLoading}
                           className="min-w-[920px]"
                         >
                           <Table.Header>
@@ -868,10 +1007,34 @@ export default function PublicScanResultPage() {
                             })}
                           </Table.Header>
                           <Table.Body>
-                            {vulnLoading ? (
+                            {vulnError && vulns.length === 0 ? (
+                              <Table.Row key="error" id="error">
+                                <Table.Cell colSpan={6}>
+                                  <div
+                                    role="alert"
+                                    aria-live="assertive"
+                                    className="flex flex-col items-center gap-3 py-12 text-center text-sm text-red-600 dark:text-red-300"
+                                  >
+                                    <span>Couldn&apos;t load vulnerabilities: {vulnError}</span>
+                                    <Button
+                                      aria-label="Retry loading vulnerabilities"
+                                      onPress={retryVulnerabilities}
+                                      size="sm"
+                                      variant="secondary"
+                                    >
+                                      Retry
+                                    </Button>
+                                  </div>
+                                </Table.Cell>
+                              </Table.Row>
+                            ) : vulnLoading ? (
                               <Table.Row key="loading" id="loading">
                                 <Table.Cell colSpan={6}>
-                                  <div className="py-12 text-center">
+                                  <div
+                                    className="py-12 text-center"
+                                    role="status"
+                                    aria-live="polite"
+                                  >
                                     <div className="flex justify-center">
                                       <div
                                         className="size-6 rounded-full border-2 border-t-accent-500 animate-spin"
@@ -881,6 +1044,7 @@ export default function PublicScanResultPage() {
                                         }}
                                       />
                                     </div>
+                                    <span className="sr-only">Loading vulnerabilities…</span>
                                   </div>
                                 </Table.Cell>
                               </Table.Row>

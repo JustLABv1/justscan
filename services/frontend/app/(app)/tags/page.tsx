@@ -7,16 +7,16 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useClientAuth } from '@/hooks/use-client-auth';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   createTag,
   deleteTag,
-  getTokenType,
-  getUser,
   getWorkScope,
   listTags,
   listTagShares,
@@ -79,6 +79,7 @@ export default function TagsPage() {
   const [shareOrgId, setShareOrgId] = useState('');
   const [transferOrgId, setTransferOrgId] = useState('');
   const [shareSaving, setShareSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filterQuery, setFilterQuery] = useState('');
   const [page, setPage] = useState(1);
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
@@ -97,8 +98,7 @@ export default function TagsPage() {
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
-  const isPlatformAdmin = getTokenType() === 'admin';
-  const currentUserId = getUser()?.id as string | undefined;
+  const { isPlatformAdmin, currentUserId } = useClientAuth();
   const orgRoleById = useMemo(
     () => new Map(orgs.map((org) => [org.id, org.current_user_role] as const)),
     [orgs]
@@ -112,6 +112,7 @@ export default function TagsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       setTags(await listTags());
     } catch (e: unknown) {
@@ -355,9 +356,17 @@ export default function TagsPage() {
       variant: 'danger',
     });
     if (!ok) return;
-    await deleteTag(id).catch(() => {});
-    toast.success('Tag deleted');
-    load();
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      await deleteTag(id);
+      toast.success('Tag deleted');
+      await load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete tag');
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -383,50 +392,56 @@ export default function TagsPage() {
         }
       />
 
-      {error ? <FormAlert description={error} title="Tag loading failed" /> : null}
-
-      {loading ? (
-        <Card className="space-y-4">
-          <SearchField name="tags-search" variant="secondary" className="w-full xl:max-w-md">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                aria-label="Filter tags"
-                placeholder="Filter tags by name, owner, or color..."
-                value={filterQuery}
-                onChange={(event) => {
-                  setFilterQuery(event.target.value);
-                  setPage(1);
-                }}
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-          <div className="surface-panel rounded-2xl overflow-hidden">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 px-4 py-3.5"
-                style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-              >
-                <Skeleton className="size-8 rounded-lg shrink-0" />
-                <Skeleton className="h-4 w-28 rounded" />
-                <div className="flex-1" />
-                <Skeleton className="h-4 w-16 rounded" />
-                <Skeleton className="size-7 rounded-lg" />
-                <Skeleton className="size-7 rounded-lg" />
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : tags.length === 0 ? (
-        <EmptyState
-          icon={<Tag01Icon size={28} />}
-          title="No tags yet"
-          description="Create color-coded tags to group and filter your scans. Tags can be assigned to any scan."
-          action={canMutateActiveScope ? { label: 'New Tag', onClick: openCreate } : undefined}
-        />
-      ) : (
+      <LoadableCollectionState
+        emptyState={
+          <EmptyState
+            icon={<Tag01Icon size={28} />}
+            title="No tags yet"
+            description="Create color-coded tags to group and filter your scans. Tags can be assigned to any scan."
+            action={canMutateActiveScope ? { label: 'New Tag', onClick: openCreate } : undefined}
+          />
+        }
+        error={error || undefined}
+        errorTitle="Tag loading failed"
+        isEmpty={tags.length === 0}
+        loading={loading}
+        retry={() => void load()}
+        loadingFallback={
+          <Card className="space-y-4" role="status">
+            <SearchField name="tags-search" variant="secondary" className="w-full xl:max-w-md">
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
+                  aria-label="Filter tags"
+                  placeholder="Filter tags by name, owner, or color..."
+                  value={filterQuery}
+                  onChange={(event) => {
+                    setFilterQuery(event.target.value);
+                    setPage(1);
+                  }}
+                />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
+            <div className="surface-panel rounded-2xl overflow-hidden">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-4 px-4 py-3.5"
+                  style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
+                >
+                  <Skeleton className="size-8 rounded-lg shrink-0" />
+                  <Skeleton className="h-4 w-28 rounded" />
+                  <div className="flex-1" />
+                  <Skeleton className="h-4 w-16 rounded" />
+                  <Skeleton className="size-7 rounded-lg" />
+                  <Skeleton className="size-7 rounded-lg" />
+                </div>
+              ))}
+            </div>
+          </Card>
+        }
+      >
         <Card className="space-y-4">
           <SearchField name="tags-search" variant="secondary" className="w-full xl:max-w-md">
             <SearchField.Group>
@@ -453,10 +468,18 @@ export default function TagsPage() {
               >
                 <Table.Header>
                   <Table.Column id="name" allowsSorting isRowHeader>
-                    Tag
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        Tag
+                      </Table.SortableColumnHeader>
+                    )}
                   </Table.Column>
                   <Table.Column id="owner" allowsSorting>
-                    Owner
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        Owner
+                      </Table.SortableColumnHeader>
+                    )}
                   </Table.Column>
                   <Table.Column className="text-right">Actions</Table.Column>
                 </Table.Header>
@@ -517,6 +540,8 @@ export default function TagsPage() {
                                         label: 'Delete tag',
                                         icon: <Delete01Icon size={15} />,
                                         variant: 'danger' as const,
+                                        pending: deletingId === tag.id,
+                                        disabled: deletingId !== null && deletingId !== tag.id,
                                         onAction: () => {
                                           void handleDelete(tag.id);
                                         },
@@ -582,7 +607,7 @@ export default function TagsPage() {
             </Table.Footer>
           </Table>
         </Card>
-      )}
+      </LoadableCollectionState>
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
@@ -666,12 +691,10 @@ export default function TagsPage() {
                 <Button
                   type="submit"
                   form="tag-form"
-                  isDisabled={saving || (editing ? !canMutateTag(editing) : !canMutateActiveScope)}
+                  isPending={saving}
+                  isDisabled={editing ? !canMutateTag(editing) : !canMutateActiveScope}
                   variant="primary"
                 >
-                  {saving && (
-                    <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  )}
                   {editing ? 'Save' : 'Create'}
                 </Button>
               </Modal.Footer>
@@ -753,6 +776,7 @@ export default function TagsPage() {
                                 onPress={() => {
                                   void handleRevokeShare(share.org_id);
                                 }}
+                                isPending={shareSaving}
                                 isDisabled={shareSaving}
                                 isIconOnly
                                 variant="danger-soft"
@@ -783,6 +807,7 @@ export default function TagsPage() {
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
                       <Select
+                        aria-label="Organization to grant tag access"
                         value={shareOrgId || '__none__'}
                         onChange={(value) =>
                           setShareOrgId(String(value === '__none__' ? '' : (value ?? '')))
@@ -809,6 +834,7 @@ export default function TagsPage() {
                         onPress={() => {
                           void handleGrantShare();
                         }}
+                        isPending={shareSaving}
                         isDisabled={!shareOrgId || shareSaving}
                         className="btn-primary disabled:opacity-60"
                         variant="primary"

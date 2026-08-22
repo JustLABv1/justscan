@@ -13,7 +13,17 @@ import {
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip, Dropdown, Label, Spinner, Table } from '@heroui/react';
+import {
+  Alert,
+  buttonVariants,
+  Button,
+  Card,
+  Chip,
+  Dropdown,
+  Label,
+  Spinner,
+  Table,
+} from '@heroui/react';
 import {
   ArrowLeft01Icon,
   CopyLinkIcon,
@@ -306,10 +316,11 @@ export default function HelmRunDetailPage() {
               Back
             </Button>
             <Dropdown>
-              <Dropdown.Trigger>
-                <Button aria-label="Open Helm run actions" isIconOnly variant="secondary">
-                  <MoreVerticalIcon size={15} />
-                </Button>
+              <Dropdown.Trigger
+                aria-label="Open Helm run actions"
+                className={buttonVariants({ isIconOnly: true, variant: 'secondary' })}
+              >
+                <MoreVerticalIcon size={15} />
               </Dropdown.Trigger>
               <Dropdown.Popover className="min-w-[220px]">
                 <Dropdown.Menu

@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Dropdown, Label } from '@heroui/react';
+import { buttonVariants, Dropdown, Label, Spinner } from '@heroui/react';
 import { MoreVerticalIcon } from 'hugeicons-react';
 import type { ReactNode } from 'react';
 
@@ -10,16 +10,18 @@ export type RowActionItem = {
   icon?: ReactNode;
   variant?: 'default' | 'danger';
   disabled?: boolean;
+  pending?: boolean;
   onAction: () => void;
 };
 
 export function RowActionsMenu({ label, items }: { label: string; items: RowActionItem[] }) {
   return (
     <Dropdown>
-      <Dropdown.Trigger>
-        <Button aria-label={label} isIconOnly variant="tertiary">
-          <MoreVerticalIcon size={15} />
-        </Button>
+      <Dropdown.Trigger
+        aria-label={label}
+        className={buttonVariants({ isIconOnly: true, variant: 'tertiary' })}
+      >
+        <MoreVerticalIcon size={15} />
       </Dropdown.Trigger>
       <Dropdown.Popover className="min-w-[190px]">
         <Dropdown.Menu
@@ -34,12 +36,14 @@ export function RowActionsMenu({ label, items }: { label: string; items: RowActi
             <Dropdown.Item
               key={item.id}
               id={item.id}
-              isDisabled={item.disabled}
+              isDisabled={item.disabled || item.pending}
               textValue={item.label}
               variant={item.variant}
             >
               <div className="flex items-center gap-2">
-                {item.icon ? (
+                {item.pending ? (
+                  <Spinner aria-label="Working" color="current" size="sm" />
+                ) : item.icon ? (
                   <span className={`shrink-0 ${item.variant === 'danger' ? 'text-danger' : ''}`}>
                     {item.icon}
                   </span>

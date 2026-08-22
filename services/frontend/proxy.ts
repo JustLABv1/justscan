@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { PATHNAME_HEADER_NAME } from '@/lib/metadata';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+const MAINTENANCE_TIMEOUT_MS = 1500;
+const MAINTENANCE_CACHE_TTL_MS = 5000;
 
 const PUBLIC_ALLOWLIST_PREFIXES = ['/maintenance', '/login', '/auth', '/admin'];
 const ANONYMOUS_AUTH_PATHS = new Set(['/login', '/register']);
@@ -20,6 +22,8 @@ interface TokenPayload {
   type?: string;
   exp?: number;
 }
+
+let maintenanceCache: { value: MaintenanceSettings | null; expiresAt: number } | null = null;
 
 function parseJSON<T>(raw: string): T | null {
   try {
@@ -73,14 +77,33 @@ function isAllowlisted(pathname: string) {
 }
 
 async function getMaintenanceSettings(): Promise<MaintenanceSettings | null> {
+  const now = Date.now();
+  if (maintenanceCache && maintenanceCache.expiresAt > now) {
+    return maintenanceCache.value;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MAINTENANCE_TIMEOUT_MS);
+
   try {
     const response = await fetch(`${API}/api/v1/public/maintenance`, {
       headers: { Accept: 'application/json' },
+      cache: 'no-store',
+      signal: controller.signal,
     });
-    if (!response.ok) return null;
-    return (await response.json()) as MaintenanceSettings;
+    if (!response.ok) {
+      maintenanceCache = { value: null, expiresAt: Date.now() + MAINTENANCE_CACHE_TTL_MS };
+      return null;
+    }
+    const value = (await response.json()) as MaintenanceSettings;
+    maintenanceCache = { value, expiresAt: Date.now() + MAINTENANCE_CACHE_TTL_MS };
+    return value;
   } catch {
+    // Maintenance checks must fail open so a temporary backend/network issue does not block navigation.
+    maintenanceCache = { value: null, expiresAt: Date.now() + MAINTENANCE_CACHE_TTL_MS };
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

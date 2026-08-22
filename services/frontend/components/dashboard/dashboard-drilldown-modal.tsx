@@ -10,12 +10,13 @@ import { getWatchlistPosture } from '@/lib/watchlist-posture';
 import { Button, Card, Chip, Link as HeroLink, Modal, useOverlayState } from '@heroui/react';
 import { CheckmarkCircle02Icon, Clock01Icon, Shield01Icon } from 'hugeicons-react';
 
-export type DashboardDrilldownKey = 'total' | 'completed' | 'watchlist';
+export type DashboardDrilldownKey = 'total' | 'completed' | 'watchlist' | 'watchlist_attention';
 
 const drilldownHeaderMeta = {
   total: { Icon: Shield01Icon, className: 'bg-default text-foreground' },
   completed: { Icon: CheckmarkCircle02Icon, className: 'bg-success/10 text-success' },
   watchlist: { Icon: Clock01Icon, className: 'bg-warning/10 text-warning' },
+  watchlist_attention: { Icon: Clock01Icon, className: 'bg-danger/10 text-danger' },
 } satisfies Record<DashboardDrilldownKey, { Icon: typeof Shield01Icon; className: string }>;
 
 function WatchlistModalRow({ item }: { item: WatchlistItem }) {
@@ -84,11 +85,13 @@ function WatchlistModalList({
   watchlistLoading,
   watchlistItems,
   displayedWatchlistItems,
+  attentionOnly,
 }: {
   watchlistError: string;
   watchlistLoading: boolean;
   watchlistItems: WatchlistItem[];
   displayedWatchlistItems: WatchlistItem[];
+  attentionOnly: boolean;
 }) {
   if (watchlistError) {
     return (
@@ -114,7 +117,9 @@ function WatchlistModalList({
     return (
       <Card variant="secondary">
         <Card.Content className="py-8 text-center text-sm text-muted">
-          No watchlist items in this scope.
+          {attentionOnly
+            ? 'No watchlist items need attention in this scope.'
+            : 'No watchlist items in this scope.'}
         </Card.Content>
       </Card>
     );
@@ -150,11 +155,13 @@ function WatchlistBody({
   watchlistLoading,
   watchlistItems,
   displayedWatchlistItems,
+  attentionOnly,
 }: {
   watchlistError: string;
   watchlistLoading: boolean;
   watchlistItems: WatchlistItem[];
   displayedWatchlistItems: WatchlistItem[];
+  attentionOnly: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -169,6 +176,7 @@ function WatchlistBody({
         watchlistLoading={watchlistLoading}
         watchlistItems={watchlistItems}
         displayedWatchlistItems={displayedWatchlistItems}
+        attentionOnly={attentionOnly}
       />
     </div>
   );
@@ -296,25 +304,38 @@ export function DashboardDrilldownModal({
 }: DashboardDrilldownModalProps) {
   if (!activeCard) return null;
 
-  const isWatchlist = activeCard === 'watchlist';
+  const isWatchlist = activeCard === 'watchlist' || activeCard === 'watchlist_attention';
+  const isWatchlistAttention = activeCard === 'watchlist_attention';
   const heading =
     activeCard === 'total'
       ? 'Recent scans'
       : activeCard === 'completed'
         ? 'Completed scans'
-        : 'Watchlist';
+        : isWatchlistAttention
+          ? 'Watchlist attention'
+          : 'Watchlist';
   const description =
     activeCard === 'total'
       ? `${totalScans.toLocaleString()} total scans overall. Showing activity from ${recentActivityRangeLabel.toLowerCase()}.`
       : activeCard === 'completed'
         ? `${completedCount.toLocaleString()} completed scans overall. Showing completions from ${recentActivityRangeLabel.toLowerCase()}.`
-        : `${watchlistCount.toLocaleString()} watchlist item${watchlistCount === 1 ? '' : 's'} in the current scope.`;
+        : isWatchlistAttention
+          ? `${watchlistCount.toLocaleString()} watchlist item${watchlistCount === 1 ? '' : 's'} need attention in the current scope.`
+          : `${watchlistCount.toLocaleString()} watchlist item${watchlistCount === 1 ? '' : 's'} in the current scope.`;
   const emptyMessage =
     activeCard === 'completed'
       ? `No completed scans in ${recentActivityRangeLabel.toLowerCase()}.`
       : `No scans started in ${recentActivityRangeLabel.toLowerCase()}.`;
-  const primaryHref = isWatchlist ? '/watchlist' : recentActivityHref;
-  const primaryLabel = isWatchlist ? 'Open watchlist' : 'Open full list';
+  const primaryHref = isWatchlist
+    ? isWatchlistAttention
+      ? '/watchlist?focus=attention'
+      : '/watchlist'
+    : recentActivityHref;
+  const primaryLabel = isWatchlist
+    ? isWatchlistAttention
+      ? 'Open attention items'
+      : 'Open watchlist'
+    : 'Open full list';
   const displayedWatchlistItems = isWatchlist
     ? watchlistItems.toSorted((left, right) => {
         const rank = (item: WatchlistItem) => {
@@ -362,6 +383,7 @@ export function DashboardDrilldownModal({
                   watchlistLoading={watchlistLoading}
                   watchlistItems={watchlistItems}
                   displayedWatchlistItems={displayedWatchlistItems}
+                  attentionOnly={isWatchlistAttention}
                 />
               ) : (
                 <>

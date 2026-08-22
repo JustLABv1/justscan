@@ -9,8 +9,10 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// Remove derived postures that were already known when their scan completed.
-// They can be rebuilt from immutable evidence if newer intelligence arrives.
+// Migration 105 removes derived postures that were already known when their
+// scan completed. The historical migration used the duplicate identifier 101;
+// this predicate is intentionally safe to replay so either legacy branch is
+// repaired without relying on an ambiguous migration row.
 func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		condition := vulnerabilityintelligence.PostScanChangeCondition("p", "s")

@@ -482,6 +482,13 @@ function scanImageHref(imageName: string) {
   return `/scans/images/${imageName.split('/').map(encodeURIComponent).join('/')}`;
 }
 
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof Error && error.name === 'AbortError') ||
+    (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
+  );
+}
+
 function ScanOverviewMetric({
   label,
   value,
@@ -567,7 +574,12 @@ export default function ScanDetailPage() {
   const [shareVisibility, setShareVisibility] = useState<'public' | 'authenticated'>('public');
   const [shareCopied, setShareCopied] = useState(false);
   const loadVersionRef = useRef(0);
-  const loadScanInFlightRef = useRef<Promise<Scan> | null>(null);
+  const loadScanInFlightRef = useRef<{
+    controller: AbortController;
+    id: string;
+    promise: Promise<Scan>;
+    version: number;
+  } | null>(null);
   const defaultTabInitializedRef = useRef(false);
   const vulnerabilityViewInitializedRef = useRef(false);
   const vulnerabilityViewScopeKeyRef = useRef('');
@@ -605,6 +617,23 @@ export default function ScanDetailPage() {
 
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vulnerabilityRequestRef = useRef<{
+    version: number;
+    controller: AbortController;
+  } | null>(null);
+  const vulnerabilityRequestVersionRef = useRef(0);
+  const vulnerabilitySummaryRequestRef = useRef<{
+    version: number;
+    controller: AbortController;
+  } | null>(null);
+  const vulnerabilitySummaryRequestVersionRef = useRef(0);
+  const complianceRequestRef = useRef<{
+    id: string;
+    version: number;
+    controller: AbortController;
+  } | null>(null);
+  const complianceRequestVersionRef = useRef(0);
+  const currentScanIdRef = useRef(id);
   const scanStatus = scan?.status;
   const activeWorkScopeOrgId = workScope.kind === 'org' ? workScope.orgId : '';
   const vulnerabilityViewScopeKey =
@@ -671,6 +700,10 @@ export default function ScanDetailPage() {
     advancedVulnerabilityFilterCount > 0;
 
   useEffect(() => {
+    currentScanIdRef.current = id;
+  }, [id]);
+
+  useEffect(() => {
     setRouteContext({
       scopeType: 'scan',
       scopeRef: id,
@@ -696,12 +729,15 @@ export default function ScanDetailPage() {
   useEffect(() => () => setOverlayContext(null), [setOverlayContext]);
 
   const loadScan = useCallback(async () => {
-    if (loadScanInFlightRef.current) {
-      return loadScanInFlightRef.current;
+    const currentRequest = loadScanInFlightRef.current;
+    if (currentRequest?.id === id) {
+      return currentRequest.promise;
     }
 
+    currentRequest?.controller.abort();
     const loadVersion = ++loadVersionRef.current;
-    const request = getScan(id)
+    const controller = new AbortController();
+    const request = getScan(id, { signal: controller.signal })
       .then((nextScan) => {
         if (loadVersion === loadVersionRef.current) {
           setScan(nextScan);
@@ -709,14 +745,46 @@ export default function ScanDetailPage() {
         return nextScan;
       })
       .finally(() => {
-        if (loadScanInFlightRef.current === request) {
+        if (loadScanInFlightRef.current?.version === loadVersion) {
           loadScanInFlightRef.current = null;
         }
       });
 
-    loadScanInFlightRef.current = request;
+    loadScanInFlightRef.current = { controller, id, promise: request, version: loadVersion };
     return request;
   }, [id]);
+
+  const loadComplianceForScan = useCallback((scanId: string) => {
+    if (currentScanIdRef.current !== scanId) {
+      return Promise.resolve([] as ComplianceResult[]);
+    }
+
+    complianceRequestRef.current?.controller.abort();
+    const requestVersion = ++complianceRequestVersionRef.current;
+    const controller = new AbortController();
+    const request = { id: scanId, version: requestVersion, controller };
+    complianceRequestRef.current = request;
+
+    return getScanCompliance(scanId, { signal: controller.signal })
+      .then((results) => {
+        if (
+          currentScanIdRef.current === scanId &&
+          complianceRequestRef.current?.id === scanId &&
+          complianceRequestRef.current.version === requestVersion
+        ) {
+          setCompliance(results);
+        }
+        return results;
+      })
+      .finally(() => {
+        if (
+          complianceRequestRef.current?.id === scanId &&
+          complianceRequestRef.current.version === requestVersion
+        ) {
+          complianceRequestRef.current = null;
+        }
+      });
+  }, []);
 
   const applyVulnerabilityViewPreference = useCallback(
     (preference: VulnerabilityViewPreferenceResponse) => {
@@ -740,6 +808,9 @@ export default function ScanDetailPage() {
 
   useEffect(() => {
     return deferEffect(() => {
+      setLoading(true);
+      setError('');
+      setScan(null);
       defaultTabInitializedRef.current = false;
       vulnerabilityViewInitializedRef.current = false;
       setActiveTab('vulns');
@@ -759,6 +830,7 @@ export default function ScanDetailPage() {
       setComplianceVulnById({});
       setComplianceVulnLoaded(false);
       setComplianceVulnLoading(false);
+      setComplianceLoading(false);
       setPolicyImpact(null);
       appliedRouteVulnerabilityFocusKeyRef.current = '';
     });
@@ -766,19 +838,40 @@ export default function ScanDetailPage() {
 
   // Initial load
   useEffect(() => {
+    let cancelled = false;
     loadScan()
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch((e: unknown) => {
+        if (!cancelled && !isAbortError(e)) {
+          setError(e instanceof Error ? e.message : 'Failed to load scan');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     listTags()
-      .then(setAllTags)
+      .then((tags) => {
+        if (!cancelled) setAllTags(tags);
+      })
       .catch(() => {});
-    getScanCompliance(id)
-      .then(setCompliance)
-      .catch(() => {});
+    loadComplianceForScan(id).catch(() => {});
     listOrgs()
-      .then(setAllOrgs)
+      .then((orgs) => {
+        if (!cancelled) setAllOrgs(orgs);
+      })
       .catch(() => {});
-  }, [id, loadScan]);
+
+    return () => {
+      cancelled = true;
+      if (loadScanInFlightRef.current?.id === id) {
+        loadScanInFlightRef.current.controller.abort();
+      }
+      if (complianceRequestRef.current?.id === id) {
+        complianceRequestVersionRef.current += 1;
+        complianceRequestRef.current.controller.abort();
+        complianceRequestRef.current = null;
+      }
+    };
+  }, [id, loadComplianceForScan, loadScan]);
 
   useEffect(() => {
     let cancelled = false;
@@ -803,13 +896,11 @@ export default function ScanDetailPage() {
     void loadScan()
       .then((nextScan) => {
         if (nextScan.status === 'completed' || nextScan.status === 'failed') {
-          void getScanCompliance(id)
-            .then(setCompliance)
-            .catch(() => {});
+          void loadComplianceForScan(id).catch(() => {});
         }
       })
       .catch(() => {});
-  }, [id, loadScan]);
+  }, [id, loadComplianceForScan, loadScan]);
 
   useConditionalInterval(
     refreshActiveScan,
@@ -999,8 +1090,18 @@ export default function ScanDetailPage() {
   }, [expandedVuln]);
 
   function loadVulns() {
-    if (!scan || scan.status === 'pending' || scan.status === 'running' || !viewSettingsReady)
+    const previousRequest = vulnerabilityRequestRef.current;
+    previousRequest?.controller.abort();
+    const requestVersion = ++vulnerabilityRequestVersionRef.current;
+
+    if (!scan || scan.status === 'pending' || scan.status === 'running' || !viewSettingsReady) {
+      vulnerabilityRequestRef.current = null;
+      setVulnLoading(false);
       return;
+    }
+
+    const controller = new AbortController();
+    vulnerabilityRequestRef.current = { controller, version: requestVersion };
     setVulnLoading(true);
     setVulnError('');
     const severityParts = severityFilter
@@ -1053,7 +1154,9 @@ export default function ScanDetailPage() {
           const all: Vulnerability[] = [];
 
           for (;;) {
-            const res = await listVulnerabilities(id, nextPage, pageSize, ...baseArgs);
+            const res = await listVulnerabilities(id, nextPage, pageSize, ...baseArgs, {
+              signal: controller.signal,
+            });
             const rows = res.data ?? [];
             total = res.total ?? total;
             all.push(...rows);
@@ -1080,16 +1183,19 @@ export default function ScanDetailPage() {
             : filteredByPolicy;
           const start = (page - 1) * LIMIT;
           const end = start + LIMIT;
-          setFilteredVulnSummaryOverride(summarizeVisibleVulnerabilities(filteredBySuppression));
+          if (vulnerabilityRequestRef.current?.version === requestVersion) {
+            setFilteredVulnSummaryOverride(summarizeVisibleVulnerabilities(filteredBySuppression));
+          }
           return {
             data: filteredBySuppression.slice(start, end),
             total: filteredBySuppression.length,
           };
         })()
-      : listVulnerabilities(id, page, LIMIT, ...baseArgs);
+      : listVulnerabilities(id, page, LIMIT, ...baseArgs, { signal: controller.signal });
 
     loadPromise
       .then((res) => {
+        if (vulnerabilityRequestRef.current?.version !== requestVersion) return;
         const rows = hideSuppressed
           ? (res.data ?? []).filter((vulnerability) => !vulnerability.suppression)
           : (res.data ?? []);
@@ -1097,14 +1203,27 @@ export default function ScanDetailPage() {
         setVulnTotal(res.total ?? rows.length);
       })
       .catch((reason: unknown) => {
+        if (vulnerabilityRequestRef.current?.version !== requestVersion || isAbortError(reason)) {
+          return;
+        }
         setVulnError(reason instanceof Error ? reason.message : 'Failed to load vulnerabilities');
         setFilteredVulnSummaryOverride(null);
       })
-      .finally(() => setVulnLoading(false));
+      .finally(() => {
+        if (vulnerabilityRequestRef.current?.version !== requestVersion) return;
+        vulnerabilityRequestRef.current = null;
+        setVulnLoading(false);
+      });
   }
 
   useEffect(() => {
-    return deferEffect(loadVulns);
+    const cancelDeferred = deferEffect(loadVulns);
+    return () => {
+      cancelDeferred();
+      vulnerabilityRequestRef.current?.controller.abort();
+      vulnerabilityRequestRef.current = null;
+      vulnerabilityRequestVersionRef.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     id,
@@ -1128,7 +1247,21 @@ export default function ScanDetailPage() {
   ]);
 
   useEffect(() => {
-    return deferEffect(() => {
+    const requestVersion = ++vulnerabilitySummaryRequestVersionRef.current;
+    vulnerabilitySummaryRequestRef.current?.controller.abort();
+    vulnerabilitySummaryRequestRef.current = null;
+
+    const invalidateRequest = () => {
+      if (vulnerabilitySummaryRequestVersionRef.current !== requestVersion) return;
+      vulnerabilitySummaryRequestVersionRef.current += 1;
+      if (vulnerabilitySummaryRequestRef.current?.version === requestVersion) {
+        vulnerabilitySummaryRequestRef.current.controller.abort();
+        vulnerabilitySummaryRequestRef.current = null;
+      }
+    };
+
+    const cancelDeferred = deferEffect(() => {
+      if (vulnerabilitySummaryRequestVersionRef.current !== requestVersion) return;
       if (!scan || scan.status === 'pending' || scan.status === 'running' || !viewSettingsReady) {
         setVulnSummary(null);
         return;
@@ -1138,17 +1271,51 @@ export default function ScanDetailPage() {
         return;
       }
 
+      const controller = new AbortController();
+      vulnerabilitySummaryRequestRef.current = { controller, version: requestVersion };
+
       getVulnerabilitySummary(
         id,
         severityFilter || undefined,
         pkgFilter || undefined,
         hasFix || undefined,
         minCvss || undefined,
-        intelligenceFilter === 'all' ? undefined : intelligenceFilter
+        intelligenceFilter === 'all' ? undefined : intelligenceFilter,
+        { signal: controller.signal }
       )
-        .then(setVulnSummary)
-        .catch(() => setVulnSummary(null));
+        .then((summary) => {
+          if (
+            vulnerabilitySummaryRequestVersionRef.current === requestVersion &&
+            vulnerabilitySummaryRequestRef.current?.version === requestVersion
+          ) {
+            setVulnSummary(summary);
+          }
+        })
+        .catch((reason: unknown) => {
+          if (
+            vulnerabilitySummaryRequestVersionRef.current === requestVersion &&
+            vulnerabilitySummaryRequestRef.current?.version === requestVersion &&
+            !isAbortError(reason)
+          ) {
+            setVulnSummary(null);
+          }
+        })
+        .finally(() => {
+          if (
+            vulnerabilitySummaryRequestVersionRef.current === requestVersion &&
+            vulnerabilitySummaryRequestRef.current?.version === requestVersion
+          ) {
+            vulnerabilitySummaryRequestRef.current = null;
+          }
+        });
+
+      return invalidateRequest;
     });
+
+    return () => {
+      cancelDeferred();
+      invalidateRequest();
+    };
   }, [
     filteredVulnSummaryOverride,
     hasFix,
@@ -1345,22 +1512,25 @@ export default function ScanDetailPage() {
   async function handleAssignOrg(orgId: string) {
     if (!canMutateScan()) return;
     await assignScanToOrg(orgId, id).catch(() => {});
-    const results = await getScanCompliance(id).catch(() => [] as ComplianceResult[]);
-    setCompliance(results);
+    await loadComplianceForScan(id).catch(() => {});
   }
 
   async function handleRemoveOrg(orgId: string) {
     if (!canMutateScan()) return;
     await removeScanFromOrg(orgId, id).catch(() => {});
-    setCompliance((c) => c.filter((r) => r.org_id !== orgId));
+    if (currentScanIdRef.current === id) {
+      setCompliance((c) => c.filter((r) => r.org_id !== orgId));
+    }
   }
 
   async function handleReEvaluate() {
     if (!canMutateScan()) return;
     setComplianceLoading(true);
     const results = await reEvaluateCompliance(id).catch(() => [] as ComplianceResult[]);
-    setCompliance(results);
-    setComplianceLoading(false);
+    if (currentScanIdRef.current === id) {
+      setCompliance(results);
+      setComplianceLoading(false);
+    }
   }
 
   async function handleReScan() {
@@ -1398,8 +1568,7 @@ export default function ScanDetailPage() {
       setComplianceVulnLoaded(false);
       setComplianceVulnLoading(false);
       setPage(1);
-      const results = await getScanCompliance(id).catch(() => [] as ComplianceResult[]);
-      setCompliance(results);
+      await loadComplianceForScan(id).catch(() => {});
       const suffix = result.violation_count === 1 ? 'violation' : 'violations';
       toast.success(`Xray policy data refreshed (${result.violation_count} ${suffix})`);
     } catch (e: unknown) {

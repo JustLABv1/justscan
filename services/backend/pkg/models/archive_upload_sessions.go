@@ -18,6 +18,7 @@ type ArchiveUploadSession struct {
 	ID           uuid.UUID  `bun:",pk,type:uuid" json:"id"`
 	OrgID        uuid.UUID  `bun:"org_id,type:uuid,notnull" json:"org_id"`
 	UserID       *uuid.UUID `bun:"user_id,type:uuid" json:"user_id,omitempty"`
+	ScanID       *uuid.UUID `bun:"scan_id,type:uuid" json:"scan_id,omitempty"`
 	Filename     string     `bun:"filename,type:text,notnull" json:"filename"`
 	ImageName    string     `bun:"image_name,type:text,notnull" json:"image_name"`
 	ImageTag     string     `bun:"image_tag,type:text,notnull" json:"image_tag"`

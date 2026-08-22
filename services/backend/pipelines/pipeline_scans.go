@@ -24,6 +24,7 @@ import (
 const (
 	callbackPollInterval = 2 * time.Second
 	callbackHTTPTimeout  = 15 * time.Second
+	callbackClaimLease   = 2 * callbackHTTPTimeout
 	maxCallbackAttempts  = 5
 )
 
@@ -213,7 +214,8 @@ func QueueCallbackForScan(ctx context.Context, db bun.IDB, scanID string) error 
 		Set("delivery_status = ?", models.PipelineCallbackStatusPending).
 		Set("next_attempt_at = ?", now).
 		Set("updated_at = ?", now).
-		Where("scan_id = ?", req.ScanID).
+		Where("scan_id = ? AND (delivery_status = ? OR (delivery_status = ? AND last_attempt_at IS NULL))",
+			req.ScanID, models.PipelineCallbackStatusAwaitingTerminal, models.PipelineCallbackStatusPending).
 		Exec(ctx)
 	return err
 }
@@ -339,12 +341,56 @@ func processPendingCallbacks(ctx context.Context, db *bun.DB) error {
 	}
 
 	for i := range requests {
+		if !claimPendingCallback(ctx, db, &requests[i]) {
+			continue
+		}
 		if err := deliverCallback(ctx, db, &requests[i]); err != nil {
 			log.Warnf("pipeline callbacks: request %s failed: %v", requests[i].ID, err)
 		}
 	}
 
 	return nil
+}
+
+// claimPendingCallback atomically leases one callback to this process. The
+// lease is stored in existing delivery timestamps so multiple backend
+// instances do not concurrently POST the same request. An expired lease is
+// eligible for retry after a process crash.
+func claimPendingCallback(ctx context.Context, db *bun.DB, req *models.PipelineScanRequest) bool {
+	if db == nil || req == nil {
+		return false
+	}
+	claimedAt := time.Now().UTC()
+	leaseUntil := claimedAt.Add(callbackClaimLease)
+	result, err := db.NewUpdate().Model((*models.PipelineScanRequest)(nil)).
+		Set("last_attempt_at = ?", claimedAt).
+		Set("next_attempt_at = ?", leaseUntil).
+		Set("updated_at = ?", claimedAt).
+		Where("id = ? AND delivery_status = ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?)",
+			req.ID, models.PipelineCallbackStatusPending, claimedAt).
+		Exec(ctx)
+	if err != nil {
+		log.Warnf("pipeline callbacks: claim %s failed: %v", req.ID, err)
+		return false
+	}
+	rows, err := result.RowsAffected()
+	if err != nil || rows != 1 {
+		return false
+	}
+	req.LastAttemptAt = &claimedAt
+	req.NextAttemptAt = &leaseUntil
+	return true
+}
+
+func releaseCallbackClaim(ctx context.Context, db *bun.DB, req *models.PipelineScanRequest, next time.Time) {
+	if db == nil || req == nil || req.LastAttemptAt == nil {
+		return
+	}
+	_, _ = db.NewUpdate().Model((*models.PipelineScanRequest)(nil)).
+		Set("next_attempt_at = ?", next).
+		Set("updated_at = ?", time.Now().UTC()).
+		Where("id = ? AND delivery_status = ? AND last_attempt_at = ?", req.ID, models.PipelineCallbackStatusPending, *req.LastAttemptAt).
+		Exec(ctx)
 }
 
 func deliverCallback(ctx context.Context, db *bun.DB, req *models.PipelineScanRequest) error {
@@ -357,6 +403,7 @@ func deliverCallback(ctx context.Context, db *bun.DB, req *models.PipelineScanRe
 		return markCallbackFailure(ctx, db, req, err, true)
 	}
 	if !isTerminalScan(scan) {
+		releaseCallbackClaim(ctx, db, req, time.Now().UTC().Add(callbackPollInterval))
 		return nil
 	}
 
@@ -365,6 +412,7 @@ func deliverCallback(ctx context.Context, db *bun.DB, req *models.PipelineScanRe
 		return markCallbackFailure(ctx, db, req, err, true)
 	}
 	if result.Verdict == models.PipelineVerdictPending {
+		releaseCallbackClaim(ctx, db, req, time.Now().UTC().Add(callbackPollInterval))
 		return nil
 	}
 	body, err := json.Marshal(result)
@@ -409,7 +457,7 @@ func deliverCallback(ctx context.Context, db *bun.DB, req *models.PipelineScanRe
 		Set("delivered_at = ?", now).
 		Set("next_attempt_at = NULL").
 		Set("updated_at = ?", now).
-		Where("id = ?", req.ID).
+		Where("id = ? AND delivery_status = ? AND last_attempt_at = ?", req.ID, models.PipelineCallbackStatusPending, callbackClaimTime(req)).
 		Exec(ctx)
 	return err
 }
@@ -434,7 +482,7 @@ func markCallbackFailure(ctx context.Context, db bun.IDB, req *models.PipelineSc
 		Set("last_delivery_error = ?", truncateError(sendErr)).
 		Set("last_attempt_at = ?", now).
 		Set("updated_at = ?", now).
-		Where("id = ?", req.ID)
+		Where("id = ? AND delivery_status = ? AND last_attempt_at = ?", req.ID, models.PipelineCallbackStatusPending, callbackClaimTime(req))
 
 	if nextAttempt == nil {
 		query = query.Set("next_attempt_at = NULL")
@@ -446,6 +494,13 @@ func markCallbackFailure(ctx context.Context, db bun.IDB, req *models.PipelineSc
 		return err
 	}
 	return sendErr
+}
+
+func callbackClaimTime(req *models.PipelineScanRequest) interface{} {
+	if req != nil && req.LastAttemptAt != nil {
+		return *req.LastAttemptAt
+	}
+	return nil
 }
 
 func signPayload(secret string, body []byte) string {

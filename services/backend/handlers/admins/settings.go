@@ -48,6 +48,19 @@ func GetSettings(c *gin.Context, db *bun.DB) {
 	for _, s := range settings {
 		result[s.Key] = s.Value
 	}
+	// `timeout_seconds` was the original admin API key. Keep returning it as
+	// an alias while persistence uses the canonical command_timeout_seconds
+	// name consumed by scanner processes.
+	if value, ok := result["scanner.command_timeout_seconds"]; ok {
+		if _, exists := result["scanner.timeout_seconds"]; !exists {
+			result["scanner.timeout_seconds"] = value
+		}
+	}
+	if value, ok := result["scanner.timeout_seconds"]; ok {
+		if _, exists := result["scanner.command_timeout_seconds"]; !exists {
+			result["scanner.command_timeout_seconds"] = value
+		}
+	}
 	c.JSON(http.StatusOK, result)
 }
 
@@ -190,6 +203,7 @@ func UpdateScannerSettings(c *gin.Context, db *bun.DB) {
 		EnableGrype               *bool `json:"enable_grype"`
 		Concurrency               *int  `json:"concurrency"`
 		TimeoutSeconds            *int  `json:"timeout_seconds"`
+		CommandTimeoutSeconds     *int  `json:"command_timeout_seconds"`
 		DBMaxAgeHours             *int  `json:"db_max_age_hours"`
 		EnableOSVJavaAugmentation *bool `json:"enable_osv_java_augmentation"`
 	}
@@ -217,10 +231,23 @@ func UpdateScannerSettings(c *gin.Context, db *bun.DB) {
 		}
 		settings["scanner.concurrency"] = strconv.Itoa(*req.Concurrency)
 	}
-	if req.TimeoutSeconds != nil {
-		settings["scanner.timeout_seconds"] = strconv.Itoa(*req.TimeoutSeconds)
+	timeoutSeconds := req.TimeoutSeconds
+	if req.CommandTimeoutSeconds != nil {
+		// Accept the canonical name as well as the original admin API field.
+		timeoutSeconds = req.CommandTimeoutSeconds
+	}
+	if timeoutSeconds != nil {
+		if *timeoutSeconds < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "timeout_seconds must be >= 1"})
+			return
+		}
+		settings["scanner.command_timeout_seconds"] = strconv.Itoa(*timeoutSeconds)
 	}
 	if req.DBMaxAgeHours != nil {
+		if *req.DBMaxAgeHours < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "db_max_age_hours must be >= 1"})
+			return
+		}
 		settings["scanner.db_max_age_hours"] = strconv.Itoa(*req.DBMaxAgeHours)
 	}
 	if req.EnableOSVJavaAugmentation != nil {
@@ -232,7 +259,21 @@ func UpdateScannerSettings(c *gin.Context, db *bun.DB) {
 			return
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"updated": settings})
+	restartRequired := make([]string, 0, 1)
+	if req.Concurrency != nil {
+		// Worker goroutines are intentionally fixed at process start. This is
+		// explicit so an operator knows a concurrency change takes effect on
+		// the next backend restart instead of believing capacity changed live.
+		restartRequired = append(restartRequired, "concurrency")
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"updated":          settings,
+		"restart_required": restartRequired,
+		"live_applies": []string{
+			"enable_trivy", "enable_grype", "command_timeout_seconds",
+			"db_max_age_hours", "enable_osv_java_augmentation",
+		},
+	})
 }
 
 // UpdateAuthSettings updates DB-backed authentication settings.

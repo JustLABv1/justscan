@@ -1,4 +1,4 @@
-import { req, reqForm } from './core';
+import { req, reqForm, type ApiRequestOptions } from './core';
 import { appendScope } from './scope';
 import type {
   ResourceShare,
@@ -41,7 +41,8 @@ export const listScans = (
   to?: string,
   imageTag?: string,
   query?: string,
-  intelligence?: 'changed' | 'confirmation_pending'
+  intelligence?: 'changed' | 'confirmation_pending',
+  options?: ApiRequestOptions
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
@@ -55,7 +56,12 @@ export const listScans = (
   if (query) params.set('q', query);
   if (intelligence) params.set('intelligence', intelligence);
   appendScope(params);
-  return req<{ data: Scan[]; total: number }>('GET', `/api/v1/scans/?${params}`);
+  return req<{ data: Scan[]; total: number }>(
+    'GET',
+    `/api/v1/scans/?${params}`,
+    undefined,
+    options
+  );
 };
 
 export const listScanArtifacts = (
@@ -68,7 +74,8 @@ export const listScanArtifacts = (
   image?: string,
   from?: string,
   to?: string,
-  intelligence?: 'changed' | 'confirmation_pending'
+  intelligence?: 'changed' | 'confirmation_pending',
+  options?: ApiRequestOptions
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (query) params.set('q', query);
@@ -82,7 +89,9 @@ export const listScanArtifacts = (
   appendScope(params);
   return req<{ data: ArtifactSummary[]; total: number; filters: ArtifactFilterOptions }>(
     'GET',
-    `/api/v1/scans/artifacts?${params}`
+    `/api/v1/scans/artifacts?${params}`,
+    undefined,
+    options
   );
 };
 
@@ -96,7 +105,8 @@ export const listScanImages = (
   from?: string,
   to?: string,
   sort?: string,
-  intelligence?: 'changed' | 'confirmation_pending'
+  intelligence?: 'changed' | 'confirmation_pending',
+  options?: ApiRequestOptions
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (query) params.set('q', query);
@@ -108,7 +118,12 @@ export const listScanImages = (
   if (sort) params.set('sort', sort);
   if (intelligence) params.set('intelligence', intelligence);
   appendScope(params);
-  return req<{ data: ImageOverview[]; total: number }>('GET', `/api/v1/scans/images?${params}`);
+  return req<{ data: ImageOverview[]; total: number }>(
+    'GET',
+    `/api/v1/scans/images?${params}`,
+    undefined,
+    options
+  );
 };
 
 export const getScanImageStats = (image: string) => {
@@ -136,7 +151,8 @@ export const getScanQueueSummary = () => {
   return req<ScanQueueSummary>('GET', `/api/v1/scans/queue-summary${query ? `?${query}` : ''}`);
 };
 
-export const getScan = (id: string) => req<Scan>('GET', `/api/v1/scans/${id}`);
+export const getScan = (id: string, options?: ApiRequestOptions) =>
+  req<Scan>('GET', `/api/v1/scans/${id}`, undefined, options);
 
 export const getScanIntelligencePolicyImpact = (id: string) =>
   req<ScanIntelligencePolicyImpactResponse>(
@@ -215,7 +231,8 @@ export const listVulnerabilities = (
   minCvss?: number,
   sortBy?: string,
   sortDir?: 'asc' | 'desc',
-  intelligence?: string
+  intelligence?: string,
+  options?: ApiRequestOptions
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (severity) params.set('severity', severity);
@@ -227,7 +244,9 @@ export const listVulnerabilities = (
   if (intelligence && intelligence !== 'all') params.set('intelligence', intelligence);
   return req<{ data: Vulnerability[]; total: number }>(
     'GET',
-    `/api/v1/scans/${scanId}/vulnerabilities?${params}`
+    `/api/v1/scans/${scanId}/vulnerabilities?${params}`,
+    undefined,
+    options
   );
 };
 
@@ -237,7 +256,8 @@ export const getVulnerabilitySummary = (
   pkg?: string,
   hasFix?: boolean,
   minCvss?: number,
-  intelligence?: string
+  intelligence?: string,
+  options?: ApiRequestOptions
 ) => {
   const params = new URLSearchParams();
   if (severity) params.set('severity', severity);
@@ -248,7 +268,9 @@ export const getVulnerabilitySummary = (
   const query = params.toString();
   return req<VulnerabilitySummary>(
     'GET',
-    `/api/v1/scans/${scanId}/vulnerabilities/summary${query ? `?${query}` : ''}`
+    `/api/v1/scans/${scanId}/vulnerabilities/summary${query ? `?${query}` : ''}`,
+    undefined,
+    options
   );
 };
 

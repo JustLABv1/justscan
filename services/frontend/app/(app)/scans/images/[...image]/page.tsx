@@ -32,6 +32,7 @@ import {
   Disclosure,
   Label,
   ListBox,
+  Pagination,
   SearchField,
   Select,
   Skeleton,
@@ -63,6 +64,8 @@ const STATUS_OPTIONS = [
   { id: 'cancelled', label: 'Cancelled' },
 ];
 
+const ARTIFACT_PAGE_SIZE = 30;
+
 function decodeImage(parts: string[] | undefined) {
   return (parts ?? [])
     .map((part) => {
@@ -79,6 +82,12 @@ function formatDuration(durationMs: number) {
   const seconds = Math.max(0, Math.round(durationMs / 1000));
   if (seconds < 60) return `${seconds}s`;
   return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+function visiblePageNumbers(totalPages: number, currentPage: number) {
+  const start = Math.max(1, currentPage - 2);
+  const end = Math.min(totalPages, currentPage + 2);
+  return Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => start + index);
 }
 
 function Metric({
@@ -118,6 +127,7 @@ export default function ImageScansPage() {
   const [stats, setStats] = useState<ImageStats | null>(null);
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([]);
   const [total, setTotal] = useState(0);
+  const [artifactPage, setArtifactPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -135,6 +145,7 @@ export default function ImageScansPage() {
   const bounds = useMemo(() => (range ? getRecentActivityBounds(range) : null), [range]);
   const filterCount = [policy, range].filter(Boolean).length;
   const hasFilters = Boolean(query || status || critical || policy || range);
+  const artifactTotalPages = Math.max(1, Math.ceil(total / ARTIFACT_PAGE_SIZE));
 
   useEffect(
     () =>
@@ -173,8 +184,8 @@ export default function ImageScansPage() {
         setLoading(true);
         setError('');
         void listScanArtifacts(
-          1,
-          100,
+          artifactPage,
+          ARTIFACT_PAGE_SIZE,
           query || undefined,
           status || undefined,
           critical,
@@ -200,7 +211,26 @@ export default function ImageScansPage() {
           cancelled = true;
         };
       }),
-    [bounds?.from, bounds?.to, critical, imageName, policy, query, refreshKey, scopeKey, status]
+    [
+      artifactPage,
+      bounds?.from,
+      bounds?.to,
+      critical,
+      imageName,
+      policy,
+      query,
+      refreshKey,
+      scopeKey,
+      status,
+    ]
+  );
+
+  useEffect(
+    () =>
+      deferEffect(() => {
+        setArtifactPage(1);
+      }),
+    [bounds?.from, bounds?.to, critical, imageName, policy, query, scopeKey, status]
   );
 
   async function confirmDelete() {
@@ -553,6 +583,48 @@ export default function ImageScansPage() {
           selectedScans={selectedScans}
         />
       </Card>
+      {total > 0 ? (
+        <Pagination size="sm" className="flex-wrap justify-between gap-3">
+          <Pagination.Summary className="text-xs text-muted">
+            Showing {(artifactPage - 1) * ARTIFACT_PAGE_SIZE + 1}-
+            {Math.min(artifactPage * ARTIFACT_PAGE_SIZE, total)} of {total} tags
+          </Pagination.Summary>
+          {artifactTotalPages > 1 ? (
+            <Pagination.Content>
+              <Pagination.Item>
+                <Pagination.Previous
+                  isDisabled={artifactPage === 1}
+                  onPress={() => setArtifactPage((current) => Math.max(1, current - 1))}
+                >
+                  <Pagination.PreviousIcon />
+                  <span>Previous</span>
+                </Pagination.Previous>
+              </Pagination.Item>
+              {visiblePageNumbers(artifactTotalPages, artifactPage).map((value) => (
+                <Pagination.Item key={value}>
+                  <Pagination.Link
+                    isActive={value === artifactPage}
+                    onPress={() => setArtifactPage(value)}
+                  >
+                    {value}
+                  </Pagination.Link>
+                </Pagination.Item>
+              ))}
+              <Pagination.Item>
+                <Pagination.Next
+                  isDisabled={artifactPage === artifactTotalPages}
+                  onPress={() =>
+                    setArtifactPage((current) => Math.min(artifactTotalPages, current + 1))
+                  }
+                >
+                  <span>Next</span>
+                  <Pagination.NextIcon />
+                </Pagination.Next>
+              </Pagination.Item>
+            </Pagination.Content>
+          ) : null}
+        </Pagination>
+      ) : null}
     </PageContainer>
   );
 }

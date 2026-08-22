@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -19,6 +20,10 @@ import (
 var cronRunner *cron.Cron
 var scheduleMu sync.Mutex
 var scheduledEntries map[string]cron.EntryID
+
+const schedulerDuplicateWindow = 45 * time.Second
+
+var errSchedulerLockUnavailable = errors.New("scheduler advisory lock is held by another instance")
 
 // Start initialises the cron scheduler and registers all enabled watchlist items.
 func Start(db *bun.DB) {
@@ -76,39 +81,62 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 		return
 	}
 	entryID, err := cronRunner.AddFunc(spec, func() {
+		ctx := context.Background()
 		currentItem := itemCopy
-		if err := db.NewSelect().Model(&currentItem).Where("id = ?", itemCopy.ID).Scan(context.Background()); err != nil {
-			log.Errorf("scheduler: failed to refresh watchlist item %s: %v", itemCopy.ID, err)
-			return
-		}
-		log.Infof("scheduler: triggering scan for %s:%s", currentItem.ImageName, currentItem.ImageTag)
-		registry, envVars, err := scanner.ResolveRegistryForScan(context.Background(), db, currentItem.ImageName, currentItem.RegistryID)
-		if err != nil {
-			log.Errorf("scheduler: failed to resolve registry for %s:%s: %v", currentItem.ImageName, currentItem.ImageTag, err)
-			return
-		}
-		provider, err := scanner.ProviderForRegistry(registry)
-		if err != nil {
-			log.Errorf("scheduler: unavailable provider for %s:%s: %v", currentItem.ImageName, currentItem.ImageTag, err)
-			return
-		}
-		normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(currentItem.ImageName, currentItem.ImageTag, registry)
-		scan := newScheduledScan(currentItem, normalizedImageName, normalizedImageTag, provider, currentItem.RegistryID, time.Now())
-		if registry != nil {
-			scan.RegistryID = &registry.ID
-		}
-		if err := db.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
-			if _, err := tx.NewInsert().Model(scan).Exec(ctx); err != nil {
+		var scan *models.Scan
+		var envVars []string
+		err := withWatchlistAdvisoryLock(ctx, db, itemCopy.ID.String(), func(lockDB bun.IDB) error {
+			if err := lockDB.NewSelect().Model(&currentItem).Where("id = ?", itemCopy.ID).Scan(ctx); err != nil {
+				return fmt.Errorf("failed to refresh watchlist item %s: %w", itemCopy.ID, err)
+			}
+			if !currentItem.Enabled {
+				return nil
+			}
+			if currentItem.LastScannedAt != nil && time.Since(*currentItem.LastScannedAt) < schedulerDuplicateWindow {
+				return nil
+			}
+			log.Infof("scheduler: triggering scan for %s:%s", currentItem.ImageName, currentItem.ImageTag)
+			registry, resolvedEnvVars, err := scanner.ResolveRegistryForScan(ctx, lockDB, currentItem.ImageName, currentItem.RegistryID)
+			if err != nil {
+				return fmt.Errorf("failed to resolve registry for %s:%s: %w", currentItem.ImageName, currentItem.ImageTag, err)
+			}
+			provider, err := scanner.ProviderForRegistry(registry)
+			if err != nil {
+				return fmt.Errorf("unavailable provider for %s:%s: %w", currentItem.ImageName, currentItem.ImageTag, err)
+			}
+			normalizedImageName, normalizedImageTag := scanner.NormalizeScanTarget(currentItem.ImageName, currentItem.ImageTag, registry)
+			scan = newScheduledScan(currentItem, normalizedImageName, normalizedImageTag, provider, currentItem.RegistryID, time.Now())
+			if registry != nil {
+				scan.RegistryID = &registry.ID
+			}
+			if _, err := lockDB.NewInsert().Model(scan).Exec(ctx); err != nil {
 				return err
 			}
 			if scan.OwnerOrgID != nil {
-				if err := ensureOrgScanLink(ctx, tx, *scan.OwnerOrgID, scan.ID); err != nil {
+				if err := ensureOrgScanLink(ctx, lockDB, *scan.OwnerOrgID, scan.ID); err != nil {
 					return err
 				}
 			}
+			now := time.Now()
+			currentItem.LastScannedAt = &now
+			currentItem.LastScanID = &scan.ID
+			if _, err := lockDB.NewUpdate().Model(&currentItem).
+				Column("last_scanned_at", "last_scan_id").
+				Where("id = ?", currentItem.ID).
+				Exec(ctx); err != nil {
+				return err
+			}
+			envVars = resolvedEnvVars
 			return nil
-		}); err != nil {
+		})
+		if errors.Is(err, errSchedulerLockUnavailable) {
+			return
+		}
+		if err != nil {
 			log.Errorf("scheduler: failed to create scan for %s: %v", currentItem.ImageName, err)
+			return
+		}
+		if scan == nil {
 			return
 		}
 		if err := scanner.DispatchScan(context.Background(), db, scan, envVars, ""); err != nil {
@@ -117,13 +145,6 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 				log.Errorf("scheduler: failed to persist dispatch error for %s: %v", scan.ID, markErr)
 			}
 		}
-		now := time.Now()
-		currentItem.LastScannedAt = &now
-		currentItem.LastScanID = &scan.ID
-		db.NewUpdate().Model(&currentItem).
-			Column("last_scanned_at", "last_scan_id").
-			Where("id = ?", currentItem.ID).
-			Exec(context.Background()) //nolint:errcheck
 	})
 	if err != nil {
 		log.Errorf("scheduler: invalid cron schedule %q for item %s: %v", item.Schedule, item.ID, err)
@@ -132,6 +153,38 @@ func scheduleItem(db *bun.DB, item models.WatchlistItem) {
 	scheduleMu.Lock()
 	scheduledEntries[item.ID.String()] = entryID
 	scheduleMu.Unlock()
+}
+
+// withWatchlistAdvisoryLock holds a session-level PostgreSQL advisory lock on
+// a dedicated pooled connection while the callback creates and marks a scan.
+// A second backend instance skips the tick while the first one owns the lock.
+func withWatchlistAdvisoryLock(ctx context.Context, db *bun.DB, watchlistID string, fn func(bun.IDB) error) error {
+	if db == nil {
+		return fmt.Errorf("database is required")
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	lockName := "justscan:watchlist:" + watchlistID
+	var locked bool
+	if err := conn.NewRaw(`SELECT pg_try_advisory_lock(hashtextextended(?, 0))`, lockName).Scan(ctx, &locked); err != nil {
+		return err
+	}
+	if !locked {
+		return errSchedulerLockUnavailable
+	}
+	defer func() {
+		_, _ = conn.NewRaw(`SELECT pg_advisory_unlock(hashtextextended(?, 0))`, lockName).Exec(context.Background())
+	}()
+	// Keep the scan insert, organization link, and watchlist marker in one
+	// transaction on the same dedicated connection that owns the advisory lock.
+	// Using db.RunInTx here would lease another pooled connection and would not
+	// make the lock protect the transaction's writes.
+	return conn.RunInTx(ctx, nil, func(_ context.Context, tx bun.Tx) error {
+		return fn(&tx)
+	})
 }
 
 func newScheduledScan(item models.WatchlistItem, imageName string, imageTag string, provider string, registryID *uuid.UUID, createdAt time.Time) *models.Scan {
@@ -233,7 +286,9 @@ func startInsightLogCleanup(db *bun.DB) {
 			res, err := db.NewDelete().TableExpr("api_request_logs").Where("created_at < ?", cutoff).Exec(ctx)
 			if err != nil {
 				log.Warnf("insight cleanup: failed to prune api_request_logs: %v", err)
-			} else if n, _ := res.RowsAffected(); n > 0 {
+			} else if n, rowsErr := res.RowsAffected(); rowsErr != nil {
+				log.Warnf("insight cleanup: failed to count pruned api_request_logs: %v", rowsErr)
+			} else if n > 0 {
 				log.Infof("insight cleanup: pruned %d api_request_logs older than %d days", n, apiDays)
 			}
 		}
@@ -243,7 +298,9 @@ func startInsightLogCleanup(db *bun.DB) {
 			res, err := db.NewDelete().TableExpr("xray_request_logs").Where("created_at < ?", cutoff).Exec(ctx)
 			if err != nil {
 				log.Warnf("insight cleanup: failed to prune xray_request_logs: %v", err)
-			} else if n, _ := res.RowsAffected(); n > 0 {
+			} else if n, rowsErr := res.RowsAffected(); rowsErr != nil {
+				log.Warnf("insight cleanup: failed to count pruned xray_request_logs: %v", rowsErr)
+			} else if n > 0 {
 				log.Infof("insight cleanup: pruned %d xray_request_logs older than %d days", n, xrayDays)
 			}
 		}

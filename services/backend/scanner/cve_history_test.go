@@ -362,8 +362,12 @@ func TestReconcileOrphanedCVEHistoryRuns(t *testing.T) {
 	endCVEHistorySync()
 	db, mock, cleanup := newMockBunDB(t)
 	defer cleanup()
+	mock.ExpectQuery(`SELECT pg_try_advisory_lock`).WillReturnRows(
+		sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true),
+	)
 	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "vulnerability_intelligence_sync_runs"`)).
 		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec(`SELECT pg_advisory_unlock`).WillReturnResult(sqlmock.NewResult(0, 1))
 
 	recovered, err := ReconcileOrphanedCVEHistoryRuns(context.Background(), db)
 	if err != nil {

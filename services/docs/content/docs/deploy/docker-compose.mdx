@@ -31,7 +31,7 @@ Set at least:
 
 Replace every `change-me-in-production` value in `backend-config.yaml` before production use. Generate distinct values for `jwt.secret` and `encryption.key`, and set `allow_origins` to the URL users open in their browser. Keep database passwords, JWT secrets, encryption keys, and provider credentials in the host secret manager where possible.
 
-For a remote host, the published frontend image expects the local development API address by default. If the browser must reach a different backend URL, build the frontend locally with `NEXT_PUBLIC_API_URL` set to that public API URL.
+The frontend uses the same-origin `/api` proxy by default, which keeps the bundled Compose deployment on one host. For a deployment where the browser must call a backend on another host, build the frontend with `NEXT_PUBLIC_API_URL` set to that backend's public URL (including `https://`); browser requests will then use that configured API origin. Local split-port development continues to use `http://localhost:8080` directly.
 
 ## Start and verify
 
@@ -39,7 +39,7 @@ For a remote host, the published frontend image expects the local development AP
 docker compose up -d
 ```
 
-Open `http://HOST[:HTTP_PORT]` and verify that `/`, `/docs`, `/swagger`, and `/api/v1/health` resolve through nginx. Then continue with [first-time setup](/setup/quick-start) to create the initial administrator.
+Open `http://HOST[:HTTP_PORT]` and verify that `/`, `/docs`, `/swagger`, and `/api/v1/health` resolve through nginx. The backend container healthcheck uses `/api/v1/readyz`; use `/api/v1/livez` for a process-only liveness check. Then continue with [first-time setup](/setup/quick-start) to create the initial administrator.
 
 ## Large archive uploads
 

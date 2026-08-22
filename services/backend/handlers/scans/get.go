@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"justscan-backend/compliance"
 	"justscan-backend/functions/blockedpolicy"
@@ -99,7 +102,13 @@ func DeleteScan(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		if _, _, _, ok := LoadAuthorizedScanForWrite(c, db, scanID); !ok {
+		scan, _, _, ok := LoadAuthorizedScanForWrite(c, db, scanID)
+		if !ok {
+			return
+		}
+		archiveSessions, err := loadArchiveUploadSessionsForScans(c.Request.Context(), db, []uuid.UUID{scanID})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve uploaded archive cleanup"})
 			return
 		}
 
@@ -109,9 +118,42 @@ func DeleteScan(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete scan"})
 			return
 		}
+		_ = cleanupArchiveUploadSessions(archiveSessions)
+		_ = cleanupQueuedUploadedArchiveScan(scan)
 
 		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
 	}
+}
+
+// cleanupQueuedUploadedArchiveScan only removes the private directory created
+// for this scan. In particular, it never trusts an arbitrary image_location
+// value from the database or request body as a path to delete.
+func cleanupQueuedUploadedArchiveScan(scan *models.Scan) error {
+	if scan == nil || scan.ScanSource != models.ScanSourceUploadedArchive {
+		return nil
+	}
+	if scan.Status != models.ScanStatusPending || scan.CurrentStep != models.ScanStepQueued {
+		return nil
+	}
+	if !isControlledUploadedArchivePath(scan.ImageLocation) {
+		return nil
+	}
+	root := filepath.Join(os.TempDir(), "justscan", "uploads")
+	relative, err := filepath.Rel(root, filepath.Clean(scan.ImageLocation))
+	if err != nil {
+		return nil
+	}
+	parts := strings.Split(relative, string(filepath.Separator))
+	if len(parts) != 2 {
+		return nil
+	}
+	directoryID, err := uuid.Parse(parts[0])
+	if err != nil || directoryID != scan.ID {
+		// This fallback is for one-shot uploads, whose directory is the scan
+		// UUID. Resumable uploads are cleaned through their session row.
+		return nil
+	}
+	return os.RemoveAll(filepath.Dir(filepath.Clean(scan.ImageLocation)))
 }
 
 func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
@@ -130,6 +172,7 @@ func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) err
 	}
 
 	for _, table := range []string{
+		"archive_upload_sessions",
 		"comments",
 		"scan_intelligence_versions",
 		"vulnerabilities",

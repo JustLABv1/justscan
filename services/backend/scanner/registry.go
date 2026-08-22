@@ -16,7 +16,7 @@ import (
 
 // ResolveRegistryForScan returns the registry to use for a scan request and
 // any auth environment variables required for Trivy-backed execution.
-func ResolveRegistryForScan(ctx context.Context, db *bun.DB, imageName string, registryID *uuid.UUID) (*models.Registry, []string, error) {
+func ResolveRegistryForScan(ctx context.Context, db bun.IDB, imageName string, registryID *uuid.UUID) (*models.Registry, []string, error) {
 	if registryID != nil {
 		registry := &models.Registry{}
 		if err := db.NewSelect().Model(registry).Where("id = ?", *registryID).Scan(ctx); err != nil {

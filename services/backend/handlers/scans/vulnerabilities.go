@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"justscan-backend/functions/authz"
 	effectivesuppressions "justscan-backend/functions/suppressions"
 	vulnerabilityintelligence "justscan-backend/functions/vulnerabilityintelligence"
 	"justscan-backend/functions/vulnerabilityview"
@@ -106,6 +107,23 @@ func intelligenceFilterCondition(filter string) (string, []interface{}, bool) {
 	}
 }
 
+// buildFirstSeenVulnerabilityQuery returns only vulnerability history that the
+// requesting principal is allowed to see.  A scan's image name is not an
+// authorization boundary: scans with the same image can belong to different
+// users or organizations.  Keep the visibility predicate on the joined scan
+// rows so a private scan cannot disclose its completed_at timestamp.
+func buildFirstSeenVulnerabilityQuery(db *bun.DB, scanID uuid.UUID, imageName string, userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID) *bun.SelectQuery {
+	q := db.NewSelect().
+		TableExpr("vulnerabilities AS v").
+		ColumnExpr("v.vuln_id, v.pkg_name, MIN(s.completed_at) AS first_seen_at").
+		Join("JOIN scans AS s ON s.id = v.scan_id").
+		Where("s.image_name = ?", imageName).
+		Where("s.status = ?", models.ScanStatusCompleted).
+		Where("s.id != ?", scanID)
+
+	return authz.ApplyOwnershipVisibility(q, "s", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
+}
+
 func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !validateIntelligenceFilter(c) {
@@ -127,7 +145,7 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 		}
 		offset := (page - 1) * limit
 
-		scan, _, _, ok := LoadAuthorizedScan(c, db, scanID)
+		scan, userID, isAdmin, ok := LoadAuthorizedScan(c, db, scanID)
 		if !ok {
 			return
 		}
@@ -209,15 +227,16 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			FirstSeenAt *time.Time `bun:"first_seen_at"`
 		}
 		var firstSeenRows []firstSeenRow
-		db.NewRaw(`
-			SELECT v.vuln_id, v.pkg_name, MIN(s.completed_at) AS first_seen_at
-			FROM vulnerabilities v
-			JOIN scans s ON s.id = v.scan_id
-			WHERE s.image_name = (SELECT image_name FROM scans WHERE id = ?)
-			  AND s.status = 'completed'
-			  AND s.id != ?
-			GROUP BY v.vuln_id, v.pkg_name
-		`, scanID, scanID).Scan(c.Request.Context(), &firstSeenRows) //nolint:errcheck
+		accessibleOrgIDs, err := authz.ListAccessibleOrgIDs(c.Request.Context(), db, userID, isAdmin)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve vulnerability history visibility"})
+			return
+		}
+		firstSeenQuery := buildFirstSeenVulnerabilityQuery(db, scanID, scan.ImageName, userID, isAdmin, accessibleOrgIDs)
+		if err := firstSeenQuery.GroupExpr("v.vuln_id, v.pkg_name").Scan(c.Request.Context(), &firstSeenRows); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load vulnerability history"})
+			return
+		}
 
 		firstSeenMap := make(map[string]*time.Time, len(firstSeenRows))
 		for i := range firstSeenRows {

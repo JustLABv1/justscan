@@ -4,6 +4,8 @@ import { getApiBase } from './base';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
+export type ApiRequestOptions = Pick<RequestInit, 'signal'>;
+
 type ApiErrorPayload = {
   message?: string;
   error?: string;
@@ -43,15 +45,23 @@ function authHeadersWithoutContentType(): HeadersInit {
 }
 
 async function getErrorMessage(response: Response): Promise<string> {
-  const error = await response.json().catch(() => ({ error: response.statusText })) as ApiErrorPayload;
+  const error = (await response
+    .json()
+    .catch(() => ({ error: response.statusText }))) as ApiErrorPayload;
   return error.message ?? error.error_description ?? error.error ?? response.statusText;
 }
 
-export async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function req<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  options?: ApiRequestOptions
+): Promise<T> {
   const response = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: authHeaders(),
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...options,
   });
 
   if (response.status === 401) {
@@ -70,11 +80,17 @@ export async function req<T>(method: string, path: string, body?: unknown): Prom
   return parseResponseBody<T>(response);
 }
 
-export async function reqForm<T>(method: string, path: string, body: FormData): Promise<T> {
+export async function reqForm<T>(
+  method: string,
+  path: string,
+  body: FormData,
+  options?: ApiRequestOptions
+): Promise<T> {
   const response = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: authHeadersWithoutContentType(),
     body,
+    ...options,
   });
 
   if (response.status === 401) {
@@ -93,11 +109,17 @@ export async function reqForm<T>(method: string, path: string, body: FormData): 
   return parseResponseBody<T>(response);
 }
 
-export async function publicReq<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function publicReq<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  options?: ApiRequestOptions
+): Promise<T> {
   const response = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...options,
   });
 
   if (!response.ok) {
@@ -108,17 +130,26 @@ export async function publicReq<T>(method: string, path: string, body?: unknown)
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string
+  ) {
     super(message);
     this.name = 'ApiError';
   }
 }
 
-export async function sharedReq<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function sharedReq<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  options?: ApiRequestOptions
+): Promise<T> {
   const response = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: authHeaders(),
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...options,
   });
 
   if (!response.ok) {

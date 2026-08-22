@@ -35,6 +35,7 @@ const (
 	defaultHistoryPageSize      = 2000
 	maxCVEHistoryResponseBytes  = 32 << 20
 	maxCVEHistoryErrorBodyBytes = 2048
+	cveHistoryAdvisoryLockKey   = "justscan:cve-history-sync"
 )
 
 var ErrCVEHistorySyncRunning = errors.New("CVE history sync is already running")
@@ -1235,7 +1236,7 @@ func QueueCVEHistorySync(db *bun.DB) bool {
 	}
 	go func() {
 		defer endCVEHistorySync()
-		if err := performCVEHistorySync(runCtx, db, newCVEHistoryClient(), "manual", startedAt); err != nil {
+		if err := performCVEHistorySyncWithAdvisoryLock(runCtx, db, newCVEHistoryClient(), "manual", startedAt); err != nil {
 			log.Warnf("manual CVE history sync failed: %v", err)
 		}
 	}()
@@ -1299,6 +1300,18 @@ func ReconcileOrphanedCVEHistoryRuns(ctx context.Context, db *bun.DB) (int, erro
 	if CurrentCVEHistorySyncStatus().Running {
 		return 0, nil
 	}
+	lockConn, locked, lockErr := acquireCVEHistoryAdvisoryLock(ctx, db)
+	if lockErr != nil {
+		return 0, fmt.Errorf("acquire CVE history reconciliation lock: %w", lockErr)
+	}
+	if !locked {
+		return 0, ErrCVEHistorySyncRunning
+	}
+	defer releaseCVEHistoryAdvisoryLock(lockConn)
+	return reconcileOrphanedCVEHistoryRuns(ctx, db)
+}
+
+func reconcileOrphanedCVEHistoryRuns(ctx context.Context, db *bun.DB) (int, error) {
 	now := time.Now().UTC()
 	result, err := db.NewUpdate().Model((*models.VulnerabilityIntelligenceSyncRun)(nil)).
 		Set("status = ?", "failed").
@@ -1349,7 +1362,53 @@ func runCVEHistorySync(ctx context.Context, db *bun.DB, client *cveHistoryClient
 		return ErrCVEHistorySyncRunning
 	}
 	defer endCVEHistorySync()
-	return performCVEHistorySync(runCtx, db, client, trigger, startedAt)
+	return performCVEHistorySyncWithAdvisoryLock(runCtx, db, client, trigger, startedAt)
+}
+
+func performCVEHistorySyncWithAdvisoryLock(ctx context.Context, db *bun.DB, client *cveHistoryClient, trigger string, startedAt time.Time) error {
+	lockConn, locked, lockErr := acquireCVEHistoryAdvisoryLock(ctx, db)
+	if lockErr != nil {
+		return fmt.Errorf("acquire CVE history sync lock: %w", lockErr)
+	}
+	if !locked {
+		return ErrCVEHistorySyncRunning
+	}
+	defer releaseCVEHistoryAdvisoryLock(lockConn)
+	return performCVEHistorySync(ctx, db, client, trigger, startedAt)
+}
+
+// PostgreSQL advisory locks provide the cross-instance single-flight guard for
+// the CVE feed. The dedicated connection is important: session advisory locks
+// must be released on the same connection, and a pooled *bun.DB may otherwise
+// release on a different session.
+func acquireCVEHistoryAdvisoryLock(ctx context.Context, db *bun.DB) (bun.Conn, bool, error) {
+	if db == nil {
+		return bun.Conn{}, false, fmt.Errorf("database is required")
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return bun.Conn{}, false, err
+	}
+	var locked bool
+	if err := conn.NewRaw(`SELECT pg_try_advisory_lock(hashtextextended(?, 0))`, cveHistoryAdvisoryLockKey).Scan(ctx, &locked); err != nil {
+		_ = conn.Close()
+		return bun.Conn{}, false, err
+	}
+	if !locked {
+		_ = conn.Close()
+		return bun.Conn{}, false, nil
+	}
+	return conn, true, nil
+}
+
+func releaseCVEHistoryAdvisoryLock(conn bun.Conn) {
+	if conn.Conn == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, _ = conn.NewRaw(`SELECT pg_advisory_unlock(hashtextextended(?, 0))`, cveHistoryAdvisoryLockKey).Exec(ctx)
+	_ = conn.Close()
 }
 
 func performCVEHistorySync(ctx context.Context, db *bun.DB, client *cveHistoryClient, trigger string, startedAt time.Time) error {

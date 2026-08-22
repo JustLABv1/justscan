@@ -58,12 +58,21 @@ func BulkDeleteScans(db *bun.DB) gin.HandlerFunc {
 				return
 			}
 		}
+		archiveSessions, err := loadArchiveUploadSessionsForScans(c.Request.Context(), db, ids)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve uploaded archive cleanup"})
+			return
+		}
 
 		if err := db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
 			return deleteScanRecords(ctx, tx, ids)
 		}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete scans"})
 			return
+		}
+		_ = cleanupArchiveUploadSessions(archiveSessions)
+		for index := range scans {
+			_ = cleanupQueuedUploadedArchiveScan(&scans[index])
 		}
 		go audit.Write(context.Background(), db, userID.String(), "scan.bulk_delete",
 			fmt.Sprintf("Bulk deleted %d scans", len(ids)))

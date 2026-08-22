@@ -87,7 +87,7 @@ type osvPackageKey struct {
 }
 
 func AugmentJavaVulnerabilitiesFromOSV(ctx context.Context, db *bun.DB, scanID uuid.UUID, components []models.SBOMComponent, existing []models.Vulnerability) []models.Vulnerability {
-	if !config.Config.Scanner.EnableOSVJavaAugmentation {
+	if !effectiveScannerSettings().EnableOSVJavaAugmentation {
 		return nil
 	}
 

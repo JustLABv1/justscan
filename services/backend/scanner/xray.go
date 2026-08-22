@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"justscan-backend/compliance"
 	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/notifications"
+	"justscan-backend/pipelines"
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
@@ -589,23 +591,32 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	completedAt := time.Now()
 	scan.Status = models.ScanStatusCompleted
 	scan.CompletedAt = &completedAt
+	scan.LastProgressAt = &completedAt
 	scan.ExternalStatus = "completed"
 	scan.CurrentStep = models.ScanStepCompleted
 
-	if _, err := db.NewUpdate().Model(scan).
-		Column("status", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "suppressed_count", "external_scan_id", "external_status", "image_config", "architecture", "os_family", "os_name").
-		Where("id = ?", scan.ID).
-		Exec(ctx); err != nil {
+	result, err := db.NewUpdate().Model(scan).
+		Column("status", "current_step", "last_progress_at", "completed_at", "critical_count", "high_count", "medium_count", "low_count", "unknown_count", "suppressed_count", "external_scan_id", "external_status", "image_config", "architecture", "os_family", "os_name").
+		Where("id = ? AND status = ?", scan.ID, models.ScanStatusRunning).
+		Exec(ctx)
+	if err != nil {
 		return fmt.Errorf("failed to mark xray scan as completed: %w", err)
+	}
+	rows, rowsErr := result.RowsAffected()
+	if rowsErr != nil {
+		return fmt.Errorf("failed to confirm xray scan completion: %w", rowsErr)
+	}
+	if rows == 0 {
+		return nil
+	}
+	if err := appendTerminalScanStepLog(ctx, db, scan.ID, models.ScanStepCompleted); err != nil {
+		return err
 	}
 	if err := RecordIntelligenceSnapshot(ctx, db, scan); err != nil {
 		log.Warnf("Xray: intelligence snapshot failed for scan %s (non-fatal): %v", scan.ID, err)
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Scan-time intelligence snapshot failed, but the Xray result remains available: %v", err))
 	} else {
 		recordScanStepOutput(ctx, db, scan.ID, "Stored scan-time vulnerability intelligence and refreshed current posture.")
-	}
-	if err := setScanStep(ctx, db, scan, models.ScanStepCompleted); err != nil {
-		return err
 	}
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray scan completed with %d total findings.", scan.CriticalCount+scan.HighCount+scan.MediumCount+scan.LowCount+scan.UnknownCount))
 	recordScanStepOutput(ctx, db, scan.ID, "Queued compliance evaluation, auto-tagging, and completion notifications.")
@@ -620,6 +631,9 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		Details: fmt.Sprintf("Critical: %d  High: %d  Medium: %d  Low: %d",
 			scan.CriticalCount, scan.HighCount, scan.MediumCount, scan.LowCount),
 	})
+	if err := pipelines.QueueCallbackForScan(context.Background(), db, scan.ID.String()); err != nil && err != sql.ErrNoRows {
+		log.Warnf("Xray: failed to queue pipeline callback for completed scan %s: %v", scan.ID, err)
+	}
 
 	return nil
 }

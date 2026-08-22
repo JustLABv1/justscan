@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"justscan-backend/functions/audit"
 	"justscan-backend/functions/authz"
@@ -17,6 +18,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
 )
+
+const scanGroupDeletionTimeout = 30 * time.Minute
 
 // DeleteScanImageGroup deletes every writable scan for an image in the active scope.
 func DeleteScanImageGroup(db *bun.DB) gin.HandlerFunc {
@@ -76,13 +79,18 @@ func deleteScanGroup(db *bun.DB, requireTag bool) gin.HandlerFunc {
 			return
 		}
 
-		if err := db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
+		deleteCtx, cancelDelete := context.WithTimeout(c.Request.Context(), scanGroupDeletionTimeout)
+		deletionStartedAt := time.Now()
+		err = db.RunInTx(deleteCtx, nil, func(ctx context.Context, tx bun.Tx) error {
 			return deleteScanRecords(ctx, tx, scanIDs)
-		}); err != nil {
+		})
+		cancelDelete()
+		if err != nil {
 			log.WithError(err).Errorf("delete scan group failed for %s", imageName)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": scanGroupDeletionErrorMessage(err)})
 			return
 		}
+		log.WithField("duration", time.Since(deletionStartedAt)).Infof("deleted scan group for %s", imageName)
 		_ = cleanupArchiveUploadSessions(archiveSessions)
 		for index := range scans {
 			_ = cleanupQueuedUploadedArchiveScan(&scans[index])
@@ -101,7 +109,7 @@ func deleteScanGroup(db *bun.DB, requireTag bool) gin.HandlerFunc {
 
 func scanGroupDeletionErrorMessage(err error) string {
 	var networkError net.Error
-	if strings.Contains(err.Error(), "lock vulnerabilities before scan deletion") &&
+	if strings.Contains(err.Error(), "lock vulnerability mutations before scan deletion") &&
 		(errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &networkError) && networkError.Timeout())) {
 		return "database timed out while preparing scan history deletion; please retry"
 	}

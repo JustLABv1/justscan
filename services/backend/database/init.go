@@ -32,10 +32,11 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 		pgdriver.WithDatabase(dbName),
 		pgdriver.WithApplicationName("exflow"),
 		pgdriver.WithTLSConfig(nil),
-		// pgdriver defaults socket reads to 10 seconds, which is too short for
-		// legitimate bulk history deletion and migrations on larger instances.
-		// A shorter context deadline still takes precedence for bounded callers.
-		pgdriver.WithReadTimeout(2*time.Minute),
+		// A group-history deletion can legitimately hold a transaction while it
+		// removes a large number of findings and their dependents. The handler
+		// applies its own 30-minute context deadline; keep the transport deadline
+		// aligned with it so pgdriver does not abort the operation first.
+		pgdriver.WithReadTimeout(30*time.Minute),
 	)
 
 	sqldb := sql.OpenDB(pgconn)

@@ -1,5 +1,6 @@
 import { req, reqForm, type ApiRequestOptions } from './core';
 import { appendScope } from './scope';
+import type { EnqueuedBackgroundJobResponse } from './types/background-jobs';
 import type {
   ResourceShare,
   VulnerabilityViewPreferenceResponse,
@@ -135,13 +136,13 @@ export const getScanImageStats = (image: string) => {
 export const deleteScanImageGroup = (image: string) => {
   const params = new URLSearchParams({ image });
   appendScope(params);
-  return req<BulkDeleteScansResponse>('DELETE', `/api/v1/scans/images?${params}`);
+  return req<EnqueuedBackgroundJobResponse>('DELETE', `/api/v1/scans/images?${params}`);
 };
 
 export const deleteScanArtifactGroup = (image: string, tag: string) => {
   const params = new URLSearchParams({ image, tag });
   appendScope(params);
-  return req<BulkDeleteScansResponse>('DELETE', `/api/v1/scans/artifacts?${params}`);
+  return req<EnqueuedBackgroundJobResponse>('DELETE', `/api/v1/scans/artifacts?${params}`);
 };
 
 export const getScanQueueSummary = () => {

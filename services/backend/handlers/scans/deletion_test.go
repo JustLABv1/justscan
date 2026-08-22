@@ -14,6 +14,25 @@ import (
 	"justscan-backend/pkg/models"
 )
 
+func TestScanDeletionRemovesLinkedBackgroundJobs(t *testing.T) {
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock database: %v", err)
+	}
+	defer sqldb.Close()
+	db := bun.NewDB(sqldb, pgdialect.New())
+	defer db.Close()
+
+	mock.ExpectExec(`(?s)DELETE FROM "background_jobs".*metadata.*scan_id.*resource_id.*payload`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	if err := deleteScanBackgroundJobs(context.Background(), db, []uuid.UUID{uuid.New()}); err != nil {
+		t.Fatalf("delete linked background jobs: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestScanDeletionExplicitlyRemovesCurrentAndLegacyDependents(t *testing.T) {
 	sqldb, mock, err := sqlmock.New()
 	if err != nil {

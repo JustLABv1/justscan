@@ -13,7 +13,9 @@ Verify `allow_origins` includes the public application URL, reverse proxy routes
 
 ## Scans remain pending or stale
 
-Inspect backend logs and scanner health. Check registry access, available worker capacity, command timeout settings, and vulnerability database refreshes.
+Open the scan's Process Center entry and compare its state and phase with the scan detail. **Queued** means the request was accepted but no worker has claimed it; **running** means a worker is active; **failed** means execution stopped with an error; and **cancelled** means an operator stopped it. A phase without a percentage is expected when the scanner has no meaningful total. Inspect backend logs and scanner health, then check registry access, available worker capacity, command timeout settings, and vulnerability database refreshes. After a backend restart, allow the durable recovery pass to requeue pending work before treating a queued scan as lost.
+
+If the scan was deleted, its linked Process Center entry is deleted with it. Process Center records are operational history; the scan record remains the source of truth for findings, SBOM data, and the release/policy verdict. There is no Process Center retry action: address the recorded execution error and submit a fresh scan. A policy failure is not a scanner retry condition.
 
 ## CVE Intelligence sync is slow or failing
 

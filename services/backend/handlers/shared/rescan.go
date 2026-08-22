@@ -75,6 +75,11 @@ func RescanShared(db *bun.DB) gin.HandlerFunc {
 
 		var envVars []string
 		if isAuthenticated {
+			// Authenticated shared-link rescans are personal work, even when the
+			// source scan belongs to an organization. Keep an explicit owner so
+			// durable process records use the same authorization boundary.
+			newScan.OwnerType = models.OwnerTypeUser
+			newScan.OwnerUserID = &resolvedUserID
 			registry, resolvedEnvVars, err := scanner.ResolveRegistryForScan(c.Request.Context(), db, orig.ImageName, orig.RegistryID)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

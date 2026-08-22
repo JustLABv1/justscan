@@ -9,10 +9,12 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	workerjobs "justscan-backend/backgroundjobs"
 	"justscan-backend/config"
 	"justscan-backend/database"
 	gitrepositories "justscan-backend/functions/gitrepositories"
 	"justscan-backend/handlers/registries"
+	scanhandlers "justscan-backend/handlers/scans"
 	"justscan-backend/notifications"
 	"justscan-backend/pipelines"
 	"justscan-backend/router"
@@ -79,6 +81,8 @@ func main() {
 
 	// Start async scan worker pool
 	scanner.InitWorker(db)
+	workerjobs.Register("scan_group_deletion", scanhandlers.ProcessScanGroupDeletion)
+	workerjobs.Start(db)
 	notifications.Start(db)
 	pipelines.Start(db)
 
@@ -99,6 +103,7 @@ func main() {
 	scheduler.Stop()
 	gitrepositories.Stop()
 	registries.StopHealthChecks()
+	workerjobs.Stop()
 	notifications.Stop()
 	pipelines.Stop()
 

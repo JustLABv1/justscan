@@ -173,6 +173,9 @@ func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) err
 	if err := clearScanReferences(ctx, db, scanIDs); err != nil {
 		return err
 	}
+	if err := deleteScanBackgroundJobs(ctx, db, scanIDs); err != nil {
+		return err
+	}
 
 	for _, table := range []string{
 		"archive_upload_sessions",
@@ -207,6 +210,29 @@ func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) err
 	_, err := db.NewDelete().Model((*models.Scan)(nil)).Where("id IN (?)", bun.In(scanIDs)).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("delete scans: %w", err)
+	}
+	return nil
+}
+
+// deleteScanBackgroundJobs keeps the Process Center in lockstep with scan
+// deletion. Scan mirrors store their resource identity in both metadata and
+// payload so this remains compatible with jobs created before explicit
+// resource columns are available.
+func deleteScanBackgroundJobs(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
+	if len(scanIDs) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(scanIDs))
+	for _, scanID := range scanIDs {
+		ids = append(ids, scanID.String())
+	}
+	_, err := db.NewDelete().TableExpr(`"background_jobs"`).Where(
+		"type = ? AND (metadata->>'scan_id' IN (?) OR metadata->>'resource_id' IN (?) OR payload->>'scan_id' IN (?) OR payload->>'resource_id' IN (?))",
+		scanner.ScanBackgroundJobType,
+		bun.In(ids), bun.In(ids), bun.In(ids), bun.In(ids),
+	).Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("delete background jobs for scans: %w", err)
 	}
 	return nil
 }

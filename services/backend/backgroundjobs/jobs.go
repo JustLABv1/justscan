@@ -4,9 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,14 +21,18 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/driver/pgdriver"
 )
 
 const (
-	defaultPollInterval = 750 * time.Millisecond
-	defaultLease        = 30 * time.Second
-	requeueDelay        = 2 * time.Second
-	defaultConcurrency  = 2
-	maxListLimit        = 100
+	defaultPollInterval   = 750 * time.Millisecond
+	defaultLease          = 30 * time.Second
+	requeueDelay          = 2 * time.Second
+	defaultConcurrency    = 2
+	maxListLimit          = 100
+	maxTransientRetries   = 5
+	maxRetryDelay         = 30 * time.Second
+	jobStateUpdateTimeout = 15 * time.Second
 )
 
 // ErrRequeue tells the worker that a processor completed one small
@@ -442,7 +450,9 @@ func claim(ctx context.Context, db *bun.DB, workerID string) (*models.Background
 func process(ctx context.Context, db *bun.DB, job *models.BackgroundJob) {
 	processor, ok := processorFor(job.Type)
 	if !ok {
-		markFailed(context.Background(), db, job, fmt.Errorf("no processor registered for job type %q", job.Type))
+		updateCtx, cancel := context.WithTimeout(context.Background(), jobStateUpdateTimeout)
+		markFailed(updateCtx, db, job, fmt.Errorf("no processor registered for job type %q", job.Type))
+		cancel()
 		return
 	}
 
@@ -464,17 +474,174 @@ func process(ctx context.Context, db *bun.DB, job *models.BackgroundJob) {
 			return
 		}
 		if errors.Is(err, ErrRequeue) {
-			if requeueErr := requeue(context.Background(), db, job); requeueErr != nil {
+			updateCtx, cancel := context.WithTimeout(context.Background(), jobStateUpdateTimeout)
+			if requeueErr := requeue(updateCtx, db, job); requeueErr != nil {
 				log.WithError(requeueErr).WithField("job_id", job.ID).Error("background job requeue update failed")
 			}
+			cancel()
 			return
 		}
-		markFailed(context.Background(), db, job, err)
+		if shouldAutoRetry(job) && isTransientError(err) {
+			updateCtx, cancel := context.WithTimeout(context.Background(), jobStateUpdateTimeout)
+			requeued, retryErr := requeueTransient(updateCtx, db, job)
+			cancel()
+			if retryErr != nil {
+				log.WithError(retryErr).WithField("job_id", job.ID).Error("background job transient retry update failed")
+			} else if requeued {
+				return
+			}
+		}
+		updateCtx, cancel := context.WithTimeout(context.Background(), jobStateUpdateTimeout)
+		markFailed(updateCtx, db, job, err)
+		cancel()
 		return
 	}
-	if err := markSucceeded(context.Background(), db, job); err != nil {
+	updateCtx, cancel := context.WithTimeout(context.Background(), jobStateUpdateTimeout)
+	if err := markSucceeded(updateCtx, db, job); err != nil {
 		log.WithError(err).WithField("job_id", job.ID).Error("background job completion update failed")
 	}
+	cancel()
+}
+
+// shouldAutoRetry is deliberately explicit. Most background processors may
+// have external side effects, so repeating them after a socket timeout could
+// duplicate work. Scan-group deletion is the one processor whose execution
+// unit is a database transaction and whose payload is persisted only after a
+// successful batch commit, making a bounded retry safe.
+func shouldAutoRetry(job *models.BackgroundJob) bool {
+	return job != nil && job.Type == models.BackgroundJobTypeScanGroupDeletion
+}
+
+// isTransientError identifies failures for which repeating the same bounded
+// unit is safe and useful. Scan deletion processors only persist their payload
+// after a transaction commits, so a retry cannot skip a partially completed
+// batch. Keep this classifier conservative: permanent constraint and data
+// errors must still become terminal jobs instead of retrying forever.
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || errors.Is(err, driver.ErrBadConn) || errors.Is(err, sql.ErrConnDone) {
+		return true
+	}
+	var networkError net.Error
+	if errors.As(err, &networkError) {
+		return networkError.Timeout() || networkError.Temporary()
+	}
+	var postgresError pgdriver.Error
+	if errors.As(err, &postgresError) {
+		switch postgresError.Field('C') {
+		case "40001", // serialization_failure
+			"40P01", // deadlock_detected
+			"55P03", // lock_not_available
+			"57014": // statement_timeout / query cancellation
+			return true
+		}
+	}
+	return false
+}
+
+func retryCount(job *models.BackgroundJob) int {
+	if job == nil || job.Payload == nil {
+		return 0
+	}
+	value, ok := job.Payload["transient_retry_count"]
+	if !ok {
+		return 0
+	}
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int8:
+		return int(typed)
+	case int16:
+		return int(typed)
+	case int32:
+		return int(typed)
+	case int64:
+		return int(typed)
+	case float32:
+		return int(typed)
+	case float64:
+		return int(typed)
+	case json.Number:
+		count, _ := strconv.Atoi(string(typed))
+		return count
+	case string:
+		count, _ := strconv.Atoi(typed)
+		return count
+	default:
+		return 0
+	}
+}
+
+func retryDelay(attempt int) time.Duration {
+	if attempt <= 0 {
+		return requeueDelay
+	}
+	delay := requeueDelay
+	for index := 1; index < attempt; index++ {
+		if delay >= maxRetryDelay/2 {
+			return maxRetryDelay
+		}
+		delay *= 2
+	}
+	if delay > maxRetryDelay {
+		return maxRetryDelay
+	}
+	return delay
+}
+
+// requeueTransient records the retry count in the durable execution payload,
+// releases the current lease, and delays the next claim. Returning false
+// means the retry budget is exhausted and the caller should mark the job
+// failed with the original private cause.
+func requeueTransient(ctx context.Context, db *bun.DB, job *models.BackgroundJob) (bool, error) {
+	if job == nil {
+		return false, errors.New("background job is missing")
+	}
+	attempt := retryCount(job) + 1
+	if attempt > maxTransientRetries {
+		return false, nil
+	}
+	if job.Payload == nil {
+		job.Payload = models.JSONObject{}
+	}
+	job.Payload["transient_retry_count"] = attempt
+	now := time.Now().UTC()
+	delay := retryDelay(attempt)
+	phase := fmt.Sprintf("Retrying after a temporary database error (%d/%d)", attempt, maxTransientRetries)
+	query := db.NewUpdate().Model((*models.BackgroundJob)(nil)).
+		Set("payload = ?", job.Payload).
+		Set("phase = ?", phase).
+		Set("error_message = ?", "Temporary database issue; retrying automatically").
+		Set("lease_owner = ''").
+		Set("lease_until = ?", now.Add(delay)).
+		Set("updated_at = ?", now).
+		Where("id = ?", job.ID).
+		Where("status = ?", models.BackgroundJobStatusRunning)
+	if job.LeaseOwner != "" {
+		query = query.Where("lease_owner = ?", job.LeaseOwner)
+	}
+	result, err := query.Exec(ctx)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if rows == 0 {
+		return false, errors.New("background job lease is no longer owned")
+	}
+	log.WithFields(log.Fields{
+		"job_id":       job.ID,
+		"job_type":     job.Type,
+		"attempt":      attempt,
+		"max_attempts": maxTransientRetries,
+		"retry_after":  delay,
+	}).Warn("background job hit a transient error; requeued")
+	return true, nil
 }
 
 func requeue(ctx context.Context, db *bun.DB, job *models.BackgroundJob) error {

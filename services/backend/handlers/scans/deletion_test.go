@@ -47,8 +47,15 @@ func TestScanDeletionExplicitlyRemovesCurrentAndLegacyDependents(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 		mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, 1))
 	}
-	mock.ExpectQuery("SELECT EXISTS").
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	for range 2 {
+		mock.ExpectQuery("SELECT EXISTS").
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	}
+	mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, 1))
+	for range 3 {
+		mock.ExpectQuery("SELECT EXISTS").
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	}
 	mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	scanIDs := []uuid.UUID{uuid.New(), uuid.New()}

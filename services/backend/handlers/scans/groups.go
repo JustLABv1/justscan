@@ -23,6 +23,10 @@ import (
 
 const scanDeletionBatchSize = 8
 
+// Keep each transaction well below the driver's transport deadline. A timed
+// out batch is rolled back and retried durably without advancing its payload.
+const scanGroupDeletionBatchTimeout = 5 * time.Minute
+
 // DeleteScanImageGroup deletes every writable scan for an image in the active scope.
 func DeleteScanImageGroup(db *bun.DB) gin.HandlerFunc {
 	return deleteScanGroup(db, false)
@@ -195,7 +199,7 @@ func ProcessScanGroupDeletion(ctx context.Context, db *bun.DB, job *models.Backg
 			if err != nil {
 				return workerjobs.NewSafeError("failed to resolve uploaded archive cleanup", err)
 			}
-			batchCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			batchCtx, cancel := context.WithTimeout(ctx, scanGroupDeletionBatchTimeout)
 			err = db.RunInTx(batchCtx, nil, func(txCtx context.Context, tx bun.Tx) error {
 				return deleteScanRecords(txCtx, tx, batch)
 			})
@@ -231,6 +235,40 @@ func ProcessScanGroupDeletion(ctx context.Context, db *bun.DB, job *models.Backg
 	go audit.Write(context.Background(), db, job.UserID.String(), "scan.group_delete",
 		fmt.Sprintf("Deleted %d scans for %s", total, deletionAuditTarget(job)))
 	return nil
+}
+
+func isRetryableScanDeletionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var networkError net.Error
+	if errors.As(err, &networkError) && networkError.Timeout() {
+		return true
+	}
+
+	message := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"i/o timeout",
+		"connection reset",
+		"connection refused",
+		"server closed the connection",
+		"unexpected eof",
+		"broken pipe",
+		"deadlock detected",
+		"could not serialize access",
+		"canceling statement due to lock timeout",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func deletionAuditTarget(job *models.BackgroundJob) string {
@@ -278,10 +316,11 @@ func scanIDsFromPayload(payload models.JSONObject) ([]uuid.UUID, error) {
 }
 
 func scanGroupDeletionErrorMessage(err error) string {
-	var networkError net.Error
-	if strings.Contains(err.Error(), "lock vulnerability mutations before scan deletion") &&
-		(errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &networkError) && networkError.Timeout())) {
-		return "database timed out while preparing scan history deletion; please retry"
+	if isRetryableScanDeletionError(err) {
+		if strings.Contains(err.Error(), "lock vulnerability mutations before scan deletion") {
+			return "database timed out while preparing scan history deletion; please retry"
+		}
+		return "database timed out while deleting scan history; please retry"
 	}
 	return "failed to delete scan group"
 }

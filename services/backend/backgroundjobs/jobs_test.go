@@ -3,12 +3,16 @@ package backgroundjobs
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"justscan-backend/pkg/models"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 )
@@ -81,5 +85,136 @@ func TestClaimExcludesPassiveJobsAndUsesSkipLocked(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+type timeoutTestError struct{}
+
+func (timeoutTestError) Error() string   { return "read tcp: i/o timeout" }
+func (timeoutTestError) Timeout() bool   { return true }
+func (timeoutTestError) Temporary() bool { return true }
+
+func TestIsTransientErrorRecognizesWrappedDatabaseTimeouts(t *testing.T) {
+	err := fmt.Errorf("delete sbom_components: %w", timeoutTestError{})
+	if !isTransientError(err) {
+		t.Fatal("wrapped network timeout should be retried")
+	}
+	if !isTransientError(fmt.Errorf("query canceled: %w", context.DeadlineExceeded)) {
+		t.Fatal("context deadline should be retried")
+	}
+	if !isTransientError(driver.ErrBadConn) {
+		t.Fatal("bad database connections should be retried")
+	}
+	if isTransientError(errors.New("duplicate key violates a permanent constraint")) {
+		t.Fatal("permanent constraint errors must not be retried")
+	}
+}
+
+func TestShouldAutoRetryOnlyIdempotentScanGroupDeletion(t *testing.T) {
+	if !shouldAutoRetry(&models.BackgroundJob{Type: models.BackgroundJobTypeScanGroupDeletion}) {
+		t.Fatal("scan-group deletion should opt into transient retries")
+	}
+	if shouldAutoRetry(&models.BackgroundJob{Type: "future_external_side_effect"}) {
+		t.Fatal("unknown processors must not inherit automatic retries")
+	}
+}
+
+func TestProcessDoesNotRetryExternalSideEffectJobs(t *testing.T) {
+	tests := []struct {
+		name          string
+		jobType       string
+		expectRequeue bool
+	}{
+		{name: "scan group deletion", jobType: models.BackgroundJobTypeScanGroupDeletion, expectRequeue: true},
+		{name: "future external side effect", jobType: "future_external_side_effect", expectRequeue: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sqldb, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("create sqlmock: %v", err)
+			}
+			defer sqldb.Close()
+			db := bun.NewDB(sqldb, pgdialect.New())
+			defer db.Close()
+
+			Register(test.jobType, func(context.Context, *bun.DB, *models.BackgroundJob) error {
+				return fmt.Errorf("delete sbom_components: %w", timeoutTestError{})
+			})
+			job := &models.BackgroundJob{
+				ID:         uuid.New(),
+				Type:       test.jobType,
+				Status:     models.BackgroundJobStatusRunning,
+				LeaseOwner: "worker-a",
+				Payload:    models.JSONObject{"scan_ids": []string{uuid.NewString()}},
+			}
+			if test.expectRequeue {
+				mock.ExpectExec(`UPDATE "background_jobs" AS "background_job" SET .*payload.*transient_retry_count.*phase.*lease_owner.*lease_until.*WHERE \(id = .*status = .*lease_owner =`).
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			} else {
+				mock.ExpectExec(`UPDATE "background_jobs" AS "background_job" SET .*status = 'failed'.*WHERE \(id = .*status = .*lease_owner =`).
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			}
+
+			process(context.Background(), db, job)
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatalf("unmet SQL expectations: %v", err)
+			}
+		})
+	}
+}
+
+func TestRetryDelayUsesBoundedExponentialBackoff(t *testing.T) {
+	want := []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 30 * time.Second, 30 * time.Second}
+	for attempt, expected := range want {
+		if got := retryDelay(attempt + 1); got != expected {
+			t.Fatalf("attempt %d delay = %s, want %s", attempt+1, got, expected)
+		}
+	}
+}
+
+func TestRequeueTransientPersistsRetryStateAndReleasesLease(t *testing.T) {
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer sqldb.Close()
+	db := bun.NewDB(sqldb, pgdialect.New())
+	defer db.Close()
+
+	job := &models.BackgroundJob{
+		ID:         uuid.New(),
+		Type:       models.BackgroundJobTypeScanGroupDeletion,
+		Status:     models.BackgroundJobStatusRunning,
+		LeaseOwner: "worker-a",
+		Payload:    models.JSONObject{"scan_ids": []string{uuid.NewString()}},
+	}
+	mock.ExpectExec(`UPDATE "background_jobs" AS "background_job" SET .*payload.*phase.*error_message.*lease_owner.*lease_until.*updated_at.*WHERE \(id = .*status = .*lease_owner =`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	requeued, err := requeueTransient(context.Background(), db, job)
+	if err != nil {
+		t.Fatalf("requeue transient: %v", err)
+	}
+	if !requeued {
+		t.Fatal("expected retry to be persisted")
+	}
+	if got := retryCount(job); got != 1 {
+		t.Fatalf("retry count = %d, want 1", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestRequeueTransientStopsAfterRetryBudget(t *testing.T) {
+	job := &models.BackgroundJob{Payload: models.JSONObject{"transient_retry_count": maxTransientRetries}}
+	requeued, err := requeueTransient(context.Background(), nil, job)
+	if err != nil {
+		t.Fatalf("retry budget check: %v", err)
+	}
+	if requeued {
+		t.Fatal("retry budget exhaustion must not requeue")
 	}
 }

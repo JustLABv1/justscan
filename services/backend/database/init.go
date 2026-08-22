@@ -32,6 +32,11 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 		pgdriver.WithDatabase(dbName),
 		pgdriver.WithApplicationName("exflow"),
 		pgdriver.WithTLSConfig(nil),
+		// pgdriver defaults socket reads to 10 seconds. A large scan-history
+		// deletion can legitimately spend longer waiting for row locks or
+		// removing SBOM dependents, so the driver deadline must not abort the
+		// query before its caller's bounded context does.
+		pgdriver.WithReadTimeout(30*time.Minute),
 	)
 
 	sqldb := sql.OpenDB(pgconn)

@@ -285,19 +285,52 @@ func deleteScanFindingDependents(ctx context.Context, db bun.IDB, scanIDs []uuid
 // deleteScanSBOMDependents handles installations created before all SBOM graph
 // foreign keys consistently cascaded.
 func deleteScanSBOMDependents(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
-	exists, err := scanDeletionColumnExists(ctx, db, "sbom_dependencies", "document_id")
+	// Component links can point across scans when an older importer reused an
+	// SBOM component. Remove them by component as well as by vulnerability so
+	// deleting the component does not invoke a full-table FK check or leave a
+	// legacy NO ACTION constraint blocking the transaction.
+	componentsHaveScanID, err := scanDeletionColumnExists(ctx, db, "sbom_components", "scan_id")
 	if err != nil {
-		return fmt.Errorf("check sbom_dependencies.document_id: %w", err)
+		return fmt.Errorf("check sbom_components.scan_id: %w", err)
 	}
-	if !exists {
+	if componentsHaveScanID {
+		linksHaveComponentID, err := scanDeletionColumnExists(ctx, db, "vulnerability_component_links", "component_id")
+		if err != nil {
+			return fmt.Errorf("check vulnerability_component_links.component_id: %w", err)
+		}
+		if linksHaveComponentID {
+			if _, err := db.NewDelete().TableExpr("vulnerability_component_links").Where(
+				"component_id IN (SELECT id FROM sbom_components WHERE scan_id IN (?))",
+				bun.In(scanIDs),
+			).Exec(ctx); err != nil {
+				return fmt.Errorf("delete vulnerability_component_links by component: %w", err)
+			}
+		}
+	}
+
+	conditions := make([]string, 0, 3)
+	args := make([]interface{}, 0, 3)
+	for _, relation := range []struct {
+		column string
+		query  string
+	}{
+		{column: "document_id", query: "document_id IN (SELECT id FROM sbom_documents WHERE scan_id IN (?))"},
+		{column: "from_component_id", query: "from_component_id IN (SELECT id FROM sbom_components WHERE scan_id IN (?))"},
+		{column: "to_component_id", query: "to_component_id IN (SELECT id FROM sbom_components WHERE scan_id IN (?))"},
+	} {
+		exists, err := scanDeletionColumnExists(ctx, db, "sbom_dependencies", relation.column)
+		if err != nil {
+			return fmt.Errorf("check sbom_dependencies.%s: %w", relation.column, err)
+		}
+		if exists {
+			conditions = append(conditions, relation.query)
+			args = append(args, bun.In(scanIDs))
+		}
+	}
+	if len(conditions) == 0 {
 		return nil
 	}
-	_, err = db.NewDelete().TableExpr("sbom_dependencies").Where(`
-		document_id IN (SELECT id FROM sbom_documents WHERE scan_id IN (?))
-		OR from_component_id IN (SELECT id FROM sbom_components WHERE scan_id IN (?))
-		OR to_component_id IN (SELECT id FROM sbom_components WHERE scan_id IN (?))
-	`, bun.In(scanIDs), bun.In(scanIDs), bun.In(scanIDs)).Exec(ctx)
-	if err != nil {
+	if _, err := db.NewDelete().TableExpr("sbom_dependencies").Where(strings.Join(conditions, "\nOR\n"), args...).Exec(ctx); err != nil {
 		return fmt.Errorf("delete sbom_dependencies: %w", err)
 	}
 	return nil

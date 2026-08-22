@@ -15,6 +15,7 @@ import (
 	"justscan-backend/compliance"
 	baseauth "justscan-backend/functions/auth"
 	"justscan-backend/functions/authz"
+	vulnerabilityintelligence "justscan-backend/functions/vulnerabilityintelligence"
 	scanhandlers "justscan-backend/handlers/scans"
 	"justscan-backend/pkg/models"
 
@@ -342,7 +343,7 @@ func applyListFilters(q *bun.SelectQuery, input ListScansInput) (*bun.SelectQuer
 }
 
 func intelligenceFilterCondition(scanExpr, filter string) (string, []interface{}, bool) {
-	prefix := "EXISTS (SELECT 1 FROM vulnerabilities AS v JOIN vulnerability_postures AS p ON p.finding_id = v.id JOIN scans AS intelligence_scan ON intelligence_scan.id = v.scan_id WHERE v.scan_id::text = " + scanExpr + "::text AND (p.change_event_id IS NOT NULL OR (intelligence_scan.completed_at IS NOT NULL AND p.observed_at > intelligence_scan.completed_at)) AND "
+	prefix := "EXISTS (SELECT 1 FROM vulnerabilities AS v JOIN vulnerability_postures AS p ON p.finding_id = v.id JOIN scans AS intelligence_scan ON intelligence_scan.id = v.scan_id WHERE v.scan_id::text = " + scanExpr + "::text AND " + vulnerabilityintelligence.PostScanChangeCondition("p", "intelligence_scan") + " AND "
 	switch filter {
 	case "changed":
 		return prefix + "p.state IS NOT NULL AND p.state <> ?)", []interface{}{models.PostureStateUnchanged}, true

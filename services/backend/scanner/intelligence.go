@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	vulnerabilityintelligence "justscan-backend/functions/vulnerabilityintelligence"
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
@@ -421,6 +422,10 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 		}
 		findings = lockedFindings
 	}
+	baselineByScanID, err := loadScanIntelligenceBaselines(ctx, db, findings)
+	if err != nil {
+		return nil, fmt.Errorf("load scan completion baselines for posture refresh: %w", err)
+	}
 
 	identityByFinding := make(map[uuid.UUID]vulnerabilityFindingIdentity, len(findings))
 	for _, finding := range findings {
@@ -508,7 +513,11 @@ func refreshPosturesWithChanges(ctx context.Context, db bun.IDB, keys []intellig
 		}
 
 		exactKey := intelligenceKeyString(intelligenceFindingKey{VulnID: finding.VulnID, PackageName: finding.PkgName})
-		latest := latestEvidenceForFinding(evidenceByKey[exactKey], wildcardEvidenceByVuln[finding.VulnID])
+		latest := latestPostScanEvidenceForFinding(
+			evidenceByKey[exactKey],
+			wildcardEvidenceByVuln[finding.VulnID],
+			baselineByScanID[finding.ScanID],
+		)
 		if len(latest) == 0 {
 			continue
 		}
@@ -715,6 +724,67 @@ func postureEventForTransition(findingID uuid.UUID, previous *models.Vulnerabili
 type evidenceCandidate struct {
 	record      models.VulnerabilityIntelligenceEvidence
 	specificity int
+}
+
+func loadScanIntelligenceBaselines(ctx context.Context, db bun.IDB, findings []models.Vulnerability) (map[uuid.UUID]*time.Time, error) {
+	baselines := make(map[uuid.UUID]*time.Time)
+	if len(findings) == 0 {
+		return baselines, nil
+	}
+
+	scanIDs := make([]uuid.UUID, 0, len(findings))
+	seen := make(map[uuid.UUID]bool, len(findings))
+	for _, finding := range findings {
+		if finding.ScanID == uuid.Nil || seen[finding.ScanID] {
+			continue
+		}
+		seen[finding.ScanID] = true
+		scanIDs = append(scanIDs, finding.ScanID)
+	}
+	if len(scanIDs) == 0 {
+		return baselines, nil
+	}
+
+	type baselineRow struct {
+		ID          uuid.UUID  `bun:"id"`
+		CompletedAt *time.Time `bun:"completed_at"`
+	}
+	var rows []baselineRow
+	if err := db.NewSelect().
+		TableExpr("scans").
+		Column("id", "completed_at").
+		Where("id IN (?)", bun.In(scanIDs)).
+		Scan(ctx, &rows); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		baselines[row.ID] = row.CompletedAt
+	}
+	return baselines, nil
+}
+
+// latestPostScanEvidenceForFinding excludes intelligence already known when
+// the scan completed. Change-event evidence uses its local creation time
+// because a provider may report an old observed_at value for a newly received
+// change.
+func latestPostScanEvidenceForFinding(exact, wildcard []models.VulnerabilityIntelligenceEvidence, completedAt *time.Time) []models.VulnerabilityIntelligenceEvidence {
+	if completedAt == nil || completedAt.IsZero() {
+		return latestEvidenceForFinding(exact, wildcard)
+	}
+	filter := func(records []models.VulnerabilityIntelligenceEvidence) []models.VulnerabilityIntelligenceEvidence {
+		result := make([]models.VulnerabilityIntelligenceEvidence, 0, len(records))
+		for _, record := range records {
+			detectedAt := record.ObservedAt
+			if record.ChangeEventID != nil && !record.CreatedAt.IsZero() {
+				detectedAt = record.CreatedAt
+			}
+			if detectedAt.After(*completedAt) {
+				result = append(result, record)
+			}
+		}
+		return result
+	}
+	return latestEvidenceForFinding(filter(exact), filter(wildcard))
 }
 
 // latestEvidenceForFinding selects one current record per source. Feed
@@ -1115,7 +1185,13 @@ func AttachVulnerabilityIntelligence(ctx context.Context, db *bun.DB, vulnerabil
 	}
 
 	var postures []models.VulnerabilityPosture
-	if err := db.NewSelect().Model(&postures).Where("finding_id IN (?)", bun.In(findingIDs)).Scan(ctx); err != nil {
+	if err := db.NewSelect().
+		TableExpr("vulnerability_postures AS p").
+		ColumnExpr("p.*").
+		Join("JOIN scans AS intelligence_scan ON intelligence_scan.id = p.scan_id").
+		Where("p.finding_id IN (?)", bun.In(findingIDs)).
+		Where(vulnerabilityintelligence.PostScanChangeCondition("p", "intelligence_scan")).
+		Scan(ctx, &postures); err != nil {
 		return fmt.Errorf("load current vulnerability postures: %w", err)
 	}
 	postureByFinding := make(map[uuid.UUID]*models.VulnerabilityPosture, len(postures))

@@ -309,6 +309,40 @@ func TestLatestEvidenceForFindingPrefersFeedAndPackageSpecificRecords(t *testing
 	}
 }
 
+func TestLatestPostScanEvidenceTreatsNewScanAsConfirmation(t *testing.T) {
+	completedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	oldEventID := uuid.New()
+	oldFeed := models.VulnerabilityIntelligenceEvidence{
+		Source:        "nvd",
+		EvidenceKind:  "feed",
+		ChangeEventID: &oldEventID,
+		ObservedAt:    completedAt.Add(-2 * time.Hour),
+		CreatedAt:     completedAt.Add(-time.Hour),
+	}
+	confirmationSnapshot := models.VulnerabilityIntelligenceEvidence{
+		Source:       "trivy",
+		EvidenceKind: "scan",
+		ObservedAt:   completedAt,
+		CreatedAt:    completedAt.Add(time.Second),
+	}
+
+	latest := latestPostScanEvidenceForFinding(
+		[]models.VulnerabilityIntelligenceEvidence{confirmationSnapshot},
+		[]models.VulnerabilityIntelligenceEvidence{oldFeed},
+		&completedAt,
+	)
+	if len(latest) != 0 {
+		t.Fatalf("confirmation scan retained old intelligence: %#v", latest)
+	}
+
+	newFeed := oldFeed
+	newFeed.CreatedAt = completedAt.Add(time.Minute)
+	latest = latestPostScanEvidenceForFinding(nil, []models.VulnerabilityIntelligenceEvidence{newFeed}, &completedAt)
+	if len(latest) != 1 || latest[0].Source != "nvd" {
+		t.Fatalf("newly ingested post-scan evidence was not retained: %#v", latest)
+	}
+}
+
 func TestDerivePostureCarriesFeedEvidenceFields(t *testing.T) {
 	finding := models.Vulnerability{
 		ID:               uuid.New(),

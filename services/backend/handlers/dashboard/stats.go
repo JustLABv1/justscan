@@ -8,6 +8,7 @@ import (
 
 	"justscan-backend/compliance"
 	"justscan-backend/functions/authz"
+	vulnerabilityintelligence "justscan-backend/functions/vulnerabilityintelligence"
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
@@ -116,8 +117,8 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 			result.Operations.OrgPolicyFailCount = policyCounts.orgPolicyFailed
 		}
 		if intelligenceCounts, intelligenceErr := loadIntelligenceIssueCounts(c, ctx, db, userID, isAdmin, accessibleOrgIDs); intelligenceErr == nil {
-			result.Operations.IntelligenceChangedCount = intelligenceCounts.changed
-			result.Operations.IntelligencePendingCount = intelligenceCounts.pending
+			result.Operations.IntelligenceChangedCount = intelligenceCounts.Changed
+			result.Operations.IntelligencePendingCount = intelligenceCounts.Pending
 		}
 
 		// Severity totals across scans with finalized findings.
@@ -313,8 +314,8 @@ type dashboardPolicyIssueCounts struct {
 }
 
 type dashboardIntelligenceIssueCounts struct {
-	changed int
-	pending int
+	Changed int `bun:"changed"`
+	Pending int `bun:"pending"`
 }
 
 func loadIntelligenceIssueCounts(
@@ -326,7 +327,7 @@ func loadIntelligenceIssueCounts(
 	accessibleOrgIDs []uuid.UUID,
 ) (dashboardIntelligenceIssueCounts, error) {
 	var counts dashboardIntelligenceIssueCounts
-	postScanChange := "(p.change_event_id IS NOT NULL OR (s.completed_at IS NOT NULL AND p.observed_at > s.completed_at))"
+	postScanChange := vulnerabilityintelligence.PostScanChangeCondition("p", "s")
 	query := db.NewSelect().
 		TableExpr("vulnerabilities AS v").
 		ColumnExpr("COUNT(DISTINCT v.scan_id) FILTER (WHERE p.state IS NOT NULL AND p.state <> ? AND "+postScanChange+") AS changed", models.PostureStateUnchanged).

@@ -1,6 +1,7 @@
 'use client';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
@@ -63,8 +64,10 @@ export function UsersTab() {
   const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const [page, setPage] = useState(1);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const toast = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,6 +107,7 @@ export function UsersTab() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (saving) return;
     setFormError('');
     setSaving(true);
     try {
@@ -134,8 +138,17 @@ export function UsersTab() {
       variant: 'danger',
     });
     if (!ok) return;
-    await deleteAdminUser(user.id).catch(() => {});
-    await load();
+    if (pendingAction) return;
+    setPendingAction(`delete:${user.id}`);
+    try {
+      await deleteAdminUser(user.id);
+      toast.success('User deleted');
+      await load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete user');
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   async function handleToggleDisable(user: AdminUser) {
@@ -156,8 +169,17 @@ export function UsersTab() {
           }
     );
     if (!ok) return;
-    await disableAdminUser(user.id, newDisabled).catch(() => {});
-    await load();
+    if (pendingAction) return;
+    setPendingAction(`toggle:${user.id}`);
+    try {
+      await disableAdminUser(user.id, newDisabled);
+      toast.success(newDisabled ? 'User disabled' : 'User enabled');
+      await load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update user status');
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   const filteredUsers = useMemo(() => {
@@ -179,7 +201,10 @@ export function UsersTab() {
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const effectivePage = Math.min(page, totalPages);
-  const pagedUsers = filteredUsers.slice((effectivePage - 1) * PAGE_SIZE, effectivePage * PAGE_SIZE);
+  const pagedUsers = filteredUsers.slice(
+    (effectivePage - 1) * PAGE_SIZE,
+    effectivePage * PAGE_SIZE
+  );
 
   const paginationItems = useMemo(() => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -195,7 +220,9 @@ export function UsersTab() {
 
   return (
     <div className="space-y-4">
-      {error ? <StatusAlert status="danger" title="Users failed to load" description={error} /> : null}
+      {error ? (
+        <StatusAlert status="danger" title="Users failed to load" description={error} />
+      ) : null}
 
       <div className="flex justify-end">
         <Button onPress={openCreate} variant="secondary">
@@ -210,6 +237,7 @@ export function UsersTab() {
             <SearchField.Group>
               <SearchField.SearchIcon />
               <SearchField.Input
+                aria-label="Filter admin users"
                 placeholder="Filter users by name, email, or auth..."
                 value={searchQuery}
                 onChange={(event) => {
@@ -222,6 +250,7 @@ export function UsersTab() {
           </SearchField>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Select
+              aria-label="Filter users by role"
               value={roleFilter}
               onChange={(value) => {
                 setRoleFilter(String(value) as 'all' | 'admin' | 'user');
@@ -243,6 +272,7 @@ export function UsersTab() {
               </Select.Popover>
             </Select>
             <Select
+              aria-label="Filter users by status"
               value={statusFilter}
               onChange={(value) => {
                 setStatusFilter(String(value) as 'all' | 'active' | 'disabled');
@@ -310,7 +340,8 @@ export function UsersTab() {
                         <div className="space-y-0.5">
                           <p title={fullDate(user.last_login_at)}>{timeAgo(user.last_login_at)}</p>
                           <p className="text-[11px] text-zinc-400">
-                            via {userAuthLabel(user.last_login_method || user.auth_type).toLowerCase()}
+                            via{' '}
+                            {userAuthLabel(user.last_login_method || user.auth_type).toLowerCase()}
                           </p>
                         </div>
                       ) : (
@@ -329,6 +360,9 @@ export function UsersTab() {
                               id: 'toggle',
                               label: user.disabled ? 'Enable user' : 'Disable user',
                               icon: <Refresh01Icon size={15} />,
+                              pending: pendingAction === `toggle:${user.id}`,
+                              disabled:
+                                pendingAction !== null && pendingAction !== `toggle:${user.id}`,
                               onAction: () => {
                                 void handleToggleDisable(user);
                               },
@@ -344,6 +378,9 @@ export function UsersTab() {
                               label: 'Delete user',
                               icon: <Delete01Icon size={15} />,
                               variant: 'danger',
+                              pending: pendingAction === `delete:${user.id}`,
+                              disabled:
+                                pendingAction !== null && pendingAction !== `delete:${user.id}`,
                               onAction: () => {
                                 void handleDelete(user);
                               },
@@ -380,7 +417,10 @@ export function UsersTab() {
                     </Pagination.Item>
                   ) : (
                     <Pagination.Item key={`users-page-${item}`}>
-                      <Pagination.Link isActive={item === effectivePage} onPress={() => setPage(item)}>
+                      <Pagination.Link
+                        isActive={item === effectivePage}
+                        onPress={() => setPage(item)}
+                      >
                         {item}
                       </Pagination.Link>
                     </Pagination.Item>
@@ -412,9 +452,28 @@ export function UsersTab() {
               </Modal.Header>
               <Modal.Body>
                 <form id="user-form" onSubmit={handleSubmit} className="space-y-4">
-                  {formError ? <StatusAlert status="danger" title="User could not be saved" description={formError} /> : null}
-                  <Input value={formUsername} onChange={(e) => setFormUsername(e.target.value)} placeholder="username" required aria-label="Username" />
-                  <Input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} placeholder="user@example.com" required aria-label="Email" />
+                  {formError ? (
+                    <StatusAlert
+                      status="danger"
+                      title="User could not be saved"
+                      description={formError}
+                    />
+                  ) : null}
+                  <Input
+                    value={formUsername}
+                    onChange={(e) => setFormUsername(e.target.value)}
+                    placeholder="username"
+                    required
+                    aria-label="Username"
+                  />
+                  <Input
+                    type="email"
+                    value={formEmail}
+                    onChange={(e) => setFormEmail(e.target.value)}
+                    placeholder="user@example.com"
+                    required
+                    aria-label="Email"
+                  />
                   <Select value={formRole} onChange={(value) => setFormRole(String(value))}>
                     <Select.Trigger>
                       <Select.Value />
@@ -429,7 +488,13 @@ export function UsersTab() {
                   </Select>
                   <FormField
                     autoComplete={editingUser?.auth_type === 'oidc' ? 'off' : 'new-password'}
-                    description={editingUser?.auth_type === 'oidc' ? 'Password changes are disabled for OIDC users.' : !isCreate ? 'Leave blank to keep unchanged.' : undefined}
+                    description={
+                      editingUser?.auth_type === 'oidc'
+                        ? 'Password changes are disabled for OIDC users.'
+                        : !isCreate
+                          ? 'Leave blank to keep unchanged.'
+                          : undefined
+                    }
                     disabled={Boolean(editingUser?.auth_type === 'oidc')}
                     label="Password"
                     name="user-password"
@@ -442,8 +507,10 @@ export function UsersTab() {
                 </form>
               </Modal.Body>
               <Modal.Footer>
-                <Button variant="secondary" onPress={modal.close}>Cancel</Button>
-                <Button type="submit" form="user-form" isDisabled={saving} variant="primary">
+                <Button variant="secondary" onPress={modal.close}>
+                  Cancel
+                </Button>
+                <Button type="submit" form="user-form" isPending={saving} variant="primary">
                   <Shield01Icon size={14} />
                   {isCreate ? 'Create' : 'Save'}
                 </Button>

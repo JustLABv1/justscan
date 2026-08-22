@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Button, Card } from '@heroui/react';
+import { Alert, buttonVariants, Button, Card } from '@heroui/react';
 import { AlertCircleIcon, ArrowLeft01Icon, RefreshIcon } from 'hugeicons-react';
 import Link from 'next/link';
 
@@ -81,12 +81,16 @@ export function RouteErrorState({
             </Alert>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
-              <Button variant="outline">
-                <Link href="/dashboard" className="inline-flex items-center gap-2">
-                  <ArrowLeft01Icon size={15} />
-                  Back to dashboard
-                </Link>
-              </Button>
+              <Link
+                href="/dashboard"
+                className={buttonVariants({
+                  variant: 'outline',
+                  className: 'inline-flex items-center gap-2',
+                })}
+              >
+                <ArrowLeft01Icon size={15} />
+                Back to dashboard
+              </Link>
               <Button
                 className="shadow-[0_0_32px_rgba(239,68,68,0.38)]"
                 onClick={onRetry}

@@ -22,7 +22,9 @@ export function PublicShell({
   withRays = false,
 }: PublicShellProps) {
   return (
-    <main className={cn('relative min-h-dvh overflow-hidden bg-background text-foreground', className)}>
+    <main
+      className={cn('relative min-h-dvh overflow-hidden bg-background text-foreground', className)}
+    >
       {withRays ? (
         <div className="pointer-events-none absolute inset-0 opacity-70">
           <LightRays

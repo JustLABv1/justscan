@@ -16,6 +16,7 @@ import {
 import { deleteScanImageGroup, listScanImages, type ImageOverview } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { useToast } from '@/components/toast';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { parseDate, type DateValue } from '@internationalized/date';
 import {
   AlertDialog,
@@ -209,10 +210,9 @@ function ScansPageContent() {
     () =>
       deferEffect(() => {
         let cancelled = false;
-        setImages([]);
-        setTotal(0);
         setLoading(true);
         setError('');
+        const controller = new AbortController();
         void listScanImages(
           page,
           PAGE_SIZE,
@@ -223,7 +223,8 @@ function ScansPageContent() {
           bounds?.from,
           bounds?.to,
           sort || undefined,
-          intelligence || undefined
+          intelligence || undefined,
+          { signal: controller.signal }
         )
           .then((response) => {
             if (!cancelled) {
@@ -232,7 +233,7 @@ function ScansPageContent() {
             }
           })
           .catch((reason) => {
-            if (!cancelled)
+            if (!cancelled && !controller.signal.aborted)
               setError(reason instanceof Error ? reason.message : 'Failed to load scans');
           })
           .finally(() => {
@@ -240,6 +241,7 @@ function ScansPageContent() {
           });
         return () => {
           cancelled = true;
+          controller.abort();
         };
       }),
     [
@@ -597,12 +599,28 @@ function ScansPageContent() {
           </Disclosure.Content>
         </Disclosure>
       </Card>
-      {error ? <Card className="border-danger/40 p-4 text-sm text-danger">{error}</Card> : null}
+      {error ? (
+        <StatusAlert
+          className="border-danger/40"
+          status="danger"
+          title="Scans failed to load"
+          description={error}
+          action={
+            <Button
+              size="sm"
+              variant="secondary"
+              onPress={() => setRefreshKey((current) => current + 1)}
+            >
+              Retry
+            </Button>
+          }
+        />
+      ) : null}
       <Card className="overflow-hidden">
         <ImageOverviewTable
           hasActiveFilters={activeFilters}
           images={images}
-          loading={loading}
+          loading={loading && images.length === 0}
           onDeleteImage={setPendingDelete}
         />
       </Card>

@@ -8,15 +8,16 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { useClientAuth } from '@/hooks/use-client-auth';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   createRegistry,
   deleteRegistry,
   getDefaultScannerCapabilities,
-  getTokenType,
   getWorkScope,
   listRegistriesWithCapabilities,
   listRegistryShares,
@@ -40,7 +41,6 @@ import {
   Modal,
   SearchField,
   Select,
-  Spinner,
   Table,
   useOverlayState,
 } from '@heroui/react';
@@ -168,6 +168,7 @@ export default function RegistriesPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [testing, setTesting] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [shareTarget, setShareTarget] = useState<RegistryWithHealth | null>(null);
   const [shares, setShares] = useState<ResourceShare[]>([]);
   const [sharesLoading, setSharesLoading] = useState(false);
@@ -181,7 +182,7 @@ export default function RegistriesPage() {
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
-  const isPlatformAdmin = getTokenType() === 'admin';
+  const { isPlatformAdmin } = useClientAuth();
   const orgRoleById = useMemo(
     () => new Map(orgs.map((org) => [org.id, org.current_user_role] as const)),
     [orgs]
@@ -195,6 +196,7 @@ export default function RegistriesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const response = await listRegistriesWithCapabilities();
       setRegistries(response.data);
@@ -296,13 +298,22 @@ export default function RegistriesPage() {
       variant: 'danger',
     });
     if (!ok) return;
-    await deleteRegistry(id).catch(() => {});
-    toast.success('Registry deleted');
-    load();
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      await deleteRegistry(id);
+      toast.success('Registry deleted');
+      await load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete registry');
+    } finally {
+      setDeletingId(null);
+    }
   }
   async function handleTest(id: string) {
     const registry = registries.find((candidate) => candidate.id === id);
     if (registry && !canMutateRegistry(registry)) return;
+    if (testing) return;
     setTesting(id);
     try {
       await testRegistry(id);
@@ -458,16 +469,28 @@ export default function RegistriesPage() {
         }
       />
 
-      {error ? <FormAlert description={error} title="Registry loading failed" /> : null}
-
-      {!loading && registries.length === 0 ? (
-        <EmptyState
-          icon={<ServerStack01Icon size={28} />}
-          title="No registries configured"
-          description="Add a private Docker registry and choose the scanner that will evaluate images from it."
-          action={canMutateActiveScope ? { label: 'Add Registry', onClick: openCreate } : undefined}
-        />
-      ) : (
+      <LoadableCollectionState
+        emptyState={
+          <EmptyState
+            icon={<ServerStack01Icon size={28} />}
+            title="No registries configured"
+            description="Add a private Docker registry and choose the scanner that will evaluate images from it."
+            action={
+              canMutateActiveScope ? { label: 'Add Registry', onClick: openCreate } : undefined
+            }
+          />
+        }
+        error={error || undefined}
+        errorTitle="Registry loading failed"
+        isEmpty={registries.length === 0}
+        loading={loading}
+        retry={() => void load()}
+        loadingFallback={
+          <div className="flex min-h-48 items-center justify-center" role="status">
+            <div className="size-5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+          </div>
+        }
+      >
         <Card className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <SearchField
@@ -478,6 +501,7 @@ export default function RegistriesPage() {
               <SearchField.Group>
                 <SearchField.SearchIcon />
                 <SearchField.Input
+                  aria-label="Search registries"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Search registry, URL, or username..."
@@ -486,6 +510,7 @@ export default function RegistriesPage() {
               </SearchField.Group>
             </SearchField>
             <Select
+              aria-label="Filter registries by scan provider"
               value={providerFilter}
               onChange={(value) =>
                 setProviderFilter(
@@ -512,11 +537,7 @@ export default function RegistriesPage() {
               </Select.Popover>
             </Select>
           </div>
-          {loading ? (
-            <div className="flex min-h-48 items-center justify-center">
-              <Spinner color="accent" size="sm" />
-            </div>
-          ) : filteredRegistries.length === 0 ? (
+          {filteredRegistries.length === 0 ? (
             <EmptyState
               icon={<ServerStack01Icon size={28} />}
               title="No registries match your filters"
@@ -532,11 +553,11 @@ export default function RegistriesPage() {
           ) : (
             <Table variant="secondary">
               <Table.ScrollContainer>
-                <Table.Content aria-label="Configured registries" className="min-w-[800px]">
+                <Table.Content aria-label="Configured registries" className="md:min-w-[800px]">
                   <Table.Header>
                     <Table.Column isRowHeader>Name</Table.Column>
-                    <Table.Column>Connection</Table.Column>
-                    <Table.Column>Health</Table.Column>
+                    <Table.Column className="hidden md:table-cell">Connection</Table.Column>
+                    <Table.Column className="hidden md:table-cell">Health</Table.Column>
                     <Table.Column className="flex justify-end">Actions</Table.Column>
                   </Table.Header>
                   <Table.Body>
@@ -550,9 +571,16 @@ export default function RegistriesPage() {
                               ownerOrgId={r.owner_org_id}
                               orgNamesById={orgNamesById}
                             />
+                            <p className="truncate text-xs text-muted md:hidden">{r.url}</p>
+                            <div className="md:hidden">
+                              <HealthBadge
+                                status={r.health_status ?? 'unknown'}
+                                message={r.health_message ?? ''}
+                              />
+                            </div>
                           </div>
                         </Table.Cell>
-                        <Table.Cell>
+                        <Table.Cell className="hidden md:table-cell">
                           <div className="space-y-1.5">
                             <p className="font-mono text-xs text-muted">{r.url}</p>
                             <div className="flex flex-wrap gap-1.5">
@@ -574,7 +602,7 @@ export default function RegistriesPage() {
                             </div>
                           </div>
                         </Table.Cell>
-                        <Table.Cell>
+                        <Table.Cell className="hidden md:table-cell">
                           <div className="flex flex-col gap-1">
                             <HealthBadge
                               status={r.health_status ?? 'unknown'}
@@ -599,7 +627,8 @@ export default function RegistriesPage() {
                                           id: 'test',
                                           label: testing === r.id ? 'Testing…' : 'Test connection',
                                           icon: <TestTube01Icon size={15} />,
-                                          disabled: testing === r.id,
+                                          disabled: testing !== null,
+                                          pending: testing === r.id,
                                           onAction: () => {
                                             void handleTest(r.id);
                                           },
@@ -629,6 +658,8 @@ export default function RegistriesPage() {
                                           label: 'Delete registry',
                                           icon: <Delete01Icon size={15} />,
                                           variant: 'danger' as const,
+                                          pending: deletingId === r.id,
+                                          disabled: deletingId !== null && deletingId !== r.id,
                                           onAction: () => {
                                             void handleDelete(r.id);
                                           },
@@ -650,7 +681,7 @@ export default function RegistriesPage() {
             </Table>
           )}
         </Card>
-      )}
+      </LoadableCollectionState>
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
@@ -673,7 +704,9 @@ export default function RegistriesPage() {
                   <section className="space-y-4 border-b border-surface-border pb-5">
                     <div>
                       <h3 className="text-sm font-semibold">Registry connection</h3>
-                      <p className="mt-1 text-sm text-muted">The endpoint JustScan uses to resolve and pull images.</p>
+                      <p className="mt-1 text-sm text-muted">
+                        The endpoint JustScan uses to resolve and pull images.
+                      </p>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                       <FormField
@@ -695,6 +728,7 @@ export default function RegistriesPage() {
                       <div className="space-y-1.5 md:col-span-2">
                         <label className="text-sm font-medium">Scan Provider</label>
                         <Select
+                          aria-label="Scan provider"
                           variant="secondary"
                           value={scanProvider}
                           onChange={(value) =>
@@ -720,11 +754,13 @@ export default function RegistriesPage() {
                           </Select.Popover>
                         </Select>
                         <p className="text-xs text-muted">
-                          This is stored in JustScan and does not require editing backend/config.yaml.
+                          This is stored in JustScan and does not require editing
+                          backend/config.yaml.
                         </p>
                         {!capabilities.enable_trivy && scanProvider === 'trivy' && editing && (
                           <p className="text-xs text-warning">
-                            This registry must be switched to Artifactory Xray before saving changes.
+                            This registry must be switched to Artifactory Xray before saving
+                            changes.
                           </p>
                         )}
                       </div>
@@ -734,7 +770,10 @@ export default function RegistriesPage() {
                     <section className="space-y-4 border-b border-surface-border pb-5">
                       <div>
                         <h3 className="text-sm font-semibold">Xray scan behavior</h3>
-                        <p className="mt-1 text-sm text-muted">Map images to Artifactory and choose whether this credential can request a fresh Xray scan.</p>
+                        <p className="mt-1 text-sm text-muted">
+                          Map images to Artifactory and choose whether this credential can request a
+                          fresh Xray scan.
+                        </p>
                       </div>
                       <div className="grid gap-4 md:grid-cols-2">
                         <FormField
@@ -780,12 +819,15 @@ export default function RegistriesPage() {
                   <section className="space-y-4">
                     <div>
                       <h3 className="text-sm font-semibold">Credentials</h3>
-                      <p className="mt-1 text-sm text-muted">Stored encrypted and reused for image pulls and Xray requests.</p>
+                      <p className="mt-1 text-sm text-muted">
+                        Stored encrypted and reused for image pulls and Xray requests.
+                      </p>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-1.5">
                         <label className="text-sm font-medium">Auth Type</label>
                         <Select
+                          aria-label="Registry authentication type"
                           variant="secondary"
                           value={authType}
                           onChange={(value) =>
@@ -845,14 +887,10 @@ export default function RegistriesPage() {
                 <Button
                   type="submit"
                   form="registry-form"
-                  isDisabled={
-                    saving || (editing ? !canMutateRegistry(editing) : !canMutateActiveScope)
-                  }
+                  isPending={saving}
+                  isDisabled={editing ? !canMutateRegistry(editing) : !canMutateActiveScope}
                   variant="primary"
                 >
-                  {saving && (
-                    <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  )}
                   {editing ? 'Save' : 'Add'}
                 </Button>
               </Modal.Footer>
@@ -940,6 +978,7 @@ export default function RegistriesPage() {
                               onPress={() => {
                                 void handleRevokeShare(share.org_id);
                               }}
+                              isPending={shareSaving}
                               isDisabled={shareSaving}
                               className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
                               isIconOnly
@@ -970,6 +1009,7 @@ export default function RegistriesPage() {
                   ) : (
                     <div className="flex gap-2">
                       <Select
+                        aria-label="Organization to grant registry access"
                         value={shareOrgId || '__none__'}
                         onChange={(value) =>
                           setShareOrgId(String(value === '__none__' ? '' : (value ?? '')))
@@ -996,6 +1036,7 @@ export default function RegistriesPage() {
                         onPress={() => {
                           void handleGrantShare();
                         }}
+                        isPending={shareSaving}
                         isDisabled={!shareOrgId || shareSaving}
                         className="btn-primary disabled:opacity-60"
                         variant="primary"

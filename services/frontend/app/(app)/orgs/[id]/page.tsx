@@ -13,6 +13,7 @@ import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
+import { RouteLoadingState } from '@/components/route-state';
 import {
   createOrgInvite,
   createPolicy,
@@ -57,7 +58,7 @@ import {
 } from '@heroui/react';
 import { ArrowLeft01Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -127,6 +128,14 @@ const LEGACY_ORG_TABS: Record<string, OrgTabId> = {
 };
 
 export default function OrgDetailPage() {
+  return (
+    <Suspense fallback={<RouteLoadingState title="Loading organization" />}>
+      <OrgDetailContent />
+    </Suspense>
+  );
+}
+
+function OrgDetailContent() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -150,6 +159,8 @@ export default function OrgDetailPage() {
     useState<Extract<OrgRole, 'admin' | 'editor' | 'viewer'>>('viewer');
   const [inviteSaving, setInviteSaving] = useState(false);
   const [inviteError, setInviteError] = useState('');
+  const [pendingMemberAction, setPendingMemberAction] = useState<string | null>(null);
+  const [pendingInviteAction, setPendingInviteAction] = useState<string | null>(null);
   const inviteModal = useOverlayState();
 
   const [orgScans, setOrgScans] = useState<OrgScanItem[]>([]);
@@ -160,6 +171,7 @@ export default function OrgDetailPage() {
   const [policyIncludeSuppressed, setPolicyIncludeSuppressed] = useState(true);
   const [policyError, setPolicyError] = useState('');
   const [policySaving, setPolicySaving] = useState(false);
+  const [deletingPolicyId, setDeletingPolicyId] = useState<string | null>(null);
   const policyModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
@@ -244,11 +256,7 @@ export default function OrgDetailPage() {
   const activeTab = (ORG_TABS.find((tab) => tab.id === normalizedTab)?.id ??
     'overview') as OrgTabId;
   const activeSection =
-    activeTab === 'access'
-      ? 'members'
-      : activeTab === 'integrations'
-        ? 'ci-cd'
-        : null;
+    activeTab === 'access' ? 'members' : activeTab === 'integrations' ? 'ci-cd' : null;
 
   function openInviteModal() {
     if (!canManageMembers) return;
@@ -289,13 +297,18 @@ export default function OrgDetailPage() {
   ) {
     if (!canEditRoles) return;
     if (member.role === nextRole) return;
+    const actionKey = `role:${member.user_id}`;
+    if (pendingMemberAction) return;
+    setPendingMemberAction(actionKey);
     try {
       await updateOrgMemberRole(id, member.user_id, nextRole);
       toast.success('Member role updated');
       await loadMembers();
       await load();
-    } catch {
-      toast.error('Failed to update member role');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update member role');
+    } finally {
+      setPendingMemberAction(null);
     }
   }
 
@@ -308,9 +321,18 @@ export default function OrgDetailPage() {
       variant: 'danger',
     });
     if (!ok) return;
-    await removeOrgMember(id, member.user_id).catch(() => {});
-    toast.success('Member removed');
-    await loadMembers();
+    const actionKey = `remove:${member.user_id}`;
+    if (pendingMemberAction) return;
+    setPendingMemberAction(actionKey);
+    try {
+      await removeOrgMember(id, member.user_id);
+      toast.success('Member removed');
+      await loadMembers();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove member');
+    } finally {
+      setPendingMemberAction(null);
+    }
   }
 
   async function handleTransferOwnership(member: OrgMember) {
@@ -324,12 +346,16 @@ export default function OrgDetailPage() {
       variant: 'warning',
     });
     if (!ok) return;
+    if (pendingMemberAction) return;
+    setPendingMemberAction(`transfer:${member.user_id}`);
     try {
       await transferOrgOwnership(id, member.user_id);
       toast.success('Ownership transferred');
       await Promise.all([load(), loadMembers()]);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to transfer ownership');
+    } finally {
+      setPendingMemberAction(null);
     }
   }
 
@@ -342,9 +368,17 @@ export default function OrgDetailPage() {
       variant: 'warning',
     });
     if (!ok) return;
-    await revokeOrgInvite(id, invite.id).catch(() => {});
-    toast.success('Invite revoked');
-    await loadMembers();
+    if (pendingInviteAction) return;
+    setPendingInviteAction(invite.id);
+    try {
+      await revokeOrgInvite(id, invite.id);
+      toast.success('Invite revoked');
+      await loadMembers();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to revoke invite');
+    } finally {
+      setPendingInviteAction(null);
+    }
   }
 
   async function copyInviteLink(invite: OrgInvite) {
@@ -404,9 +438,17 @@ export default function OrgDetailPage() {
       variant: 'danger',
     });
     if (!ok) return;
-    await deletePolicy(id, policyId).catch(() => {});
-    toast.success('Policy deleted');
-    load();
+    if (deletingPolicyId) return;
+    setDeletingPolicyId(policyId);
+    try {
+      await deletePolicy(id, policyId);
+      toast.success('Policy deleted');
+      await load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete policy');
+    } finally {
+      setDeletingPolicyId(null);
+    }
   }
 
   function setRuleField(idx: number, field: keyof PolicyRule, value: string | number) {
@@ -490,7 +532,7 @@ export default function OrgDetailPage() {
           org.description || 'Manage organization risk, policies, members, and assigned assets.'
         }
         actions={
-          <Button onClick={() => router.back()} variant="secondary">
+          <Button onPress={() => router.back()} variant="secondary">
             <ArrowLeft01Icon size={15} />
             Back to organizations
           </Button>
@@ -542,6 +584,7 @@ export default function OrgDetailPage() {
             <OrgAutomationTab
               org={org}
               canManageOrgSettings={canManageOrgSettings}
+              deletingPolicyId={deletingPolicyId}
               onCreatePolicy={openCreatePolicy}
               onEditPolicy={openEditPolicy}
               onDeletePolicy={(policyId) => void handleDeletePolicy(policyId)}
@@ -576,6 +619,8 @@ export default function OrgDetailPage() {
               onRemoveMember={(member) => void handleRemoveMember(member)}
               onRevokeInvite={(invite) => void handleRevokeInvite(invite)}
               onTransferOwnership={(member) => void handleTransferOwnership(member)}
+              pendingInviteAction={pendingInviteAction}
+              pendingMemberAction={pendingMemberAction}
               featureDisabledReason={
                 !org?.is_active
                   ? 'Organization is suspended. Invites are disabled.'
@@ -634,10 +679,12 @@ export default function OrgDetailPage() {
                     </div>
                   )}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium">
+                    <label className="text-sm font-medium" htmlFor="policy-name">
                       Policy Name <span className="text-red-400">*</span>
                     </label>
                     <Input
+                      id="policy-name"
+                      aria-label="Policy name"
                       className={inputCls}
                       placeholder="e.g. No Critical CVEs"
                       value={policyName}
@@ -670,7 +717,7 @@ export default function OrgDetailPage() {
                       <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
                         Rules
                       </label>
-                      <Button type="button" onClick={addRule} size="sm" variant="secondary">
+                      <Button type="button" onPress={addRule} size="sm" variant="secondary">
                         <PlusSignIcon size={12} />
                         Add Rule
                       </Button>
@@ -680,6 +727,7 @@ export default function OrgDetailPage() {
                       <Card key={idx} className="bg-surface-secondary p-3 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <Select
+                            aria-label={`Rule ${idx + 1} type`}
                             value={rule.type}
                             onChange={(value) => {
                               const newType = value as PolicyRule['type'];
@@ -703,17 +751,19 @@ export default function OrgDetailPage() {
                               </ListBox>
                             </Select.Popover>
                           </Select>
-                          <Button onClick={() => removeRule(idx)} variant="danger-soft" isIconOnly>
+                          <Button onPress={() => removeRule(idx)} variant="danger-soft" isIconOnly>
                             <Delete01Icon size={15} />
                           </Button>
                         </div>
 
                         {rule.type === 'max_cvss' && (
                           <div className="flex flex-col gap-1">
-                            <label className="text-xs">
+                            <label className="text-xs" htmlFor={`policy-rule-${idx}-max-cvss`}>
                               Max CVSS threshold (fail if ≥ this value)
                             </label>
                             <Input
+                              id={`policy-rule-${idx}-max-cvss`}
+                              aria-label="Max CVSS threshold"
                               type="number"
                               min={0}
                               max={10}
@@ -729,8 +779,15 @@ export default function OrgDetailPage() {
                         {rule.type === 'max_count' && (
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                              <label className="text-xs text-zinc-500">Severity</label>
+                              <label
+                                className="text-xs text-zinc-500"
+                                htmlFor={`policy-rule-${idx}-severity`}
+                              >
+                                Severity
+                              </label>
                               <Select
+                                id={`policy-rule-${idx}-severity`}
+                                aria-label="Rule severity"
                                 value={rule.severity ?? 'CRITICAL'}
                                 onChange={(value) => setRuleField(idx, 'severity', String(value))}
                               >
@@ -750,8 +807,15 @@ export default function OrgDetailPage() {
                               </Select>
                             </div>
                             <div className="space-y-1">
-                              <label className="text-xs text-zinc-500">Max count</label>
+                              <label
+                                className="text-xs text-zinc-500"
+                                htmlFor={`policy-rule-${idx}-max-count`}
+                              >
+                                Max count
+                              </label>
                               <Input
+                                id={`policy-rule-${idx}-max-count`}
+                                aria-label="Maximum vulnerability count"
                                 type="number"
                                 min={0}
                                 value={rule.value ?? 0}
@@ -765,10 +829,15 @@ export default function OrgDetailPage() {
                         )}
                         {rule.type === 'max_total' && (
                           <div className="space-y-1">
-                            <label className="text-xs text-zinc-500">
+                            <label
+                              className="text-xs text-zinc-500"
+                              htmlFor={`policy-rule-${idx}-max-total`}
+                            >
                               Max total vulnerabilities
                             </label>
                             <Input
+                              id={`policy-rule-${idx}-max-total`}
+                              aria-label="Maximum total vulnerabilities"
                               type="number"
                               min={0}
                               value={rule.value ?? 0}
@@ -779,10 +848,15 @@ export default function OrgDetailPage() {
                         )}
                         {rule.type === 'require_fix' && (
                           <div className="space-y-1">
-                            <label className="text-xs text-zinc-500">
+                            <label
+                              className="text-xs text-zinc-500"
+                              htmlFor={`policy-rule-${idx}-require-fix`}
+                            >
                               Require fix for severity
                             </label>
                             <Select
+                              id={`policy-rule-${idx}-require-fix`}
+                              aria-label="Require fix severity"
                               value={rule.severity ?? 'CRITICAL'}
                               onChange={(value) => setRuleField(idx, 'severity', String(value))}
                             >
@@ -804,8 +878,15 @@ export default function OrgDetailPage() {
                         )}
                         {rule.type === 'blocked_cve' && (
                           <div className="space-y-1">
-                            <label className="text-xs text-zinc-500">CVE ID</label>
+                            <label
+                              className="text-xs text-zinc-500"
+                              htmlFor={`policy-rule-${idx}-cve`}
+                            >
+                              CVE ID
+                            </label>
                             <Input
+                              id={`policy-rule-${idx}-cve`}
+                              aria-label="Blocked CVE ID"
                               type="text"
                               value={rule.cve_id ?? ''}
                               onChange={(e) => setRuleField(idx, 'cve_id', e.target.value)}
@@ -816,7 +897,12 @@ export default function OrgDetailPage() {
                         )}
                         {rule.type === 'xray_policy_block' && (
                           <div className="space-y-1">
-                            <label className="text-xs text-zinc-500">Xray policy blocking</label>
+                            <label
+                              className="text-xs text-zinc-500"
+                              htmlFor={`policy-rule-${idx}-xray`}
+                            >
+                              Xray policy blocking
+                            </label>
                             <p className="text-xs text-zinc-500">
                               Fails when any vulnerability has an active Xray blocking policy match.
                             </p>
@@ -834,13 +920,10 @@ export default function OrgDetailPage() {
                 </form>
               </Modal.Body>
               <Modal.Footer>
-                <Button onClick={policyModal.close} variant="secondary">
+                <Button onPress={policyModal.close} variant="secondary">
                   Cancel
                 </Button>
-                <Button type="submit" form="policy-form" isDisabled={policySaving}>
-                  {policySaving && (
-                    <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  )}
+                <Button type="submit" form="policy-form" isPending={policySaving}>
                   {editingPolicy ? 'Save Changes' : 'Create Policy'}
                 </Button>
               </Modal.Footer>
@@ -876,6 +959,7 @@ export default function OrgDetailPage() {
                       Role
                     </Label>
                     <Select
+                      aria-label="Invite member role"
                       value={inviteRole}
                       onChange={(value) =>
                         setInviteRole(value as Extract<OrgRole, 'admin' | 'editor' | 'viewer'>)
@@ -897,13 +981,10 @@ export default function OrgDetailPage() {
                 </form>
               </Modal.Body>
               <Modal.Footer>
-                <Button onClick={inviteModal.close} variant="secondary">
+                <Button onPress={inviteModal.close} variant="secondary">
                   Cancel
                 </Button>
-                <Button type="submit" form="invite-member-form" isDisabled={inviteSaving}>
-                  {inviteSaving && (
-                    <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  )}
+                <Button type="submit" form="invite-member-form" isPending={inviteSaving}>
                   Create Invite
                 </Button>
               </Modal.Footer>

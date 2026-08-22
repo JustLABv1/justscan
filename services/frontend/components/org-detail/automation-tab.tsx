@@ -10,6 +10,7 @@ interface OrgAutomationTabProps {
   onCreatePolicy: () => void;
   onEditPolicy: (policy: OrgPolicy) => void;
   onDeletePolicy: (policyId: string) => void | Promise<void>;
+  deletingPolicyId: string | null;
 }
 
 export function OrgAutomationTab({
@@ -18,6 +19,7 @@ export function OrgAutomationTab({
   onCreatePolicy,
   onEditPolicy,
   onDeletePolicy,
+  deletingPolicyId,
 }: OrgAutomationTabProps) {
   const policies = org.policies ?? [];
 
@@ -30,7 +32,10 @@ export function OrgAutomationTab({
             Rules are evaluated whenever a scan is explicitly in this organization&apos;s scope.
           </Card.Description>
         </div>
-        <Button onPress={onCreatePolicy} isDisabled={!canManageOrgSettings}>
+        <Button
+          onPress={onCreatePolicy}
+          isDisabled={!canManageOrgSettings || deletingPolicyId !== null}
+        >
           <PlusSignIcon size={14} />
           Add policy
         </Button>
@@ -59,7 +64,7 @@ export function OrgAutomationTab({
                       aria-label={`Edit ${policy.name}`}
                       isIconOnly
                       variant="secondary"
-                      isDisabled={!canManageOrgSettings}
+                      isDisabled={!canManageOrgSettings || deletingPolicyId !== null}
                       onPress={() => onEditPolicy(policy)}
                     >
                       <PencilEdit01Icon size={15} />
@@ -68,7 +73,8 @@ export function OrgAutomationTab({
                       aria-label={`Delete ${policy.name}`}
                       isIconOnly
                       variant="danger-soft"
-                      isDisabled={!canManageOrgSettings}
+                      isDisabled={!canManageOrgSettings || deletingPolicyId !== null}
+                      isPending={deletingPolicyId === policy.id}
                       onPress={() => void onDeletePolicy(policy.id)}
                     >
                       <Delete01Icon size={15} />

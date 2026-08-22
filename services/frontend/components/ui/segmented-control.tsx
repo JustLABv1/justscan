@@ -1,6 +1,6 @@
 'use client';
 
-import { Tabs } from '@heroui/react';
+import { ToggleButton, ToggleButtonGroup } from '@heroui/react';
 import type { CSSProperties, ReactNode } from 'react';
 
 type SegmentOption<T extends string> = {
@@ -34,31 +34,35 @@ export function SegmentedControl<T extends string>({
   getItemStyle,
 }: SegmentedControlProps<T>) {
   return (
-    <Tabs
-      selectedKey={value}
-      onSelectionChange={(key) => onChange(String(key) as T)}
+    <ToggleButtonGroup
+      selectedKeys={new Set([value])}
+      selectionMode="single"
+      disallowEmptySelection
+      aria-label={ariaLabel ?? 'Segmented control'}
+      onSelectionChange={(keys) => {
+        const next = [...keys][0];
+        if (next != null) onChange(String(next) as T);
+      }}
       className={cx('segmented-control-root', className)}
     >
-      <Tabs.ListContainer>
-        <Tabs.List aria-label={ariaLabel ?? 'Segmented control'} className="segmented-control">
-          {options.map((option) => {
-            const active = value === option.id;
-            return (
-              <Tabs.Tab
-                key={option.id}
-                id={option.id}
-                className={cx('segmented-control-item', itemClassName)}
-                data-active={active ? 'true' : 'false'}
-                data-size={size}
-                style={getItemStyle?.(option, active)}
-              >
-                {option.label}
-                <Tabs.Indicator />
-              </Tabs.Tab>
-            );
-          })}
-        </Tabs.List>
-      </Tabs.ListContainer>
-    </Tabs>
+      {options.map((option) => {
+        const active = value === option.id;
+        return (
+          <ToggleButton
+            key={option.id}
+            id={option.id}
+            aria-label={typeof option.label === 'string' ? option.label : undefined}
+            className={cx('segmented-control-item', itemClassName)}
+            data-active={active ? 'true' : 'false'}
+            data-size={size}
+            style={getItemStyle?.(option, active)}
+            size={size}
+            variant={active ? 'default' : 'ghost'}
+          >
+            {option.label}
+          </ToggleButton>
+        );
+      })}
+    </ToggleButtonGroup>
   );
 }

@@ -55,9 +55,7 @@ const LightRays = ({
   const rendererRef = useRef(null);
   const mouseRef = useRef({ x: 0.5, y: 0.5 });
   const smoothMouseRef = useRef({ x: 0.5, y: 0.5 });
-  const animationIdRef = useRef(null);
   const meshRef = useRef(null);
-  const cleanupFunctionRef = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
   const observerRef = useRef(null);
 
@@ -85,19 +83,17 @@ const LightRays = ({
   useEffect(() => {
     if (!isVisible || !containerRef.current) return;
 
-    if (cleanupFunctionRef.current) {
-      cleanupFunctionRef.current();
-      cleanupFunctionRef.current = null;
-    }
+    let cancelled = false;
+    let animationId = null;
+    let renderer = null;
+    let updatePlacement = null;
 
-    const initializeWebGL = async () => {
+    const initializeWebGL = () => {
       if (!containerRef.current) return;
 
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      if (cancelled || !containerRef.current) return;
 
-      if (!containerRef.current) return;
-
-      const renderer = new Renderer({
+      renderer = new Renderer({
         dpr: Math.min(window.devicePixelRatio, 2),
         alpha: true,
       });
@@ -244,7 +240,7 @@ void main() {
       const mesh = new Mesh(gl, { geometry, program });
       meshRef.current = mesh;
 
-      const updatePlacement = () => {
+      updatePlacement = () => {
         if (!containerRef.current || !renderer) return;
 
         renderer.dpr = Math.min(window.devicePixelRatio, 2);
@@ -283,7 +279,7 @@ void main() {
 
         try {
           renderer.render({ scene: mesh });
-          animationIdRef.current = requestAnimationFrame(loop);
+          animationId = requestAnimationFrame(loop);
         } catch (error) {
           console.warn('WebGL rendering error:', error);
           return;
@@ -292,45 +288,41 @@ void main() {
 
       window.addEventListener('resize', updatePlacement);
       updatePlacement();
-      animationIdRef.current = requestAnimationFrame(loop);
-
-      cleanupFunctionRef.current = () => {
-        if (animationIdRef.current) {
-          cancelAnimationFrame(animationIdRef.current);
-          animationIdRef.current = null;
-        }
-
-        window.removeEventListener('resize', updatePlacement);
-
-        if (renderer) {
-          try {
-            const canvas = renderer.gl.canvas;
-            const loseContextExt = renderer.gl.getExtension('WEBGL_lose_context');
-            if (loseContextExt) {
-              loseContextExt.loseContext();
-            }
-
-            if (canvas && canvas.parentNode) {
-              canvas.parentNode.removeChild(canvas);
-            }
-          } catch (error) {
-            console.warn('Error during WebGL cleanup:', error);
-          }
-        }
-
-        rendererRef.current = null;
-        uniformsRef.current = null;
-        meshRef.current = null;
-      };
+      animationId = requestAnimationFrame(loop);
     };
 
     initializeWebGL();
 
     return () => {
-      if (cleanupFunctionRef.current) {
-        cleanupFunctionRef.current();
-        cleanupFunctionRef.current = null;
+      cancelled = true;
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
       }
+
+      if (updatePlacement) {
+        window.removeEventListener('resize', updatePlacement);
+      }
+
+      if (renderer) {
+        try {
+          const canvas = renderer.gl.canvas;
+          const loseContextExt = renderer.gl.getExtension('WEBGL_lose_context');
+          if (loseContextExt) {
+            loseContextExt.loseContext();
+          }
+
+          if (canvas && canvas.parentNode) {
+            canvas.parentNode.removeChild(canvas);
+          }
+        } catch (error) {
+          console.warn('Error during WebGL cleanup:', error);
+        }
+      }
+
+      rendererRef.current = null;
+      uniformsRef.current = null;
+      meshRef.current = null;
     };
   }, [
     isVisible,

@@ -64,7 +64,7 @@ import {
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // ── severity config ──────────────────────────────────────────────────
 const SEV = [
@@ -141,13 +141,18 @@ const SCAN_OUTCOME_SERIES = [
 ] as const satisfies readonly ScanOutcomeSeries[];
 
 const SCAN_OUTCOME_CONFIG = typedChartConfigFromSeries(SCAN_OUTCOME_SERIES);
-const HOUR_FORMATTER = new Intl.DateTimeFormat('en', { hour: 'numeric', hour12: false });
+const HOUR_FORMATTER = new Intl.DateTimeFormat('en', {
+  hour: 'numeric',
+  hour12: false,
+  timeZone: 'UTC',
+});
 const HOUR_TOOLTIP_FORMATTER = new Intl.DateTimeFormat('en', {
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit',
   hour12: false,
+  timeZone: 'UTC',
 });
 const SCAN_OUTCOME_RANGE_DAYS: Record<Exclude<RecentActivityRange, '6h' | '24h'>, number> = {
   '7d': 7,
@@ -281,16 +286,20 @@ function ScanOutcomeChart({
   data,
   range,
   loading,
+  error,
   onRangeChange,
   onDayPress,
   onStatusPress,
+  onRetry,
 }: {
   data: DashboardTrendPoint[];
   range: RecentActivityRange;
   loading: boolean;
+  error?: string;
   onRangeChange: (range: RecentActivityRange) => void;
   onDayPress: (date: string) => void;
   onStatusPress: (filters: { status?: string; policy?: string }) => void;
+  onRetry?: () => void;
 }) {
   const filledData = fillScanOutcomeBuckets(data, range);
   const totalScans = filledData.reduce((sum, point) => sum + point.total, 0);
@@ -304,6 +313,26 @@ function ScanOutcomeChart({
     ...series,
     total: filledData.reduce((sum, point) => sum + (point[series.key] ?? 0), 0),
   }));
+  const openDayDates = new Set<string>();
+  const openDayButtons = filledData.reduce<ReactNode[]>((buttons, point) => {
+    if (point.total <= 0) {
+      return buttons;
+    }
+
+    openDayDates.add(point.date);
+    buttons.push(
+      <Button
+        key={point.date}
+        aria-label={`Open ${point.total} scans from ${formatScanOutcomeTooltip(point.date, range)}`}
+        onPress={() => onDayPress(point.date)}
+        size="sm"
+        variant="ghost"
+      >
+        {formatScanOutcomeBucket(point.date, range)}
+      </Button>
+    );
+    return buttons;
+  }, []);
   const rangeLabel =
     RECENT_ACTIVITY_RANGE_OPTIONS.find((option) => option.id === range)?.label ?? 'selected period';
 
@@ -335,7 +364,7 @@ function ScanOutcomeChart({
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <p className="text-sm text-muted">
             <span className="font-semibold tabular-nums text-foreground">
-              {totalScans.toLocaleString()}
+              {error ? 'Unavailable' : totalScans.toLocaleString()}
             </span>{' '}
             total scans
           </p>
@@ -347,7 +376,21 @@ function ScanOutcomeChart({
           </Link>
         </div>
 
-        {loading ? (
+        {error ? (
+          <StatusAlert
+            className="mt-5"
+            status="danger"
+            title="Scan outcomes unavailable"
+            description={error}
+            action={
+              onRetry ? (
+                <Button size="sm" variant="secondary" onPress={onRetry}>
+                  Retry
+                </Button>
+              ) : null
+            }
+          />
+        ) : loading ? (
           <div className="mt-5 flex h-[280px] items-center justify-center text-sm text-muted">
             Updating scan outcomes…
           </div>
@@ -367,7 +410,7 @@ function ScanOutcomeChart({
                 margin: { top: 12, right: 8, left: -18, bottom: 0 },
                 onClick: ({ activeLabel }) => {
                   const day = typeof activeLabel === 'string' ? activeLabel : null;
-                  if (day && filledData.some((point) => point.date === day && point.total > 0)) {
+                  if (day && openDayDates.has(day)) {
                     onDayPress(day);
                   }
                 },
@@ -392,6 +435,16 @@ function ScanOutcomeChart({
           </div>
         )}
 
+        {!error && openDayButtons.length > 0 ? (
+          <div
+            className="mt-3 flex flex-wrap items-center gap-1.5"
+            aria-label="Open scans for a specific day"
+          >
+            <span className="mr-1 text-xs text-muted">Open a day:</span>
+            {openDayButtons}
+          </div>
+        ) : null}
+
         <div className="mt-4 flex min-w-0 gap-1 overflow-x-auto pb-1">
           {totals.map((series) => (
             <Button
@@ -415,7 +468,9 @@ function ScanOutcomeChart({
                 />
                 <span className="truncate">{series.label}</span>
               </span>
-              <span className="tabular-nums text-muted">{series.total.toLocaleString()}</span>
+              <span className="tabular-nums text-muted">
+                {error ? '—' : series.total.toLocaleString()}
+              </span>
             </Button>
           ))}
         </div>
@@ -600,10 +655,14 @@ function VulnTrendChart({
   data,
   period,
   onPeriod,
+  error,
+  onRetry,
 }: {
   data: DashboardVulnTrendPoint[];
   period: number;
   onPeriod: (d: number) => void;
+  error?: string;
+  onRetry?: () => void;
 }) {
   const filled = fillDates(data, period);
   const hasData = filled.some((point) => sumAvgFindings(point) > 0);
@@ -634,7 +693,9 @@ function VulnTrendChart({
               Historical average findings per finalized scan, by severity
             </p>
             <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-              {latestActivePoint ? (
+              {error ? (
+                'Risk trend unavailable'
+              ) : latestActivePoint ? (
                 <>
                   <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
                     {latestActivePoint.total}
@@ -674,7 +735,20 @@ function VulnTrendChart({
       </div>
 
       <div className="w-full">
-        {!hasData ? (
+        {error ? (
+          <StatusAlert
+            status="danger"
+            title="Risk trend unavailable"
+            description={error}
+            action={
+              onRetry ? (
+                <Button size="sm" variant="secondary" onPress={onRetry}>
+                  Retry
+                </Button>
+              ) : null
+            }
+          />
+        ) : !hasData ? (
           <div className="flex items-center justify-center text-sm text-zinc-500 py-10">
             No finalized scans in this period
           </div>
@@ -742,7 +816,11 @@ export default function DashboardPage() {
   const drilldownModal = useOverlayState();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [trends, setTrends] = useState<DashboardTrendPoint[]>([]);
+  const [trendError, setTrendError] = useState('');
   const [vulnTrends, setVulnTrends] = useState<DashboardVulnTrendPoint[]>([]);
+  const [vulnTrendError, setVulnTrendError] = useState('');
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+  const [vulnTrendRefreshKey, setVulnTrendRefreshKey] = useState(0);
   const [chartRefreshKey, setChartRefreshKey] = useState(0);
   const [vulnTrendPeriod, setVulnTrendPeriod] = useState(30);
   const [scanOutcomeRange, setScanOutcomeRange] = useState<RecentActivityRange>('30d');
@@ -757,6 +835,9 @@ export default function DashboardPage() {
   const [modalScansLoading, setModalScansLoading] = useState(false);
   const [modalScansError, setModalScansError] = useState('');
   const [watchlistOverviewItems, setWatchlistOverviewItems] = useState<WatchlistItem[]>([]);
+  const [watchlistOverviewLoading, setWatchlistOverviewLoading] = useState(true);
+  const [watchlistOverviewError, setWatchlistOverviewError] = useState('');
+  const [watchlistOverviewRefreshKey, setWatchlistOverviewRefreshKey] = useState(0);
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [watchlistError, setWatchlistError] = useState('');
@@ -837,27 +918,52 @@ export default function DashboardPage() {
           })
       : Promise.resolve({ health: null, error: '' });
 
-    Promise.all([
+    Promise.allSettled([
       getStats({ signal: controller.signal }),
-      getDashboardTrends(scanOutcomeRange, { signal: controller.signal }).catch(
-        (reason: unknown) => {
-          if (isAbortError(reason)) throw reason;
-          return [] as DashboardTrendPoint[];
-        }
-      ),
+      getDashboardTrends(scanOutcomeRange, { signal: controller.signal }),
       healthPromise,
     ])
-      .then(([s, t, healthResult]) => {
+      .then(([statsResult, trendsResult, healthResult]) => {
         if (dashboardRequestRef.current?.version !== requestVersion) return;
-        setStats(s);
-        setTrends(t);
-        setScannerHealth(healthResult.health);
-        setScannerHealthError(healthResult.error);
+
+        if (statsResult.status === 'rejected') {
+          if (!isAbortError(statsResult.reason)) {
+            setError(
+              statsResult.reason instanceof Error
+                ? statsResult.reason.message
+                : 'Failed to load dashboard data'
+            );
+          }
+        } else {
+          setStats(statsResult.value);
+          setError('');
+        }
+
+        if (trendsResult.status === 'rejected') {
+          if (!isAbortError(trendsResult.reason)) {
+            setTrendError(
+              trendsResult.reason instanceof Error
+                ? trendsResult.reason.message
+                : 'Failed to load scan outcomes'
+            );
+          }
+        } else {
+          setTrends(trendsResult.value);
+          setTrendError('');
+        }
+
+        if (healthResult.status === 'fulfilled') {
+          setScannerHealth(healthResult.value.health);
+          setScannerHealthError(healthResult.value.error);
+        } else if (!isAbortError(healthResult.reason)) {
+          setScannerHealth(null);
+          setScannerHealthError(
+            healthResult.reason instanceof Error
+              ? healthResult.reason.message
+              : 'Failed to load scanner health'
+          );
+        }
         setChartRefreshKey((current) => current + 1);
-      })
-      .catch((reason: unknown) => {
-        if (dashboardRequestRef.current?.version !== requestVersion || isAbortError(reason)) return;
-        setError(reason instanceof Error ? reason.message : 'Failed to load dashboard data');
       })
       .finally(() => {
         if (dashboardRequestRef.current?.version !== requestVersion) return;
@@ -871,7 +977,7 @@ export default function DashboardPage() {
         controller.abort();
       }
     };
-  }, [isAdmin, scanOutcomeRange, scopeKey]);
+  }, [dashboardRefreshKey, isAdmin, scanOutcomeRange, scopeKey]);
 
   useEffect(() => {
     vulnTrendRequestRef.current?.controller.abort();
@@ -882,11 +988,14 @@ export default function DashboardPage() {
       .then((nextTrends) => {
         if (vulnTrendRequestRef.current?.version === requestVersion) {
           setVulnTrends(nextTrends);
+          setVulnTrendError('');
         }
       })
       .catch((reason: unknown) => {
         if (vulnTrendRequestRef.current?.version !== requestVersion || isAbortError(reason)) return;
-        setVulnTrends([]);
+        setVulnTrendError(
+          reason instanceof Error ? reason.message : 'Failed to load vulnerability trend'
+        );
       })
       .finally(() => {
         if (vulnTrendRequestRef.current?.version === requestVersion) {
@@ -899,25 +1008,32 @@ export default function DashboardPage() {
         controller.abort();
       }
     };
-  }, [scopeKey, vulnTrendPeriod]);
+  }, [scopeKey, vulnTrendPeriod, vulnTrendRefreshKey]);
 
   useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
     void listWatchlist({ signal: controller.signal })
       .then((items) => {
-        if (!cancelled) setWatchlistOverviewItems(items);
+        if (!cancelled) {
+          setWatchlistOverviewItems(items);
+          setWatchlistOverviewError('');
+        }
       })
       .catch((reason: unknown) => {
         if (cancelled || isAbortError(reason)) return;
-        setWatchlistOverviewItems([]);
-        console.warn('Failed to load watchlist overview', reason);
+        setWatchlistOverviewError(
+          reason instanceof Error ? reason.message : 'Failed to load watchlist coverage'
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setWatchlistOverviewLoading(false);
       });
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [scopeKey]);
+  }, [scopeKey, watchlistOverviewRefreshKey]);
 
   useEffect(() => {
     drilldownRequestRef.current?.controller.abort();
@@ -1002,11 +1118,13 @@ export default function DashboardPage() {
   }, [activeDrilldown, drilldownModal.isOpen, recentActivityRange, scopeKey]);
 
   function handleVulnPeriodChange(days: number) {
+    setVulnTrendError('');
     setVulnTrendPeriod(days);
   }
 
   function handleScanOutcomeRangeChange(range: RecentActivityRange) {
     if (range === scanOutcomeRange) return;
+    setTrendError('');
     setScanOutcomeRange(range);
     setScanOutcomeLoading(true);
   }
@@ -1027,16 +1145,23 @@ export default function DashboardPage() {
   if (error)
     return (
       <div className="p-8">
-        <div
-          className="rounded-xl px-4 py-3 text-sm"
-          style={{
-            background: 'rgba(239,68,68,0.08)',
-            border: '1px solid rgba(239,68,68,0.18)',
-            color: '#f87171',
-          }}
-        >
-          {error}
-        </div>
+        <StatusAlert
+          status="danger"
+          title="Dashboard unavailable"
+          description={error}
+          action={
+            <Button
+              size="sm"
+              variant="secondary"
+              onPress={() => {
+                setLoading(true);
+                setDashboardRefreshKey((current) => current + 1);
+              }}
+            >
+              Retry
+            </Button>
+          }
+        />
       </div>
     );
 
@@ -1048,6 +1173,7 @@ export default function DashboardPage() {
   const completedCount = stats.status_counts['completed'] ?? 0;
   const watchlistCoverage = getWatchlistCoverage(watchlistOverviewItems);
   const watchlistAttentionCount = getWatchlistPolicyAttentionItems(watchlistOverviewItems).length;
+  const watchlistOverviewUnavailable = Boolean(watchlistOverviewError);
   const scannerReady = isScannerReady({
     isAdmin,
     scannerHealth,
@@ -1335,10 +1461,14 @@ export default function DashboardPage() {
               </span>
               <div>
                 <p className="text-sm font-medium text-foreground">
-                  {watchlistAttentionCount.toLocaleString()} watchlist items need attention
+                  {watchlistOverviewUnavailable
+                    ? 'Watchlist attention unavailable'
+                    : `${watchlistAttentionCount.toLocaleString()} watchlist items need attention`}
                 </p>
                 <p className="mt-1 text-xs leading-5 text-muted">
-                  Scheduled scans with a policy outcome or scan issue stay visible here.
+                  {watchlistOverviewUnavailable
+                    ? 'The dashboard could not load current watchlist coverage.'
+                    : 'Scheduled scans with a policy outcome or scan issue stay visible here.'}
                 </p>
               </div>
             </div>
@@ -1374,9 +1504,14 @@ export default function DashboardPage() {
             data={trends}
             range={scanOutcomeRange}
             loading={scanOutcomeLoading}
+            error={trendError}
             onRangeChange={handleScanOutcomeRangeChange}
             onDayPress={openScanOutcomeDay}
             onStatusPress={openScanOutcomeStatus}
+            onRetry={() => {
+              setTrendError('');
+              setDashboardRefreshKey((current) => current + 1);
+            }}
           />
 
           <Card className="p-6">
@@ -1387,76 +1522,103 @@ export default function DashboardPage() {
               </Card.Description>
             </Card.Header>
             <Card.Content className="mt-6 space-y-6 p-0">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <p className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                    {watchlistCoverage.coverage7d}%
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted">fresh in 7 days</p>
+              {watchlistOverviewError ? (
+                <StatusAlert
+                  status="danger"
+                  title="Coverage unavailable"
+                  description={watchlistOverviewError}
+                  action={
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onPress={() => {
+                        setWatchlistOverviewError('');
+                        setWatchlistOverviewLoading(true);
+                        setWatchlistOverviewRefreshKey((current) => current + 1);
+                      }}
+                    >
+                      Retry
+                    </Button>
+                  }
+                />
+              ) : watchlistOverviewLoading && watchlistOverviewItems.length === 0 ? (
+                <div className="rounded-xl bg-surface-secondary px-4 py-8 text-center text-sm text-muted">
+                  Loading fresh coverage…
                 </div>
-                <div>
-                  <p className="text-2xl font-semibold tabular-nums tracking-tight text-warning">
-                    {watchlistCoverage.staleItems.length}
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted">overdue</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold tabular-nums tracking-tight text-accent">
-                    {dashboardActivity.images_scanned_today}
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted">scanned today</p>
-                </div>
-              </div>
-              <ProgressBar
-                aria-label="Fresh scan coverage"
-                color={
-                  coverageTone === 'success'
-                    ? 'success'
-                    : coverageTone === 'warning'
-                      ? 'warning'
-                      : 'accent'
-                }
-                value={watchlistCoverage.coverage7d}
-              >
-                <ProgressBar.Track>
-                  <ProgressBar.Fill />
-                </ProgressBar.Track>
-              </ProgressBar>
-              <Separator variant="tertiary" />
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="flex items-center gap-2 text-muted">
-                    <GitBranchIcon size={16} /> Git repositories
-                  </span>
-                  <span
-                    className={
-                      gitRepositoryTone === 'success'
-                        ? 'text-success'
-                        : gitRepositoryTone === 'danger'
-                          ? 'text-danger'
-                          : 'text-foreground'
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+                        {watchlistCoverage.coverage7d}%
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted">fresh in 7 days</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-semibold tabular-nums tracking-tight text-warning">
+                        {watchlistCoverage.staleItems.length}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted">overdue</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-semibold tabular-nums tracking-tight text-accent">
+                        {dashboardActivity.images_scanned_today}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted">scanned today</p>
+                    </div>
+                  </div>
+                  <ProgressBar
+                    aria-label="Fresh scan coverage"
+                    color={
+                      coverageTone === 'success'
+                        ? 'success'
+                        : coverageTone === 'warning'
+                          ? 'warning'
+                          : 'accent'
                     }
+                    value={watchlistCoverage.coverage7d}
                   >
-                    {gitRepositoryDetail}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="flex items-center gap-2 text-muted">
-                    <ChartIcon size={16} /> Active Xray scans
-                  </span>
-                  <span className="tabular-nums text-foreground">
-                    {operations.active_xray_count}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="flex items-center gap-2 text-muted">
-                    <PackageIcon size={16} /> Scheduled items
-                  </span>
-                  <span className="tabular-nums text-foreground">
-                    {watchlistCoverage.enabledCount}
-                  </span>
-                </div>
-              </div>
+                    <ProgressBar.Track>
+                      <ProgressBar.Fill />
+                    </ProgressBar.Track>
+                  </ProgressBar>
+                  <Separator variant="tertiary" />
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="flex items-center gap-2 text-muted">
+                        <GitBranchIcon size={16} /> Git repositories
+                      </span>
+                      <span
+                        className={
+                          gitRepositoryTone === 'success'
+                            ? 'text-success'
+                            : gitRepositoryTone === 'danger'
+                              ? 'text-danger'
+                              : 'text-foreground'
+                        }
+                      >
+                        {gitRepositoryDetail}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="flex items-center gap-2 text-muted">
+                        <ChartIcon size={16} /> Active Xray scans
+                      </span>
+                      <span className="tabular-nums text-foreground">
+                        {operations.active_xray_count}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="flex items-center gap-2 text-muted">
+                        <PackageIcon size={16} /> Scheduled items
+                      </span>
+                      <span className="tabular-nums text-foreground">
+                        {watchlistCoverage.enabledCount}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
             </Card.Content>
             <Card.Footer className="px-0 pt-6">
               <Link
@@ -1475,6 +1637,11 @@ export default function DashboardPage() {
         data={vulnTrends}
         period={vulnTrendPeriod}
         onPeriod={handleVulnPeriodChange}
+        error={vulnTrendError}
+        onRetry={() => {
+          setVulnTrendError('');
+          setVulnTrendRefreshKey((current) => current + 1);
+        }}
       />
 
       <DashboardDrilldownModal
@@ -1484,7 +1651,9 @@ export default function DashboardPage() {
         completedCount={completedCount}
         watchlistCount={
           activeDrilldown === 'watchlist_attention'
-            ? watchlistAttentionCount
+            ? watchlistOverviewUnavailable
+              ? 0
+              : watchlistAttentionCount
             : stats.watchlist_count
         }
         recentActivityRange={recentActivityRange}

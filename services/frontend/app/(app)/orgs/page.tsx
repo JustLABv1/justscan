@@ -3,6 +3,7 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
+import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
@@ -17,6 +18,7 @@ import {
   OrgInvite,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { formatDateOnly } from '@/lib/time';
 import {
   Avatar,
   Button,
@@ -31,7 +33,7 @@ import {
   type SortDescriptor,
 } from '@heroui/react';
 import { Delete01Icon, PlusSignIcon, UserAdd01Icon } from 'hugeicons-react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type OrgWithCount = Org;
@@ -55,6 +57,7 @@ export default function OrgsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -68,10 +71,10 @@ export default function OrgsPage() {
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
-  const router = useRouter();
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const [nextOrgs, nextInvites] = await Promise.all([listOrgs(), listMyOrgInvites()]);
       setOrgs(nextOrgs);
@@ -151,8 +154,17 @@ export default function OrgsPage() {
       variant: 'danger',
     });
     if (!ok) return;
-    await deleteOrg(id).catch(() => {});
-    load();
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      await deleteOrg(id);
+      toast.success('Organization deleted');
+      await load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete organization');
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   async function handleAcceptInvite(invite: OrgInvite) {
@@ -195,13 +207,12 @@ export default function OrgsPage() {
             : 'Manage organization workspaces, members, and invites.'
         }
         actions={
-          <Button onClick={modal.open} variant="primary">
+          <Button onPress={modal.open} variant="primary">
             <PlusSignIcon size={15} /> New Organization
           </Button>
         }
       />
 
-      {error ? <FormAlert description={error} title="Organization loading failed" /> : null}
       {inviteError ? <FormAlert description={inviteError} title="Invite action failed" /> : null}
 
       {pendingInvites.length > 0 && (
@@ -257,7 +268,7 @@ export default function OrgsPage() {
                       className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium text-zinc-500"
                       style={{ background: 'var(--row-divider)' }}
                     >
-                      Expires {new Date(invite.expires_at).toLocaleDateString()}
+                      Expires {formatDateOnly(invite.expires_at)}
                     </span>
                   </div>
 
@@ -271,7 +282,8 @@ export default function OrgsPage() {
                     <Button
                       variant="primary"
                       isDisabled={busy}
-                      onClick={() => {
+                      isPending={busy}
+                      onPress={() => {
                         void handleAcceptInvite(invite);
                       }}
                     >
@@ -284,7 +296,7 @@ export default function OrgsPage() {
                       variant="secondary"
                       className="border border-zinc-300 dark:border-zinc-700"
                       isDisabled={busy}
-                      onClick={() => {
+                      onPress={() => {
                         void handleDeclineInvite(invite);
                       }}
                     >
@@ -298,31 +310,40 @@ export default function OrgsPage() {
         </Card>
       )}
 
-      {loading ? (
-        <div className="flex justify-center items-center h-48">
-          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
-        </div>
-      ) : orgs.length === 0 ? (
-        <Card className="py-20 flex flex-col items-center gap-3">
-          <div
-            className="size-14 rounded-2xl flex items-center justify-center"
-            style={{
-              background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
-            }}
-          >
-            <Avatar color="accent" size="lg" variant="soft">
-              <Avatar.Fallback>O</Avatar.Fallback>
-            </Avatar>
+      <LoadableCollectionState
+        emptyState={
+          <Card className="py-20 flex flex-col items-center gap-3">
+            <div
+              className="size-14 rounded-2xl flex items-center justify-center"
+              style={{
+                background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+              }}
+            >
+              <Avatar color="accent" size="lg" variant="soft">
+                <Avatar.Fallback>O</Avatar.Fallback>
+              </Avatar>
+            </div>
+            <p className="text-sm text-zinc-500 text-center max-w-xs">
+              No organizations yet. Create one to start managing compliance policies.
+            </p>
+            <Button onPress={modal.open} variant="secondary">
+              Create organization →
+            </Button>
+          </Card>
+        }
+        error={error || undefined}
+        errorTitle="Organization loading failed"
+        isEmpty={orgs.length === 0}
+        loading={loading}
+        loadingFallback={
+          <div className="flex justify-center items-center h-48" role="status">
+            <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
+            <span className="sr-only">Loading organizations</span>
           </div>
-          <p className="text-sm text-zinc-500 text-center max-w-xs">
-            No organizations yet. Create one to start managing compliance policies.
-          </p>
-          <Button onClick={modal.open} variant="secondary">
-            Create organization →
-          </Button>
-        </Card>
-      ) : (
+        }
+        retry={() => void load()}
+      >
         <>
           <Card className="p-3">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
@@ -330,6 +351,7 @@ export default function OrgsPage() {
                 <SearchField.Group>
                   <SearchField.SearchIcon />
                   <SearchField.Input
+                    aria-label="Search organizations"
                     placeholder="Search organizations, descriptions, or members..."
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
@@ -412,22 +434,38 @@ export default function OrgsPage() {
               <Table.ScrollContainer>
                 <Table.Content
                   aria-label="Organizations table"
-                  className="min-w-[900px]"
+                  className="md:min-w-[900px]"
                   sortDescriptor={sortDescriptor}
                   onSortChange={setSortDescriptor}
                 >
                   <Table.Header>
                     <Table.Column id="name" allowsSorting isRowHeader>
-                      Organization
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Organization
+                        </Table.SortableColumnHeader>
+                      )}
                     </Table.Column>
-                    <Table.Column id="members" allowsSorting>
-                      Members
+                    <Table.Column className="hidden md:table-cell" id="members" allowsSorting>
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Members
+                        </Table.SortableColumnHeader>
+                      )}
                     </Table.Column>
-                    <Table.Column id="policies" allowsSorting>
-                      Policies
+                    <Table.Column className="hidden md:table-cell" id="policies" allowsSorting>
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Policies
+                        </Table.SortableColumnHeader>
+                      )}
                     </Table.Column>
-                    <Table.Column id="updated" allowsSorting>
-                      Updated
+                    <Table.Column className="hidden md:table-cell" id="updated" allowsSorting>
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Updated
+                        </Table.SortableColumnHeader>
+                      )}
                     </Table.Column>
                     <Table.Column className="text-right">Actions</Table.Column>
                   </Table.Header>
@@ -445,9 +483,9 @@ export default function OrgsPage() {
                         <Table.Row
                           key={org.id}
                           id={org.id}
-                          className="cursor-pointer transition-colors hover:bg-[var(--row-hover)]"
+                          className="transition-colors hover:bg-[var(--row-hover)]"
                         >
-                          <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
+                          <Table.Cell>
                             <div className="flex items-center gap-3">
                               <Avatar
                                 className="shrink-0"
@@ -460,34 +498,45 @@ export default function OrgsPage() {
                                 </Avatar.Fallback>
                               </Avatar>
                               <div className="min-w-0">
-                                <p className="truncate font-medium text-zinc-900 dark:text-white">
+                                <Link
+                                  className="truncate font-medium text-zinc-900 hover:text-accent dark:text-white dark:hover:text-accent"
+                                  href={`/orgs/${org.id}`}
+                                >
                                   {org.name}
-                                </p>
+                                </Link>
                                 <p className="truncate text-xs text-zinc-500">
                                   {org.description || 'No description'}
                                 </p>
+                                <div className="mt-1 flex flex-wrap gap-x-2 text-xs text-zinc-500 md:hidden">
+                                  <span>
+                                    {org.member_count ?? 0}{' '}
+                                    {(org.member_count ?? 0) === 1 ? 'member' : 'members'}
+                                  </span>
+                                  <span aria-hidden="true">·</span>
+                                  <span>
+                                    {org.policy_count ?? 0}{' '}
+                                    {org.policy_count === 1 ? 'policy' : 'policies'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </Table.Cell>
-                          <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
+                          <Table.Cell className="hidden md:table-cell">
                             <Chip variant="soft">
                               {org.member_count ?? 0}{' '}
                               {(org.member_count ?? 0) === 1 ? 'member' : 'members'}
                             </Chip>
                           </Table.Cell>
-                          <Table.Cell onClick={() => router.push(`/orgs/${org.id}`)}>
+                          <Table.Cell className="hidden md:table-cell">
                             <Chip variant="soft">
                               {org.policy_count ?? 0}{' '}
                               {org.policy_count === 1 ? 'policy' : 'policies'}
                             </Chip>
                           </Table.Cell>
-                          <Table.Cell
-                            className="text-xs text-zinc-500"
-                            onClick={() => router.push(`/orgs/${org.id}`)}
-                          >
-                            {new Date(org.updated_at).toLocaleDateString()}
+                          <Table.Cell className="hidden text-xs text-zinc-500 md:table-cell">
+                            {formatDateOnly(org.updated_at)}
                           </Table.Cell>
-                          <Table.Cell onClick={(event) => event.stopPropagation()}>
+                          <Table.Cell>
                             <div className="flex justify-end">
                               {isSystemAdmin || org.current_user_role === 'owner' ? (
                                 <RowActionsMenu
@@ -498,6 +547,8 @@ export default function OrgsPage() {
                                       label: 'Delete organization',
                                       icon: <Delete01Icon size={15} />,
                                       variant: 'danger',
+                                      pending: deletingId === org.id,
+                                      disabled: deletingId !== null && deletingId !== org.id,
                                       onAction: () => {
                                         void handleDelete(org.id, org.name);
                                       },
@@ -518,7 +569,7 @@ export default function OrgsPage() {
             </Table>
           </Card>
         </>
-      )}
+      </LoadableCollectionState>
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable>
@@ -551,13 +602,10 @@ export default function OrgsPage() {
                 </form>
               </Modal.Body>
               <Modal.Footer>
-                <Button onClick={modal.close} variant="tertiary">
+                <Button onPress={modal.close} variant="tertiary">
                   Cancel
                 </Button>
-                <Button type="submit" form="create-org-form" isDisabled={creating}>
-                  {creating && (
-                    <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  )}
+                <Button type="submit" form="create-org-form" isPending={creating}>
                   Create
                 </Button>
               </Modal.Footer>

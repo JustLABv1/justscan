@@ -1,7 +1,7 @@
 'use client';
 
 import { useToast } from '@/components/toast';
-import { FormAlert } from '@/components/ui/form-alert';
+import { FormAlert, StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import {
   heroSelectTriggerClassName,
@@ -225,15 +225,22 @@ export default function NewScanPage() {
   const [createError, setCreateError] = useState('');
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
   const [scopedOrgPolicy, setScopedOrgPolicy] = useState<Org | null>(null);
+  const [scopedOrgPolicyError, setScopedOrgPolicyError] = useState('');
   const [capabilities, setCapabilities] = useState<ScannerCapabilities>(() =>
     getDefaultScannerCapabilities()
   );
+  const [capabilitiesLoading, setCapabilitiesLoading] = useState(true);
+  const [capabilitiesError, setCapabilitiesError] = useState('');
+  const [capabilitiesRetryKey, setCapabilitiesRetryKey] = useState(0);
 
   const isPlatformAdmin = getTokenType() === 'admin';
 
   useEffect(() => {
+    let cancelled = false;
     listRegistriesWithCapabilities()
       .then((response) => {
+        if (cancelled) return;
+        setCapabilitiesError('');
         setRegistries(response.data);
         setCapabilities(response.capabilities);
         const defaultReg = response.data.find((registry) => registry.is_default);
@@ -241,8 +248,19 @@ export default function NewScanPage() {
           setRegistryId((previous) => previous || defaultReg.id);
         }
       })
-      .catch(() => {});
-  }, [scopeKey]);
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        setCapabilitiesError(
+          reason instanceof Error ? reason.message : 'Failed to load scanner capabilities'
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setCapabilitiesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [capabilitiesRetryKey, scopeKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,6 +269,7 @@ export default function NewScanPage() {
       if (workScope.kind !== 'org') {
         if (!cancelled) {
           setScopedOrgPolicy(null);
+          setScopedOrgPolicyError('');
         }
         return;
       }
@@ -259,10 +278,14 @@ export default function NewScanPage() {
         .then((orgs) => {
           if (cancelled) return;
           setScopedOrgPolicy(orgs.find((org) => org.id === workScope.orgId) ?? null);
+          setScopedOrgPolicyError('');
         })
-        .catch(() => {
+        .catch((reason: unknown) => {
           if (cancelled) return;
           setScopedOrgPolicy(null);
+          setScopedOrgPolicyError(
+            reason instanceof Error ? reason.message : 'Failed to load organization policy'
+          );
         });
     };
 
@@ -602,6 +625,8 @@ export default function NewScanPage() {
       : selectedRegistry?.name || 'Not selected';
   const canStartScan =
     !creating &&
+    !capabilitiesLoading &&
+    !capabilitiesError &&
     canMutateCurrentScope &&
     !xrayOnlyWithoutRegistries &&
     !orgFeatureBlockMessage &&
@@ -625,6 +650,39 @@ export default function NewScanPage() {
 
       <form onSubmit={handleCreate} className="space-y-4">
         {createError ? <FormAlert description={createError} title="Scan creation failed" /> : null}
+        {capabilitiesLoading ? (
+          <StatusAlert
+            title="Loading scanner capabilities"
+            description="Checking available scan routes…"
+          />
+        ) : null}
+        {capabilitiesError ? (
+          <StatusAlert
+            status="danger"
+            title="Scanner capabilities unavailable"
+            description={capabilitiesError}
+            action={
+              <Button
+                size="sm"
+                variant="secondary"
+                onPress={() => {
+                  setCapabilitiesError('');
+                  setCapabilitiesLoading(true);
+                  setCapabilitiesRetryKey((current) => current + 1);
+                }}
+              >
+                Retry
+              </Button>
+            }
+          />
+        ) : null}
+        {scopedOrgPolicyError ? (
+          <StatusAlert
+            status="warning"
+            title="Organization policy unavailable"
+            description={scopedOrgPolicyError}
+          />
+        ) : null}
         {!createError && orgFeatureBlockMessage ? (
           <FormAlert
             title="Scan creation disabled"
@@ -693,6 +751,7 @@ export default function NewScanPage() {
                 <ScanWizardField label="OCI/Docker archive">
                   <div className="rounded-2xl border border-dashed border-surface-border bg-surface-secondary px-4 py-4">
                     <input
+                      aria-label="OCI or Docker archive"
                       accept=".tar,.tgz,.tar.gz,.oci"
                       className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-xl file:border-0 file:bg-accent file:px-3 file:py-2 file:font-medium file:text-white hover:file:opacity-90 dark:text-zinc-300"
                       onChange={(e) => setUploadedArchiveFile(e.target.files?.[0] ?? null)}
@@ -752,6 +811,7 @@ export default function NewScanPage() {
                   {scanSource === 'private_registry' ? (
                     <ScanWizardField label="Private registry">
                       <Select
+                        aria-label="Private registry"
                         variant="secondary"
                         value={registryId || '__none__'}
                         onChange={(value) =>
@@ -779,6 +839,7 @@ export default function NewScanPage() {
                     <div className="space-y-4">
                       <ScanWizardField label="Artifactory registry">
                         <Select
+                          aria-label="Artifactory registry"
                           variant="secondary"
                           value={registryId || '__none__'}
                           onChange={(value) =>
@@ -851,7 +912,11 @@ export default function NewScanPage() {
                           </Autocomplete.Trigger>
                           <Autocomplete.Popover>
                             <Autocomplete.Filter filter={contains}>
-                              <SearchField name="artifactory-repo-search" variant="secondary">
+                              <SearchField
+                                name="artifactory-repo-search"
+                                aria-label="Search Artifactory repositories"
+                                variant="secondary"
+                              >
                                 <SearchField.Group>
                                   <SearchField.SearchIcon />
                                   <SearchField.Input placeholder="Search Artifactory repos..." />
@@ -892,10 +957,26 @@ export default function NewScanPage() {
                           </p>
                         ) : null}
                         {selectedRegistryRepositoriesError ? (
-                          <p className="text-xs" style={{ color: '#f59e0b' }}>
+                          <div
+                            className="flex items-center gap-2 text-xs"
+                            style={{ color: '#f59e0b' }}
+                          >
                             {selectedRegistryRepositoriesError}. You can still enter the repo
                             manually.
-                          </p>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onPress={() =>
+                                setArtifactoryRepositoriesErrorByRegistry((previous) => {
+                                  const next = { ...previous };
+                                  if (selectedRegistry) delete next[selectedRegistry.id];
+                                  return next;
+                                })
+                              }
+                            >
+                              Retry
+                            </Button>
+                          </div>
                         ) : null}
                         {useManualXrayRepository || !!selectedRegistryRepositoriesError ? (
                           <FormField
@@ -948,6 +1029,7 @@ export default function NewScanPage() {
                         optional
                       >
                         <TextArea
+                          aria-label="Additional image references"
                           className={joinClassNames(inputCls, 'min-h-24 bg-surface resize-y')}
                           placeholder={
                             'ghcr.io/example/api:1.2.3\nregistry.example.com/team/worker:latest'
@@ -957,6 +1039,7 @@ export default function NewScanPage() {
                         />
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <Button
+                            type="button"
                             variant="secondary"
                             size="sm"
                             className="shrink-0"
@@ -1021,6 +1104,7 @@ export default function NewScanPage() {
 
                     <ScanWizardField label="Platform" optional>
                       <Select
+                        aria-label="Platform"
                         value={platform || '__auto__'}
                         onChange={(value) =>
                           setPlatform(String(value === '__auto__' ? '' : (value ?? '')))

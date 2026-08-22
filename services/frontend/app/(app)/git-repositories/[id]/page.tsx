@@ -2,6 +2,7 @@
 
 import {
   Accordion,
+  buttonVariants,
   Button,
   Card,
   Checkbox,
@@ -816,10 +817,11 @@ export default function GitRepositoryDetailPage() {
               </Button>
             )}
             <Dropdown>
-              <Dropdown.Trigger>
-                <Button aria-label="Open repository actions" isIconOnly variant="secondary">
-                  <MoreVerticalIcon size={16} />
-                </Button>
+              <Dropdown.Trigger
+                aria-label="Open repository actions"
+                className={buttonVariants({ isIconOnly: true, variant: 'secondary' })}
+              >
+                <MoreVerticalIcon size={16} />
               </Dropdown.Trigger>
               <Dropdown.Popover className="min-w-[220px]" placement="bottom end">
                 <Dropdown.Menu

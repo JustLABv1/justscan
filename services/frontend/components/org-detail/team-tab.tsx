@@ -1,6 +1,15 @@
 import { OrgInvite, OrgMember, OrgRole } from '@/lib/api';
 import { timeAgo, timeUntil } from '@/lib/time';
-import { Avatar, Button, Card, ListBox, SearchField, Select, Table, type SortDescriptor } from '@heroui/react';
+import {
+  Avatar,
+  Button,
+  Card,
+  ListBox,
+  SearchField,
+  Select,
+  Table,
+  type SortDescriptor,
+} from '@heroui/react';
 import { Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useMemo, useState } from 'react';
 
@@ -23,6 +32,8 @@ interface OrgTeamTabProps {
   onRemoveMember: (member: OrgMember) => void | Promise<void>;
   onRevokeInvite: (invite: OrgInvite) => void | Promise<void>;
   onTransferOwnership: (member: OrgMember) => void | Promise<void>;
+  pendingInviteAction: string | null;
+  pendingMemberAction: string | null;
   featureDisabledReason?: string;
 }
 
@@ -57,6 +68,8 @@ export function OrgTeamTab({
   onRemoveMember,
   onRevokeInvite,
   onTransferOwnership,
+  pendingInviteAction,
+  pendingMemberAction,
   featureDisabledReason,
 }: OrgTeamTabProps) {
   const [memberSearch, setMemberSearch] = useState('');
@@ -102,7 +115,9 @@ export function OrgTeamTab({
   const filteredInvites = useMemo(() => {
     const query = memberSearch.trim().toLowerCase();
     if (!query) return invites;
-    return invites.filter((invite) => [invite.email, invite.role].some((value) => value.toLowerCase().includes(query)));
+    return invites.filter((invite) =>
+      [invite.email, invite.role].some((value) => value.toLowerCase().includes(query))
+    );
   }, [invites, memberSearch]);
 
   return (
@@ -120,7 +135,14 @@ export function OrgTeamTab({
             </p>
           </div>
           {canManageMembers && (
-            <Button onClick={onOpenInviteModal} isDisabled={Boolean(featureDisabledReason)}>
+            <Button
+              onClick={onOpenInviteModal}
+              isDisabled={
+                Boolean(featureDisabledReason) ||
+                pendingMemberAction !== null ||
+                pendingInviteAction !== null
+              }
+            >
               <PlusSignIcon size={14} />
               Invite Member
             </Button>
@@ -136,7 +158,9 @@ export function OrgTeamTab({
               <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
             </div>
           ) : members.length === 0 && invites.length === 0 ? (
-            <div className="px-6 py-8 text-sm text-zinc-500 text-center">No members or pending invites.</div>
+            <div className="px-6 py-8 text-sm text-zinc-500 text-center">
+              No members or pending invites.
+            </div>
           ) : (
             <div className="space-y-3">
               <SearchField name="org-members-search" variant="secondary">
@@ -185,108 +209,149 @@ export function OrgTeamTab({
                         <>
                           {sortedMembers.map((member) => (
                             <Table.Row
-                            key={member.user_id}
-                            id={member.user_id}
-                            className="transition-colors hover:bg-[var(--row-hover)]"
-                          >
-                            <Table.Cell>
-                              <div className="flex items-center gap-3">
-                                <Avatar color="accent" size="sm" variant="soft">
-                                  <Avatar.Fallback>{memberInitials(member)}</Avatar.Fallback>
-                                </Avatar>
-                                <div>
-                                  <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                                    {member.username || member.email || member.user_id}
-                                  </p>
-                                  {member.email && (
-                                    <p className="text-xs text-zinc-500 mt-0.5">{member.email}</p>
+                              key={member.user_id}
+                              id={member.user_id}
+                              className="transition-colors hover:bg-[var(--row-hover)]"
+                            >
+                              <Table.Cell>
+                                <div className="flex items-center gap-3">
+                                  <Avatar color="accent" size="sm" variant="soft">
+                                    <Avatar.Fallback>{memberInitials(member)}</Avatar.Fallback>
+                                  </Avatar>
+                                  <div>
+                                    <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                                      {member.username || member.email || member.user_id}
+                                    </p>
+                                    {member.email && (
+                                      <p className="text-xs text-zinc-500 mt-0.5">{member.email}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </Table.Cell>
+                              <Table.Cell>
+                                {canEditRoles && member.role !== 'owner' ? (
+                                  <Select
+                                    value={member.role}
+                                    isDisabled={pendingMemberAction !== null}
+                                    onChange={(value) =>
+                                      void onMemberRoleChange(
+                                        member,
+                                        String(value) as Extract<
+                                          OrgRole,
+                                          'admin' | 'editor' | 'viewer'
+                                        >
+                                      )
+                                    }
+                                  >
+                                    <Select.Trigger
+                                      className={`${inputClassName} max-w-[140px] py-2 text-sm`}
+                                    >
+                                      <Select.Value />
+                                      <Select.Indicator />
+                                    </Select.Trigger>
+                                    <Select.Popover>
+                                      <ListBox>
+                                        <ListBox.Item id="viewer">viewer</ListBox.Item>
+                                        <ListBox.Item id="editor">editor</ListBox.Item>
+                                        <ListBox.Item id="admin">admin</ListBox.Item>
+                                      </ListBox>
+                                    </Select.Popover>
+                                  </Select>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-accent-500/10 text-accent border-accent-500/20">
+                                    {member.role}
+                                  </span>
+                                )}
+                              </Table.Cell>
+                              <Table.Cell className="text-xs text-zinc-500">
+                                {timeAgo(member.joined_at)}
+                              </Table.Cell>
+                              <Table.Cell>
+                                <span className="text-xs text-success">Active</span>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <div className="flex items-center justify-end gap-2">
+                                  {canTransferOwnership && member.role !== 'owner' && (
+                                    <Button
+                                      onClick={() => void onTransferOwnership(member)}
+                                      isDisabled={pendingMemberAction !== null}
+                                      isPending={
+                                        pendingMemberAction === `transfer:${member.user_id}`
+                                      }
+                                      variant="secondary"
+                                    >
+                                      Make owner
+                                    </Button>
+                                  )}
+                                  {canManageMembers && member.role !== 'owner' && (
+                                    <Button
+                                      onClick={() => void onRemoveMember(member)}
+                                      aria-label={`Remove ${member.username || member.email || 'member'}`}
+                                      isDisabled={pendingMemberAction !== null}
+                                      isPending={pendingMemberAction === `remove:${member.user_id}`}
+                                      variant="danger-soft"
+                                      isIconOnly
+                                    >
+                                      <Delete01Icon size={15} />
+                                    </Button>
                                   )}
                                 </div>
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell>
-                              {canEditRoles && member.role !== 'owner' ? (
-                                <Select
-                                  value={member.role}
-                                  onChange={(value) =>
-                                    void onMemberRoleChange(
-                                      member,
-                                      String(value) as Extract<
-                                        OrgRole,
-                                        'admin' | 'editor' | 'viewer'
-                                      >
-                                    )
-                                  }
-                                >
-                                  <Select.Trigger className={`${inputClassName} max-w-[140px] py-2 text-sm`}>
-                                    <Select.Value />
-                                    <Select.Indicator />
-                                  </Select.Trigger>
-                                  <Select.Popover>
-                                    <ListBox>
-                                      <ListBox.Item id="viewer">viewer</ListBox.Item>
-                                      <ListBox.Item id="editor">editor</ListBox.Item>
-                                      <ListBox.Item id="admin">admin</ListBox.Item>
-                                    </ListBox>
-                                  </Select.Popover>
-                                </Select>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-accent-500/10 text-accent border-accent-500/20">
-                                  {member.role}
-                                </span>
-                              )}
-                            </Table.Cell>
-                            <Table.Cell className="text-xs text-zinc-500">
-                              {timeAgo(member.joined_at)}
-                            </Table.Cell>
-                            <Table.Cell>
-                              <span className="text-xs text-success">Active</span>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <div className="flex items-center justify-end gap-2">
-                                {canTransferOwnership && member.role !== 'owner' && (
-                                  <Button
-                                    onClick={() => void onTransferOwnership(member)}
-                                    variant="secondary"
-                                  >
-                                    Make owner
-                                  </Button>
-                                )}
-                                {canManageMembers && member.role !== 'owner' && (
-                                  <Button
-                                    onClick={() => void onRemoveMember(member)}
-                                    variant="danger-soft"
-                                    isIconOnly
-                                  >
-                                    <Delete01Icon size={15} />
-                                  </Button>
-                                )}
-                              </div>
-                            </Table.Cell>
+                              </Table.Cell>
                             </Table.Row>
                           ))}
                           {filteredInvites.map((invite) => (
-                            <Table.Row key={invite.id} id={`invite-${invite.id}`} className="bg-surface-secondary/40">
+                            <Table.Row
+                              key={invite.id}
+                              id={`invite-${invite.id}`}
+                              className="bg-surface-secondary/40"
+                            >
                               <Table.Cell>
                                 <div className="flex items-center gap-3">
                                   <Avatar color="warning" size="sm" variant="soft">
-                                    <Avatar.Fallback>{invite.email.charAt(0).toUpperCase()}</Avatar.Fallback>
+                                    <Avatar.Fallback>
+                                      {invite.email.charAt(0).toUpperCase()}
+                                    </Avatar.Fallback>
                                   </Avatar>
                                   <div>
-                                    <p className="font-medium text-zinc-800 dark:text-zinc-200">{invite.email}</p>
+                                    <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                                      {invite.email}
+                                    </p>
                                     <p className="mt-0.5 text-xs text-muted">Invitation pending</p>
                                   </div>
                                 </div>
                               </Table.Cell>
                               <Table.Cell>
-                                <span className="inline-flex rounded-full border border-warning/20 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">{invite.role}</span>
+                                <span className="inline-flex rounded-full border border-warning/20 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+                                  {invite.role}
+                                </span>
                               </Table.Cell>
                               <Table.Cell className="text-xs text-muted">—</Table.Cell>
-                              <Table.Cell><span className="text-xs text-warning">Expires {timeUntil(invite.expires_at)}</span></Table.Cell>
+                              <Table.Cell>
+                                <span className="text-xs text-warning">
+                                  Expires {timeUntil(invite.expires_at)}
+                                </span>
+                              </Table.Cell>
                               <Table.Cell>
                                 <div className="flex items-center justify-end gap-2">
-                                  <Button onPress={() => void onCopyInviteLink(invite)} size="sm" variant="secondary">Copy link</Button>
-                                  {canManageMembers ? <Button onPress={() => void onRevokeInvite(invite)} size="sm" variant="danger">Revoke</Button> : null}
+                                  <Button
+                                    onPress={() => void onCopyInviteLink(invite)}
+                                    isDisabled={pendingInviteAction !== null}
+                                    size="sm"
+                                    variant="secondary"
+                                  >
+                                    Copy link
+                                  </Button>
+                                  {canManageMembers ? (
+                                    <Button
+                                      onPress={() => void onRevokeInvite(invite)}
+                                      isDisabled={pendingInviteAction !== null}
+                                      isPending={pendingInviteAction === invite.id}
+                                      size="sm"
+                                      variant="danger"
+                                    >
+                                      Revoke
+                                    </Button>
+                                  ) : null}
                                 </div>
                               </Table.Cell>
                             </Table.Row>
@@ -301,7 +366,6 @@ export function OrgTeamTab({
           )}
         </div>
       </Card>
-
     </div>
   );
 }

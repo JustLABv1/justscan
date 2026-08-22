@@ -13,7 +13,13 @@ import {
   TextArea,
   useOverlayState,
 } from '@heroui/react';
-import { Delete01Icon, GitBranchIcon, PencilEdit01Icon, PlayIcon, PlusSignIcon } from 'hugeicons-react';
+import {
+  Delete01Icon,
+  GitBranchIcon,
+  PencilEdit01Icon,
+  PlayIcon,
+  PlusSignIcon,
+} from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -21,6 +27,7 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
+import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -69,8 +76,10 @@ const initialDraft: Draft = {
 export default function GitRepositoriesPage() {
   const [repositories, setRepositories] = useState<GitRepository[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [editingRepository, setEditingRepository] = useState<GitRepository | null>(null);
   const overlay = useOverlayState();
   const workScope = useWorkScope();
@@ -80,14 +89,15 @@ export default function GitRepositoriesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       setRepositories(await listGitRepositories(workspaceScope));
     } catch (error) {
-      showError(error instanceof Error ? error.message : 'Could not load Git repositories.');
+      setLoadError(error instanceof Error ? error.message : 'Could not load Git repositories.');
     } finally {
       setLoading(false);
     }
-  }, [showError, workspaceScope]);
+  }, [workspaceScope]);
   useEffect(
     () =>
       deferEffect(() => {
@@ -97,11 +107,15 @@ export default function GitRepositoriesPage() {
   );
 
   async function save() {
+    if (saving) return;
     setSaving(true);
     try {
       const input: GitRepositoryInput = {
         ...draft,
-        entrypoints: draft.entrypoints.split('\n').map((value) => value.trim()).filter(Boolean),
+        entrypoints: draft.entrypoints
+          .split('\n')
+          .map((value) => value.trim())
+          .filter(Boolean),
       };
       if (editingRepository) {
         await updateGitRepository(editingRepository.id, input);
@@ -115,7 +129,11 @@ export default function GitRepositoriesPage() {
       setDraft(initialDraft);
       setEditingRepository(null);
       await load();
-      success(editingRepository ? 'Git repository updated.' : 'Git repository connected. You can run it now or enable its schedule.');
+      success(
+        editingRepository
+          ? 'Git repository updated.'
+          : 'Git repository connected. You can run it now or enable its schedule.'
+      );
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Could not save Git repository.');
     } finally {
@@ -149,12 +167,17 @@ export default function GitRepositoriesPage() {
     repository: GitRepository,
     policy: 'changed' | 'all' = repository.rescan_policy
   ) {
+    const actionKey = `run:${repository.id}:${policy}`;
+    if (pendingAction) return;
+    setPendingAction(actionKey);
     try {
       await runGitRepository(repository.id, { policy });
       success(`${repository.name} scan queued.`);
       await load();
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Could not queue repository scan.');
+    } finally {
+      setPendingAction(null);
     }
   }
   async function remove(repository: GitRepository) {
@@ -165,12 +188,16 @@ export default function GitRepositoriesPage() {
       variant: 'danger',
     });
     if (!confirmed) return;
+    if (pendingAction) return;
+    setPendingAction(`delete:${repository.id}`);
     try {
       await deleteGitRepository(repository.id);
       await load();
       success('Git repository deleted.');
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Could not delete Git repository.');
+    } finally {
+      setPendingAction(null);
     }
   }
 
@@ -186,28 +213,36 @@ export default function GitRepositoriesPage() {
           </Button>
         }
       />
-      {loading ? (
-        <Card>
-          <Card.Content className="py-12 text-sm text-foreground/60">
-            Loading Git repositories…
-          </Card.Content>
-        </Card>
-      ) : repositories.length === 0 ? (
-        <EmptyState
-          icon={<GitBranchIcon />}
-          title="No Git repositories connected"
-          description="Connect a GitOps repository to discover its declared container images."
-          action={{ label: 'Connect repository', onClick: connect }}
-        />
-      ) : (
+      <LoadableCollectionState
+        emptyState={
+          <EmptyState
+            icon={<GitBranchIcon />}
+            title="No Git repositories connected"
+            description="Connect a GitOps repository to discover its declared container images."
+            action={{ label: 'Connect repository', onClick: connect }}
+          />
+        }
+        error={loadError || undefined}
+        errorTitle="Git repositories failed to load"
+        isEmpty={repositories.length === 0}
+        loading={loading}
+        loadingFallback={
+          <Card>
+            <Card.Content className="py-12 text-sm text-foreground/60" role="status">
+              Loading Git repositories…
+            </Card.Content>
+          </Card>
+        }
+        retry={() => void load()}
+      >
         <Table>
           <Table.ScrollContainer>
-            <Table.Content aria-label="Git repositories">
+            <Table.Content aria-label="Git repositories" className="md:min-w-[720px]">
               <Table.Header>
                 <Table.Column>Repository</Table.Column>
-                <Table.Column>Ref</Table.Column>
-                <Table.Column>Schedule</Table.Column>
-                <Table.Column>Last run</Table.Column>
+                <Table.Column className="hidden md:table-cell">Ref</Table.Column>
+                <Table.Column className="hidden md:table-cell">Schedule</Table.Column>
+                <Table.Column className="hidden md:table-cell">Last run</Table.Column>
                 <Table.Column>Actions</Table.Column>
               </Table.Header>
               <Table.Body>
@@ -215,18 +250,30 @@ export default function GitRepositoriesPage() {
                   <Table.Row key={repository.id}>
                     <Table.Cell>
                       <div className="space-y-1">
-                        <Link className="font-medium text-foreground hover:text-accent" href={`/git-repositories/${repository.id}`}>
+                        <Link
+                          className="font-medium text-foreground hover:text-accent"
+                          href={`/git-repositories/${repository.id}`}
+                        >
                           {repository.name}
                         </Link>
                         <p className="max-w-sm truncate text-xs text-foreground/60">
                           {repository.clone_url}
                         </p>
+                        <div className="flex flex-wrap gap-x-2 text-xs text-foreground/60 md:hidden">
+                          <span>{repository.ref}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>{repository.enabled ? repository.schedule : 'Manual'}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>
+                            {repository.last_run_at ? timeAgo(repository.last_run_at) : 'Never'}
+                          </span>
+                        </div>
                       </div>
                     </Table.Cell>
-                    <Table.Cell>
+                    <Table.Cell className="hidden md:table-cell">
                       <code className="text-xs">{repository.ref}</code>
                     </Table.Cell>
-                    <Table.Cell>
+                    <Table.Cell className="hidden md:table-cell">
                       <Chip
                         color={repository.enabled ? 'success' : 'default'}
                         size="sm"
@@ -235,7 +282,7 @@ export default function GitRepositoriesPage() {
                         {repository.enabled ? repository.schedule : 'Manual'}
                       </Chip>
                     </Table.Cell>
-                    <Table.Cell>
+                    <Table.Cell className="hidden md:table-cell">
                       {repository.last_run_at ? timeAgo(repository.last_run_at) : 'Never'}
                     </Table.Cell>
                     <Table.Cell>
@@ -246,12 +293,20 @@ export default function GitRepositoriesPage() {
                             id: 'run',
                             label: 'Run scan',
                             icon: <PlayIcon size={15} />,
+                            pending: pendingAction === `run:${repository.id}:changed`,
+                            disabled:
+                              pendingAction !== null &&
+                              pendingAction !== `run:${repository.id}:changed`,
                             onAction: () => void run(repository),
                           },
                           {
                             id: 'full',
                             label: 'Full rescan',
                             icon: <PlayIcon size={15} />,
+                            pending: pendingAction === `run:${repository.id}:all`,
+                            disabled:
+                              pendingAction !== null &&
+                              pendingAction !== `run:${repository.id}:all`,
                             onAction: () => void run(repository, 'all'),
                           },
                           {
@@ -265,6 +320,9 @@ export default function GitRepositoriesPage() {
                             label: 'Delete',
                             icon: <Delete01Icon size={15} />,
                             variant: 'danger',
+                            pending: pendingAction === `delete:${repository.id}`,
+                            disabled:
+                              pendingAction !== null && pendingAction !== `delete:${repository.id}`,
                             onAction: () => void remove(repository),
                           },
                         ]}
@@ -276,7 +334,7 @@ export default function GitRepositoriesPage() {
             </Table.Content>
           </Table.ScrollContainer>
         </Table>
-      )}
+      </LoadableCollectionState>
       {dialog}
       <Modal>
         <Modal.Backdrop isOpen={overlay.isOpen} onOpenChange={overlay.setOpen}>
@@ -284,7 +342,9 @@ export default function GitRepositoriesPage() {
             <Modal.Dialog>
               <Modal.CloseTrigger />
               <Modal.Header>
-                <Modal.Heading>{editingRepository ? 'Edit Git repository' : 'Connect Git repository'}</Modal.Heading>
+                <Modal.Heading>
+                  {editingRepository ? 'Edit Git repository' : 'Connect Git repository'}
+                </Modal.Heading>
               </Modal.Header>
               <Modal.Body className="grid gap-4">
                 <FormField
@@ -320,7 +380,9 @@ export default function GitRepositoriesPage() {
                   </Select.Trigger>
                   <Select.Popover>
                     <ListBox>
-                      <ListBox.Item id="auto">Auto — rendered Kustomize, otherwise manifests</ListBox.Item>
+                      <ListBox.Item id="auto">
+                        Auto — rendered Kustomize, otherwise manifests
+                      </ListBox.Item>
                       <ListBox.Item id="kustomize">Kustomize entrypoints</ListBox.Item>
                       <ListBox.Item id="manifests">Plain Kubernetes manifests</ListBox.Item>
                     </ListBox>
@@ -337,7 +399,9 @@ export default function GitRepositoriesPage() {
                       rows={3}
                       variant="secondary"
                     />
-                    <p className="text-xs text-foreground/60">One relative repository path per line.</p>
+                    <p className="text-xs text-foreground/60">
+                      One relative repository path per line.
+                    </p>
                   </div>
                 ) : null}
                 <Select

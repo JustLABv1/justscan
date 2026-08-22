@@ -1,8 +1,17 @@
-import { sharedReq } from './core';
-import type { SBOMComponent, SBOMComponentDetail, SBOMDocument, SBOMGraph, Scan, SharedScanRescanResponse, Vulnerability, VulnerabilityContextAnalysis } from './types/scans';
+import { sharedReq, type ApiRequestOptions } from './core';
+import type {
+  SBOMComponent,
+  SBOMComponentDetail,
+  SBOMDocument,
+  SBOMGraph,
+  Scan,
+  SharedScanRescanResponse,
+  Vulnerability,
+  VulnerabilityContextAnalysis,
+} from './types/scans';
 
-export const getSharedScan = (token: string) =>
-  sharedReq<Scan>('GET', `/api/v1/shared/${token}`);
+export const getSharedScan = (token: string, options?: ApiRequestOptions) =>
+  sharedReq<Scan>('GET', `/api/v1/shared/${token}`, undefined, options);
 
 export const listSharedVulnerabilities = (
   token: string,
@@ -14,6 +23,7 @@ export const listSharedVulnerabilities = (
   minCvss?: number,
   sortBy?: string,
   sortDir?: 'asc' | 'desc',
+  options?: ApiRequestOptions
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (severity) params.set('severity', severity);
@@ -22,19 +32,30 @@ export const listSharedVulnerabilities = (
   if (minCvss) params.set('min_cvss', String(minCvss));
   if (sortBy) params.set('sort_by', sortBy);
   if (sortDir) params.set('sort_dir', sortDir);
-  return sharedReq<{ data: Vulnerability[]; total: number }>('GET', `/api/v1/shared/${token}/vulnerabilities?${params}`);
+  return sharedReq<{ data: Vulnerability[]; total: number }>(
+    'GET',
+    `/api/v1/shared/${token}/vulnerabilities?${params}`,
+    undefined,
+    options
+  );
 };
 
 export const rescanShared = (token: string) =>
   sharedReq<SharedScanRescanResponse>('POST', `/api/v1/shared/${token}/rescan`);
 
 export const getSharedVulnerabilityContextAnalysis = (token: string, vulnerabilityId: string) =>
-  sharedReq<VulnerabilityContextAnalysis>('GET', `/api/v1/shared/${token}/vulnerabilities/${vulnerabilityId}/analysis`);
+  sharedReq<VulnerabilityContextAnalysis>(
+    'GET',
+    `/api/v1/shared/${token}/vulnerabilities/${vulnerabilityId}/analysis`
+  );
 
 export const getSharedSBOM = (token: string, name?: string) => {
   const params = new URLSearchParams();
   if (name) params.set('name', name);
-  return sharedReq<{ data: SBOMComponent[]; total: number; document?: SBOMDocument }>('GET', `/api/v1/shared/${token}/sbom?${params}`);
+  return sharedReq<{ data: SBOMComponent[]; total: number; document?: SBOMDocument }>(
+    'GET',
+    `/api/v1/shared/${token}/sbom?${params}`
+  );
 };
 
 export const getSharedSBOMGraph = (token: string, focus?: string) => {

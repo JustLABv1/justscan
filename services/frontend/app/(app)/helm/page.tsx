@@ -3,6 +3,7 @@ import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import type { Key } from '@heroui/react';
 import {
@@ -107,7 +108,9 @@ function credentialMatchesChart(
     if (credentialURL.host.toLowerCase() !== chartURL.host.toLowerCase()) return false;
     const credentialPath = credentialURL.pathname.replace(/^\/+|\/+$/g, '');
     const chartPath = chartURL.pathname.replace(/^\/+|\/+$/g, '');
-    return !credentialPath || chartPath === credentialPath || chartPath.startsWith(`${credentialPath}/`);
+    return (
+      !credentialPath || chartPath === credentialPath || chartPath.startsWith(`${credentialPath}/`)
+    );
   } catch {
     return false;
   }
@@ -139,7 +142,9 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
   const [chartName, setChartName] = useState('');
   const [chartVersion, setChartVersion] = useState('');
   const [helmRegistryCredentialId, setHelmRegistryCredentialId] = useState('');
-  const [helmRegistryCredentials, setHelmRegistryCredentials] = useState<HelmRegistryCredential[]>([]);
+  const [helmRegistryCredentials, setHelmRegistryCredentials] = useState<HelmRegistryCredential[]>(
+    []
+  );
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
 
@@ -161,6 +166,11 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
   const [helmRuns, setHelmRuns] = useState<HelmScanRunSummary[]>([]);
   const [isAdmin] = useState(() => getTokenType() === 'admin');
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [tagError, setTagError] = useState('');
+  const [credentialsError, setCredentialsError] = useState('');
+  const [registryError, setRegistryError] = useState('');
+  const [scopedOrgPolicyError, setScopedOrgPolicyError] = useState('');
   const [historyActionRunId, setHistoryActionRunId] = useState<string | null>(null);
 
   const isOCI = chartURL.trim().startsWith('oci://');
@@ -179,22 +189,48 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
   const xrayOnlyWithoutRegistries = !capabilities.enable_trivy && selectableRegistries.length === 0;
 
   const loadTags = useCallback(async () => {
+    setTagError('');
     try {
       setAvailableTags(await listTags());
-    } catch {
-      // Tags are optional.
+    } catch (reason: unknown) {
+      setTagError(reason instanceof Error ? reason.message : 'Failed to load tags');
     }
   }, []);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
+    setHistoryError('');
     try {
       const { data } = await listHelmScanRuns(1, 24);
       setHelmRuns(Array.isArray(data) ? data : []);
-    } catch {
-      setHelmRuns([]);
+    } catch (reason: unknown) {
+      setHistoryError(reason instanceof Error ? reason.message : 'Failed to load Helm runs');
     } finally {
       setHistoryLoading(false);
+    }
+  }, []);
+
+  const loadCredentials = useCallback(async () => {
+    setCredentialsError('');
+    try {
+      setHelmRegistryCredentials(await listHelmRegistryCredentials());
+    } catch (reason: unknown) {
+      setCredentialsError(
+        reason instanceof Error ? reason.message : 'Failed to load Helm credentials'
+      );
+    }
+  }, []);
+
+  const loadRegistries = useCallback(async () => {
+    setRegistryError('');
+    try {
+      const response = await listRegistriesWithCapabilities();
+      setRegistries(response.data);
+      setCapabilities(response.capabilities);
+    } catch (reason: unknown) {
+      setRegistryError(
+        reason instanceof Error ? reason.message : 'Failed to load scanner registries'
+      );
     }
   }, []);
 
@@ -202,32 +238,32 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
     return deferEffect(() => {
       void loadTags();
       void loadHistory();
-      void listHelmRegistryCredentials().then(setHelmRegistryCredentials).catch(() => {});
-      void listRegistriesWithCapabilities()
-        .then((response) => {
-          setRegistries(response.data);
-          setCapabilities(response.capabilities);
-        })
-        .catch(() => {});
+      void loadCredentials();
+      void loadRegistries();
     });
-  }, [loadHistory, loadTags, scopeKey]);
+  }, [loadCredentials, loadHistory, loadRegistries, loadTags, scopeKey]);
 
   useEffect(() => {
     let cancelled = false;
     const loadScopedOrgPolicy = async () => {
       if (workScope.kind !== 'org') {
         await Promise.resolve();
-        if (!cancelled) setScopedOrgPolicy(null);
+        if (!cancelled) {
+          setScopedOrgPolicy(null);
+          setScopedOrgPolicyError('');
+        }
         return;
       }
       listOrgs()
         .then((orgs) => {
           if (cancelled) return;
           setScopedOrgPolicy(orgs.find((org) => org.id === workScope.orgId) ?? null);
+          setScopedOrgPolicyError('');
         })
         .catch(() => {
           if (cancelled) return;
           setScopedOrgPolicy(null);
+          setScopedOrgPolicyError('Failed to load organization scan policy');
         });
     };
     void loadScopedOrgPolicy();
@@ -314,9 +350,16 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
       );
 
       if (makePublic && (result.scans?.length ?? 0) > 0) {
-        await Promise.all(
-          result.scans.map((scan) => createShare(scan.id, 'public').catch(() => null))
+        const shareResults = await Promise.allSettled(
+          result.scans.map((scan) => createShare(scan.id, 'public'))
         );
+        const sharedCount = shareResults.filter((share) => share.status === 'fulfilled').length;
+        const failedCount = shareResults.length - sharedCount;
+        if (failedCount > 0) {
+          toast.error(
+            `${sharedCount} scan${sharedCount === 1 ? '' : 's'} shared, but ${failedCount} public link${failedCount === 1 ? '' : 's'} could not be created. You can retry sharing from the run history.`
+          );
+        }
       }
 
       await loadHistory();
@@ -382,16 +425,29 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
         return;
       }
 
-      const tokens = await Promise.all(
+      const shareResults = await Promise.allSettled(
         scans.map(async (scan) => {
           if (scan.share_token) return scan.share_token;
           const share = await createShare(scan.id, 'public');
           return share.share_token;
         })
       );
+      const tokens = shareResults.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : []
+      );
+      const failedCount = shareResults.length - tokens.length;
+      if (tokens.length === 0) {
+        throw new Error('No public links could be created for this Helm run');
+      }
 
       await loadHistory();
-      toast.success(`Shared ${scans.length} scan${scans.length === 1 ? '' : 's'}`);
+      if (failedCount > 0) {
+        toast.error(
+          `${tokens.length} scan${tokens.length === 1 ? '' : 's'} shared, but ${failedCount} public link${failedCount === 1 ? '' : 's'} failed. Retry to share the remaining scans.`
+        );
+      } else {
+        toast.success(`Shared ${scans.length} scan${scans.length === 1 ? '' : 's'}`);
+      }
 
       if (copyLink && tokens.length > 0) {
         const [first, ...rest] = tokens;
@@ -499,8 +555,10 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                   </TextField>
 
                   <div className="flex min-w-0 flex-col gap-1.5">
-                    <Label>Helm credential</Label>
+                    <Label htmlFor="helm-credential">Helm credential</Label>
                     <Select
+                      id="helm-credential"
+                      aria-label="Helm credential"
                       className="w-full"
                       value={helmRegistryCredentialId || '__none__'}
                       onChange={(value) =>
@@ -528,6 +586,18 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                     <Description>
                       Only credentials that match this chart endpoint are available.
                     </Description>
+                    {credentialsError ? (
+                      <StatusAlert
+                        status="warning"
+                        title="Helm credentials unavailable"
+                        description={credentialsError}
+                        action={
+                          <Button size="sm" variant="secondary" onPress={loadCredentials}>
+                            Retry
+                          </Button>
+                        }
+                      />
+                    ) : null}
                   </div>
 
                   {!isOCI && (
@@ -628,8 +698,12 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                   <Card>
                     <Card.Content className="grid w-full gap-4 lg:grid-cols-[minmax(280px,380px)_minmax(180px,240px)_minmax(0,1fr)_auto] lg:items-end">
                       <div className="flex min-w-0 flex-col gap-1.5">
-                        <Label className="text-xs">Registry</Label>
+                        <Label htmlFor="helm-registry" className="text-xs">
+                          Registry
+                        </Label>
                         <Select
+                          id="helm-registry"
+                          aria-label="Registry"
                           className="w-full"
                           value={registryId || '__auto__'}
                           onChange={(value) =>
@@ -670,10 +744,26 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                           </Alert.Content>
                         </Alert>
                       )}
+                      {registryError ? (
+                        <StatusAlert
+                          status="warning"
+                          title="Scanner registries unavailable"
+                          description={registryError}
+                          action={
+                            <Button size="sm" variant="secondary" onPress={loadRegistries}>
+                              Retry
+                            </Button>
+                          }
+                        />
+                      ) : null}
 
                       <div className="flex min-w-0 flex-col gap-1.5">
-                        <Label className="text-xs">Platform</Label>
+                        <Label htmlFor="helm-platform" className="text-xs">
+                          Platform
+                        </Label>
                         <Select
+                          id="helm-platform"
+                          aria-label="Platform"
                           className="w-full"
                           value={platform || '__auto__'}
                           onChange={(value) =>
@@ -700,6 +790,8 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                       {availableTags.length > 0 && (
                         <div className="flex min-w-0 flex-col gap-1.5">
                           <Select
+                            id="helm-tags"
+                            aria-label="Tags"
                             className="w-full"
                             placeholder="Select tags"
                             selectionMode="multiple"
@@ -733,6 +825,18 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                           )}
                         </div>
                       )}
+                      {tagError ? (
+                        <StatusAlert
+                          status="warning"
+                          title="Tags unavailable"
+                          description={tagError}
+                          action={
+                            <Button size="sm" variant="secondary" onPress={loadTags}>
+                              Retry
+                            </Button>
+                          }
+                        />
+                      ) : null}
 
                       <Switch
                         className="justify-self-start lg:justify-self-end"
@@ -855,6 +959,13 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                   </Alert.Content>
                 </Alert>
               ) : null}
+              {step === 'configure' && scopedOrgPolicyError ? (
+                <StatusAlert
+                  status="warning"
+                  title="Organization policy unavailable"
+                  description={scopedOrgPolicyError}
+                />
+              ) : null}
 
               <div className="flex items-center justify-between gap-4 pt-1">
                 <Button
@@ -900,7 +1011,9 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
           runs={helmRuns}
           isAdmin={isAdmin}
           loading={historyLoading}
+          error={historyError}
           actionRunId={historyActionRunId}
+          onRetry={loadHistory}
           onDeleteRun={deleteHelmRun}
           onShareRun={(run) => shareHelmRun(run)}
           onCopyShareLink={(run) => shareHelmRun(run, true)}
@@ -942,7 +1055,9 @@ function HelmRunHistory({
   runs,
   isAdmin,
   loading,
+  error,
   actionRunId,
+  onRetry,
   onDeleteRun,
   onShareRun,
   onCopyShareLink,
@@ -950,7 +1065,9 @@ function HelmRunHistory({
   runs: HelmScanRunSummary[];
   isAdmin: boolean;
   loading: boolean;
+  error: string;
   actionRunId: string | null;
+  onRetry: () => void;
   onDeleteRun: (run: HelmScanRunSummary) => void;
   onShareRun: (run: HelmScanRunSummary) => void;
   onCopyShareLink: (run: HelmScanRunSummary) => void;
@@ -1037,7 +1154,7 @@ function HelmRunHistory({
     sortedRuns.length === 0 ? 0 : (effectivePage - 1) * HELM_RUN_HISTORY_PAGE_SIZE + 1;
   const visibleEnd = Math.min(effectivePage * HELM_RUN_HISTORY_PAGE_SIZE, sortedRuns.length);
 
-  if (loading) {
+  if (loading && runs.length === 0) {
     return (
       <Card>
         <Card.Content className="px-5 py-8 text-center text-sm text-muted">
@@ -1047,13 +1164,33 @@ function HelmRunHistory({
     );
   }
 
+  if (error) {
+    return (
+      <StatusAlert
+        status="danger"
+        title="Helm runs unavailable"
+        description={error}
+        action={
+          <Button size="sm" variant="secondary" onPress={onRetry}>
+            Retry
+          </Button>
+        }
+      />
+    );
+  }
+
   const columnCount = isAdmin ? 10 : 9;
 
   return (
     <>
       <Card className="p-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <SearchField name="helm-run-search" variant="secondary" className="w-full sm:max-w-sm">
+          <SearchField
+            name="helm-run-search"
+            aria-label="Search Helm runs"
+            variant="secondary"
+            className="w-full sm:max-w-sm"
+          >
             <SearchField.Group>
               <SearchField.SearchIcon />
               <SearchField.Input
@@ -1105,38 +1242,78 @@ function HelmRunHistory({
           <Table.ScrollContainer>
             <Table.Content
               aria-label="Recent Helm runs"
-              className="min-w-[1080px]"
+              className="min-w-[680px] md:min-w-[900px]"
               sortDescriptor={sortDescriptor}
               onSortChange={setSortDescriptor}
             >
               <Table.Header>
                 <Table.Column id="chart" allowsSorting isRowHeader>
-                  Chart
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>
+                      Chart
+                    </Table.SortableColumnHeader>
+                  )}
                 </Table.Column>
                 <Table.Column id="status" allowsSorting>
-                  Status
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>
+                      Status
+                    </Table.SortableColumnHeader>
+                  )}
                 </Table.Column>
                 <Table.Column id="images" allowsSorting className="text-right">
-                  Images
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>
+                      Images
+                    </Table.SortableColumnHeader>
+                  )}
                 </Table.Column>
                 <Table.Column id="completed" allowsSorting className="text-right">
-                  Done
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>
+                      Done
+                    </Table.SortableColumnHeader>
+                  )}
                 </Table.Column>
                 <Table.Column id="failed" allowsSorting className="text-right">
-                  Failed
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>
+                      Failed
+                    </Table.SortableColumnHeader>
+                  )}
                 </Table.Column>
-                <Table.Column id="high" allowsSorting className="text-right">
-                  High
+                <Table.Column id="high" allowsSorting className="hidden text-right lg:table-cell">
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>
+                      High
+                    </Table.SortableColumnHeader>
+                  )}
                 </Table.Column>
-                <Table.Column id="critical" allowsSorting className="text-right">
-                  Critical
+                <Table.Column
+                  id="critical"
+                  allowsSorting
+                  className="hidden text-right lg:table-cell"
+                >
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>
+                      Critical
+                    </Table.SortableColumnHeader>
+                  )}
                 </Table.Column>
                 <Table.Column id="started" allowsSorting>
-                  Started
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>
+                      Started
+                    </Table.SortableColumnHeader>
+                  )}
                 </Table.Column>
                 {isAdmin ? (
-                  <Table.Column id="owner" allowsSorting>
-                    Owner
+                  <Table.Column id="owner" allowsSorting className="hidden lg:table-cell">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        Owner
+                      </Table.SortableColumnHeader>
+                    )}
                   </Table.Column>
                 ) : null}
                 <Table.Column className="text-right">Action</Table.Column>
@@ -1202,7 +1379,7 @@ function HelmRunHistory({
                             {run.failed_images}
                           </Chip>
                         </Table.Cell>
-                        <Table.Cell className="text-right">
+                        <Table.Cell className="hidden text-right lg:table-cell">
                           <Chip
                             color={run.high_count > 0 ? 'warning' : 'default'}
                             size="sm"
@@ -1211,7 +1388,7 @@ function HelmRunHistory({
                             {run.high_count}
                           </Chip>
                         </Table.Cell>
-                        <Table.Cell className="text-right">
+                        <Table.Cell className="hidden text-right lg:table-cell">
                           <Chip
                             color={run.critical_count > 0 ? 'danger' : 'default'}
                             size="sm"
@@ -1224,7 +1401,7 @@ function HelmRunHistory({
                           {timeAgo(run.created_at)}
                         </Table.Cell>
                         {isAdmin ? (
-                          <Table.Cell className="text-xs text-muted">
+                          <Table.Cell className="hidden text-xs text-muted lg:table-cell">
                             {run.owner_username || '-'}
                           </Table.Cell>
                         ) : null}

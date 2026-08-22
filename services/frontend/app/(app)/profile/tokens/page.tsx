@@ -341,13 +341,10 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
               <Button
                 type="submit"
                 form="create-token-form"
-                isDisabled={saving}
+                isPending={saving}
                 className="btn-primary inline-flex items-center gap-2"
                 variant="primary"
               >
-                {saving && (
-                  <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                )}
                 Create Token
               </Button>
             </Modal.Footer>
@@ -361,6 +358,8 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
 export default function TokensPage() {
   const [tokens, setTokens] = useState<PersonalToken[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [revokingId, setRevokingId] = useState<string | null>(null);
   const [rawToken, setRawToken] = useState('');
   const createModal = useOverlayState();
   const revealModal = useOverlayState();
@@ -369,11 +368,12 @@ export default function TokensPage() {
 
   async function load() {
     setLoading(true);
+    setLoadError('');
     try {
       const res = await listUserTokens();
       setTokens(res.data ?? []);
-    } catch {
-      setTokens([]);
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load tokens');
     } finally {
       setLoading(false);
     }
@@ -395,12 +395,16 @@ export default function TokensPage() {
       variant: 'danger',
     });
     if (!ok) return;
+    if (revokingId) return;
+    setRevokingId(token.id);
     try {
       await revokeUserToken(token.id);
       toast.success('Token revoked');
-      void load();
-    } catch {
-      toast.error('Failed to revoke token');
+      await load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to revoke token');
+    } finally {
+      setRevokingId(null);
     }
   }
 
@@ -426,6 +430,16 @@ export default function TokensPage() {
 
       {loading ? (
         <TokensLoadingState />
+      ) : loadError ? (
+        <Alert status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>{loadError}</Alert.Title>
+            <Button size="sm" variant="secondary" isPending={loading} onPress={() => void load()}>
+              Retry
+            </Button>
+          </Alert.Content>
+        </Alert>
       ) : (
         <>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -511,11 +525,6 @@ export default function TokensPage() {
                         className="hover:bg-[var(--row-hover)]"
                       >
                         <Table.Cell>
-                          <Chip size="sm" variant="soft" color={token.type === 'cli_session' ? 'accent' : 'default'}>
-                            {token.type === 'cli_session' ? 'CLI session' : 'Personal token'}
-                          </Chip>
-                        </Table.Cell>
-                        <Table.Cell>
                           <div className="min-w-0">
                             <p className="font-medium text-zinc-900 dark:text-white break-words">
                               {token.description}
@@ -524,6 +533,15 @@ export default function TokensPage() {
                               Created {timeAgo(token.created_at)}
                             </p>
                           </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Chip
+                            size="sm"
+                            variant="soft"
+                            color={token.type === 'cli_session' ? 'accent' : 'default'}
+                          >
+                            {token.type === 'cli_session' ? 'CLI session' : 'Personal token'}
+                          </Chip>
                         </Table.Cell>
                         <Table.Cell>
                           <span className="text-sm text-zinc-500 hidden md:inline">
@@ -542,7 +560,10 @@ export default function TokensPage() {
                           <div className="flex justify-end">
                             {!token.disabled ? (
                               <Button
+                                aria-label={`Revoke ${token.description}`}
                                 onPress={() => void handleRevoke(token)}
+                                isPending={revokingId === token.id}
+                                isDisabled={revokingId !== null}
                                 isIconOnly
                                 variant="secondary"
                               >

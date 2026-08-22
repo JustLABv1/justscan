@@ -26,7 +26,7 @@ import { CpuIcon, FileExportIcon, GitCompareIcon, Refresh01Icon } from 'hugeicon
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ScanningAnimation, ScanStepTimeline } from '../../../components/scans/scan-runtime';
 
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -112,6 +112,12 @@ function SourceBadge({ source }: { source?: string }) {
 
 const LIMIT = 25;
 
+function subscribeToAuth(onChange: () => void) {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('storage', onChange);
+  return () => window.removeEventListener('storage', onChange);
+}
+
 type XrayWatchPolicyMatch = {
   watchName: string;
   watchID: string;
@@ -182,6 +188,13 @@ function vulnerabilityHasXrayPolicy(vulnerability: Vulnerability): boolean {
   );
 }
 
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof Error && error.name === 'AbortError') ||
+    (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
+  );
+}
+
 function prioritizeXrayPolicyVulnerabilities(vulnerabilities: Vulnerability[]): Vulnerability[] {
   return vulnerabilities
     .map((vulnerability, index) => ({ vulnerability, index }))
@@ -240,38 +253,77 @@ export default function SharedScanPage() {
   const [sortBy, setSortBy] = useState('severity');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [vulnLoading, setVulnLoading] = useState(false);
+  const [vulnError, setVulnError] = useState('');
+  const [vulnRetryKey, setVulnRetryKey] = useState(0);
   const [reScanning, setReScanning] = useState(false);
   const [comparingPrev, setComparingPrev] = useState(false);
   const [actionError, setActionError] = useState('');
-  const [isLoggedIn] = useState(() => !!getToken());
+  const isLoggedIn = useSyncExternalStore(
+    subscribeToAuth,
+    () => Boolean(getToken()),
+    () => false
+  );
   const [activeTab, setActiveTab] = useState<ResultTab>('overview');
   const vulnerabilityDetailsModal = useOverlayState();
   const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pkgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    function fetchScan() {
-      getSharedScan(token)
-        .then((s) => {
-          setScan(s);
-          if (s.status === 'completed' || s.status === 'failed') {
-            if (pollRef.current) clearInterval(pollRef.current);
+    const controller = new AbortController();
+    let stopped = false;
+    let terminal = false;
+    let inFlight = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const stopPolling = () => {
+      terminal = true;
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const poll = () => {
+      if (stopped || controller.signal.aborted || inFlight || terminal) return;
+      inFlight = true;
+
+      void getSharedScan(token, { signal: controller.signal })
+        .then((result) => {
+          if (stopped) return;
+          setError('');
+          setScan(result);
+          if (result.status === 'completed' || result.status === 'failed') {
+            stopPolling();
           }
         })
-        .catch((e) => {
-          if (e instanceof ApiError && e.status === 401) {
+        .catch((error: unknown) => {
+          if (
+            stopped ||
+            controller.signal.aborted ||
+            (error instanceof Error && error.name === 'AbortError')
+          ) {
+            return;
+          }
+          if (error instanceof ApiError && error.status === 401) {
+            stopPolling();
             router.push(`/login?returnUrl=/shared/${token}`);
             return;
           }
-          setError(e.message);
-          if (pollRef.current) clearInterval(pollRef.current);
+          stopPolling();
+          setError(error instanceof Error ? error.message : 'Failed to load shared scan.');
+        })
+        .finally(() => {
+          inFlight = false;
         });
-    }
-    fetchScan();
-    pollRef.current = setInterval(fetchScan, 2500);
+    };
+
+    void poll();
+    intervalId = setInterval(() => void poll(), 2500);
+
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      stopped = true;
+      controller.abort();
+      stopPolling();
     };
   }, [token, router]);
 
@@ -293,55 +345,85 @@ export default function SharedScanPage() {
         (scan.status !== 'completed' && scan.external_status !== 'blocked_by_xray_policy')
       )
         return;
+
+      const controller = new AbortController();
       setVulnLoading(true);
+      setVulnError('');
       const shouldLoadAllPages = xrayPolicyFirst;
       const severity = severityFilter || undefined;
       const pkg = pkgFilter || undefined;
       const fix = hasFix || undefined;
       const cvss = minCvss || undefined;
+      const requestOptions = { signal: controller.signal };
 
-      const request = shouldLoadAllPages
-        ? (async () => {
-            const pageSize = 100;
-            let nextPage = 1;
-            const all: Vulnerability[] = [];
-            while (true) {
-              const res = await listSharedVulnerabilities(
-                token,
-                nextPage,
-                pageSize,
-                severity,
-                pkg,
-                fix,
-                cvss,
-                sortBy,
-                sortDir
-              );
-              const rows = res.data ?? [];
-              all.push(...rows);
-              if (all.length >= res.total || rows.length < pageSize) {
-                break;
-              }
-              nextPage += 1;
+      const loadVulnerabilities = async () => {
+        if (shouldLoadAllPages) {
+          const pageSize = 100;
+          let nextPage = 1;
+          const all: Vulnerability[] = [];
+          while (true) {
+            const res = await listSharedVulnerabilities(
+              token,
+              nextPage,
+              pageSize,
+              severity,
+              pkg,
+              fix,
+              cvss,
+              sortBy,
+              sortDir,
+              requestOptions
+            );
+            if (controller.signal.aborted) return null;
+            const rows = res.data ?? [];
+            all.push(...rows);
+            if (all.length >= res.total || rows.length < pageSize) {
+              break;
             }
-            const prioritized = prioritizeXrayPolicyVulnerabilities(all);
-            const start = (page - 1) * LIMIT;
-            const end = start + LIMIT;
-            return { data: prioritized.slice(start, end), total: prioritized.length };
-          })()
-        : listSharedVulnerabilities(token, page, LIMIT, severity, pkg, fix, cvss, sortBy, sortDir);
+            nextPage += 1;
+          }
+          const prioritized = prioritizeXrayPolicyVulnerabilities(all);
+          const start = (page - 1) * LIMIT;
+          const end = start + LIMIT;
+          return { data: prioritized.slice(start, end), total: prioritized.length };
+        }
 
-      request
+        const res = await listSharedVulnerabilities(
+          token,
+          page,
+          LIMIT,
+          severity,
+          pkg,
+          fix,
+          cvss,
+          sortBy,
+          sortDir,
+          requestOptions
+        );
+        return controller.signal.aborted ? null : res;
+      };
+
+      loadVulnerabilities()
         .then((res) => {
+          if (!res || controller.signal.aborted) return;
           setVulns(res.data ?? []);
           setVulnTotal(res.total);
         })
-        .catch((e) => {
-          if (e instanceof ApiError && e.status === 401) {
+        .catch((reason: unknown) => {
+          if (controller.signal.aborted || isAbortError(reason)) return;
+          if (reason instanceof ApiError && reason.status === 401) {
             router.push(`/login?returnUrl=/shared/${token}`);
+            return;
           }
+          setVulnError(
+            reason instanceof Error ? reason.message : 'Failed to load vulnerabilities.'
+          );
         })
-        .finally(() => setVulnLoading(false));
+        .finally(() => {
+          if (!controller.signal.aborted) setVulnLoading(false);
+        });
+
+      return () => controller.abort();
     });
   }, [
     token,
@@ -355,6 +437,7 @@ export default function SharedScanPage() {
     sortBy,
     sortDir,
     router,
+    vulnRetryKey,
   ]);
 
   async function handleRescan() {
@@ -398,6 +481,10 @@ export default function SharedScanPage() {
     setSelectedVulnerability(null);
   }
 
+  function retryVulnerabilities() {
+    setVulnRetryKey((current) => current + 1);
+  }
+
   if (error)
     return (
       <div
@@ -405,7 +492,9 @@ export default function SharedScanPage() {
         style={{ background: 'var(--app-bg)' }}
       >
         <div className="text-center space-y-3">
-          <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>
+          <p role="alert" className="text-red-500 dark:text-red-400 text-sm">
+            {error}
+          </p>
           <Link href="/" className="text-accent dark:text-accent text-sm hover:underline">
             ← Back to home
           </Link>
@@ -799,70 +888,107 @@ export default function SharedScanPage() {
                   </div>
                 </Card>
               </Card.Header>
-              <VulnerabilitiesTable
-                ariaLabel="Shared scan vulnerabilities"
-                vulns={vulns}
-                vulnLoading={vulnLoading}
-                vulnTotal={vulnTotal}
-                sortBy={
-                  sortBy as
-                    | 'vuln_id'
-                    | 'pkg_name'
-                    | 'installed_version'
-                    | 'fixed_version'
-                    | 'severity'
-                    | 'cvss_score'
-                }
-                sortDir={sortDir}
-                onSortChange={(key, direction) => {
-                  setSortBy(key);
-                  setSortDir(direction);
-                  setPage(1);
-                }}
-                onOpenVulnerability={openVulnerabilityDetails}
-                renderSeverityBadge={(severity) => <SeverityBadge severity={severity} />}
-                renderSourceBadge={(source) => <SourceBadge source={source} />}
-                renderXrayPolicyCell={(vulnerability) => {
-                  const policyMatches = parseXrayWatchPolicyMatches(vulnerability);
-                  const watchCount = xrayWatchNames(vulnerability).length;
-                  const hasDetails =
-                    policyMatches.length > 0 || watchCount > 0 || !!vulnerability.xray_is_blocking;
-                  if (!hasDetails) {
-                    return <span className="text-xs text-zinc-400">-</span>;
-                  }
-
-                  const total = policyMatches.length || watchCount;
-                  const isBlocking =
-                    vulnerability.xray_is_blocking ||
-                    policyMatches.some(
-                      (match) => match.isBlocking || match.isBuildFailed || match.failPullRequest
-                    );
-
-                  return (
+              <div aria-busy={vulnLoading}>
+                <div className="sr-only" role="status" aria-live="polite">
+                  {vulnLoading
+                    ? 'Loading vulnerabilities…'
+                    : vulnError
+                      ? vulns.length > 0
+                        ? 'Unable to refresh vulnerabilities. Showing the last successful results.'
+                        : 'Unable to load vulnerabilities.'
+                      : `${vulnTotal} vulnerabilities loaded.`}
+                </div>
+                {vulnError && (
+                  <div
+                    role="alert"
+                    aria-live="assertive"
+                    className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300"
+                  >
+                    <span>
+                      {vulns.length > 0
+                        ? `Couldn&apos;t refresh vulnerabilities: ${vulnError} Showing the last successful results.`
+                        : `Couldn&apos;t load vulnerabilities: ${vulnError}`}
+                    </span>
                     <Button
-                      onPress={() => openVulnerabilityDetails(vulnerability)}
-                      className="inline-flex items-center gap-1.5"
-                      variant={isBlocking ? 'danger-soft' : 'secondary'}
+                      aria-label="Retry loading vulnerabilities"
+                      onPress={retryVulnerabilities}
+                      size="sm"
+                      variant="secondary"
                     >
-                      Details
-                      <span
-                        className={`font-semibold text-xs rounded-full px-1.5 py-0.5 ${
-                          isBlocking
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-zinc-500/20 text-zinc-300 dark:text-zinc-200'
-                        }`}
-                      >
-                        {total}
-                      </span>
+                      Retry
                     </Button>
-                  );
-                }}
-                page={page}
-                totalPages={totalPages}
-                paginationItems={vulnPaginationItems}
-                onPageChange={setPage}
-                pageSize={LIMIT}
-              />
+                  </div>
+                )}
+                {vulnError && vulns.length === 0 ? null : (
+                  <VulnerabilitiesTable
+                    ariaLabel="Shared scan vulnerabilities"
+                    vulns={vulns}
+                    vulnLoading={vulnLoading}
+                    vulnTotal={vulnTotal}
+                    sortBy={
+                      sortBy as
+                        | 'vuln_id'
+                        | 'pkg_name'
+                        | 'installed_version'
+                        | 'fixed_version'
+                        | 'severity'
+                        | 'cvss_score'
+                    }
+                    sortDir={sortDir}
+                    onSortChange={(key, direction) => {
+                      setSortBy(key);
+                      setSortDir(direction);
+                      setPage(1);
+                    }}
+                    onOpenVulnerability={openVulnerabilityDetails}
+                    renderSeverityBadge={(severity) => <SeverityBadge severity={severity} />}
+                    renderSourceBadge={(source) => <SourceBadge source={source} />}
+                    renderXrayPolicyCell={(vulnerability) => {
+                      const policyMatches = parseXrayWatchPolicyMatches(vulnerability);
+                      const watchCount = xrayWatchNames(vulnerability).length;
+                      const hasDetails =
+                        policyMatches.length > 0 ||
+                        watchCount > 0 ||
+                        !!vulnerability.xray_is_blocking;
+                      if (!hasDetails) {
+                        return <span className="text-xs text-zinc-400">-</span>;
+                      }
+
+                      const total = policyMatches.length || watchCount;
+                      const isBlocking =
+                        vulnerability.xray_is_blocking ||
+                        policyMatches.some(
+                          (match) =>
+                            match.isBlocking || match.isBuildFailed || match.failPullRequest
+                        );
+
+                      return (
+                        <Button
+                          onPress={() => openVulnerabilityDetails(vulnerability)}
+                          className="inline-flex items-center gap-1.5"
+                          variant={isBlocking ? 'danger-soft' : 'secondary'}
+                        >
+                          Details
+                          <span
+                            className={`font-semibold text-xs rounded-full px-1.5 py-0.5 ${
+                              isBlocking
+                                ? 'bg-red-500/20 text-red-400'
+                                : 'bg-zinc-500/20 text-zinc-300 dark:text-zinc-200'
+                            }`}
+                          >
+                            {total}
+                          </span>
+                        </Button>
+                      );
+                    }}
+                    page={page}
+                    totalPages={totalPages}
+                    paginationItems={vulnPaginationItems}
+                    onPageChange={setPage}
+                    pageSize={LIMIT}
+                  />
+                )}
+              </div>
             </Card>
           </>
         )}

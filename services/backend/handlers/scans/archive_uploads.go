@@ -548,7 +548,7 @@ func loadArchiveUploadSessionsForScans(ctx context.Context, db bun.IDB, scanIDs 
 	if len(scanIDs) == 0 {
 		return nil, nil
 	}
-	exists, err := scanDeletionTableExists(ctx, db, "archive_upload_sessions")
+	exists, err := scanDeletionColumnExists(ctx, db, "archive_upload_sessions", "scan_id")
 	if err != nil {
 		return nil, err
 	}
@@ -583,7 +583,7 @@ func deleteArchiveUploadSessionsForScans(ctx context.Context, db bun.IDB, scanID
 	if len(scanIDs) == 0 {
 		return nil
 	}
-	exists, err := scanDeletionTableExists(ctx, db, "archive_upload_sessions")
+	exists, err := scanDeletionColumnExists(ctx, db, "archive_upload_sessions", "scan_id")
 	if err != nil {
 		return err
 	}

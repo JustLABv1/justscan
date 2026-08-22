@@ -5,6 +5,13 @@
 @import './auth-aurora.css';
 
 @layer components {
+  /* HeroUI's dropdown trigger defaults to inline-block. When it also uses the
+     button variants, keep the button's flex layout so icon-only triggers stay
+     centered and text/icon triggers retain their intended gap. */
+  .dropdown__trigger.button {
+    display: inline-flex;
+  }
+
   .react-flow__controls {
     overflow: hidden;
     border: 1px solid var(--divider);

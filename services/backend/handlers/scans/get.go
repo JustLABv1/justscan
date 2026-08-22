@@ -170,6 +170,9 @@ func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) err
 	if err := deleteScanSBOMDependents(ctx, db, scanIDs); err != nil {
 		return err
 	}
+	if err := clearScanReferences(ctx, db, scanIDs); err != nil {
+		return err
+	}
 
 	for _, table := range []string{
 		"archive_upload_sessions",
@@ -188,9 +191,9 @@ func deleteScanRecords(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) err
 		"xray_request_logs",
 		"pipeline_scan_requests",
 	} {
-		exists, err := scanDeletionTableExists(ctx, db, table)
+		exists, err := scanDeletionColumnExists(ctx, db, table, "scan_id")
 		if err != nil {
-			return fmt.Errorf("check %s: %w", table, err)
+			return fmt.Errorf("check %s.scan_id: %w", table, err)
 		}
 		if !exists {
 			continue
@@ -220,9 +223,9 @@ func deleteScanFindingDependents(ctx context.Context, db bun.IDB, scanIDs []uuid
 		{table: "vulnerability_intelligence_evidence", column: "finding_id"},
 		{table: "vulnerability_component_links", column: "vulnerability_id"},
 	} {
-		exists, err := scanDeletionTableExists(ctx, db, relation.table)
+		exists, err := scanDeletionColumnExists(ctx, db, relation.table, relation.column)
 		if err != nil {
-			return fmt.Errorf("check %s: %w", relation.table, err)
+			return fmt.Errorf("check %s.%s: %w", relation.table, relation.column, err)
 		}
 		if !exists {
 			continue
@@ -234,15 +237,31 @@ func deleteScanFindingDependents(ctx context.Context, db bun.IDB, scanIDs []uuid
 			return fmt.Errorf("delete %s: %w", relation.table, err)
 		}
 	}
+
+	// Early versions of vulnerability intelligence stored the scan reference
+	// directly on posture rows, while finding references could be absent. Delete
+	// those rows explicitly so their legacy foreign key cannot block the scan.
+	postureScanIDExists, err := scanDeletionColumnExists(ctx, db, "vulnerability_postures", "scan_id")
+	if err != nil {
+		return fmt.Errorf("check vulnerability_postures.scan_id: %w", err)
+	}
+	if postureScanIDExists {
+		if _, err := db.NewDelete().
+			TableExpr("vulnerability_postures").
+			Where("scan_id IN (?)", bun.In(scanIDs)).
+			Exec(ctx); err != nil {
+			return fmt.Errorf("delete vulnerability_postures by scan: %w", err)
+		}
+	}
 	return nil
 }
 
 // deleteScanSBOMDependents handles installations created before all SBOM graph
 // foreign keys consistently cascaded.
 func deleteScanSBOMDependents(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
-	exists, err := scanDeletionTableExists(ctx, db, "sbom_dependencies")
+	exists, err := scanDeletionColumnExists(ctx, db, "sbom_dependencies", "document_id")
 	if err != nil {
-		return fmt.Errorf("check sbom_dependencies: %w", err)
+		return fmt.Errorf("check sbom_dependencies.document_id: %w", err)
 	}
 	if !exists {
 		return nil
@@ -258,13 +277,49 @@ func deleteScanSBOMDependents(ctx context.Context, db bun.IDB, scanIDs []uuid.UU
 	return nil
 }
 
-// scanDeletionTableExists keeps scan deletion compatible with installations that
-// are upgraded from an older schema. Tables introduced after a scan was created
-// cannot contain rows for it, so they are safe to skip until the corresponding
-// migration has run.
-func scanDeletionTableExists(ctx context.Context, db bun.IDB, table string) (bool, error) {
+// clearScanReferences preserves records that outlive an individual scan while
+// preventing legacy NO ACTION foreign keys from blocking deletion.
+func clearScanReferences(ctx context.Context, db bun.IDB, scanIDs []uuid.UUID) error {
+	for _, relation := range []struct {
+		table  string
+		column string
+	}{
+		{table: "watchlist_items", column: "last_scan_id"},
+		{table: "git_repository_run_images", column: "scan_id"},
+	} {
+		exists, err := scanDeletionColumnExists(ctx, db, relation.table, relation.column)
+		if err != nil {
+			return fmt.Errorf("check %s.%s: %w", relation.table, relation.column, err)
+		}
+		if !exists {
+			continue
+		}
+		if _, err := db.NewUpdate().
+			TableExpr(relation.table).
+			Set(relation.column+" = NULL").
+			Where(relation.column+" IN (?)", bun.In(scanIDs)).
+			Exec(ctx); err != nil {
+			return fmt.Errorf("clear %s.%s: %w", relation.table, relation.column, err)
+		}
+	}
+	return nil
+}
+
+// scanDeletionColumnExists keeps scan deletion compatible with installations
+// upgraded from older schemas. CREATE TABLE IF NOT EXISTS migrations can leave
+// a legacy table without a column added by a later model, so checking only the
+// table is not sufficient before issuing a cleanup statement.
+func scanDeletionColumnExists(ctx context.Context, db bun.IDB, table, column string) (bool, error) {
 	var exists bool
-	if err := db.NewRaw("SELECT to_regclass(?) IS NOT NULL", table).Scan(ctx, &exists); err != nil {
+	if err := db.NewRaw(`
+		SELECT EXISTS (
+			SELECT 1
+			FROM information_schema.columns
+			WHERE table_schema = current_schema()
+			  AND table_name = ?
+			  AND column_name = ?
+		)
+	`, table, column).Scan(ctx, &exists); err != nil {
 		return false, err
 	}
 	return exists, nil

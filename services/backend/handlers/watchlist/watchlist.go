@@ -434,6 +434,7 @@ func TriggerScan(db *bun.DB) gin.HandlerFunc {
 			OwnerType:   item.OwnerType,
 			OwnerUserID: item.OwnerUserID,
 			OwnerOrgID:  item.OwnerOrgID,
+			WatchlistID: &item.ID,
 			CreatedAt:   time.Now(),
 		}
 		registry, envVars, err := scanner.ResolveRegistryForScan(c.Request.Context(), db, item.ImageName, item.RegistryID)

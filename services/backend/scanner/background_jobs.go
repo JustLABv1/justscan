@@ -35,6 +35,22 @@ func init() {
 	backgroundjobs.RegisterPassive(ScanBackgroundJobType)
 }
 
+func scanBackgroundMetadata(scan *models.Scan) models.JSONObject {
+	metadata := models.JSONObject{
+		"resource_type": "scan",
+		"resource_id":   scan.ID.String(),
+		"scan_id":       scan.ID.String(),
+		"image_name":    scan.ImageName,
+		"image_tag":     scan.ImageTag,
+		"scan_provider": scan.ScanProvider,
+	}
+	if scan.WatchlistID != nil && *scan.WatchlistID != uuid.Nil {
+		metadata["trigger_source"] = "watchlist"
+		metadata["watchlist_id"] = scan.WatchlistID.String()
+	}
+	return metadata
+}
+
 func enqueueScanBackgroundJob(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	if db == nil || scan == nil || scan.ID == uuid.Nil {
 		return nil
@@ -62,14 +78,6 @@ func enqueueScanBackgroundJob(ctx context.Context, db *bun.DB, scan *models.Scan
 	if phase == "" {
 		phase = models.ScanStepQueued
 	}
-	metadata := models.JSONObject{
-		"resource_type": "scan",
-		"resource_id":   scan.ID.String(),
-		"scan_id":       scan.ID.String(),
-		"image_name":    scan.ImageName,
-		"image_tag":     scan.ImageTag,
-		"scan_provider": scan.ScanProvider,
-	}
 	_, err := backgroundjobs.Enqueue(ctx, db, backgroundjobs.EnqueueRequest{
 		UserID:      *userID,
 		ScopeType:   scopeType,
@@ -78,7 +86,7 @@ func enqueueScanBackgroundJob(ctx context.Context, db *bun.DB, scan *models.Scan
 		Title:       fmt.Sprintf("Scan %s:%s", scan.ImageName, scan.ImageTag),
 		Description: "Container image scan",
 		Phase:       phase,
-		Metadata:    metadata,
+		Metadata:    scanBackgroundMetadata(scan),
 		DedupeKey:   "scan:" + scan.ID.String(),
 	})
 	if err != nil {

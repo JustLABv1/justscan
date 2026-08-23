@@ -215,6 +215,7 @@ func newScheduledScan(item models.WatchlistItem, imageName string, imageTag stri
 		OwnerType:    ownerType,
 		OwnerUserID:  ownerUserID,
 		OwnerOrgID:   ownerOrgID,
+		WatchlistID:  &item.ID,
 		CreatedAt:    createdAt,
 	}
 }

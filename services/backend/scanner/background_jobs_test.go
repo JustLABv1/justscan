@@ -18,6 +18,26 @@ func TestEnqueueScanBackgroundJobSkipsAnonymousScan(t *testing.T) {
 	}
 }
 
+func TestScanBackgroundMetadataMarksWatchlistTrigger(t *testing.T) {
+	scanID := uuid.New()
+	watchlistID := uuid.New()
+	metadata := scanBackgroundMetadata(&models.Scan{
+		ID:          scanID,
+		ImageName:   "alpine",
+		ImageTag:    "latest",
+		WatchlistID: &watchlistID,
+	})
+	if metadata["scan_id"] != scanID.String() {
+		t.Fatalf("scan_id = %v, want %s", metadata["scan_id"], scanID)
+	}
+	if metadata["trigger_source"] != "watchlist" {
+		t.Fatalf("trigger_source = %v, want watchlist", metadata["trigger_source"])
+	}
+	if metadata["watchlist_id"] != watchlistID.String() {
+		t.Fatalf("watchlist_id = %v, want %s", metadata["watchlist_id"], watchlistID)
+	}
+}
+
 func TestEnqueueScanBackgroundJobUsesOrganizationScope(t *testing.T) {
 	db, mock, cleanup := newMockBunDB(t)
 	defer cleanup()

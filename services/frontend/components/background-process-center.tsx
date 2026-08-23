@@ -3,6 +3,8 @@
 import {
   BACKGROUND_JOB_ENQUEUED_EVENT,
   announceBackgroundJobFinished,
+  dismissBackgroundJob,
+  dismissBackgroundJobs,
   isBackgroundJobActive,
   isBackgroundJobFinished,
   listBackgroundJobs,
@@ -13,8 +15,15 @@ import type { BackgroundJob } from '@/lib/api/types/background-jobs';
 import { timeAgo } from '@/lib/time';
 import { useToast } from '@/components/toast';
 import { useWorkScope } from '@/hooks/use-work-scope';
-import { Badge, Button, Chip, Drawer, ProgressBar, Spinner } from '@heroui/react';
-import { Activity01Icon, Alert02Icon, CheckmarkCircle02Icon, Refresh01Icon } from 'hugeicons-react';
+import { Badge, Button, ButtonGroup, Chip, Drawer, ProgressBar, Spinner } from '@heroui/react';
+import {
+  Activity01Icon,
+  Alert02Icon,
+  ArrowRight01Icon,
+  Cancel01Icon,
+  CheckmarkCircle02Icon,
+  Refresh01Icon,
+} from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const JOB_LIMIT = 50;
@@ -70,6 +79,30 @@ function formatPhase(phase: string | null | undefined) {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
+function jobDisplayPriority(job: BackgroundJob) {
+  if (isBackgroundJobActive(job)) return 0;
+  if (job.status === 'failed') return 1;
+  return 2;
+}
+
+function jobDisplayTime(job: BackgroundJob) {
+  return Date.parse(job.finished_at ?? job.started_at ?? job.created_at) || 0;
+}
+
+function scanDetailsHref(job: BackgroundJob) {
+  if (job.type !== 'scan') return null;
+  const scanID = job.metadata?.scan_id ?? job.metadata?.resource_id;
+  if (typeof scanID !== 'string' || !scanID.trim()) return null;
+  return `/scans/details/${encodeURIComponent(scanID)}`;
+}
+
+function isWatchlistScanJob(job: BackgroundJob) {
+  return (
+    job.type === 'scan' &&
+    (job.metadata?.trigger_source === 'watchlist' || typeof job.metadata?.watchlist_id === 'string')
+  );
+}
+
 function mergeJobs(current: BackgroundJob[], incoming: BackgroundJob[]) {
   const nextById = new Map(incoming.map((job) => [job.id, job]));
 
@@ -84,9 +117,9 @@ function mergeJobs(current: BackgroundJob[], incoming: BackgroundJob[]) {
 
   return Array.from(nextById.values())
     .sort((a, b) => {
-      const aTime = Date.parse(a.created_at) || 0;
-      const bTime = Date.parse(b.created_at) || 0;
-      return bTime - aTime;
+      const priorityDifference = jobDisplayPriority(a) - jobDisplayPriority(b);
+      if (priorityDifference !== 0) return priorityDifference;
+      return jobDisplayTime(b) - jobDisplayTime(a);
     })
     .slice(0, JOB_LIMIT);
 }
@@ -102,78 +135,140 @@ function announceFinishedJob(job: BackgroundJob, setAnnouncement: (value: string
   }
 }
 
-function BackgroundJobCard({ job }: { job: BackgroundJob }) {
+function BackgroundJobCard({
+  job,
+  isDismissing,
+  onDismiss,
+}: {
+  job: BackgroundJob;
+  isDismissing: boolean;
+  onDismiss: (id: string) => void;
+}) {
   const active = isBackgroundJobActive(job);
   const progressCurrent = Math.max(0, job.progress_current ?? 0);
   const progressTotal = Math.max(1, job.progress_total ?? 1);
   const progressPercent = Math.min(100, (progressCurrent / progressTotal) * 100);
   const color = jobStatusColor(job.status);
+  const scanHref = scanDetailsHref(job);
 
   return (
     <article
       aria-label={`${job.title}, ${jobStatusLabel(job.status)}`}
-      className="space-y-3 rounded-xl border border-border bg-surface-secondary/60 p-3"
+      className="overflow-hidden rounded-xl border border-border bg-surface-secondary/60"
     >
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-foreground">{job.title}</p>
-          {job.description ? (
-            <p className="mt-1 text-xs leading-5 text-muted">{job.description}</p>
-          ) : null}
-        </div>
-        <Chip color={color} size="sm" variant="soft">
-          <span className="inline-flex items-center gap-1.5">
-            {active ? (
-              <Spinner aria-label={`${jobStatusLabel(job.status)} process`} size="sm" />
+      <div className="space-y-3 p-3">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground">{job.title}</p>
+            {job.description ? (
+              <p className="mt-1 text-xs leading-5 text-muted">{job.description}</p>
             ) : null}
-            {!active && (job.status === 'succeeded' || job.status === 'completed') ? (
-              <CheckmarkCircle02Icon aria-hidden size={13} />
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <Chip color={color} size="sm" variant="soft">
+              <span className="inline-flex items-center gap-1.5">
+                {active ? (
+                  <Spinner aria-label={`${jobStatusLabel(job.status)} process`} size="sm" />
+                ) : null}
+                {!active && (job.status === 'succeeded' || job.status === 'completed') ? (
+                  <CheckmarkCircle02Icon aria-hidden size={13} />
+                ) : null}
+                {!active && job.status === 'failed' ? <Alert02Icon aria-hidden size={13} /> : null}
+                {jobStatusLabel(job.status)}
+              </span>
+            </Chip>
+            {isWatchlistScanJob(job) ? (
+              <Chip color="accent" size="sm" variant="soft">
+                Watchlist
+              </Chip>
             ) : null}
-            {!active && job.status === 'failed' ? <Alert02Icon aria-hidden size={13} /> : null}
-            {jobStatusLabel(job.status)}
-          </span>
-        </Chip>
-      </div>
-
-      {hasProgress(job) ? (
-        <div className="space-y-1.5">
-          <ProgressBar
-            aria-label={`${job.title} progress`}
-            color={color === 'default' ? 'accent' : color}
-            maxValue={progressTotal}
-            size="sm"
-            value={progressCurrent}
-          >
-            <ProgressBar.Track>
-              <ProgressBar.Fill />
-            </ProgressBar.Track>
-          </ProgressBar>
-          <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
-            <span>{formatPhase(job.phase) || (active ? 'Working…' : jobStatusLabel(job.status))}</span>
-            <span className="tabular-nums">
-              {progressCurrent.toLocaleString()} / {progressTotal.toLocaleString()} (
-              {Math.round(progressPercent)}%)
-            </span>
           </div>
         </div>
-      ) : active ? (
-        <div className="flex items-center gap-2 text-xs text-muted">
-          <Spinner aria-hidden size="sm" />
-          <span>{formatPhase(job.phase) || 'Working in the background…'}</span>
-        </div>
-      ) : null}
 
-      {job.status === 'failed' && job.error ? (
-        <p className="rounded-lg bg-danger/10 px-2.5 py-2 text-xs leading-5 text-danger">
-          {job.error}
-        </p>
-      ) : null}
-      {!active ? (
-        <p className="text-[11px] text-muted">
-          {job.finished_at
-            ? `${jobStatusLabel(job.status)} ${timeAgo(job.finished_at)}`
-            : 'Finished'}
-        </p>
+        {hasProgress(job) ? (
+          <div className="space-y-1.5">
+            <ProgressBar
+              aria-label={`${job.title} progress`}
+              color={color === 'default' ? 'accent' : color}
+              maxValue={progressTotal}
+              size="sm"
+              value={progressCurrent}
+            >
+              <ProgressBar.Track>
+                <ProgressBar.Fill />
+              </ProgressBar.Track>
+            </ProgressBar>
+            <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
+              <span>{formatPhase(job.phase) || (active ? 'Working…' : jobStatusLabel(job.status))}</span>
+              <span className="tabular-nums">
+                {progressCurrent.toLocaleString()} / {progressTotal.toLocaleString()} (
+                {Math.round(progressPercent)}%)
+              </span>
+            </div>
+          </div>
+        ) : active ? (
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <Spinner aria-hidden size="sm" />
+            <span>{formatPhase(job.phase) || 'Working in the background…'}</span>
+          </div>
+        ) : null}
+
+        {job.status === 'failed' && job.error ? (
+          <p className="rounded-lg bg-danger/10 px-2.5 py-2 text-xs leading-5 text-danger">
+            {job.error}
+          </p>
+        ) : null}
+        {!active ? (
+          <p className="text-[11px] text-muted">
+            {job.finished_at ? `${jobStatusLabel(job.status)} ${timeAgo(job.finished_at)}` : 'Finished'}
+          </p>
+        ) : null}
+      </div>
+
+      {scanHref || !active ? (
+        <div className="border-t border-border bg-surface-tertiary/30 p-2.5">
+          {scanHref && !active ? (
+            <ButtonGroup fullWidth size="sm" variant="secondary">
+              <Button
+                render={(props: any) => <a {...props} href={scanHref} />}
+              >
+                View scan
+                <ArrowRight01Icon aria-hidden size={15} />
+              </Button>
+              <Button
+                aria-label={`Remove ${job.title || 'background process'} from the process center`}
+                isPending={isDismissing}
+                onPress={() => onDismiss(job.id)}
+              >
+                <ButtonGroup.Separator />
+                <Cancel01Icon aria-hidden size={15} />
+                Remove
+              </Button>
+            </ButtonGroup>
+          ) : scanHref ? (
+            <Button
+              fullWidth
+              render={(props: any) => <a {...props} href={scanHref} />}
+              size="sm"
+              variant="secondary"
+            >
+              View scan
+              <ArrowRight01Icon aria-hidden size={15} />
+            </Button>
+          ) : (
+            <Button
+              aria-label={`Remove ${job.title || 'background process'} from the process center`}
+              fullWidth
+              isPending={isDismissing}
+              onPress={() => onDismiss(job.id)}
+              size="sm"
+              variant="tertiary"
+            >
+              <Cancel01Icon aria-hidden size={15} />
+              Remove
+            </Button>
+          )}
+        </div>
       ) : null}
     </article>
   );
@@ -192,6 +287,7 @@ export function BackgroundProcessCenter() {
   const [error, setError] = useState('');
   const [errorScopeKey, setErrorScopeKey] = useState(scopeKey);
   const [announcement, setAnnouncement] = useState('');
+  const [dismissingJobIDs, setDismissingJobIDs] = useState<Set<string>>(() => new Set());
   const toast = useToast();
   const inFlightRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -210,6 +306,7 @@ export function BackgroundProcessCenter() {
   );
   const scopedError = errorScopeKey === scopeKey ? error : '';
   const activeJobs = useMemo(() => scopedJobs.filter(isBackgroundJobActive), [scopedJobs]);
+  const finishedJobs = useMemo(() => scopedJobs.filter(isBackgroundJobFinished), [scopedJobs]);
   const activeCount = activeJobs.length;
 
   const loadJobs = useCallback(async () => {
@@ -323,6 +420,32 @@ export function BackgroundProcessCenter() {
     return () => window.clearTimeout(timeout);
   }, [announcement]);
 
+  const dismissJobs = useCallback(async (ids: string[]) => {
+    const uniqueIDs = Array.from(new Set(ids));
+    if (uniqueIDs.length === 0) return;
+    setDismissingJobIDs((current) => new Set([...current, ...uniqueIDs]));
+    try {
+      if (uniqueIDs.length === 1) {
+        await dismissBackgroundJob(uniqueIDs[0]);
+      } else {
+        await dismissBackgroundJobs(uniqueIDs);
+      }
+      const removed = new Set(uniqueIDs);
+      setJobs((current) => current.filter((job) => !removed.has(job.id)));
+      for (const id of removed) previousStatusesRef.current.delete(id);
+    } catch (reason) {
+      toastRef.current.error('Couldn’t remove process history', {
+        description: reason instanceof Error ? reason.message : 'Please try again.',
+      });
+    } finally {
+      setDismissingJobIDs((current) => {
+        const next = new Set(current);
+        for (const id of uniqueIDs) next.delete(id);
+        return next;
+      });
+    }
+  }, []);
+
   return (
     <>
       <Badge.Anchor className="shrink-0">
@@ -403,13 +526,30 @@ export function BackgroundProcessCenter() {
                   ) : null}
                   <div className="space-y-3">
                     {scopedJobs.map((job) => (
-                      <BackgroundJobCard key={job.id} job={job} />
+                      <BackgroundJobCard
+                        isDismissing={dismissingJobIDs.has(job.id)}
+                        job={job}
+                        key={job.id}
+                        onDismiss={(id) => void dismissJobs([id])}
+                      />
                     ))}
                   </div>
                 </>
               )}
             </Drawer.Body>
-            <Drawer.Footer className="border-t border-border p-4">
+            <Drawer.Footer className="flex flex-col gap-2 border-t border-border p-4">
+              {finishedJobs.length > 0 ? (
+                <Button
+                  className="w-full"
+                  isDisabled={dismissingJobIDs.size > 0}
+                  isPending={dismissingJobIDs.size === finishedJobs.length}
+                  onPress={() => void dismissJobs(finishedJobs.map((job) => job.id))}
+                  variant="tertiary"
+                >
+                  <Cancel01Icon aria-hidden size={15} />
+                  Remove completed &amp; failed ({finishedJobs.length})
+                </Button>
+              ) : null}
               <Button slot="close" className="w-full" variant="secondary">
                 Close
               </Button>

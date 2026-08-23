@@ -62,6 +62,10 @@ type Scan struct {
 	ComplianceSummary       *ScanComplianceSummary `bun:"-" json:"compliance_summary,omitempty"`
 	IntelligenceSummary     *IntelligenceSummary   `bun:"-" json:"intelligence_summary,omitempty"`
 	PipelineInitiator       *PipelineInitiator     `bun:"-" json:"pipeline_initiator,omitempty"`
+	// WatchlistID is transient provenance used when creating the Process Center
+	// mirror for a watchlist-triggered scan. It is intentionally not persisted
+	// on the scan row because watchlist_items.last_scan_id owns that relationship.
+	WatchlistID *uuid.UUID `bun:"-" json:"-"`
 
 	// Relations (not stored in DB, populated on join)
 	Tags                 []Tag                              `bun:"m2m:scan_tags,join:Scan=Tag" json:"tags,omitempty"`

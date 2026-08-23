@@ -41,6 +41,8 @@ const (
 // monopolizing the executable worker pool while an external process runs.
 var ErrRequeue = errors.New("background job requeue")
 
+var ErrJobNotFinished = errors.New("background job is still active")
+
 // Processor performs one durable job. It should update progress after each
 // bounded unit and return a SafeError when a user-facing error can be stated
 // more precisely than the generic failure message.
@@ -254,7 +256,9 @@ func ListAuthorized(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin b
 		return nil, err
 	}
 
-	query := db.NewSelect().Model((*models.BackgroundJob)(nil)).OrderExpr("created_at DESC").Limit(limit)
+	query := db.NewSelect().Model((*models.BackgroundJob)(nil)).
+		Where("NOT EXISTS (SELECT 1 FROM background_job_dismissals AS dismissal WHERE dismissal.job_id = background_job.id AND dismissal.user_id = ?)", userID).
+		OrderExpr("created_at DESC").Limit(limit)
 	if !isAdmin {
 		query = query.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
 			q = q.Where("user_id = ?", userID)
@@ -295,6 +299,51 @@ func GetAuthorized(ctx context.Context, db *bun.DB, id, userID uuid.UUID, isAdmi
 		return nil, sql.ErrNoRows
 	}
 	return job, nil
+}
+
+// DismissAuthorized hides a terminal job from one user's Process Center. It
+// never deletes the underlying job, which may be shared with an organization
+// or needed for operational diagnostics.
+func DismissAuthorized(ctx context.Context, db *bun.DB, id, userID uuid.UUID, isAdmin bool) error {
+	job, err := GetAuthorized(ctx, db, id, userID, isAdmin)
+	if err != nil {
+		return err
+	}
+	if job.Status != models.BackgroundJobStatusSucceeded && job.Status != models.BackgroundJobStatusFailed &&
+		job.Status != "completed" && job.Status != "cancelled" {
+		return ErrJobNotFinished
+	}
+	_, err = db.NewInsert().Model(&models.BackgroundJobDismissal{
+		JobID:     job.ID,
+		UserID:    userID,
+		CreatedAt: time.Now().UTC(),
+	}).On("CONFLICT (job_id, user_id) DO NOTHING").Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("dismiss background job: %w", err)
+	}
+	return nil
+}
+
+// DismissManyAuthorized is intentionally a per-job authorization check: a
+// Process Center can include personal and organization jobs, and a dismissal
+// must remain private to the current user in either case.
+func DismissManyAuthorized(ctx context.Context, db *bun.DB, ids []uuid.UUID, userID uuid.UUID, isAdmin bool) (int, error) {
+	seen := make(map[uuid.UUID]struct{}, len(ids))
+	dismissed := 0
+	for _, id := range ids {
+		if id == uuid.Nil {
+			return dismissed, errors.New("background job id is required")
+		}
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
+		if err := DismissAuthorized(ctx, db, id, userID, isAdmin); err != nil {
+			return dismissed, err
+		}
+		dismissed++
+	}
+	return dismissed, nil
 }
 
 func IsAuthorized(ctx context.Context, db *bun.DB, job *models.BackgroundJob, userID uuid.UUID, isAdmin bool) bool {

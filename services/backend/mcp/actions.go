@@ -300,6 +300,7 @@ func (s *server) createWatchlistScan(ctx context.Context, itemID uuid.UUID) (*mo
 		OwnerType:   item.OwnerType,
 		OwnerUserID: item.OwnerUserID,
 		OwnerOrgID:  item.OwnerOrgID,
+		WatchlistID: &item.ID,
 		CreatedAt:   time.Now().UTC(),
 	}
 	registry, envVars, err := scanner.ResolveRegistryForScan(ctx, s.db, item.ImageName, item.RegistryID)

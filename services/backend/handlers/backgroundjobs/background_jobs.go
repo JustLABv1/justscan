@@ -74,3 +74,66 @@ func Get(db *bun.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"job": job})
 	}
 }
+
+// Dismiss hides a completed or failed job from the current user's Process
+// Center. The job record itself remains available for operations and other
+// authorized organization members.
+func Dismiss(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		jobID, err := uuid.Parse(strings.TrimSpace(c.Param("id")))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid job id"})
+			return
+		}
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+		if err := workerjobs.DismissAuthorized(c.Request.Context(), db, jobID, userID, isAdmin); err != nil {
+			switch {
+			case errors.Is(err, sql.ErrNoRows):
+				c.JSON(http.StatusNotFound, gin.H{"error": "background job not found"})
+			case errors.Is(err, workerjobs.ErrJobNotFinished):
+				c.JSON(http.StatusConflict, gin.H{"error": "active background jobs cannot be removed"})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove background job"})
+			}
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
+type dismissManyRequest struct {
+	IDs []uuid.UUID `json:"ids"`
+}
+
+// DismissMany performs the same user-specific dismissal for the selected
+// completed or failed jobs. The client supplies the currently displayed IDs,
+// keeping the bulk action explicit and scope-safe.
+func DismissMany(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var request dismissManyRequest
+		if err := c.ShouldBindJSON(&request); err != nil || len(request.IDs) == 0 || len(request.IDs) > 100 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "provide between 1 and 100 background job ids"})
+			return
+		}
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+		dismissed, err := workerjobs.DismissManyAuthorized(c.Request.Context(), db, request.IDs, userID, isAdmin)
+		if err != nil {
+			switch {
+			case errors.Is(err, sql.ErrNoRows):
+				c.JSON(http.StatusNotFound, gin.H{"error": "background job not found"})
+			case errors.Is(err, workerjobs.ErrJobNotFinished):
+				c.JSON(http.StatusConflict, gin.H{"error": "active background jobs cannot be removed"})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove background jobs"})
+			}
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"dismissed": dismissed})
+	}
+}

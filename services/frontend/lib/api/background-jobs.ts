@@ -21,6 +21,14 @@ export function listBackgroundJobs(limit = 50, options?: ApiRequestOptions) {
   );
 }
 
+export function dismissBackgroundJob(id: string, options?: ApiRequestOptions) {
+  return req<void>('DELETE', `/api/v1/background-jobs/${encodeURIComponent(id)}`, undefined, options);
+}
+
+export function dismissBackgroundJobs(ids: string[], options?: ApiRequestOptions) {
+  return req<{ dismissed: number }>('DELETE', '/api/v1/background-jobs', { ids }, options);
+}
+
 export function openBackgroundProcessCenter() {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new Event(OPEN_BACKGROUND_PROCESS_CENTER_EVENT));

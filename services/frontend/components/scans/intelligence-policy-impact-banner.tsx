@@ -1,7 +1,7 @@
 'use client';
 
 import type { ScanIntelligencePolicyImpactResponse } from '@/lib/api';
-import { Alert, Button, Chip, Disclosure, Link as HeroLink } from '@heroui/react';
+import { Accordion, Alert, Button, Chip, Link as HeroLink } from '@heroui/react';
 import { Refresh01Icon, ShieldKeyIcon } from 'hugeicons-react';
 
 interface IntelligencePolicyImpactBannerProps {
@@ -97,18 +97,19 @@ export function IntelligencePolicyImpactBanner({
   );
 
   return (
-    <Alert className="items-start gap-3" status={meta.status}>
+    <Alert className="items-start gap-3 py-4" status={meta.status}>
       <Alert.Indicator>
         <ShieldKeyIcon size={18} />
       </Alert.Indicator>
-      <Alert.Content className="min-w-0 flex-1 gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+      <Alert.Content className="min-w-0 flex-1 gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
             <Alert.Title>Policy result pending confirmation</Alert.Title>
             <Alert.Description className="mt-1 max-w-4xl">{meta.description}</Alert.Description>
           </div>
           {canRescan ? (
             <Button
+              className="shrink-0 self-start"
               isDisabled={rescanPending}
               isPending={rescanPending}
               onPress={onRescan}
@@ -134,52 +135,59 @@ export function IntelligencePolicyImpactBanner({
           <span className="text-xs text-muted">Stored result preserved</span>
         </div>
 
-        <Disclosure className="border-t border-divider/60 pt-2">
-          <Disclosure.Heading>
-            <Disclosure.Trigger className="w-full justify-between text-left text-xs font-medium text-muted hover:text-foreground">
-              Review policy impact
-              <Disclosure.Indicator />
-            </Disclosure.Trigger>
-          </Disclosure.Heading>
-          <Disclosure.Content>
-            <Disclosure.Body className="space-y-3 pt-3">
-              <div className="space-y-2">
-                {impact.policies.map((policy) => (
-                  <div
-                    className="border-l-2 border-divider pl-3"
-                    key={`${policy.org_id}-${policy.policy_id}`}
-                  >
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                      <span className="font-medium text-foreground">{policy.policy_name}</span>
-                      <span className="text-muted">
-                        {formatStatus(policy.historical_status)} →{' '}
-                        {formatStatus(policy.current_status)}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted">{policy.reason}</p>
-                  </div>
-                ))}
-              </div>
-
-              {cves.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-                  <span>Changed CVEs:</span>
-                  {cves.map((cve) => (
-                    <HeroLink
-                      key={cve}
-                      className="font-mono text-accent underline-offset-2"
-                      href={`/vulnkb/${encodeURIComponent(cve)}`}
+        <Accordion className="w-full overflow-hidden rounded-lg border border-divider/70 bg-surface/40" hideSeparator>
+          <Accordion.Item id="policy-impact">
+            <Accordion.Heading>
+              <Accordion.Trigger className="group flex min-h-10 w-full items-center gap-3 px-3 text-left hover:bg-surface-secondary/70">
+                <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
+                  Review policy impact
+                </span>
+                <span className="hidden text-xs text-muted sm:inline">
+                  {policyNames.length} {policyNames.length === 1 ? 'policy' : 'policies'} affected
+                </span>
+                <Accordion.Indicator className="shrink-0 text-muted group-hover:text-foreground [&>svg]:size-4" />
+              </Accordion.Trigger>
+            </Accordion.Heading>
+            <Accordion.Panel className="border-t border-divider/70">
+              <Accordion.Body className="space-y-3 px-3 pb-3 pt-3">
+                <div className="space-y-2">
+                  {impact.policies.map((policy) => (
+                    <div
+                      className="border-l-2 border-divider pl-3"
+                      key={`${policy.org_id}-${policy.policy_id}`}
                     >
-                      {cve}
-                    </HeroLink>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                        <span className="font-medium text-foreground">{policy.policy_name}</span>
+                        <span className="text-muted">
+                          {formatStatus(policy.historical_status)} →{' '}
+                          {formatStatus(policy.current_status)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted">{policy.reason}</p>
+                    </div>
                   ))}
                 </div>
-              ) : null}
 
-              <p className="text-xs text-muted">Policies: {policyNames.join(', ')}</p>
-            </Disclosure.Body>
-          </Disclosure.Content>
-        </Disclosure>
+                {cves.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                    <span>Changed CVEs:</span>
+                    {cves.map((cve) => (
+                      <HeroLink
+                        key={cve}
+                        className="font-mono text-accent underline-offset-2"
+                        href={`/vulnkb/${encodeURIComponent(cve)}`}
+                      >
+                        {cve}
+                      </HeroLink>
+                    ))}
+                  </div>
+                ) : null}
+
+                <p className="text-xs text-muted">Policies: {policyNames.join(', ')}</p>
+              </Accordion.Body>
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
 
         {!canRescan && rescanDisabledReason ? (
           <p className="text-xs text-muted">{rescanDisabledReason}</p>

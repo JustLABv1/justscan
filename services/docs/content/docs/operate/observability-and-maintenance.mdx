@@ -17,7 +17,7 @@ Treat JustScan as a release-decision service once CI depends on policy outcomes.
 
 The admin scanner settings API applies engine toggles, command timeout, scanner database age, and OSV Java enrichment on subsequent work. Worker concurrency is fixed when the backend starts and is reported as restart-required; pending durable scans are requeued during startup and by the recovery dispatcher. The Process Center reconciles its linked records from persisted scan status and phase, so a process entry should be checked together with the scan detail when diagnosing a restart or stale worker.
 
-The Process Center list shows recent process records for operational history; those records are not a second copy of findings or SBOM data. Deleting the linked scan removes the process entry. There is no Process Center retry action: correct credentials, registry access, scanner data, or input errors before submitting a fresh scan, and use a fresh scan when the original input or policy decision must be replaced.
+The Process Center list shows recent process records for operational history; those records are not a second copy of findings or SBOM data. Completed and failed entries can be removed individually or in bulk from one user's Process Center view without deleting shared organization history or backend diagnostics. Deleting the linked scan removes the process entry. There is no Process Center retry action: correct credentials, registry access, scanner data, or input errors before submitting a fresh scan, and use a fresh scan when the original input or policy decision must be replaced.
 
 ## CVE Intelligence health
 

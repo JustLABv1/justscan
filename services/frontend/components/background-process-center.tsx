@@ -3,6 +3,8 @@
 import {
   BACKGROUND_JOB_ENQUEUED_EVENT,
   announceBackgroundJobFinished,
+  dismissBackgroundJob,
+  dismissBackgroundJobs,
   isBackgroundJobActive,
   isBackgroundJobFinished,
   listBackgroundJobs,
@@ -14,7 +16,13 @@ import { timeAgo } from '@/lib/time';
 import { useToast } from '@/components/toast';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { Badge, Button, Chip, Drawer, ProgressBar, Spinner } from '@heroui/react';
-import { Activity01Icon, Alert02Icon, CheckmarkCircle02Icon, Refresh01Icon } from 'hugeicons-react';
+import {
+  Activity01Icon,
+  Alert02Icon,
+  Cancel01Icon,
+  CheckmarkCircle02Icon,
+  Refresh01Icon,
+} from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const JOB_LIMIT = 50;
@@ -70,6 +78,16 @@ function formatPhase(phase: string | null | undefined) {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
+function jobDisplayPriority(job: BackgroundJob) {
+  if (isBackgroundJobActive(job)) return 0;
+  if (job.status === 'failed') return 1;
+  return 2;
+}
+
+function jobDisplayTime(job: BackgroundJob) {
+  return Date.parse(job.finished_at ?? job.started_at ?? job.created_at) || 0;
+}
+
 function mergeJobs(current: BackgroundJob[], incoming: BackgroundJob[]) {
   const nextById = new Map(incoming.map((job) => [job.id, job]));
 
@@ -84,9 +102,9 @@ function mergeJobs(current: BackgroundJob[], incoming: BackgroundJob[]) {
 
   return Array.from(nextById.values())
     .sort((a, b) => {
-      const aTime = Date.parse(a.created_at) || 0;
-      const bTime = Date.parse(b.created_at) || 0;
-      return bTime - aTime;
+      const priorityDifference = jobDisplayPriority(a) - jobDisplayPriority(b);
+      if (priorityDifference !== 0) return priorityDifference;
+      return jobDisplayTime(b) - jobDisplayTime(a);
     })
     .slice(0, JOB_LIMIT);
 }
@@ -102,7 +120,15 @@ function announceFinishedJob(job: BackgroundJob, setAnnouncement: (value: string
   }
 }
 
-function BackgroundJobCard({ job }: { job: BackgroundJob }) {
+function BackgroundJobCard({
+  job,
+  isDismissing,
+  onDismiss,
+}: {
+  job: BackgroundJob;
+  isDismissing: boolean;
+  onDismiss: (id: string) => void;
+}) {
   const active = isBackgroundJobActive(job);
   const progressCurrent = Math.max(0, job.progress_current ?? 0);
   const progressTotal = Math.max(1, job.progress_total ?? 1);
@@ -121,18 +147,20 @@ function BackgroundJobCard({ job }: { job: BackgroundJob }) {
             <p className="mt-1 text-xs leading-5 text-muted">{job.description}</p>
           ) : null}
         </div>
-        <Chip color={color} size="sm" variant="soft">
-          <span className="inline-flex items-center gap-1.5">
-            {active ? (
-              <Spinner aria-label={`${jobStatusLabel(job.status)} process`} size="sm" />
-            ) : null}
-            {!active && (job.status === 'succeeded' || job.status === 'completed') ? (
-              <CheckmarkCircle02Icon aria-hidden size={13} />
-            ) : null}
-            {!active && job.status === 'failed' ? <Alert02Icon aria-hidden size={13} /> : null}
-            {jobStatusLabel(job.status)}
-          </span>
-        </Chip>
+        <div className="flex shrink-0 items-center gap-1">
+          <Chip color={color} size="sm" variant="soft">
+            <span className="inline-flex items-center gap-1.5">
+              {active ? (
+                <Spinner aria-label={`${jobStatusLabel(job.status)} process`} size="sm" />
+              ) : null}
+              {!active && (job.status === 'succeeded' || job.status === 'completed') ? (
+                <CheckmarkCircle02Icon aria-hidden size={13} />
+              ) : null}
+              {!active && job.status === 'failed' ? <Alert02Icon aria-hidden size={13} /> : null}
+              {jobStatusLabel(job.status)}
+            </span>
+          </Chip>
+        </div>
       </div>
 
       {hasProgress(job) ? (
@@ -169,11 +197,24 @@ function BackgroundJobCard({ job }: { job: BackgroundJob }) {
         </p>
       ) : null}
       {!active ? (
-        <p className="text-[11px] text-muted">
-          {job.finished_at
-            ? `${jobStatusLabel(job.status)} ${timeAgo(job.finished_at)}`
-            : 'Finished'}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+          <p className="text-[11px] text-muted">
+            {job.finished_at
+              ? `${jobStatusLabel(job.status)} ${timeAgo(job.finished_at)}`
+              : 'Finished'}
+          </p>
+          <Button
+            aria-label={`Remove ${job.title || 'background process'} from the process center`}
+            className="shrink-0"
+            isPending={isDismissing}
+            onPress={() => onDismiss(job.id)}
+            size="sm"
+            variant="tertiary"
+          >
+            <Cancel01Icon aria-hidden size={15} />
+            Remove
+          </Button>
+        </div>
       ) : null}
     </article>
   );
@@ -192,6 +233,7 @@ export function BackgroundProcessCenter() {
   const [error, setError] = useState('');
   const [errorScopeKey, setErrorScopeKey] = useState(scopeKey);
   const [announcement, setAnnouncement] = useState('');
+  const [dismissingJobIDs, setDismissingJobIDs] = useState<Set<string>>(() => new Set());
   const toast = useToast();
   const inFlightRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -210,6 +252,7 @@ export function BackgroundProcessCenter() {
   );
   const scopedError = errorScopeKey === scopeKey ? error : '';
   const activeJobs = useMemo(() => scopedJobs.filter(isBackgroundJobActive), [scopedJobs]);
+  const finishedJobs = useMemo(() => scopedJobs.filter(isBackgroundJobFinished), [scopedJobs]);
   const activeCount = activeJobs.length;
 
   const loadJobs = useCallback(async () => {
@@ -323,6 +366,32 @@ export function BackgroundProcessCenter() {
     return () => window.clearTimeout(timeout);
   }, [announcement]);
 
+  const dismissJobs = useCallback(async (ids: string[]) => {
+    const uniqueIDs = Array.from(new Set(ids));
+    if (uniqueIDs.length === 0) return;
+    setDismissingJobIDs((current) => new Set([...current, ...uniqueIDs]));
+    try {
+      if (uniqueIDs.length === 1) {
+        await dismissBackgroundJob(uniqueIDs[0]);
+      } else {
+        await dismissBackgroundJobs(uniqueIDs);
+      }
+      const removed = new Set(uniqueIDs);
+      setJobs((current) => current.filter((job) => !removed.has(job.id)));
+      for (const id of removed) previousStatusesRef.current.delete(id);
+    } catch (reason) {
+      toastRef.current.error('Couldn’t remove process history', {
+        description: reason instanceof Error ? reason.message : 'Please try again.',
+      });
+    } finally {
+      setDismissingJobIDs((current) => {
+        const next = new Set(current);
+        for (const id of uniqueIDs) next.delete(id);
+        return next;
+      });
+    }
+  }, []);
+
   return (
     <>
       <Badge.Anchor className="shrink-0">
@@ -403,13 +472,30 @@ export function BackgroundProcessCenter() {
                   ) : null}
                   <div className="space-y-3">
                     {scopedJobs.map((job) => (
-                      <BackgroundJobCard key={job.id} job={job} />
+                      <BackgroundJobCard
+                        isDismissing={dismissingJobIDs.has(job.id)}
+                        job={job}
+                        key={job.id}
+                        onDismiss={(id) => void dismissJobs([id])}
+                      />
                     ))}
                   </div>
                 </>
               )}
             </Drawer.Body>
-            <Drawer.Footer className="border-t border-border p-4">
+            <Drawer.Footer className="flex flex-col gap-2 border-t border-border p-4">
+              {finishedJobs.length > 0 ? (
+                <Button
+                  className="w-full"
+                  isDisabled={dismissingJobIDs.size > 0}
+                  isPending={dismissingJobIDs.size === finishedJobs.length}
+                  onPress={() => void dismissJobs(finishedJobs.map((job) => job.id))}
+                  variant="tertiary"
+                >
+                  <Cancel01Icon aria-hidden size={15} />
+                  Remove completed &amp; failed ({finishedJobs.length})
+                </Button>
+              ) : null}
               <Button slot="close" className="w-full" variant="secondary">
                 Close
               </Button>

@@ -35,7 +35,7 @@ The process status describes execution, not the release verdict:
 
 Phases are sourced from real scan steps such as preparing the image, scanning, processing results, or finalizing the report. A phase may be shown without a percentage: JustScan does not invent a determinate percent when the scanner has not supplied a meaningful total. Use the scan's step output and terminal error for detail.
 
-Deleting a scan also removes its linked process record and any queued process-center entry; it does not retain a separate copy of scan evidence. The Process Center currently has no retry action: correct the recorded execution cause and submit a new scan when a fresh attempt is needed. A restart recovery or fresh submission must not be confused with a policy result; the scan record remains the source of truth.
+Deleting a scan also removes its linked process record and any queued process-center entry; it does not retain a separate copy of scan evidence. Completed and failed entries can be removed individually or in bulk from the Process Center. This only clears them from your own Process Center view; it does not delete shared organization history or backend diagnostics. The Process Center currently has no retry action: correct the recorded execution cause and submit a new scan when a fresh attempt is needed. A restart recovery or fresh submission must not be confused with a policy result; the scan record remains the source of truth.
 
 ## Choose the source deliberately
 

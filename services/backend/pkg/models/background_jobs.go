@@ -56,3 +56,14 @@ type BackgroundJob struct {
 	ErrorLog   string     `bun:"error_log,type:text,notnull,default:''" json:"-"`
 	DedupeKey  string     `bun:"dedupe_key,type:text,notnull,default:''" json:"-"`
 }
+
+// BackgroundJobDismissal is a user-specific removal from the Process Center.
+// Jobs remain available for operational diagnostics and to other authorized
+// organization members; only the dismissing user's process list is affected.
+type BackgroundJobDismissal struct {
+	bun.BaseModel `bun:"table:background_job_dismissals"`
+
+	JobID     uuid.UUID `bun:"job_id,type:uuid,pk"`
+	UserID    uuid.UUID `bun:"user_id,type:uuid,pk"`
+	CreatedAt time.Time `bun:"created_at,type:timestamptz,notnull,default:now()"`
+}

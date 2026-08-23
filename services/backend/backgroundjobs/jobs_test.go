@@ -88,6 +88,79 @@ func TestClaimExcludesPassiveJobsAndUsesSkipLocked(t *testing.T) {
 	}
 }
 
+func TestDismissAuthorizedStoresAUserSpecificDismissal(t *testing.T) {
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer sqldb.Close()
+	db := bun.NewDB(sqldb, pgdialect.New())
+	defer db.Close()
+
+	jobID := uuid.New()
+	userID := uuid.New()
+	mock.ExpectQuery(`SELECT .*FROM "background_jobs" AS "background_job" WHERE \(id =`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status"}).
+			AddRow(jobID, userID, models.BackgroundJobStatusSucceeded))
+	mock.ExpectExec(`INSERT INTO "background_job_dismissals"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	if err := DismissAuthorized(context.Background(), db, jobID, userID, false); err != nil {
+		t.Fatalf("dismiss authorized job: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestDismissAuthorizedRejectsActiveJobs(t *testing.T) {
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer sqldb.Close()
+	db := bun.NewDB(sqldb, pgdialect.New())
+	defer db.Close()
+
+	jobID := uuid.New()
+	userID := uuid.New()
+	mock.ExpectQuery(`SELECT .*FROM "background_jobs" AS "background_job" WHERE \(id =`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status"}).
+			AddRow(jobID, userID, models.BackgroundJobStatusRunning))
+
+	err = DismissAuthorized(context.Background(), db, jobID, userID, false)
+	if !errors.Is(err, ErrJobNotFinished) {
+		t.Fatalf("dismiss active job error = %v, want ErrJobNotFinished", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestListAuthorizedExcludesTheCurrentUsersDismissedJobs(t *testing.T) {
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer sqldb.Close()
+	db := bun.NewDB(sqldb, pgdialect.New())
+	defer db.Close()
+
+	mock.ExpectQuery(`SELECT .*FROM "background_jobs" AS "background_job" WHERE \(NOT EXISTS \(SELECT 1 FROM background_job_dismissals AS dismissal WHERE dismissal.job_id = background_job.id AND dismissal.user_id =`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status"}))
+
+	jobs, err := ListAuthorized(context.Background(), db, uuid.New(), true, "", 10)
+	if err != nil {
+		t.Fatalf("list authorized jobs: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("jobs = %d, want 0", len(jobs))
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
 type timeoutTestError struct{}
 
 func (timeoutTestError) Error() string   { return "read tcp: i/o timeout" }

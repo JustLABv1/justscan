@@ -33,6 +33,7 @@ import {
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import {
+  Alert,
   AlertDialog,
   Button,
   Card,
@@ -486,20 +487,29 @@ export default function ImageScansPage() {
         </AlertDialog.Backdrop>
       </AlertDialog>
       {queuedDeletions.size > 0 ? (
-        <Card className="flex flex-wrap items-center justify-between gap-3 border-warning/30 bg-warning/5 p-4">
-          <div className="flex min-w-0 items-start gap-3">
-            <Spinner aria-hidden className="mt-0.5 shrink-0" color="warning" size="sm" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium">Deletion queued</p>
-              <p className="mt-1 text-xs leading-5 text-muted">
-                This page stays available while cleanup runs. The row will refresh when it finishes.
-              </p>
+        <Alert className="items-center gap-3 py-3" status="warning">
+          <Alert.Indicator>
+            <Spinner aria-label="Deletion in progress" color="warning" size="sm" />
+          </Alert.Indicator>
+          <Alert.Content className="min-w-0 flex-1 gap-0">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <Alert.Title>Deletion queued</Alert.Title>
+                <Alert.Description className="mt-0.5">
+                  Cleanup is running in the background. This page will refresh when it finishes.
+                </Alert.Description>
+              </div>
+              <Button
+                className="shrink-0 self-start sm:self-auto"
+                onPress={openBackgroundProcessCenter}
+                size="sm"
+                variant="secondary"
+              >
+                View progress
+              </Button>
             </div>
-          </div>
-          <Button onPress={openBackgroundProcessCenter} size="sm" variant="secondary">
-            View progress
-          </Button>
-        </Card>
+          </Alert.Content>
+        </Alert>
       ) : null}
       {statsLoading ? (
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">

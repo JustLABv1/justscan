@@ -63,13 +63,13 @@ func parseImageOverviewTime(c *gin.Context) (string, []interface{}) {
 func imageOverviewOrder(raw string) string {
 	switch raw {
 	case "image_asc":
-		return "image_name ASC"
+		return "active_rank DESC, image_name ASC"
 	case "scan_count_desc":
-		return "scan_count DESC, latest_scan_at DESC"
+		return "active_rank DESC, scan_count DESC, latest_scan_at DESC"
 	case "risk_desc":
-		return "health_rank DESC, latest_scan_at DESC"
+		return "active_rank DESC, health_rank DESC, latest_scan_at DESC"
 	default:
-		return "latest_scan_at DESC"
+		return "active_rank DESC, latest_scan_at DESC"
 	}
 }
 
@@ -164,6 +164,8 @@ WITH visible AS (
     SELECT
         h.image_name, c.scan_count,
         COUNT(*) OVER (PARTITION BY h.image_name) AS tag_count,
+        MAX(CASE WHEN h.status IN ('pending', 'queued', 'running') THEN 1 ELSE 0 END)
+            OVER (PARTITION BY h.image_name) AS active_rank,
         MAX(h.health_rank) OVER (PARTITION BY h.image_name) AS health_rank,
         MAX(h.created_at) OVER (PARTITION BY h.image_name) AS latest_scan_at,
         MAX(h.scan_id::text) FILTER (WHERE h.latest_rank = 1) OVER (PARTITION BY h.image_name) AS latest_scan_id,

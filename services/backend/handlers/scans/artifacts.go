@@ -258,7 +258,10 @@ SELECT
     l.low_count
 FROM latest l
 WHERE ` + latestStatusWhere + ` AND ` + criticalWhere + ` AND ` + policyWhere + ` AND ` + intelligenceWhere + `
-ORDER BY l.latest_scan_at DESC, l.latest_scan_id DESC
+ORDER BY
+    CASE WHEN l.latest_status IN ('pending', 'queued', 'running') THEN 0 ELSE 1 END,
+    l.latest_scan_at DESC,
+    l.latest_scan_id DESC
 LIMIT ? OFFSET ?`
 		dataArgs := append([]interface{}{}, baseArgs...)
 		dataArgs = append(dataArgs, latestStatusArgs...)

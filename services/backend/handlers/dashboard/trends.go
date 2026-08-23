@@ -91,6 +91,7 @@ func GetTrends(db *bun.DB) gin.HandlerFunc {
 		pendingArgs := append([]interface{}{models.ScanStatusPending}, orgPolicyFailureArgs...)
 		cancelledArgs := append([]interface{}{models.ScanStatusCancelled}, orgPolicyFailureArgs...)
 		otherArgs := append([]interface{}{bun.In([]string{models.ScanStatusCompleted, models.ScanStatusFailed, models.ScanStatusRunning, models.ScanStatusPending, models.ScanStatusCancelled}), models.ScanExternalStatusBlockedByXrayPolicy}, orgPolicyFailureArgs...)
+		orgPolicyFailedColumn := "SUM(CASE WHEN " + orgPolicyFailure + " THEN 1 ELSE 0 END) AS org_policy_failed"
 
 		var rows []scanTrendRow
 		query := db.NewSelect().
@@ -102,8 +103,13 @@ func GetTrends(db *bun.DB) gin.HandlerFunc {
 			ColumnExpr("SUM(CASE WHEN external_status = ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS policy_blocked", policyBlockedArgs...).
 			ColumnExpr("SUM(CASE WHEN status = ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS running", runningArgs...).
 			ColumnExpr("SUM(CASE WHEN status = ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS pending", pendingArgs...).
-			ColumnExpr("SUM(CASE WHEN status = ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS cancelled", cancelledArgs...).
-			ColumnExpr("SUM(CASE WHEN "+orgPolicyFailure+" THEN 1 ELSE 0 END) AS org_policy_failed", orgPolicyFailureArgs...).
+			ColumnExpr("SUM(CASE WHEN status = ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS cancelled", cancelledArgs...)
+		if len(orgPolicyFailureArgs) == 0 {
+			query = query.ColumnExpr(orgPolicyFailedColumn)
+		} else {
+			query = query.ColumnExpr(orgPolicyFailedColumn, orgPolicyFailureArgs...)
+		}
+		query = query.
 			ColumnExpr("SUM(CASE WHEN status NOT IN (?) AND COALESCE(external_status, '') <> ? AND NOT ("+orgPolicyFailure+") THEN 1 ELSE 0 END) AS other", otherArgs...).
 			Where("created_at >= ?", cutoff).
 			GroupExpr("date").

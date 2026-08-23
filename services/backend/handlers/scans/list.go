@@ -34,7 +34,7 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 
 		scans := make([]models.Scan, 0)
 		q := db.NewSelect().Model(&scans).
-			OrderExpr("created_at DESC").
+			OrderExpr("CASE WHEN status IN ('pending', 'queued', 'running') THEN 0 ELSE 1 END, created_at DESC, id DESC").
 			Limit(limit).
 			Offset(offset)
 		q = authz.ApplyOwnershipVisibility(q, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)

@@ -20,6 +20,12 @@ const (
 	GitRepositoryDiscoveryAuto      = "auto"
 	GitRepositoryDiscoveryKustomize = "kustomize"
 	GitRepositoryDiscoveryManifests = "manifests"
+	// GitRepositoryDiscoveryRegistry scans repository text files for concrete
+	// image references under a configured or manually supplied registry prefix.
+	GitRepositoryDiscoveryRegistry = "registry"
+	// GitRepositoryDiscoveryGitLabCI extracts images from GitLab CI image and
+	// service declarations. Entrypoints contains one or more CI config paths.
+	GitRepositoryDiscoveryGitLabCI = "gitlab_ci"
 
 	GitRepositoryRunQueued      = "queued"
 	GitRepositoryRunDiscovering = "discovering"
@@ -53,6 +59,8 @@ type GitRepository struct {
 	Enabled              bool       `bun:"enabled,type:bool,notnull,default:false" json:"enabled"`
 	RescanPolicy         string     `bun:"rescan_policy,type:text,notnull,default:'changed'" json:"rescan_policy"`
 	DiscoveryMode        string     `bun:"discovery_mode,type:text,notnull,default:'auto'" json:"discovery_mode"`
+	DiscoveryRegistryID  *uuid.UUID `bun:"discovery_registry_id,type:uuid" json:"discovery_registry_id,omitempty"`
+	DiscoveryRegistry    string     `bun:"discovery_registry,type:text,notnull,default:''" json:"discovery_registry"`
 	Entrypoints          []string   `bun:"entrypoints,type:jsonb,notnull,default:'[]'" json:"entrypoints"`
 	TagIDs               []string   `bun:"tag_ids,type:jsonb,notnull,default:'[]'" json:"tag_ids"`
 	CreatedByID          uuid.UUID  `bun:"created_by_id,type:uuid,notnull" json:"created_by_id"`

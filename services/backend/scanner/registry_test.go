@@ -117,3 +117,26 @@ func TestNormalizeScanTargetWithXrayRepository_TrivyBehaviorUnchanged(t *testing
 		t.Fatalf("expected trivy normalization to stay unchanged, got %q", imageName)
 	}
 }
+
+func TestRegistryMatchesImageUsesExactHostBoundaries(t *testing.T) {
+	registry := &models.Registry{URL: "https://registry.example.com/"}
+	if !RegistryMatchesImage("registry.example.com/team/app", registry) {
+		t.Fatal("matching registry host was not detected")
+	}
+	if RegistryMatchesImage("registry.example.com.evil/team/app", registry) {
+		t.Fatal("registry host prefix without a boundary was detected")
+	}
+	if RegistryMatchesImage("team/app", registry) {
+		t.Fatal("unqualified image matched a non-Docker registry")
+	}
+}
+
+func TestRegistryMatchesImageTreatsUnqualifiedNamesAsDockerHub(t *testing.T) {
+	registry := &models.Registry{URL: "https://docker.io/"}
+	if !RegistryMatchesImage("alpine", registry) {
+		t.Fatal("unqualified image did not match Docker Hub")
+	}
+	if RegistryMatchesImage("ghcr.io/team/app", registry) {
+		t.Fatal("another registry host matched Docker Hub")
+	}
+}

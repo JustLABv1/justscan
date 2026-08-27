@@ -37,8 +37,7 @@ func ResolveRegistryForScan(ctx context.Context, db bun.IDB, imageName string, r
 	}
 
 	for _, registry := range registries {
-		host := normalizeRegistryHost(registry.URL)
-		if !strings.HasPrefix(imageName, host+"/") && host != "docker.io" {
+		if !RegistryMatchesImage(imageName, &registry) {
 			continue
 		}
 
@@ -104,6 +103,26 @@ func normalizeRegistryHost(url string) string {
 	host = strings.TrimPrefix(host, "http://")
 	host = strings.TrimSuffix(host, "/")
 	return host
+}
+
+// RegistryMatchesImage reports whether an image reference is addressed to a
+// registry endpoint. Unqualified names are treated as Docker Hub images, as
+// they are by Docker and by ResolveRegistryForScan. Keeping this predicate
+// separate lets repository discovery identify a configured registry without
+// decrypting its credentials first.
+func RegistryMatchesImage(imageName string, registry *models.Registry) bool {
+	if registry == nil {
+		return false
+	}
+	host := normalizeRegistryHost(registry.URL)
+	if host == "" {
+		return false
+	}
+	trimmedName := strings.Trim(strings.TrimSpace(imageName), "/")
+	if trimmedName == "" {
+		return false
+	}
+	return strings.HasPrefix(trimmedName, host+"/") || (host == "docker.io" && !hasRegistryHost(trimmedName))
 }
 
 // NormalizeScanTarget trims user input, removes accidental leading/trailing

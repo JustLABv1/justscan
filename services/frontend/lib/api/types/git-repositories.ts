@@ -1,7 +1,8 @@
 import type { OwnerType } from './common';
 
 export type GitRepositoryRescanPolicy = 'changed' | 'all';
-export type GitRepositoryDiscoveryMode = 'auto' | 'kustomize' | 'manifests';
+export type GitRepositoryDiscoveryMode =
+  'auto' | 'kustomize' | 'manifests' | 'registry' | 'gitlab_ci';
 export type GitRepositoryRunStatus =
   'queued' | 'discovering' | 'scanning' | 'completed' | 'partial' | 'failed' | 'cancelled';
 
@@ -18,6 +19,10 @@ export interface GitRepository {
   enabled: boolean;
   rescan_policy: GitRepositoryRescanPolicy;
   discovery_mode: GitRepositoryDiscoveryMode;
+  /** Configured registry used by registry-reference discovery, when accessible. */
+  discovery_registry_id?: string | null;
+  /** Registry host or path prefix used by registry-reference discovery. */
+  discovery_registry?: string;
   entrypoints: string[];
   tag_ids: string[];
   owner_type: OwnerType;
@@ -80,7 +85,7 @@ export interface GitRepositoryDiscoveryRule {
   id: string;
   repository_id: string;
   path_pattern: string;
-  resolution: 'kustomize' | 'helm' | 'manifests' | 'ignore';
+  resolution: 'kustomize' | 'helm' | 'manifests' | 'gitlab_ci' | 'ignore';
   config: Record<string, unknown>;
   active: boolean;
   created_at: string;
@@ -124,6 +129,8 @@ export interface GitDiscoveredImage {
   full_ref: string;
   image_name: string;
   image_tag: string;
+  /** Configured JustScan registry selected by automatic host matching. */
+  registry_id?: string | null;
   locations: Array<{
     file: string;
     target?: string;

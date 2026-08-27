@@ -1,6 +1,7 @@
 package gitrepositories
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -22,20 +23,22 @@ import (
 )
 
 type repositoryRequest struct {
-	Name          string   `json:"name"`
-	CloneURL      string   `json:"clone_url" binding:"required"`
-	Ref           string   `json:"ref"`
-	AuthType      string   `json:"auth_type"`
-	Username      string   `json:"username"`
-	Credential    string   `json:"credential"`
-	Schedule      string   `json:"schedule"`
-	Timezone      string   `json:"timezone"`
-	Enabled       bool     `json:"enabled"`
-	RescanPolicy  string   `json:"rescan_policy"`
-	DiscoveryMode string   `json:"discovery_mode"`
-	Entrypoints   []string `json:"entrypoints"`
-	TagIDs        []string `json:"tag_ids"`
-	OrgID         string   `json:"org_id"`
+	Name                string   `json:"name"`
+	CloneURL            string   `json:"clone_url" binding:"required"`
+	Ref                 string   `json:"ref"`
+	AuthType            string   `json:"auth_type"`
+	Username            string   `json:"username"`
+	Credential          string   `json:"credential"`
+	Schedule            string   `json:"schedule"`
+	Timezone            string   `json:"timezone"`
+	Enabled             bool     `json:"enabled"`
+	RescanPolicy        string   `json:"rescan_policy"`
+	DiscoveryMode       string   `json:"discovery_mode"`
+	DiscoveryRegistryID string   `json:"discovery_registry_id"`
+	DiscoveryRegistry   string   `json:"discovery_registry"`
+	Entrypoints         []string `json:"entrypoints"`
+	TagIDs              []string `json:"tag_ids"`
+	OrgID               string   `json:"org_id"`
 }
 
 type helmSourceRequest struct {
@@ -545,7 +548,7 @@ func CreateRule(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "path_pattern must be a relative repository path"})
 			return
 		}
-		if body.Resolution != "kustomize" && body.Resolution != "helm" && body.Resolution != "manifests" && body.Resolution != "ignore" {
+		if body.Resolution != "kustomize" && body.Resolution != "helm" && body.Resolution != "manifests" && body.Resolution != "gitlab_ci" && body.Resolution != "ignore" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid resolution"})
 			return
 		}
@@ -840,13 +843,26 @@ func buildHelmSource(c *gin.Context, db *bun.DB, repository *models.GitRepositor
 }
 
 func registryAvailableToRepository(c *gin.Context, db *bun.DB, repository *models.GitRepository, registry *models.Registry) (bool, error) {
+	if repository == nil || registry == nil {
+		return false, nil
+	}
 	if registry.OwnerType == models.OwnerTypeSystem {
 		return true, nil
 	}
 	if repository.OwnerOrgID != nil {
-		return authz.CanOrgAccessRegistry(c.Request.Context(), db, *repository.OwnerOrgID, registry)
+		if db == nil {
+			return false, nil
+		}
+		return authz.CanOrgAccessRegistry(gitRepositoryRequestContext(c), db, *repository.OwnerOrgID, registry)
 	}
 	return repository.OwnerUserID != nil && registry.OwnerUserID != nil && *repository.OwnerUserID == *registry.OwnerUserID, nil
+}
+
+func gitRepositoryRequestContext(c *gin.Context) context.Context {
+	if c != nil && c.Request != nil {
+		return c.Request.Context()
+	}
+	return context.Background()
 }
 
 func relativeRepositoryPath(value, field string) (string, error) {
@@ -972,7 +988,7 @@ func build(c *gin.Context, db *bun.DB, body repositoryRequest, userID uuid.UUID,
 	if discoveryMode == "" {
 		discoveryMode = models.GitRepositoryDiscoveryAuto
 	}
-	if discoveryMode != models.GitRepositoryDiscoveryAuto && discoveryMode != models.GitRepositoryDiscoveryKustomize && discoveryMode != models.GitRepositoryDiscoveryManifests {
+	if discoveryMode != models.GitRepositoryDiscoveryAuto && discoveryMode != models.GitRepositoryDiscoveryKustomize && discoveryMode != models.GitRepositoryDiscoveryManifests && discoveryMode != models.GitRepositoryDiscoveryRegistry && discoveryMode != models.GitRepositoryDiscoveryGitLabCI {
 		return nil, fmt.Errorf("invalid discovery mode")
 	}
 	entrypoints := make([]string, 0, len(body.Entrypoints))
@@ -1009,6 +1025,53 @@ func build(c *gin.Context, db *bun.DB, body repositoryRequest, userID uuid.UUID,
 			return nil, fmt.Errorf("not allowed to use this organization")
 		}
 		item.OwnerType, item.OwnerUserID, item.OwnerOrgID = models.OwnerTypeOrg, nil, &orgID
+	}
+	selectedRegistryID := strings.TrimSpace(body.DiscoveryRegistryID)
+	customRegistryPrefix := strings.TrimSpace(body.DiscoveryRegistry)
+	if discoveryMode == models.GitRepositoryDiscoveryRegistry && selectedRegistryID == "" && customRegistryPrefix == "" && previous != nil && previous.DiscoveryMode == models.GitRepositoryDiscoveryRegistry {
+		if previous.DiscoveryRegistryID != nil {
+			selectedRegistryID = previous.DiscoveryRegistryID.String()
+		} else {
+			customRegistryPrefix = previous.DiscoveryRegistry
+		}
+	}
+	if discoveryMode == models.GitRepositoryDiscoveryRegistry {
+		if selectedRegistryID != "" && customRegistryPrefix != "" {
+			return nil, fmt.Errorf("choose a configured registry or a custom registry prefix, not both")
+		}
+		if selectedRegistryID == "" && customRegistryPrefix == "" {
+			return nil, fmt.Errorf("registry discovery requires a configured registry or custom registry prefix")
+		}
+		if customRegistryPrefix != "" {
+			normalizedPrefix, err := gitservice.NormalizeRegistryDiscoveryPrefix(customRegistryPrefix)
+			if err != nil {
+				return nil, err
+			}
+			item.DiscoveryRegistry = normalizedPrefix
+		} else {
+			registryID, err := uuid.Parse(selectedRegistryID)
+			if err != nil {
+				return nil, fmt.Errorf("invalid discovery_registry_id")
+			}
+			if db == nil {
+				return nil, fmt.Errorf("selected discovery registry is unavailable")
+			}
+			var registry models.Registry
+			if err := db.NewSelect().Model(&registry).Where("id = ?", registryID).Scan(gitRepositoryRequestContext(c)); err != nil {
+				return nil, fmt.Errorf("selected discovery registry is unavailable")
+			}
+			available, err := registryAvailableToRepository(c, db, item, &registry)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check discovery registry access: %w", err)
+			}
+			if !available {
+				return nil, fmt.Errorf("selected discovery registry must be available to the same workspace")
+			}
+			if _, err := gitservice.NormalizeConfiguredRegistryDiscoveryPrefix(registry.URL); err != nil {
+				return nil, fmt.Errorf("selected discovery registry URL: %w", err)
+			}
+			item.DiscoveryRegistryID = &registryID
+		}
 	}
 	if credential != "" {
 		encrypted, err := crypto.Encrypt(crypto.KeyFromString(config.Config.Encryption.Key), credential)

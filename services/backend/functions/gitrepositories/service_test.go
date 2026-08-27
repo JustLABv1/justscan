@@ -15,6 +15,8 @@ import (
 	"justscan-backend/config"
 	"justscan-backend/pkg/crypto"
 	"justscan-backend/pkg/models"
+
+	"github.com/google/uuid"
 )
 
 func TestDiscoverYAMLExtractsAndDeduplicatesWorkloadImages(t *testing.T) {
@@ -58,6 +60,36 @@ data:
 	}
 	if images[1].ImageTag != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
 		t.Fatalf("digest tag = %q", images[1].ImageTag)
+	}
+}
+
+func TestCreateScanWithoutDetectedRegistryKeepsCustomHostAnonymous(t *testing.T) {
+	previousConfig := config.Config
+	config.Config = &config.RestfulConf{Scanner: config.ScannerConf{EnableTrivy: true}}
+	defer func() { config.Config = previousConfig }()
+
+	runID := uuid.New()
+	ownerID := uuid.New()
+	scan, envVars, err := createScan(context.Background(), nil, models.GitRepository{
+		CreatedByID: ownerID,
+		OwnerType:   models.OwnerTypeUser,
+		OwnerUserID: &ownerID,
+	}, runID, DiscoveredImage{
+		FullRef:   "custom.example.com/team/app:1.0",
+		ImageName: "custom.example.com/team/app",
+		ImageTag:  "1.0",
+	}, nil)
+	if err != nil {
+		t.Fatalf("createScan() error = %v", err)
+	}
+	if scan.RegistryID != nil {
+		t.Fatalf("registry ID = %v, want nil", scan.RegistryID)
+	}
+	if scan.ImageName != "custom.example.com/team/app" || scan.ImageTag != "1.0" {
+		t.Fatalf("scan target = %s:%s", scan.ImageName, scan.ImageTag)
+	}
+	if len(envVars) != 0 {
+		t.Fatalf("registry environment = %#v, want empty", envVars)
 	}
 }
 

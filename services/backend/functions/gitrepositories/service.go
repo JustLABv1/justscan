@@ -50,10 +50,11 @@ type ImageLocation struct {
 }
 
 type DiscoveredImage struct {
-	FullRef   string          `json:"full_ref"`
-	ImageName string          `json:"image_name"`
-	ImageTag  string          `json:"image_tag"`
-	Locations []ImageLocation `json:"locations"`
+	FullRef    string          `json:"full_ref"`
+	ImageName  string          `json:"image_name"`
+	ImageTag   string          `json:"image_tag"`
+	Locations  []ImageLocation `json:"locations"`
+	RegistryID *uuid.UUID      `json:"registry_id,omitempty"`
 }
 
 type DiscoveryCandidate struct {
@@ -334,7 +335,7 @@ func CreateDiscovery(ctx context.Context, repositoryID uuid.UUID) (*models.GitRe
 		for _, image := range images {
 			row := &models.GitRepositoryRunImage{
 				RunID: run.ID, FullRef: image.FullRef, ImageName: image.ImageName, ImageTag: image.ImageTag,
-				Locations: models.JSONObject{"items": image.Locations}, State: "discovered", CreatedAt: completedAt,
+				Locations: models.JSONObject{"items": image.Locations}, State: "discovered", RegistryID: image.RegistryID, CreatedAt: completedAt,
 			}
 			if _, err := tx.NewInsert().Model(row).Exec(ctx); err != nil {
 				return err
@@ -428,14 +429,22 @@ func processRun(runID uuid.UUID) {
 		}
 	}
 	registryOverrides := imageRegistryOverrides(ctx, db, repository.ID)
-	previous := previousRefs(ctx, db, repository.ID, run.ID, registryOverrides)
+	currentRegistryIDs := make(map[string]*uuid.UUID, len(images))
+	for _, image := range images {
+		registryID := image.RegistryID
+		if override, ok := registryOverrides[image.FullRef]; ok {
+			registryID = &override
+		}
+		currentRegistryIDs[image.FullRef] = registryID
+	}
+	previous := previousRefs(ctx, db, repository.ID, run.ID, registryOverrides, currentRegistryIDs)
 	excluded := excludedImageRefs(ctx, db, repository.ID)
 	created := 0
 	for _, image := range images {
 		if runCancelled(ctx, db, run.ID) {
 			return
 		}
-		var registryID *uuid.UUID
+		registryID := image.RegistryID
 		if override, ok := registryOverrides[image.FullRef]; ok {
 			registryID = &override
 		}
@@ -524,9 +533,27 @@ func cancelRepositoryRunScan(ctx context.Context, db *bun.DB, scanID uuid.UUID) 
 }
 
 func createScan(ctx context.Context, db *bun.DB, repository models.GitRepository, runID uuid.UUID, image DiscoveredImage, registryID *uuid.UUID) (*models.Scan, []string, error) {
-	registry, envVars, err := scanner.ResolveRegistryForScan(ctx, db, image.ImageName, registryID)
-	if err != nil {
-		return nil, nil, err
+	var registry *models.Registry
+	var envVars []string
+	if registryID != nil {
+		if db == nil {
+			return nil, nil, fmt.Errorf("selected registry is unavailable")
+		}
+		var selected models.Registry
+		if err := db.NewSelect().Model(&selected).Where("id = ?", *registryID).Scan(ctx); err != nil {
+			return nil, nil, fmt.Errorf("selected registry is unavailable")
+		}
+		allowed, err := registryBelongsToRepository(ctx, db, &selected, repository)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to check selected registry access: %w", err)
+		}
+		if !allowed {
+			return nil, nil, fmt.Errorf("selected registry is not available to this workspace")
+		}
+		registry, envVars, err = scanner.ResolveRegistryForScan(ctx, db, image.ImageName, registryID)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	provider, err := scanner.ProviderForRegistry(registry)
 	if err != nil {
@@ -565,7 +592,7 @@ func failRun(ctx context.Context, db *bun.DB, run *models.GitRepositoryRun, err 
 		Exec(ctx)
 }
 
-func previousRefs(ctx context.Context, db *bun.DB, repositoryID, currentRunID uuid.UUID, registryOverrides map[string]uuid.UUID) map[string]bool {
+func previousRefs(ctx context.Context, db *bun.DB, repositoryID, currentRunID uuid.UUID, registryOverrides map[string]uuid.UUID, detectedRegistryIDs ...map[string]*uuid.UUID) map[string]bool {
 	var previous models.GitRepositoryRun
 	if err := db.NewSelect().Model(&previous).Where("repository_id = ?", repositoryID).Where("id != ?", currentRunID).Where("trigger != ?", "dry_run").Where("status IN (?)", bun.In([]string{models.GitRepositoryRunCompleted, models.GitRepositoryRunPartial})).OrderExpr("created_at DESC").Limit(1).Scan(ctx); err != nil {
 		return map[string]bool{}
@@ -578,7 +605,19 @@ func previousRefs(ctx context.Context, db *bun.DB, repositoryID, currentRunID uu
 		return map[string]bool{}
 	}
 	result := make(map[string]bool, len(refs))
+	currentRegistries := map[string]*uuid.UUID(nil)
+	if len(detectedRegistryIDs) > 0 {
+		currentRegistries = detectedRegistryIDs[0]
+	}
 	for _, ref := range refs {
+		if currentRegistries != nil {
+			currentRegistryID, present := currentRegistries[ref.FullRef]
+			if !present || !sameRegistryID(ref.RegistryID, currentRegistryID) {
+				continue
+			}
+			result[ref.FullRef] = true
+			continue
+		}
 		if override, ok := registryOverrides[ref.FullRef]; ok {
 			if ref.RegistryID == nil || *ref.RegistryID != override {
 				continue
@@ -589,6 +628,13 @@ func previousRefs(ctx context.Context, db *bun.DB, repositoryID, currentRunID uu
 		result[ref.FullRef] = true
 	}
 	return result
+}
+
+func sameRegistryID(left, right *uuid.UUID) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 func imageRegistryOverrides(ctx context.Context, db *bun.DB, repositoryID uuid.UUID) map[string]uuid.UUID {
@@ -697,6 +743,93 @@ func Discover(ctx context.Context, repository models.GitRepository) ([]Discovere
 	return images, commit, err
 }
 
+// registryDiscoverySelection resolves the prefix used by registry-reference
+// discovery. A configured registry is loaded and authorized against the
+// repository owner before its URL is used; a manually entered prefix never
+// implicitly selects a credential-bearing registry record.
+func registryDiscoverySelection(ctx context.Context, repository models.GitRepository) (string, *uuid.UUID, error) {
+	if repository.DiscoveryRegistryID != nil {
+		if strings.TrimSpace(repository.DiscoveryRegistry) != "" {
+			return "", nil, fmt.Errorf("choose a configured registry or a custom registry prefix, not both")
+		}
+		state.Lock()
+		db := state.db
+		state.Unlock()
+		if db == nil {
+			return "", nil, fmt.Errorf("selected registry is unavailable")
+		}
+		var registry models.Registry
+		if err := db.NewSelect().Model(&registry).Where("id = ?", *repository.DiscoveryRegistryID).Scan(ctx); err != nil {
+			return "", nil, fmt.Errorf("selected registry is unavailable")
+		}
+		allowed, err := registryBelongsToRepository(ctx, db, &registry, repository)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to check selected registry access: %w", err)
+		}
+		if !allowed {
+			return "", nil, fmt.Errorf("selected registry is not available to this workspace")
+		}
+		prefix, err := normalizeConfiguredRegistryPrefix(registry.URL)
+		if err != nil {
+			return "", nil, fmt.Errorf("selected registry URL: %w", err)
+		}
+		registryID := registry.ID
+		return prefix, &registryID, nil
+	}
+	prefix, err := NormalizeRegistryDiscoveryPrefix(repository.DiscoveryRegistry)
+	if err != nil {
+		return "", nil, err
+	}
+	return prefix, nil, nil
+}
+
+// detectImageRegistries annotates discovered images with the configured
+// registry entry that would be used for an automatic scan. Only registries
+// visible in the repository's workspace are considered; an otherwise matching
+// registry owned by another user or organization must never become an
+// implicit credential choice. Unknown hosts remain unannotated so callers can
+// preserve and, where supported, scan their original fully-qualified ref.
+func detectImageRegistries(ctx context.Context, repository models.GitRepository, images []DiscoveredImage) []DiscoveredImage {
+	state.Lock()
+	db := state.db
+	state.Unlock()
+	if db == nil || len(images) == 0 || repository.DiscoveryMode == models.GitRepositoryDiscoveryRegistry {
+		return images
+	}
+
+	var registries []models.Registry
+	if err := db.NewSelect().Model(&registries).OrderExpr("created_at DESC").Scan(ctx); err != nil {
+		log.Warnf("Git repository registry detection: list registries: %v", err)
+		return images
+	}
+	available := make([]models.Registry, 0, len(registries))
+	for index := range registries {
+		registry := &registries[index]
+		allowed, err := registryBelongsToRepository(ctx, db, registry, repository)
+		if err != nil {
+			log.Warnf("Git repository registry detection: check registry %s: %v", registry.ID, err)
+			continue
+		}
+		if allowed {
+			available = append(available, *registry)
+		}
+	}
+
+	for index := range images {
+		if images[index].RegistryID != nil {
+			continue
+		}
+		for registryIndex := range available {
+			if scanner.RegistryMatchesImage(images[index].ImageName, &available[registryIndex]) {
+				registryID := available[registryIndex].ID
+				images[index].RegistryID = &registryID
+				break
+			}
+		}
+	}
+	return images
+}
+
 // DiscoverReview returns proven deployment images plus paths which need an
 // operator decision before JustScan can safely treat them as deployments.
 func DiscoverReview(ctx context.Context, repository models.GitRepository) ([]DiscoveredImage, []DiscoveryCandidate, string, error) {
@@ -743,6 +876,7 @@ func DiscoverReview(ctx context.Context, repository models.GitRepository) ([]Dis
 	if configured {
 		rules = nil // A committed repository configuration takes precedence over UI rules.
 	}
+	images = detectImageRegistries(ctx, repository, images)
 	return images, findDiscoveryCandidates(dir, rules, configuration, managedSources), strings.TrimSpace(commit), nil
 }
 
@@ -1137,6 +1271,25 @@ func discoverRepository(ctx context.Context, root string, repository models.GitR
 	if mode == models.GitRepositoryDiscoveryManifests {
 		return discoverYAML(root)
 	}
+	if mode == models.GitRepositoryDiscoveryRegistry {
+		prefix, registryID, err := registryDiscoverySelection(ctx, repository)
+		if err != nil {
+			return nil, err
+		}
+		images, err := discoverRegistry(root, prefix)
+		if err != nil {
+			return nil, err
+		}
+		if registryID != nil {
+			for index := range images {
+				images[index].RegistryID = registryID
+			}
+		}
+		return images, nil
+	}
+	if mode == models.GitRepositoryDiscoveryGitLabCI {
+		return discoverGitLabCI(root, repository.Entrypoints)
+	}
 	roots, err := findKustomizationRoots(root, repository.Entrypoints)
 	if err != nil {
 		return nil, err
@@ -1179,7 +1332,7 @@ func discoverConfiguredSources(ctx context.Context, root string, configuration j
 	sources := append([]justScanSource{}, configuration.Discovery.Sources...)
 	for _, rule := range configuration.Discovery.Rules {
 		source := justScanSource{Type: rule.Type, Chart: rule.Chart, Values: rule.Values, ReleaseName: rule.ReleaseName, Paths: rule.Paths}
-		if len(source.Paths) == 0 && rule.Match != "" && (rule.Type == "kustomize" || rule.Type == "manifests") {
+		if len(source.Paths) == 0 && rule.Match != "" && (rule.Type == "kustomize" || rule.Type == "manifests" || rule.Type == "gitlab_ci") {
 			source.Paths = []string{rule.Match}
 		}
 		if rule.Type != "ignore" {
@@ -1217,6 +1370,25 @@ func discoverConfiguredSources(ctx context.Context, root string, configuration j
 			}
 			if err := appendManifestPaths(root, byRef, source.Paths); err != nil {
 				return nil, fmt.Errorf(".justscan.yaml source %d (manifests): %w", index+1, err)
+			}
+		case "gitlab_ci", "gitlab-ci", "gitlab":
+			paths := source.Paths
+			if len(paths) == 0 && strings.TrimSpace(source.Root) != "" {
+				paths = []string{source.Root}
+			}
+			images, err := discoverGitLabCI(root, paths)
+			if err != nil {
+				return nil, fmt.Errorf(".justscan.yaml source %d (gitlab_ci): %w", index+1, err)
+			}
+			for _, image := range images {
+				item := image
+				item.Locations = nil
+				if existing := byRef[image.FullRef]; existing != nil {
+					existing.Locations = append(existing.Locations, image.Locations...)
+					continue
+				}
+				item.Locations = append(item.Locations, image.Locations...)
+				byRef[image.FullRef] = &item
 			}
 		case "helm":
 			if err := appendHelmChartFromRoots(ctx, root, root, byRef, source, "", repository, nil, nil); err != nil {

@@ -13,3 +13,7 @@ justscan_scan:
 ```
 
 For archive-based workflows and the complete request/response model, see [CI/CD integration](/integrations/ci-cd). Confirm that a nonzero exit code fails the job; do not use an unconditional `allow_failure` once JustScan is the release gate.
+
+To discover and schedule scans for image and service declarations in GitLab CI, connect the repository and choose **GitLab CI configuration** as its discovery method. Paths are optional: leave them empty for the conventional root `.gitlab-ci.yml` or `.gitlab-ci.yaml`, or provide relative files, directories, or patterns for repositories with CI configuration elsewhere. This schema-aware mode follows local includes and skips references that still contain runtime variables. See [Git repository discovery](/scan-and-analyze/gitops#gitlab-ci-discovery).
+
+If the goal is to find concrete references throughout the repository without maintaining CI paths, choose **Registry image references** instead. It searches automatically under a selected configured registry or a custom host/path; see [Registry image-reference discovery](/scan-and-analyze/gitops#registry-image-reference-discovery).

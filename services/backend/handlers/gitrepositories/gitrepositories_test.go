@@ -70,6 +70,32 @@ func TestBuildStoresCompleteGitAuthentication(t *testing.T) {
 	}
 }
 
+func TestBuildRegistryDiscoveryAcceptsCustomPrefixWithoutEntrypoints(t *testing.T) {
+	item, err := build(nil, nil, repositoryRequest{
+		CloneURL:          "https://git.example.com/group/repository.git",
+		DiscoveryMode:     models.GitRepositoryDiscoveryRegistry,
+		DiscoveryRegistry: " Registry.Example.com/Team/ ",
+		Entrypoints:       nil,
+	}, uuid.New(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.DiscoveryRegistry != "registry.example.com/team" || item.DiscoveryRegistryID != nil {
+		t.Fatalf("unexpected registry discovery settings: %#v", item)
+	}
+}
+
+func TestBuildRegistryDiscoveryRejectsUnsafeCustomPrefix(t *testing.T) {
+	_, err := build(nil, nil, repositoryRequest{
+		CloneURL:          "https://git.example.com/group/repository.git",
+		DiscoveryMode:     models.GitRepositoryDiscoveryRegistry,
+		DiscoveryRegistry: "https://registry.example.com/team",
+	}, uuid.New(), nil)
+	if err == nil || !strings.Contains(err.Error(), "omit the URL scheme") {
+		t.Fatalf("unsafe registry prefix error = %v", err)
+	}
+}
+
 func TestBuildHelmSourceStoresDirectCredentialsAndRestrictsPaths(t *testing.T) {
 	previousConfig := config.Config
 	config.Config = &config.RestfulConf{Encryption: config.EncryptionConf{Key: "helm-source-test-encryption-key"}}

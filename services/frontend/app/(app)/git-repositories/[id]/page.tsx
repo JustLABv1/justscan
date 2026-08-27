@@ -64,6 +64,7 @@ import {
   setGitRepositoryImageRegistryOverride,
   updateGitRepositoryHelmSource,
   type GitRepository,
+  type GitRepositoryDiscoveryMode,
   type GitRepositoryHelmSource,
   type GitRepositoryHelmSourceInput,
   type GitRepositoryImageExclusion,
@@ -158,7 +159,9 @@ function ImageRegistrySelect({
           <ListBox.Item id="automatic" textValue="Automatic matching">
             <div className="flex min-w-0 flex-col items-start gap-0.5">
               <Label>Automatic matching</Label>
-              <Description className="!block">Match the image host or use the default.</Description>
+              <Description className="!block">
+                Match a configured image host; leave an unconfigured host as entered.
+              </Description>
             </div>
             <ListBox.ItemIndicator />
           </ListBox.Item>
@@ -182,9 +185,106 @@ function ImageRegistrySelect({
       </Select.Popover>
       <Description>
         Choose another configured registry entry when this image needs a different endpoint or
-        token. Create a second entry with the same URL for a second credential.
+        token. This selector uses saved JustScan entries; add a new credential from Registries.
       </Description>
     </Select>
+  );
+}
+
+function imageRegistryHost(imageRef: string): string | null {
+  const trimmed = imageRef.trim().replace(/^\/+|\/+$/g, '');
+  if (!trimmed.includes('/')) return null;
+  const firstSegment = trimmed.split('/')[0]?.toLowerCase() ?? '';
+  if (
+    !firstSegment ||
+    (firstSegment !== 'localhost' && !firstSegment.includes('.') && !firstSegment.includes(':'))
+  ) {
+    return null;
+  }
+  return firstSegment;
+}
+
+function RegistryResolutionSummary({
+  image,
+  override,
+  overrideRegistry,
+  inferredRegistry,
+}: {
+  image: GitRepositoryRunImage;
+  override?: GitRepositoryImageRegistryOverride;
+  overrideRegistry?: Registry;
+  inferredRegistry?: Registry;
+}) {
+  const host = imageRegistryHost(image.full_ref);
+
+  if (override) {
+    return (
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip className="shrink-0" color="accent" size="sm" variant="soft">
+            Configured override
+          </Chip>
+          {host ? <code className="truncate text-xs text-muted">{host}</code> : null}
+        </div>
+        <Description className="!block">
+          {overrideRegistry
+            ? `This image is pinned to the configured ${overrideRegistry.name} registry entry.`
+            : 'This image has an override for a registry entry that is not available in the current workspace.'}
+        </Description>
+      </div>
+    );
+  }
+
+  if (image.registry_id) {
+    return (
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip
+            className="shrink-0"
+            color={inferredRegistry ? 'accent' : 'warning'}
+            size="sm"
+            variant="soft"
+          >
+            {inferredRegistry ? 'Configured match' : 'Configured match unavailable'}
+          </Chip>
+          {host ? <code className="truncate text-xs text-muted">{host}</code> : null}
+        </div>
+        <Description className="!block">
+          {inferredRegistry
+            ? `Automatic matching selected the configured ${inferredRegistry.name} registry entry${host ? ` for ${host}` : ''}.`
+            : 'Automatic matching found a configured registry entry, but it is not available in the current workspace view.'}
+        </Description>
+      </div>
+    );
+  }
+
+  if (host) {
+    return (
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip className="shrink-0" color="warning" size="sm" variant="soft">
+            Custom / unconfigured host
+          </Chip>
+          <code className="truncate text-xs text-muted">{host}</code>
+        </div>
+        <Description className="!block">
+          No JustScan registry entry matches this host. Automatic matching keeps the original host;
+          add a registry entry from Registries if this image needs credentials.
+        </Description>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <Chip className="shrink-0" size="sm" variant="soft">
+        Default matching
+      </Chip>
+      <Description className="!block">
+        This image reference has no explicit registry host. Automatic matching uses the default
+        Docker Hub behavior when a matching entry is available.
+      </Description>
+    </div>
   );
 }
 
@@ -192,15 +292,52 @@ function locationsFor(image: GitRepositoryRunImage) {
   return image.locations?.items ?? [];
 }
 
-function targetGroup(target: string) {
+function discoveryModeLabel(mode: GitRepositoryDiscoveryMode) {
+  switch (mode) {
+    case 'kustomize':
+      return 'Kustomize entrypoints';
+    case 'manifests':
+      return 'Plain Kubernetes manifests';
+    case 'registry':
+      return 'Registry references';
+    case 'gitlab_ci':
+      return 'GitLab CI configuration';
+    default:
+      return 'Automatic discovery';
+  }
+}
+
+function registryDiscoverySource(repository: GitRepository, registries: Registry[]) {
+  if (repository.discovery_registry_id) {
+    const registry = registries.find((item) => item.id === repository.discovery_registry_id);
+    if (registry) return `configured registry “${registry.name}” (${registry.url})`;
+    return 'a configured registry that is not available in this workspace';
+  }
+  if (repository.discovery_registry?.trim()) {
+    return `custom registry prefix “${repository.discovery_registry.trim()}”`;
+  }
+  return 'an unconfigured registry source';
+}
+
+function targetGroup(
+  target: string,
+  discoveryMode?: GitRepositoryDiscoveryMode,
+  locationKind?: string
+) {
   if (target.startsWith('Helm chart ')) {
     return { label: 'Helm', path: target.slice('Helm chart '.length) };
   }
   if (target.startsWith('Helm values ')) {
     return { label: 'Helm', path: target.slice('Helm values '.length) };
   }
+  if (discoveryMode === 'registry' || /registry/i.test(locationKind ?? '')) {
+    return { label: 'Registry references', path: target };
+  }
   if (/kustomization\.ya?ml$/i.test(target)) {
     return { label: 'Kustomize', path: target };
+  }
+  if (discoveryMode === 'gitlab_ci' || locationKind === 'GitLabCI') {
+    return { label: 'GitLab CI', path: target };
   }
   return { label: 'Manifests', path: target };
 }
@@ -694,30 +831,34 @@ export default function GitRepositoryDetailPage() {
   }
 
   const files = useMemo(() => {
-    const grouped = new Map<string, string[]>();
+    const grouped = new Map<string, { file: string; kind?: string; refs: string[] }>();
     for (const image of preview?.images ?? []) {
       for (const location of locationsFor(image)) {
         const source = location.target || location.file;
-        const refs = grouped.get(source) ?? [];
-        refs.push(image.full_ref);
-        grouped.set(source, refs);
+        const key = `${location.kind ?? ''}\u0000${source}`;
+        const item = grouped.get(key) ?? { file: source, kind: location.kind, refs: [] };
+        item.refs.push(image.full_ref);
+        grouped.set(key, item);
       }
     }
-    return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right));
+    return [...grouped.values()].sort(
+      (left, right) =>
+        left.file.localeCompare(right.file) || (left.kind ?? '').localeCompare(right.kind ?? '')
+    );
   }, [preview]);
 
   const filesByDeploymentType = useMemo(() => {
     const groups = new Map<string, Array<[string, string[]]>>();
-    for (const [file, refs] of files) {
-      const group = targetGroup(file);
+    for (const { file, kind, refs } of files) {
+      const group = targetGroup(file, repository?.discovery_mode, kind);
       const items = groups.get(group.label) ?? [];
       items.push([group.path, refs]);
       groups.set(group.label, items);
     }
-    return ['Kustomize', 'Helm', 'Manifests']
+    return ['Kustomize', 'Helm', 'GitLab CI', 'Registry references', 'Manifests']
       .map((label) => [label, groups.get(label) ?? []] as const)
       .filter(([, items]) => items.length > 0);
-  }, [files]);
+  }, [files, repository?.discovery_mode]);
 
   const previewImages = preview?.images ?? [];
   const exclusionByRef = useMemo(
@@ -800,7 +941,7 @@ export default function GitRepositoryDetailPage() {
           { label: 'Git repositories', href: '/git-repositories' },
           { label: repository.name },
         ]}
-        description={`${repository.clone_url} · ${repository.ref}${repository.owner_type === 'org' ? ' · Scans appear in the organization workspace.' : ''}`}
+        description={`${repository.clone_url} · ${repository.ref} · ${discoveryModeLabel(repository.discovery_mode)}${repository.discovery_mode === 'registry' ? ` · ${registryDiscoverySource(repository, registries)}` : ''}${repository.owner_type === 'org' ? ' · Scans appear in the organization workspace.' : ''}`}
         actions={
           <div className="flex items-center gap-2">
             {activeRun ? (
@@ -877,13 +1018,23 @@ export default function GitRepositoryDetailPage() {
         />
         <MetricCard
           title={
-            repository.discovery_mode === 'manifests' ? 'Files with images' : 'Deployment targets'
+            repository.discovery_mode === 'manifests'
+              ? 'Files with images'
+              : repository.discovery_mode === 'registry'
+                ? 'Registry reference files'
+                : repository.discovery_mode === 'gitlab_ci'
+                  ? 'CI config files'
+                  : 'Deployment targets'
           }
           value={String(files.length)}
           detail={
             repository.discovery_mode === 'manifests'
               ? 'manifest files represented'
-              : 'rendered entrypoints represented'
+              : repository.discovery_mode === 'registry'
+                ? 'files with matching image references'
+                : repository.discovery_mode === 'gitlab_ci'
+                  ? 'GitLab CI image declarations represented'
+                  : 'rendered entrypoints represented'
           }
         />
         <MetricCard
@@ -1138,8 +1289,11 @@ export default function GitRepositoryDetailPage() {
                 <div className="min-w-0">
                   <Card.Title>Discovered images</Card.Title>
                   <Card.Description>
-                    Review the images found in this dry run, then scan only the workloads you want
-                    to track.
+                    {repository.discovery_mode === 'registry'
+                      ? `This discovery searches ${registryDiscoverySource(repository, registries)} and keeps each matching image reference tied to its source file. Review the results, then scan only the workloads you want to track.`
+                      : repository.discovery_mode === 'gitlab_ci'
+                        ? 'Images and service declarations found in GitLab CI YAML. Review the results, then scan only the workloads you want to track.'
+                        : 'Review the images found in this dry run, then scan only the workloads you want to track.'}
                   </Card.Description>
                 </div>
               </div>
@@ -1227,6 +1381,10 @@ export default function GitRepositoryDetailPage() {
                   const selectedRegistry = registryOverride
                     ? registryByID.get(registryOverride.registry_id)
                     : undefined;
+                  const inferredRegistry = image.registry_id
+                    ? registryByID.get(image.registry_id)
+                    : undefined;
+                  const imageHost = imageRegistryHost(image.full_ref);
                   const latestScan = latestScanByRef.get(image.full_ref);
                   return (
                     <div
@@ -1279,7 +1437,22 @@ export default function GitRepositoryDetailPage() {
                               ) : null}
                               {registryOverride ? (
                                 <Chip className="shrink-0" color="accent" size="sm" variant="soft">
-                                  {selectedRegistry?.name ?? 'Custom registry'}
+                                  {selectedRegistry?.name ?? 'Configured override'}
+                                </Chip>
+                              ) : image.registry_id ? (
+                                <Chip
+                                  className="shrink-0"
+                                  color={inferredRegistry ? 'accent' : 'warning'}
+                                  size="sm"
+                                  variant="soft"
+                                >
+                                  {inferredRegistry
+                                    ? `Matched: ${inferredRegistry.name}`
+                                    : 'Configured match unavailable'}
+                                </Chip>
+                              ) : imageHost ? (
+                                <Chip className="shrink-0" color="warning" size="sm" variant="soft">
+                                  Custom host: {imageHost}
                                 </Chip>
                               ) : null}
                               {latestScan ? (
@@ -1296,14 +1469,22 @@ export default function GitRepositoryDetailPage() {
                           <Accordion.Panel>
                             <Accordion.Body className="mt-3 border-t border-divider/70 pt-3">
                               <div className="mb-4 rounded-lg border border-divider/70 bg-surface-secondary p-3">
-                                <ImageRegistrySelect
-                                  registries={registries}
-                                  value={registryOverride?.registry_id ?? null}
-                                  isDisabled={savingImageRegistryRef === image.full_ref}
-                                  onChange={(value) =>
-                                    void updateImageRegistry(image.full_ref, value)
-                                  }
+                                <RegistryResolutionSummary
+                                  image={image}
+                                  inferredRegistry={inferredRegistry}
+                                  override={registryOverride}
+                                  overrideRegistry={selectedRegistry}
                                 />
+                                <div className="mt-4 border-t border-divider/70 pt-4">
+                                  <ImageRegistrySelect
+                                    registries={registries}
+                                    value={registryOverride?.registry_id ?? null}
+                                    isDisabled={savingImageRegistryRef === image.full_ref}
+                                    onChange={(value) =>
+                                      void updateImageRegistry(image.full_ref, value)
+                                    }
+                                  />
+                                </div>
                               </div>
                               <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted">
                                 Deployment locations
@@ -1392,7 +1573,11 @@ export default function GitRepositoryDetailPage() {
                         <span className="mt-0.5 block truncate text-xs text-muted">
                           {repository.discovery_mode === 'manifests'
                             ? 'Source manifests and their detected image references'
-                            : 'Rendered deployment targets and their detected image references'}
+                            : repository.discovery_mode === 'registry'
+                              ? `Registry references from ${registryDiscoverySource(repository, registries)}`
+                              : repository.discovery_mode === 'gitlab_ci'
+                                ? 'GitLab CI config files and their detected image references'
+                                : 'Rendered deployment targets and their detected image references'}
                         </span>
                       </span>
                     </span>

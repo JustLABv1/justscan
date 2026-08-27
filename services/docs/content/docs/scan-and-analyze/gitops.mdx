@@ -1,17 +1,77 @@
 ---
-title: GitOps repository discovery
-description: Discover deployment images from Kustomize, Helm, and plain Kubernetes manifests.
+title: Git repository discovery
+description: Discover container images from registry references, GitLab CI, Kustomize, Helm, and Kubernetes manifests.
 ---
 
 Connect a Git repository in the application, validate access, then run discovery before scheduling scans. A dry run renders the configured deployment inputs and discovers images only; it never queues scans.
 
 ## Discovery modes
 
+- **Registry image references (recommended)** searches repository text and configuration for concrete references under one selected configured registry or custom host/path. It discovers files automatically; no CI, manifest, or other path list is required.
 - **Auto** detects unreferenced Kustomize roots and falls back to Kubernetes workload manifests.
 - **Kustomize entrypoints** renders only operator-selected repository paths.
 - **Plain Kubernetes manifests** extracts images from `containers`, `initContainers`, and `ephemeralContainers`.
+- **GitLab CI configuration** extracts global, default, and job-level `image` and `services` declarations. Add one or more relative CI config paths, or leave the paths empty to use `.gitlab-ci.yml` or `.gitlab-ci.yaml` at the repository root.
 
 After a dry run, review discovered images, select the ones that should be tracked, then create scans. Excluded images remain visible in the review so their deployment context is retained without scheduling future scans.
+
+## Registry image-reference discovery
+
+Choose **Registry image references** when image declarations are spread across deployment files, scripts, and other repository configuration. Select a configured registry from the workspace, or choose **Custom registry host or path** and enter a prefix such as `registry.example.com/team`. JustScan searches automatically and still shows the source file and line for each result so the dry-run review is auditable.
+
+Only concrete, fully qualified references below the selected prefix are returned. Include an explicit tag, such as `registry.example.com/team/api:1.2.3` or `:latest`, or a digest, such as `registry.example.com/team/api@sha256:...`. Unqualified or tagless names, wildcard references, URLs, and unresolved variables or templates are skipped. Prefix matching respects host and repository-path boundaries, so `registry.example.com/team` does not match `registry.example.com/team-other`.
+
+Discovery is bounded and intended for source/configuration files. JustScan skips binary or invalid text files, symlinks, `.git`, common dependency/build/generated directories, files larger than 5 MiB, and stops reading after 64 MiB of text for one discovery. Duplicate references are combined while retaining their source locations.
+
+### Configured registry or custom prefix
+
+- A **configured registry** is selected from the registries available in the repository's workspace. Its configured scan provider and encrypted credentials are used for matching images, and the selected entry is applied to discovered images unless a per-image override replaces it.
+- A **custom registry prefix** is kept as written in each image reference and has no JustScan credential attached. Scans therefore run anonymously. For a private custom host, configure a registry entry and use it as the discovery source, or assign a configured registry as a per-image override after the dry run.
+
+Changing the discovery source causes the next run to evaluate the images with the new registry choice. If a selected configured registry is removed or is no longer available to the workspace, discovery reports an error rather than silently scanning anonymously.
+
+## GitLab CI discovery
+
+Use **GitLab CI configuration** when you want schema-aware discovery limited to CI declarations. Paths are optional: add one or more relative files, directories, or patterns when the repository keeps CI configuration outside the root, or leave the field empty to inspect `.gitlab-ci.yml` and `.gitlab-ci.yaml` at the repository root. This mode is separate from the path-free Registry image references mode.
+
+GitLab CI discovery accepts scalar declarations and mappings with a `name` field. It follows local `include` files without making network requests for remote or project includes, and resolves variables declared statically in the same CI file. References that still contain runtime variables such as `$CI_COMMIT_SHA` are skipped because they are not concrete scan targets.
+
+```yaml
+variables:
+  REGISTRY: registry.example.com
+
+default:
+  image: alpine:3.20
+
+build:
+  image:
+    name: ${REGISTRY}/team/builder:2.0
+  services:
+    - docker:27-dind
+    - name: ${REGISTRY}/team/cache:3.0
+```
+
+JustScan records the CI file, job, and declaration path for every result. Script commands and unrelated YAML keys are not treated as image declarations.
+
+For a repository that combines GitLab CI with deployment inputs, use multiple sources in `.justscan.yaml`:
+
+```yaml
+version: 1
+discovery:
+  sources:
+    - type: gitlab_ci
+      paths:
+        - .gitlab-ci.yml
+        - ci/release.yml
+    - type: kustomize
+      root: deploy
+```
+
+## Registry matching outside registry-reference discovery
+
+For images discovered by Auto, Kustomize, manifests, GitLab CI, or Helm, JustScan can compare the image host with registry entries available to the repository's workspace. A matching configured registry supplies its scan provider and credentials automatically. A saved per-image registry override takes precedence over automatic matching. Registry image-reference discovery uses the explicitly selected configured registry or custom prefix described above.
+
+A fully qualified image from an unconfigured custom registry is kept exactly as written and can be scanned anonymously. No registry record or credential is created implicitly.
 
 ## Per-image registry and credential
 
@@ -32,6 +92,10 @@ discovery:
     - type: manifests
       paths:
         - manifests
+    - type: gitlab_ci
+      paths:
+        - .gitlab-ci.yml
+        - ci/release.yml
     - type: helm
       chart: charts/standalone-service
       releaseName: standalone-service
@@ -41,6 +105,7 @@ discovery:
 
 - A `kustomize` source accepts a discovery `root` or explicit `paths` to `kustomization.yaml` files.
 - A `manifests` source requires `paths` to plain Kubernetes YAML files or directories.
+- A `gitlab_ci` source accepts optional CI config `paths`, directories, or patterns. With no paths, it uses the conventional root GitLab CI filename.
 - A `helm` source requires a chart directory in the same repository. JustScan resolves declared chart dependencies in an isolated temporary directory before rendering; it never writes them back to Git.
 
 ## Managed Helm sources

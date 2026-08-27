@@ -18,6 +18,23 @@ export const listWatchlist = (options?: ApiRequestOptions) => {
 export const createWatchlistItem = (data: Partial<WatchlistItem> & { org_id?: string }) =>
   req<WatchlistItem>('POST', '/api/v1/watchlist/', data);
 
+export type BulkWatchlistItem = Pick<WatchlistItem, 'image_name' | 'image_tag'>;
+
+export const createWatchlistItems = (data: {
+  items: BulkWatchlistItem[];
+  schedule: string;
+  timezone: string;
+  enabled: boolean;
+  registry_id?: string | null;
+  org_id?: string;
+}) => req<{ data: WatchlistItem[]; created: number }>('POST', '/api/v1/watchlist/bulk', data);
+
+export const bulkWatchlistAction = (ids: string[], action: 'enable' | 'disable' | 'delete') =>
+  req<{ updated: number; action: string }>('POST', '/api/v1/watchlist/bulk-actions', {
+    ids,
+    action,
+  });
+
 export const updateWatchlistItem = (id: string, data: Partial<WatchlistItem>) =>
   req<WatchlistItem>('PUT', `/api/v1/watchlist/${id}`, data);
 

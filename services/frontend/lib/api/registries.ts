@@ -40,14 +40,17 @@ export const listRegistries = () => {
   );
 };
 
-export const listRegistriesWithCapabilities = () => {
+export const listRegistriesWithCapabilities = (includeHiddenSystemRegistries = false) => {
   const params = new URLSearchParams();
   appendScope(params);
+  if (includeHiddenSystemRegistries) params.set('include_hidden_system', 'true');
   const qs = params.toString();
   return req<RegistryListResponse>('GET', `/api/v1/registries/${qs ? `?${qs}` : ''}`).then(
     (result) => ({
       data: result.data ?? [],
       capabilities: result.capabilities ?? getDefaultScannerCapabilities(),
+      workspaceRegistryPreferences: result.workspace_registry_preferences,
+      hiddenSystemRegistryIds: result.hidden_system_registry_ids ?? [],
     })
   );
 };
@@ -75,8 +78,31 @@ export const unshareRegistry = (id: string, orgId: string) =>
 export const transferRegistryOwnership = (id: string, orgId: string) =>
   req<{ result: string }>('POST', `/api/v1/registries/${id}/transfer-ownership`, { org_id: orgId });
 
+function scopedRegistryPath(path: string) {
+  const params = new URLSearchParams();
+  appendScope(params);
+  const qs = params.toString();
+  return `${path}${qs ? `?${qs}` : ''}`;
+}
+
 export const getDefaultRegistry = () =>
-  req<Registry>('GET', '/api/v1/registries/default').catch(() => null);
+  req<Registry>('GET', scopedRegistryPath('/api/v1/registries/default')).catch(() => null);
+
+export const setDefaultRegistry = (id: string) =>
+  req<{ id: string; is_default: boolean }>(
+    'PUT',
+    scopedRegistryPath(`/api/v1/registries/default/${id}`)
+  );
+
+export const clearDefaultRegistry = () =>
+  req<void>('DELETE', scopedRegistryPath('/api/v1/registries/default'));
+
+export const setSystemRegistryVisibility = (id: string, hidden: boolean) =>
+  req<{ id: string; hidden: boolean }>(
+    'PUT',
+    scopedRegistryPath(`/api/v1/registries/system-registries/${id}/visibility`),
+    { hidden }
+  );
 
 export const testRegistry = (id: string) =>
   req<{ health_status: string; health_message: string; last_health_check_at: string }>(

@@ -16,6 +16,7 @@ import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   createRegistry,
+  clearDefaultRegistry,
   deleteRegistry,
   getDefaultScannerCapabilities,
   getWorkScope,
@@ -25,6 +26,8 @@ import {
   ResourceShare,
   ScannerCapabilities,
   shareRegistry,
+  setDefaultRegistry,
+  setSystemRegistryVisibility,
   testRegistry,
   transferRegistryOwnership,
   unshareRegistry,
@@ -37,6 +40,7 @@ import {
   Alert,
   Button,
   Card,
+  Chip,
   ListBox,
   Modal,
   SearchField,
@@ -178,6 +182,7 @@ export default function RegistriesPage() {
   const [shareSaving, setShareSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [providerFilter, setProviderFilter] = useState<'all' | 'trivy' | 'artifactory_xray'>('all');
+  const [hiddenSystemRegistryIds, setHiddenSystemRegistryIds] = useState<string[]>([]);
   const modal = useOverlayState();
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
@@ -186,6 +191,10 @@ export default function RegistriesPage() {
   const orgRoleById = useMemo(
     () => new Map(orgs.map((org) => [org.id, org.current_user_role] as const)),
     [orgs]
+  );
+  const hiddenSystemRegistryIdSet = useMemo(
+    () => new Set(hiddenSystemRegistryIds),
+    [hiddenSystemRegistryIds]
   );
   const canMutateActiveScope =
     isPlatformAdmin || workScope.kind !== 'org' || canMutateOrg(orgRoleById.get(workScope.orgId));
@@ -198,9 +207,10 @@ export default function RegistriesPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await listRegistriesWithCapabilities();
+      const response = await listRegistriesWithCapabilities(true);
       setRegistries(response.data);
       setCapabilities(response.capabilities);
+      setHiddenSystemRegistryIds(response.hiddenSystemRegistryIds);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -327,7 +337,40 @@ export default function RegistriesPage() {
     }
   }
 
+  async function handleDefault(registry: RegistryWithHealth) {
+    try {
+      if (registry.is_default) {
+        await clearDefaultRegistry();
+        toast.success('Workspace default registry cleared');
+      } else {
+        await setDefaultRegistry(registry.id);
+        toast.success(`${registry.name} is now the workspace default registry`);
+      }
+      await load();
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update default registry');
+    }
+  }
+
+  async function handleSystemRegistryVisibility(registry: RegistryWithHealth) {
+    try {
+      const hidden = !hiddenSystemRegistryIdSet.has(registry.id);
+      await setSystemRegistryVisibility(registry.id, hidden);
+      toast.success(
+        hidden
+          ? `${registry.name} hidden for this workspace`
+          : `${registry.name} shown for this workspace`
+      );
+      await load();
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to update system registry visibility'
+      );
+    }
+  }
+
   function canManageAccess(registry: RegistryWithHealth) {
+    if (registry.owner_type === 'system') return isPlatformAdmin;
     if (isPlatformAdmin) return true;
     if (registry.owner_type === 'org' && registry.owner_org_id) {
       return canManageOrg(orgRoleById.get(registry.owner_org_id));
@@ -455,7 +498,7 @@ export default function RegistriesPage() {
         title="Registries"
         description="Configure private Docker registries and choose the scan provider per registry."
         actions={
-          registries.length > 0 ? (
+          <div className="flex items-center gap-2">
             <Button
               onPress={openCreate}
               className="inline-flex items-center gap-2"
@@ -465,7 +508,7 @@ export default function RegistriesPage() {
             >
               <PlusSignIcon size={15} /> Add Registry
             </Button>
-          ) : undefined
+          </div>
         }
       />
 
@@ -562,10 +605,28 @@ export default function RegistriesPage() {
                   </Table.Header>
                   <Table.Body>
                     {filteredRegistries.map((r) => (
-                      <Table.Row key={r.id} id={r.id}>
+                      <Table.Row
+                        key={r.id}
+                        id={r.id}
+                        className={
+                          hiddenSystemRegistryIdSet.has(r.id)
+                            ? 'opacity-55 grayscale-[0.2]'
+                            : undefined
+                        }
+                      >
                         <Table.Cell>
                           <div className="space-y-1">
                             <p className="font-medium text-zinc-700 dark:text-zinc-200">{r.name}</p>
+                            {r.is_default ? (
+                              <Chip size="sm" variant="soft" color="accent">
+                                Workspace default
+                              </Chip>
+                            ) : null}
+                            {hiddenSystemRegistryIdSet.has(r.id) ? (
+                              <Chip size="sm" variant="soft" color="default">
+                                Hidden in workspace
+                              </Chip>
+                            ) : null}
                             <OwnershipBadge
                               ownerType={r.owner_type}
                               ownerOrgId={r.owner_org_id}
@@ -617,10 +678,40 @@ export default function RegistriesPage() {
                         </Table.Cell>
                         <Table.Cell>
                           <div className="flex items-center justify-end">
-                            {canManageAccess(r) || canMutateRegistry(r) ? (
+                            {canManageAccess(r) ||
+                            canMutateRegistry(r) ||
+                            r.owner_type === 'system' ? (
                               <RowActionsMenu
                                 label={`Open actions menu for ${r.name}`}
                                 items={[
+                                  ...(hiddenSystemRegistryIdSet.has(r.id)
+                                    ? []
+                                    : [
+                                        {
+                                          id: 'default',
+                                          label: r.is_default
+                                            ? 'Clear workspace default'
+                                            : 'Set as workspace default',
+                                          icon: <Shield01Icon size={15} />,
+                                          onAction: () => {
+                                            void handleDefault(r);
+                                          },
+                                        },
+                                      ]),
+                                  ...(r.owner_type === 'system' && canMutateActiveScope
+                                    ? [
+                                        {
+                                          id: 'system-visibility',
+                                          label: hiddenSystemRegistryIdSet.has(r.id)
+                                            ? 'Show in workspace'
+                                            : 'Hide from workspace',
+                                          icon: <ServerStack01Icon size={15} />,
+                                          onAction: () => {
+                                            void handleSystemRegistryVisibility(r);
+                                          },
+                                        },
+                                      ]
+                                    : []),
                                   ...(canMutateRegistry(r)
                                     ? [
                                         {

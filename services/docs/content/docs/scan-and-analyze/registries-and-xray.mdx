@@ -5,7 +5,7 @@ description: Configure image registry access and select Trivy, Grype, or Xray an
 
 > Helm dependency authentication uses [Helm registry credentials](./helm-registry-credentials), not the image registries described here.
 
-Create registries in **Workspace setup → Registries**. Credentials are encrypted at rest with the configured encryption key. Test a registry connection before relying on it in a scheduled or CI workflow. Set a default registry only when that default is unambiguous for the intended workspace.
+Create registries in **Workspace setup → Registries**. Credentials are encrypted at rest with the configured encryption key. Test a registry connection before relying on it in a scheduled or CI workflow. Use **Set as workspace default** to choose the default registry for the active workspace. Organization editors set this for every workspace member; a personal workspace is naturally private. System registries are admin-managed but available as read-only scan sources. An organization editor can hide or show individual system registries for the whole workspace from each registry's action menu. Hidden entries stay visible but dimmed on this management page so they can be restored, while normal scan pickers omit them.
 
 ## Xray modes
 

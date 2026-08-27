@@ -291,6 +291,160 @@ func CreateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
+// BulkCreateWatchlistItems creates up to 250 entries with the same schedule,
+// timezone, registry, and workspace. The client parses pasted text and files;
+// the server remains the validation and authorization boundary.
+func BulkCreateWatchlistItems(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body struct {
+			Items []struct {
+				ImageName string `json:"image_name"`
+				ImageTag  string `json:"image_tag"`
+			} `json:"items" binding:"required,min=1,max=250"`
+			Schedule   string     `json:"schedule" binding:"required"`
+			Timezone   string     `json:"timezone"`
+			Enabled    bool       `json:"enabled"`
+			OrgID      string     `json:"org_id"`
+			RegistryID *uuid.UUID `json:"registry_id"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+		timezone := strings.TrimSpace(body.Timezone)
+		if timezone == "" {
+			timezone = "UTC"
+		}
+		if err := scheduler.ValidateSchedule(body.Schedule, timezone); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		var ownerOrgID *uuid.UUID
+		if body.OrgID != "" {
+			parsed, err := uuid.Parse(body.OrgID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+				return
+			}
+			if _, _, _, _, ok := authz.RequireOrgRole(c, db, parsed, models.OrgRoleEditor); !ok {
+				return
+			}
+			ownerOrgID = &parsed
+		}
+		if body.RegistryID != nil {
+			if _, _, _, ok := authz.LoadAccessibleRegistry(c, db, *body.RegistryID); !ok {
+				return
+			}
+		}
+		seen := make(map[string]struct{}, len(body.Items))
+		items := make([]models.WatchlistItem, 0, len(body.Items))
+		for _, input := range body.Items {
+			name, tag := strings.TrimSpace(input.ImageName), strings.TrimSpace(input.ImageTag)
+			if name == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "each item needs an image_name"})
+				return
+			}
+			if tag == "" {
+				tag = "latest"
+			}
+			key := name + "\x00" + tag
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			item := models.WatchlistItem{ImageName: name, ImageTag: tag, Schedule: body.Schedule, Timezone: timezone, Enabled: body.Enabled, RegistryID: body.RegistryID, UserID: userID, OwnerType: models.OwnerTypeUser, OwnerUserID: &userID, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+			if ownerOrgID != nil {
+				item.OwnerType = models.OwnerTypeOrg
+				item.OwnerUserID = nil
+				item.OwnerOrgID = ownerOrgID
+			}
+			items = append(items, item)
+		}
+		if len(items) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "no unique watchlist items supplied"})
+			return
+		}
+		if err := db.RunInTx(c.Request.Context(), nil, func(ctx context.Context, tx bun.Tx) error {
+			if _, err := tx.NewInsert().Model(&items).Exec(ctx); err != nil {
+				return err
+			}
+			if ownerOrgID != nil {
+				for _, item := range items {
+					if _, err := tx.NewInsert().Model(&models.OrgWatchlistItem{OrgID: *ownerOrgID, WatchlistItemID: item.ID}).On("CONFLICT DO NOTHING").Exec(ctx); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create watchlist items"})
+			return
+		}
+		for _, item := range items {
+			scheduler.SyncWatchlistItem(db, item)
+		}
+		c.JSON(http.StatusCreated, gin.H{"data": items, "created": len(items)})
+	}
+}
+
+// BulkWatchlistActions is deliberately limited to state changes and deletion;
+// scans use the normal per-item endpoint so each receives its own scan result.
+func BulkWatchlistActions(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body struct {
+			IDs    []uuid.UUID `json:"ids" binding:"required,min=1,max=250"`
+			Action string      `json:"action" binding:"required,oneof=enable disable delete"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+		var items []models.WatchlistItem
+		if err := db.NewSelect().Model(&items).Where("id IN (?)", bun.In(body.IDs)).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load watchlist items"})
+			return
+		}
+		if len(items) != len(body.IDs) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "one or more watchlist items were not found"})
+			return
+		}
+		for index := range items {
+			if !canWriteWatchlistItem(c.Request.Context(), db, &items[index], userID, isAdmin) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+				return
+			}
+		}
+		if body.Action == "delete" {
+			if _, err := db.NewDelete().Model((*models.WatchlistItem)(nil)).Where("id IN (?)", bun.In(body.IDs)).Exec(c.Request.Context()); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete watchlist items"})
+				return
+			}
+			for _, id := range body.IDs {
+				scheduler.UnscheduleWatchlistItem(id.String())
+			}
+		} else {
+			enabled := body.Action == "enable"
+			if _, err := db.NewUpdate().Model((*models.WatchlistItem)(nil)).Set("enabled = ?, updated_at = now()", enabled).Where("id IN (?)", bun.In(body.IDs)).Exec(c.Request.Context()); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update watchlist items"})
+				return
+			}
+			for _, item := range items {
+				item.Enabled = enabled
+				scheduler.SyncWatchlistItem(db, item)
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"updated": len(items), "action": body.Action})
+	}
+}
+
 func UpdateWatchlistItem(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		itemID, err := uuid.Parse(c.Param("id"))

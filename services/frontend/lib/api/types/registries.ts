@@ -186,6 +186,11 @@ export interface RegistryWithHealth extends Registry {
 export interface RegistryListResponse {
   data: RegistryWithHealth[];
   capabilities?: ScannerCapabilities;
+  workspace_registry_preferences?: {
+    default_registry_id?: string | null;
+    hide_system_registries: boolean;
+  };
+  hidden_system_registry_ids?: string[];
 }
 
 export interface ArtifactoryRepository {

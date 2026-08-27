@@ -13,6 +13,9 @@ func Registries(router *gin.RouterGroup, db *bun.DB) {
 	{
 		r.GET("/", registries.ListRegistries(db))
 		r.GET("/default", registries.GetDefaultRegistry(db))
+		r.PUT("/default/:id", registries.SetUserDefaultRegistry(db))
+		r.DELETE("/default", registries.ClearUserDefaultRegistry(db))
+		r.PUT("/system-registries/:id/visibility", registries.SetSystemRegistryVisibility(db))
 		r.POST("/", registries.CreateRegistry(db))
 		r.PUT("/:id", registries.UpdateRegistry(db))
 		r.DELETE("/:id", registries.DeleteRegistry(db))

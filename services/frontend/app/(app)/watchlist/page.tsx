@@ -18,6 +18,8 @@ import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   createWatchlistItem,
+  createWatchlistItems,
+  bulkWatchlistAction,
   deleteWatchlistItem,
   getDefaultScannerCapabilities,
   getTokenType,
@@ -63,6 +65,7 @@ import {
   Spinner,
   Switch,
   Table,
+  TextArea,
   useOverlayState,
 } from '@heroui/react';
 import {
@@ -77,7 +80,7 @@ import {
 } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const selectTriggerCls = heroSelectTriggerClassName;
 const TIMEZONE_OPTIONS =
@@ -85,6 +88,23 @@ const TIMEZONE_OPTIONS =
 
 function getBrowserTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+}
+
+function parseWatchlistImport(value: string) {
+  const entries = new Map<string, { image_name: string; image_tag: string }>();
+  for (const rawLine of value.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || /^\s*(image|image_name|repository)\s*[,;\t]/i.test(line)) continue;
+    const target = line.split(/[,;\t]/)[0].trim();
+    if (!target) continue;
+    const slash = target.lastIndexOf('/');
+    const colon = target.lastIndexOf(':');
+    const hasTag = colon > slash;
+    const image_name = hasTag ? target.slice(0, colon) : target;
+    const image_tag = hasTag ? target.slice(colon + 1) : 'latest';
+    if (image_name) entries.set(`${image_name}:${image_tag}`, { image_name, image_tag });
+  }
+  return [...entries.values()];
 }
 
 const postureChipColor: Record<
@@ -303,6 +323,12 @@ export default function WatchlistPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [triggering, setTriggering] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkActionSaving, setBulkActionSaving] = useState(false);
+  const [bulkInput, setBulkInput] = useState('');
+  const [importedFileName, setImportedFileName] = useState('');
+  const fileImportRef = useRef<HTMLInputElement>(null);
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [shareTarget, setShareTarget] = useState<WatchlistItem | null>(null);
   const [shares, setShares] = useState<ResourceShare[]>([]);
   const [sharesLoading, setSharesLoading] = useState(false);
@@ -316,6 +342,7 @@ export default function WatchlistPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [postureNow] = useState(() => Date.now());
   const modal = useOverlayState();
+  const bulkModal = useOverlayState();
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
@@ -406,6 +433,13 @@ export default function WatchlistPage() {
     setFormError('');
     modal.open();
   }
+  function openBulkCreate() {
+    if (!canMutateActiveScope) return;
+    setBulkInput('');
+    setImportedFileName('');
+    setFormError('');
+    bulkModal.open();
+  }
   function openEdit(item: WatchlistItem) {
     if (!canMutateItem(item)) return;
     setEditing(item);
@@ -472,6 +506,74 @@ export default function WatchlistPage() {
       await load();
     }
   }
+  async function handleBulkAction(action: 'enable' | 'disable' | 'delete' | 'scan') {
+    const ids = [...selectedIds];
+    if (!ids.length || bulkActionSaving) return;
+    if (action === 'delete') {
+      const ok = await confirm({
+        title: 'Remove selected watchlist items?',
+        message: `${ids.length} image${ids.length === 1 ? '' : 's'} will no longer be automatically scanned.`,
+        confirmLabel: 'Remove',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
+    setBulkActionSaving(true);
+    try {
+      if (action === 'scan') {
+        const results = await Promise.allSettled(ids.map((id) => triggerWatchlistScan(id)));
+        const failed = results.filter((result) => result.status === 'rejected').length;
+        if (failed) toast.error(`${failed} scan${failed === 1 ? '' : 's'} could not be triggered`);
+        else toast.success(`${ids.length} scan${ids.length === 1 ? '' : 's'} triggered`);
+      } else {
+        await bulkWatchlistAction(ids, action);
+        toast.success(
+          `${ids.length} item${ids.length === 1 ? '' : 's'} ${action === 'delete' ? 'removed' : action === 'enable' ? 'enabled' : 'paused'}`
+        );
+      }
+      setSelectedIds(new Set());
+      await load();
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Bulk action failed');
+      await load();
+    } finally {
+      setBulkActionSaving(false);
+    }
+  }
+  async function handleBulkCreate(event: React.FormEvent) {
+    event.preventDefault();
+    const imported = parseWatchlistImport(bulkInput);
+    if (!imported.length) {
+      setFormError('Enter at least one image reference.');
+      return;
+    }
+    setBulkSaving(true);
+    setFormError('');
+    try {
+      const currentScope = getWorkScope();
+      await createWatchlistItems({
+        items: imported,
+        schedule,
+        timezone,
+        enabled,
+        registry_id: registryId || null,
+        ...(currentScope.kind === 'org' ? { org_id: currentScope.orgId } : {}),
+      });
+      toast.success(`Added ${imported.length} watchlist item${imported.length === 1 ? '' : 's'}`);
+      bulkModal.close();
+      await load();
+    } catch (error: unknown) {
+      setFormError(error instanceof Error ? error.message : 'Failed to add watchlist items');
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
+  async function handleImportFile(file: File | undefined) {
+    if (!file) return;
+    setBulkInput(await file.text());
+    setImportedFileName(file.name);
+  }
   async function handleTrigger(id: string) {
     const item = items.find((candidate) => candidate.id === id);
     if (item && !canMutateItem(item)) return;
@@ -503,6 +605,14 @@ export default function WatchlistPage() {
       return canManageOrg(orgRoleById.get(item.owner_org_id));
     }
     return true;
+  }
+
+  function writableItemIds(candidates: WatchlistItem[]) {
+    const ids: string[] = [];
+    for (const item of candidates) {
+      if (canMutateItem(item)) ids.push(item.id);
+    }
+    return ids;
   }
 
   async function loadShares(itemId: string) {
@@ -668,6 +778,11 @@ export default function WatchlistPage() {
   const hasFilters =
     searchQuery.trim().length > 0 || statusFilter !== 'all' || focusFilter !== 'all';
 
+  const nonMutableItemIds: string[] = [];
+  for (const item of filteredItems) {
+    if (!canMutateItem(item)) nonMutableItemIds.push(item.id);
+  }
+
   return (
     <div className="p-6 space-y-5">
       <PageHeader
@@ -711,6 +826,9 @@ export default function WatchlistPage() {
               variant="primary"
             >
               <PlusSignIcon size={15} /> Add Image
+            </Button>
+            <Button onPress={openBulkCreate} isDisabled={!canMutateActiveScope} variant="secondary">
+              Add multiple
             </Button>
           </div>
         }
@@ -866,10 +984,85 @@ export default function WatchlistPage() {
           </Card>
 
           <Card className="overflow-hidden">
+            {selectedIds.size > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 border-b border-divider px-3 py-2">
+                <span className="text-sm text-muted">{selectedIds.size} selected</span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  isDisabled={bulkActionSaving}
+                  onPress={() => {
+                    void handleBulkAction('scan');
+                  }}
+                >
+                  Scan now
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  isDisabled={bulkActionSaving}
+                  onPress={() => {
+                    void handleBulkAction('enable');
+                  }}
+                >
+                  Enable
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  isDisabled={bulkActionSaving}
+                  onPress={() => {
+                    void handleBulkAction('disable');
+                  }}
+                >
+                  Pause
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  isDisabled={bulkActionSaving}
+                  onPress={() => {
+                    void handleBulkAction('delete');
+                  }}
+                >
+                  Remove
+                </Button>
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  isDisabled={bulkActionSaving}
+                  onPress={() => setSelectedIds(new Set())}
+                >
+                  Clear
+                </Button>
+              </div>
+            ) : null}
             <Table variant="secondary">
               <Table.ScrollContainer>
-                <Table.Content aria-label="Watchlist images" className="min-w-[900px]">
+                <Table.Content
+                  aria-label="Watchlist images"
+                  className="min-w-[900px]"
+                  disabledKeys={nonMutableItemIds}
+                  selectedKeys={selectedIds}
+                  selectionMode="multiple"
+                  onSelectionChange={(selection) => {
+                    if (selection === 'all') {
+                      setSelectedIds(new Set(writableItemIds(filteredItems)));
+                      return;
+                    }
+                    setSelectedIds(new Set([...selection].map(String)));
+                  }}
+                >
                   <Table.Header>
+                    <Table.Column className="w-10">
+                      <Checkbox aria-label="Select all visible watchlist items" slot="selection">
+                        <Checkbox.Content>
+                          <Checkbox.Control>
+                            <Checkbox.Indicator />
+                          </Checkbox.Control>
+                        </Checkbox.Content>
+                      </Checkbox>
+                    </Table.Column>
                     <Table.Column isRowHeader>Image</Table.Column>
                     <Table.Column className="hidden md:table-cell">Schedule</Table.Column>
                     <Table.Column>Latest scan</Table.Column>
@@ -962,6 +1155,19 @@ export default function WatchlistPage() {
                           className="hover:bg-[var(--row-hover)]"
                         >
                           <Table.Cell>
+                            <Checkbox
+                              aria-label={`Select ${item.image_name}:${item.image_tag}`}
+                              slot="selection"
+                              variant="secondary"
+                            >
+                              <Checkbox.Content>
+                                <Checkbox.Control>
+                                  <Checkbox.Indicator />
+                                </Checkbox.Control>
+                              </Checkbox.Content>
+                            </Checkbox>
+                          </Table.Cell>
+                          <Table.Cell>
                             <div className="space-y-1.5">
                               <p className="font-mono text-xs text-zinc-700 dark:text-zinc-200">
                                 {item.image_name}:{item.image_tag}
@@ -1006,7 +1212,20 @@ export default function WatchlistPage() {
                             </div>
                           </Table.Cell>
                           <Table.Cell>
-                            <div className="flex justify-end">
+                            <div className="flex justify-end gap-2">
+                              {canMutate ? (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  isPending={triggering === item.id}
+                                  isDisabled={Boolean(triggering)}
+                                  onPress={() => {
+                                    void handleTrigger(item.id);
+                                  }}
+                                >
+                                  Scan now
+                                </Button>
+                              ) : null}
                               {actions.length > 0 ? (
                                 <RowActionsMenu
                                   label={`Open actions menu for ${item.image_name}:${item.image_tag}`}
@@ -1184,6 +1403,79 @@ export default function WatchlistPage() {
                     <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   )}
                   {editing ? 'Save' : 'Add'}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+      <Modal state={bulkModal}>
+        <Modal.Backdrop isDismissable>
+          <Modal.Container size="md" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>Add multiple watchlist items</Modal.Heading>
+                <Modal.CloseTrigger />
+              </Modal.Header>
+              <Modal.Body>
+                <form id="bulk-watchlist-form" onSubmit={handleBulkCreate} className="space-y-4">
+                  {formError ? (
+                    <StatusAlert
+                      status="danger"
+                      title="Watchlist items could not be added"
+                      description={formError}
+                    />
+                  ) : null}
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="watchlist-import">Image references</Label>
+                    <TextArea
+                      id="watchlist-import"
+                      variant="secondary"
+                      rows={8}
+                      className="min-h-40 w-full font-mono"
+                      value={bulkInput}
+                      onChange={(event) => setBulkInput(event.target.value)}
+                      placeholder={'nginx:latest\nregistry.example.com/team/api:1.2.3'}
+                    />
+                    <p className="text-xs text-muted">
+                      Paste one image per line, or CSV/TXT content. A CSV header is ignored and tags
+                      default to latest.
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-surface-border bg-surface-secondary px-3 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Import a file</p>
+                      <p className="truncate text-xs text-muted">
+                        {importedFileName || 'Choose a .txt or .csv file'}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onPress={() => fileImportRef.current?.click()}
+                    >
+                      Choose file
+                    </Button>
+                    <input
+                      id="watchlist-file-import"
+                      ref={fileImportRef}
+                      className="sr-only"
+                      aria-label="Import watchlist items from a text or CSV file"
+                      type="file"
+                      accept=".txt,.csv,text/plain,text/csv"
+                      onChange={(event) => {
+                        void handleImportFile(event.target.files?.[0]);
+                      }}
+                    />
+                  </div>
+                </form>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="secondary" onPress={bulkModal.close}>
+                  Cancel
+                </Button>
+                <Button type="submit" form="bulk-watchlist-form" isPending={bulkSaving}>
+                  Add items
                 </Button>
               </Modal.Footer>
             </Modal.Dialog>

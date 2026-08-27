@@ -2,6 +2,7 @@ package registries
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"time"
 
@@ -18,10 +19,59 @@ import (
 	"github.com/uptrace/bun"
 )
 
+type workspaceRegistryPreference struct {
+	WorkspaceKey         string     `bun:"workspace_key" json:"-"`
+	DefaultRegistryID    *uuid.UUID `bun:"default_registry_id" json:"default_registry_id,omitempty"`
+	HideSystemRegistries bool       `bun:"hide_system_registries" json:"hide_system_registries"`
+}
+
+type hiddenSystemRegistry struct {
+	bun.BaseModel `bun:"table:workspace_hidden_system_registries"`
+	RegistryID    uuid.UUID `bun:"registry_id"`
+}
+
+func registryWorkspaceKey(c *gin.Context, db *bun.DB, userID uuid.UUID, requireWrite bool) (string, bool) {
+	scope := c.Query("scope")
+	if scope == "" || scope == "personal" {
+		return "personal:" + userID.String(), true
+	}
+	orgID, err := uuid.Parse(scope)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid workspace scope"})
+		return "", false
+	}
+	minimumRole := models.OrgRoleViewer
+	if requireWrite {
+		minimumRole = models.OrgRoleEditor
+	}
+	if _, _, _, _, ok := authz.RequireOrgRole(c, db, orgID, minimumRole); !ok {
+		return "", false
+	}
+	return "org:" + orgID.String(), true
+}
+
+func loadWorkspaceRegistryPreference(ctx context.Context, db *bun.DB, workspaceKey string) (workspaceRegistryPreference, error) {
+	pref := workspaceRegistryPreference{WorkspaceKey: workspaceKey}
+	err := db.NewSelect().Model(&pref).Where("workspace_key = ?", workspaceKey).Scan(ctx)
+	if err != nil && err != sql.ErrNoRows {
+		return pref, err
+	}
+	return pref, nil
+}
+
 func ListRegistries(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
 		if !ok {
+			return
+		}
+		workspaceKey, ok := registryWorkspaceKey(c, db, userID, false)
+		if !ok {
+			return
+		}
+		preference, err := loadWorkspaceRegistryPreference(c.Request.Context(), db, workspaceKey)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load registry workspace preferences"})
 			return
 		}
 		accessibleOrgIDs, err := authz.ListAccessibleOrgIDs(c.Request.Context(), db, userID, isAdmin)
@@ -32,17 +82,32 @@ func ListRegistries(db *bun.DB) gin.HandlerFunc {
 
 		var registries []models.Registry
 		query := db.NewSelect().Model(&registries).
-			Column("id", "name", "url", "xray_url", "xray_artifactory_id", "xray_repository", "xray_mode", "auth_type", "scan_provider", "username", "created_by_id", "owner_type", "owner_user_id", "owner_org_id", "is_default", "created_at", "updated_at", "health_status", "health_message", "last_health_check_at").
+			Column("id", "name", "url", "xray_url", "xray_artifactory_id", "xray_repository", "xray_mode", "auth_type", "scan_provider", "username", "created_by_id", "owner_type", "owner_user_id", "owner_org_id", "created_at", "updated_at", "health_status", "health_message", "last_health_check_at").
 			OrderExpr("name ASC")
 		query = authz.ApplyOwnershipVisibility(query, "", "created_by_id", "owner_user_id", "owner_org_id", "org_registries", "registry_id", userID, isAdmin, accessibleOrgIDs)
 		query = authz.ApplyWorkspaceScope(c, query, "", "owner_user_id", "owner_org_id", "org_registries", "registry_id", userID)
-		// System registries are always visible to all authenticated users.
-		query = query.WhereOr("owner_type = ?", models.OwnerTypeSystem)
+		var hiddenRows []hiddenSystemRegistry
+		if err := db.NewSelect().Model(&hiddenRows).Where("workspace_key = ?", workspaceKey).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load hidden system registries"})
+			return
+		}
+		hiddenIDs := make([]uuid.UUID, 0, len(hiddenRows))
+		for _, row := range hiddenRows {
+			hiddenIDs = append(hiddenIDs, row.RegistryID)
+		}
+		if c.Query("include_hidden_system") == "true" || len(hiddenIDs) == 0 {
+			query = query.WhereOr("owner_type = ?", models.OwnerTypeSystem)
+		} else {
+			query = query.WhereOr("owner_type = ? AND id NOT IN (?)", models.OwnerTypeSystem, bun.In(hiddenIDs))
+		}
 		if err := query.Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list registries"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"data": registries, "capabilities": scanner.ScannerCapabilities()})
+		for index := range registries {
+			registries[index].IsDefault = preference.DefaultRegistryID != nil && registries[index].ID == *preference.DefaultRegistryID
+		}
+		c.JSON(http.StatusOK, gin.H{"data": registries, "capabilities": scanner.ScannerCapabilities(), "workspace_registry_preferences": preference, "hidden_system_registry_ids": hiddenIDs})
 	}
 }
 
@@ -422,18 +487,123 @@ func canManageRegistryShares(ctx context.Context, db *bun.DB, registry *models.R
 	return authz.HasOrgRoleAtLeast(roles, *registry.OwnerOrgID, models.OrgRoleEditor)
 }
 
-// GetDefaultRegistry returns the system registry marked as default, if any.
+// GetDefaultRegistry returns the active workspace's preferred accessible registry.
 func GetDefaultRegistry(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+		workspaceKey, ok := registryWorkspaceKey(c, db, userID, false)
+		if !ok {
+			return
+		}
+		preference, err := loadWorkspaceRegistryPreference(c.Request.Context(), db, workspaceKey)
+		if err != nil || preference.DefaultRegistryID == nil {
+			c.JSON(http.StatusNoContent, nil)
+			return
+		}
 		var registry models.Registry
-		err := db.NewSelect().Model(&registry).
-			Where("is_default = true AND owner_type = ?", models.OwnerTypeSystem).
-			Scan(c.Request.Context())
+		err = db.NewSelect().Model(&registry).Where("id = ?", *preference.DefaultRegistryID).Scan(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusNoContent, nil)
 			return
 		}
+		if _, _, _, ok := authz.LoadAccessibleRegistry(c, db, registry.ID); !ok {
+			return
+		}
 		registry.Password = ""
 		c.JSON(http.StatusOK, registry)
+	}
+}
+
+func SetUserDefaultRegistry(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		registryID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry ID"})
+			return
+		}
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+		workspaceKey, ok := registryWorkspaceKey(c, db, userID, true)
+		if !ok {
+			return
+		}
+		_, _, _, ok = authz.LoadAccessibleRegistry(c, db, registryID)
+		if !ok {
+			return
+		}
+		if _, err := db.NewRaw(`INSERT INTO workspace_registry_preferences (workspace_key, default_registry_id, updated_at) VALUES (?, ?, now()) ON CONFLICT (workspace_key) DO UPDATE SET default_registry_id = EXCLUDED.default_registry_id, updated_at = now()`, workspaceKey, registryID).Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set default registry"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"id": registryID, "is_default": true})
+	}
+}
+
+func ClearUserDefaultRegistry(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+		workspaceKey, ok := registryWorkspaceKey(c, db, userID, true)
+		if !ok {
+			return
+		}
+		if _, err := db.NewRaw(`INSERT INTO workspace_registry_preferences (workspace_key, default_registry_id, updated_at) VALUES (?, NULL, now()) ON CONFLICT (workspace_key) DO UPDATE SET default_registry_id = NULL, updated_at = now()`, workspaceKey).Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear default registry"})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
+// SetSystemRegistryVisibility hides or shows one centrally managed registry
+// for every member of the active workspace.
+func SetSystemRegistryVisibility(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		registryID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid registry ID"})
+			return
+		}
+		var body struct {
+			Hidden bool `json:"hidden"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		userID, _, ok := authz.RequireRequestUser(c, db)
+		if !ok {
+			return
+		}
+		workspaceKey, ok := registryWorkspaceKey(c, db, userID, true)
+		if !ok {
+			return
+		}
+		registry := new(models.Registry)
+		if err := db.NewSelect().Model(registry).Where("id = ? AND owner_type = ?", registryID, models.OwnerTypeSystem).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "system registry not found"})
+			return
+		}
+		if body.Hidden {
+			if _, err := db.NewRaw(`INSERT INTO workspace_hidden_system_registries (workspace_key, registry_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, workspaceKey, registryID).Exec(c.Request.Context()); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hide system registry"})
+				return
+			}
+			if _, err := db.NewUpdate().Table("workspace_registry_preferences").Set("default_registry_id = NULL, updated_at = now()").Where("workspace_key = ? AND default_registry_id = ?", workspaceKey, registryID).Exec(c.Request.Context()); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear hidden default registry"})
+				return
+			}
+		} else if _, err := db.NewDelete().Table("workspace_hidden_system_registries").Where("workspace_key = ? AND registry_id = ?", workspaceKey, registryID).Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to show system registry"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"id": registryID, "hidden": body.Hidden})
 	}
 }

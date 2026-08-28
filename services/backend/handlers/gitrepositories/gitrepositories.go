@@ -37,6 +37,7 @@ type repositoryRequest struct {
 	DiscoveryRegistryID string   `json:"discovery_registry_id"`
 	DiscoveryRegistry   string   `json:"discovery_registry"`
 	Entrypoints         []string `json:"entrypoints"`
+	DiscoveryExcludes   []string `json:"discovery_excludes"`
 	TagIDs              []string `json:"tag_ids"`
 	OrgID               string   `json:"org_id"`
 }
@@ -1005,7 +1006,17 @@ func build(c *gin.Context, db *bun.DB, body repositoryRequest, userID uuid.UUID,
 	if discoveryMode == models.GitRepositoryDiscoveryKustomize && len(entrypoints) == 0 {
 		return nil, fmt.Errorf("Kustomize discovery requires at least one entrypoint")
 	}
-	item := &models.GitRepository{Name: strings.TrimSpace(body.Name), CloneURL: url, Ref: strings.TrimSpace(body.Ref), AuthType: authType, Username: username, Schedule: schedule, Timezone: timezone, Enabled: body.Enabled, RescanPolicy: policy, DiscoveryMode: discoveryMode, Entrypoints: entrypoints, TagIDs: body.TagIDs, CreatedByID: userID, OwnerType: models.OwnerTypeUser, OwnerUserID: &userID, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	discoveryExcludesInput := body.DiscoveryExcludes
+	if discoveryExcludesInput == nil && previous != nil {
+		// Preserve exclusions for older clients that do not send the newly
+		// introduced field during an otherwise unrelated repository update.
+		discoveryExcludesInput = previous.DiscoveryExcludes
+	}
+	discoveryExcludes, err := gitservice.NormalizeDiscoveryExcludes(discoveryExcludesInput)
+	if err != nil {
+		return nil, err
+	}
+	item := &models.GitRepository{Name: strings.TrimSpace(body.Name), CloneURL: url, Ref: strings.TrimSpace(body.Ref), AuthType: authType, Username: username, Schedule: schedule, Timezone: timezone, Enabled: body.Enabled, RescanPolicy: policy, DiscoveryMode: discoveryMode, Entrypoints: entrypoints, DiscoveryExcludes: discoveryExcludes, TagIDs: body.TagIDs, CreatedByID: userID, OwnerType: models.OwnerTypeUser, OwnerUserID: &userID, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if item.Name == "" {
 		item.Name = url
 	}

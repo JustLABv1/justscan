@@ -183,6 +183,10 @@ func NormalizeConfiguredRegistryDiscoveryPrefix(value string) (string, error) {
 // addressed to prefix. It never follows symlinked files and skips common
 // generated/dependency trees before reading file contents.
 func discoverRegistry(root, prefix string) ([]DiscoveredImage, error) {
+	return discoverRegistryWithMatcher(root, prefix, emptyDiscoveryPathMatcher(root))
+}
+
+func discoverRegistryWithMatcher(root, prefix string, discoveryMatcher discoveryPathMatcher) ([]DiscoveredImage, error) {
 	normalizedPrefix, err := NormalizeRegistryDiscoveryPrefix(prefix)
 	if err != nil {
 		return nil, err
@@ -199,6 +203,12 @@ func discoverRegistry(root, prefix string) ([]DiscoveredImage, error) {
 			return walkErr
 		}
 		if entry == nil {
+			return nil
+		}
+		if discoveryMatcher.Excluded(path) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if entry.IsDir() {

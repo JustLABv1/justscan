@@ -1045,6 +1045,24 @@ export default function GitRepositoryDetailPage() {
         />
       </div>
 
+      {repository.discovery_excludes?.length ? (
+        <Card>
+          <Card.Header>
+            <Card.Title>Ignored discovery paths</Card.Title>
+            <Card.Description>
+              These repository-relative globs are skipped before automatic discovery scans.
+            </Card.Description>
+          </Card.Header>
+          <Card.Content className="flex flex-wrap gap-2">
+            {repository.discovery_excludes.map((path) => (
+              <Chip key={path} size="sm" variant="soft">
+                <code>{path}</code>
+              </Chip>
+            ))}
+          </Card.Content>
+        </Card>
+      ) : null}
+
       <Card className="overflow-hidden">
         <Card.Header className="!flex-row items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">

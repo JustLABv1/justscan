@@ -29,14 +29,18 @@ var (
 // root .gitlab-ci.yml/.gitlab-ci.yaml files are used. Explicit paths may be
 // files, directories, or filepath globs; all paths are resolved below root.
 func discoverGitLabCI(root string, paths []string) ([]DiscoveredImage, error) {
-	files, err := gitLabCIConfigFiles(root, paths)
+	return discoverGitLabCIWithMatcher(root, paths, emptyDiscoveryPathMatcher(root))
+}
+
+func discoverGitLabCIWithMatcher(root string, paths []string, discoveryMatcher discoveryPathMatcher) ([]DiscoveredImage, error) {
+	files, err := gitLabCIConfigFilesWithMatcher(root, paths, discoveryMatcher)
 	if err != nil {
 		return nil, err
 	}
 	byRef := map[string]*DiscoveredImage{}
 	visited := map[string]bool{}
 	for _, file := range files {
-		if err := appendGitLabCIFile(root, file, byRef, visited, 0); err != nil {
+		if err := appendGitLabCIFileWithMatcher(root, file, byRef, visited, 0, discoveryMatcher); err != nil {
 			return nil, err
 		}
 	}
@@ -44,6 +48,11 @@ func discoverGitLabCI(root string, paths []string) ([]DiscoveredImage, error) {
 }
 
 func gitLabCIConfigFiles(root string, paths []string) ([]string, error) {
+	return gitLabCIConfigFilesWithMatcher(root, paths, emptyDiscoveryPathMatcher(root))
+}
+
+func gitLabCIConfigFilesWithMatcher(root string, paths []string, discoveryMatcher discoveryPathMatcher) ([]string, error) {
+	explicitPaths := len(paths) > 0
 	if len(paths) == 0 {
 		paths = []string{gitLabCIFileName, gitLabCIAltFileName}
 	}
@@ -54,7 +63,7 @@ func gitLabCIConfigFiles(root string, paths []string) ([]string, error) {
 		if raw == "" {
 			continue
 		}
-		matches, err := gitLabCIPathMatches(root, raw)
+		matches, err := gitLabCIPathMatchesWithMatcher(root, raw, discoveryMatcher, explicitPaths)
 		if err != nil {
 			return nil, err
 		}
@@ -71,10 +80,20 @@ func gitLabCIConfigFiles(root string, paths []string) ([]string, error) {
 }
 
 func gitLabCIPathMatches(root, raw string) ([]string, error) {
+	return gitLabCIPathMatchesWithMatcher(root, raw, emptyDiscoveryPathMatcher(root), false)
+}
+
+func gitLabCIPathMatchesWithMatcher(root, raw string, discoveryMatcher discoveryPathMatcher, explicitPath bool) ([]string, error) {
 	if !hasGitLabCIGlob(raw) {
 		path, err := resolveRepositoryPath(root, raw)
 		if err != nil {
 			return nil, err
+		}
+		if discoveryMatcher.Excluded(path) {
+			if explicitPath {
+				return nil, fmt.Errorf("GitLab CI config path %q is excluded", raw)
+			}
+			return nil, nil
 		}
 		info, err := os.Stat(path)
 		if os.IsNotExist(err) && (raw == gitLabCIFileName || raw == gitLabCIAltFileName) {
@@ -86,7 +105,7 @@ func gitLabCIPathMatches(root, raw string) ([]string, error) {
 			return nil, fmt.Errorf("stat GitLab CI config %q: %w", raw, err)
 		}
 		if info.IsDir() {
-			return gitLabCIWalkFiles(root, path)
+			return gitLabCIWalkFilesWithMatcher(root, path, discoveryMatcher)
 		}
 		return []string{path}, nil
 	}
@@ -104,12 +123,18 @@ func gitLabCIPathMatches(root, raw string) ([]string, error) {
 		if !pathWithin(root, match) {
 			return nil, fmt.Errorf("GitLab CI config path %q is outside the repository", raw)
 		}
+		if discoveryMatcher.Excluded(match) {
+			if explicitPath {
+				return nil, fmt.Errorf("GitLab CI config path %q is excluded", raw)
+			}
+			continue
+		}
 		info, statErr := os.Stat(match)
 		if statErr != nil {
 			return nil, fmt.Errorf("stat GitLab CI config %q: %w", raw, statErr)
 		}
 		if info.IsDir() {
-			walked, walkErr := gitLabCIWalkFiles(root, match)
+			walked, walkErr := gitLabCIWalkFilesWithMatcher(root, match, discoveryMatcher)
 			if walkErr != nil {
 				return nil, walkErr
 			}
@@ -123,10 +148,23 @@ func gitLabCIPathMatches(root, raw string) ([]string, error) {
 }
 
 func gitLabCIWalkFiles(root, directory string) ([]string, error) {
+	return gitLabCIWalkFilesWithMatcher(root, directory, emptyDiscoveryPathMatcher(root))
+}
+
+func gitLabCIWalkFilesWithMatcher(root, directory string, discoveryMatcher discoveryPathMatcher) ([]string, error) {
 	files := []string{}
 	err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if entry == nil {
+			return nil
+		}
+		if discoveryMatcher.Excluded(path) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if entry.IsDir() {
 			if entry.Name() == ".git" {
@@ -147,7 +185,14 @@ func gitLabCIWalkFiles(root, directory string) ([]string, error) {
 }
 
 func appendGitLabCIFile(root, file string, byRef map[string]*DiscoveredImage, visited map[string]bool, depth int) error {
+	return appendGitLabCIFileWithMatcher(root, file, byRef, visited, depth, emptyDiscoveryPathMatcher(root))
+}
+
+func appendGitLabCIFileWithMatcher(root, file string, byRef map[string]*DiscoveredImage, visited map[string]bool, depth int, discoveryMatcher discoveryPathMatcher) error {
 	file = filepath.Clean(file)
+	if discoveryMatcher.Excluded(file) {
+		return nil
+	}
 	if visited[file] {
 		return nil
 	}
@@ -213,14 +258,14 @@ func appendGitLabCIFile(root, file string, byRef map[string]*DiscoveredImage, vi
 		}
 
 		for _, include := range gitLabCILocalIncludes(configuration["include"]) {
-			includePath, includeErr := resolveGitLabCILocalInclude(root, file, include)
+			includePath, includeErr := resolveGitLabCILocalIncludeWithMatcher(root, file, include, discoveryMatcher)
 			if includeErr != nil {
 				return includeErr
 			}
 			if includePath == "" {
 				continue
 			}
-			if err := appendGitLabCIFile(root, includePath, byRef, visited, depth+1); err != nil {
+			if err := appendGitLabCIFileWithMatcher(root, includePath, byRef, visited, depth+1, discoveryMatcher); err != nil {
 				return err
 			}
 		}
@@ -385,6 +430,10 @@ func gitLabCILocalIncludes(value any) []string {
 }
 
 func resolveGitLabCILocalInclude(root, includingFile, include string) (string, error) {
+	return resolveGitLabCILocalIncludeWithMatcher(root, includingFile, include, emptyDiscoveryPathMatcher(root))
+}
+
+func resolveGitLabCILocalIncludeWithMatcher(root, includingFile, include string, discoveryMatcher discoveryPathMatcher) (string, error) {
 	include = strings.TrimSpace(include)
 	if include == "" || strings.HasPrefix(include, "http://") || strings.HasPrefix(include, "https://") {
 		return "", nil
@@ -393,6 +442,9 @@ func resolveGitLabCILocalInclude(root, includingFile, include string) (string, e
 	path, err := resolveRepositoryPath(root, include)
 	if err != nil {
 		return "", fmt.Errorf("resolve GitLab CI local include %q: %w", include, err)
+	}
+	if discoveryMatcher.Excluded(path) {
+		return "", nil
 	}
 	if _, err := os.Stat(path); err == nil {
 		return path, nil
@@ -403,6 +455,9 @@ func resolveGitLabCILocalInclude(root, includingFile, include string) (string, e
 	// root-relative path remains the GitLab-defined interpretation.
 	nested := filepath.Join(filepath.Dir(includingFile), include)
 	if pathWithin(root, nested) {
+		if discoveryMatcher.Excluded(nested) {
+			return "", nil
+		}
 		if _, err := os.Stat(nested); err == nil {
 			return filepath.Clean(nested), nil
 		}

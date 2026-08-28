@@ -66,6 +66,11 @@ type DiscoveryCandidate struct {
 	RuleID       *uuid.UUID
 }
 
+type repositoryDiscoveryResult struct {
+	images   []DiscoveredImage
+	warnings []DiscoveryCandidate
+}
+
 // justScanConfig is optional repository-owned discovery configuration. It
 // composes multiple deployment mechanisms in one dry run.
 type justScanConfig struct {
@@ -846,6 +851,10 @@ func DiscoverReview(ctx context.Context, repository models.GitRepository) ([]Dis
 	if err := clone(cloneCtx, repository, dir); err != nil {
 		return nil, nil, "", err
 	}
+	discoveryMatcher, err := newDiscoveryPathMatcher(dir, repository.DiscoveryExcludes)
+	if err != nil {
+		return nil, nil, "", err
+	}
 	commit, err := gitOutput(cloneCtx, dir, "rev-parse", "HEAD")
 	if err != nil {
 		return nil, nil, "", err
@@ -855,11 +864,12 @@ func DiscoverReview(ctx context.Context, repository models.GitRepository) ([]Dis
 	if configErr != nil {
 		return nil, nil, strings.TrimSpace(commit), configErr
 	}
-	images, err := discoverRepository(ctx, dir, repository)
+	discovery, err := discoverRepositoryWithMatcher(ctx, dir, repository, discoveryMatcher)
 	if err != nil {
 		return nil, nil, strings.TrimSpace(commit), err
 	}
-	managedImages, err := discoverManagedHelmSources(ctx, dir, repository)
+	images := discovery.images
+	managedImages, err := discoverManagedHelmSources(ctx, dir, repository, discoveryMatcher)
 	if err != nil {
 		return nil, nil, strings.TrimSpace(commit), err
 	}
@@ -869,7 +879,7 @@ func DiscoverReview(ctx context.Context, repository models.GitRepository) ([]Dis
 		return nil, nil, strings.TrimSpace(commit), err
 	}
 	if !configured && len(rules) > 0 {
-		if resolved, err := discoverRuleSources(ctx, dir, rules, repository); err == nil {
+		if resolved, err := discoverRuleSourcesWithMatcher(ctx, dir, rules, repository, discoveryMatcher); err == nil {
 			images = mergeDiscoveredImages(images, resolved)
 		}
 	}
@@ -877,7 +887,10 @@ func DiscoverReview(ctx context.Context, repository models.GitRepository) ([]Dis
 		rules = nil // A committed repository configuration takes precedence over UI rules.
 	}
 	images = detectImageRegistries(ctx, repository, images)
-	return images, findDiscoveryCandidates(dir, rules, configuration, managedSources), strings.TrimSpace(commit), nil
+	candidates := findDiscoveryCandidatesWithMatcher(dir, rules, configuration, managedSources, discoveryMatcher)
+	candidates = append(candidates, discovery.warnings...)
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].Path < candidates[j].Path })
+	return images, candidates, strings.TrimSpace(commit), nil
 }
 
 func loadDiscoveryRules(ctx context.Context, repositoryID uuid.UUID) []models.GitRepositoryDiscoveryRule {
@@ -911,7 +924,7 @@ func loadHelmSources(ctx context.Context, repositoryID uuid.UUID) ([]models.GitR
 // Managed Helm sources are deliberately independent of repository-owned
 // .justscan.yaml configuration: connector IDs and encrypted credentials cannot
 // be committed safely, and an external chart can complement local sources.
-func discoverManagedHelmSources(ctx context.Context, repositoryRoot string, repository models.GitRepository) ([]DiscoveredImage, error) {
+func discoverManagedHelmSources(ctx context.Context, repositoryRoot string, repository models.GitRepository, discoveryMatcher discoveryPathMatcher) ([]DiscoveredImage, error) {
 	sources, err := loadHelmSources(ctx, repository.ID)
 	if err != nil || len(sources) == 0 {
 		return nil, err
@@ -921,11 +934,27 @@ func discoverManagedHelmSources(ctx context.Context, repositoryRoot string, repo
 	state.Unlock()
 	byRef := map[string]*DiscoveredImage{}
 	for _, source := range sources {
+		for _, configuredValue := range source.Values {
+			valuePath, valueErr := resolveRepositoryPath(repositoryRoot, configuredValue)
+			if valueErr != nil {
+				return nil, valueErr
+			}
+			if discoveryMatcher.Excluded(valuePath) {
+				return nil, fmt.Errorf("managed Helm values path %q is excluded", configuredValue)
+			}
+		}
 		chartRoot := repositoryRoot
 		chartLabel := relativePath(repositoryRoot, filepath.Join(repositoryRoot, source.ChartPath))
 		var removeChartRoot func()
 		switch source.SourceType {
 		case "local":
+			chartPath, chartErr := resolveRepositoryPath(repositoryRoot, source.ChartPath)
+			if chartErr != nil {
+				return nil, chartErr
+			}
+			if discoveryMatcher.Excluded(chartPath) {
+				return nil, fmt.Errorf("managed Helm chart path %q is excluded", source.ChartPath)
+			}
 			chartLabel = relativePath(repositoryRoot, filepath.Join(repositoryRoot, source.ChartPath))
 		case "repository", "url":
 			chartRepository, err := managedHelmChartRepository(ctx, db, source)
@@ -973,6 +1002,14 @@ func managedHelmChartRepository(ctx context.Context, db *bun.DB, source models.G
 }
 
 func discoverRuleSources(ctx context.Context, root string, rules []models.GitRepositoryDiscoveryRule, repository models.GitRepository) ([]DiscoveredImage, error) {
+	discoveryMatcher, err := newDiscoveryPathMatcher(root, repository.DiscoveryExcludes)
+	if err != nil {
+		return nil, err
+	}
+	return discoverRuleSourcesWithMatcher(ctx, root, rules, repository, discoveryMatcher)
+}
+
+func discoverRuleSourcesWithMatcher(ctx context.Context, root string, rules []models.GitRepositoryDiscoveryRule, repository models.GitRepository, discoveryMatcher discoveryPathMatcher) ([]DiscoveredImage, error) {
 	configuration := justScanConfig{Version: 1}
 	for _, rule := range rules {
 		if rule.Resolution == "ignore" {
@@ -992,7 +1029,8 @@ func discoverRuleSources(ctx context.Context, root string, rules []models.GitRep
 	if len(configuration.Discovery.Sources) == 0 {
 		return nil, nil
 	}
-	return discoverConfiguredSources(ctx, root, configuration, repository)
+	discovery, err := discoverConfiguredSourcesWithMatcher(ctx, root, configuration, repository, discoveryMatcher)
+	return discovery.images, err
 }
 
 func mergeDiscoveredImages(groups ...[]DiscoveredImage) []DiscoveredImage {
@@ -1013,10 +1051,27 @@ func mergeDiscoveredImages(groups ...[]DiscoveredImage) []DiscoveredImage {
 }
 
 func findDiscoveryCandidates(root string, rules []models.GitRepositoryDiscoveryRule, configuration justScanConfig, helmSources []models.GitRepositoryHelmSource) []DiscoveryCandidate {
+	discoveryMatcher := emptyDiscoveryPathMatcher(root)
+	return findDiscoveryCandidatesWithMatcher(root, rules, configuration, helmSources, discoveryMatcher)
+}
+
+func findDiscoveryCandidatesWithMatcher(root string, rules []models.GitRepositoryDiscoveryRule, configuration justScanConfig, helmSources []models.GitRepositoryHelmSource, discoveryMatcher discoveryPathMatcher) []DiscoveryCandidate {
 	result := []DiscoveryCandidate{}
-	consumedValues := kustomizeValuesFiles(root)
+	consumedValues := kustomizeValuesFilesWithMatcher(root, discoveryMatcher)
 	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
+		if err != nil {
+			return nil
+		}
+		if entry == nil {
+			return nil
+		}
+		if discoveryMatcher.Excluded(path) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() {
 			if entry != nil && entry.IsDir() && (entry.Name() == ".git" || (path != root && isAutoDiscoveryFixtureDirectory(relativePath(root, path)))) {
 				return filepath.SkipDir
 			}
@@ -1093,9 +1148,22 @@ func chartFilename(path string) string {
 }
 
 func kustomizeValuesFiles(root string) map[string]bool {
+	return kustomizeValuesFilesWithMatcher(root, emptyDiscoveryPathMatcher(root))
+}
+
+func kustomizeValuesFilesWithMatcher(root string, discoveryMatcher discoveryPathMatcher) map[string]bool {
 	result := map[string]bool{}
 	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || !isKustomizationFile(entry.Name()) {
+		if err != nil || entry == nil {
+			return nil
+		}
+		if discoveryMatcher.Excluded(path) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() || !isKustomizationFile(entry.Name()) {
 			return nil
 		}
 		content, err := os.ReadFile(path)
@@ -1259,48 +1327,65 @@ func defaultTimezone(value string) string {
 }
 
 func discoverRepository(ctx context.Context, root string, repository models.GitRepository) ([]DiscoveredImage, error) {
-	if repositoryConfig, configured, err := loadJustScanConfig(root); err != nil {
+	discoveryMatcher, err := newDiscoveryPathMatcher(root, repository.DiscoveryExcludes)
+	if err != nil {
 		return nil, err
+	}
+	discovery, err := discoverRepositoryWithMatcher(ctx, root, repository, discoveryMatcher)
+	if err != nil {
+		return nil, err
+	}
+	return discovery.images, nil
+}
+
+func discoverRepositoryWithMatcher(ctx context.Context, root string, repository models.GitRepository, discoveryMatcher discoveryPathMatcher) (repositoryDiscoveryResult, error) {
+	if repositoryConfig, configured, err := loadJustScanConfig(root); err != nil {
+		return repositoryDiscoveryResult{}, err
 	} else if configured {
-		return discoverConfiguredSources(ctx, root, repositoryConfig, repository)
+		return discoverConfiguredSourcesWithMatcher(ctx, root, repositoryConfig, repository, discoveryMatcher)
 	}
 	mode := repository.DiscoveryMode
 	if mode == "" {
 		mode = models.GitRepositoryDiscoveryAuto
 	}
 	if mode == models.GitRepositoryDiscoveryManifests {
-		return discoverYAML(root)
+		images, err := discoverYAMLWithMatcher(root, discoveryMatcher)
+		return repositoryDiscoveryResult{images: images}, err
 	}
 	if mode == models.GitRepositoryDiscoveryRegistry {
 		prefix, registryID, err := registryDiscoverySelection(ctx, repository)
 		if err != nil {
-			return nil, err
+			return repositoryDiscoveryResult{}, err
 		}
-		images, err := discoverRegistry(root, prefix)
+		images, err := discoverRegistryWithMatcher(root, prefix, discoveryMatcher)
 		if err != nil {
-			return nil, err
+			return repositoryDiscoveryResult{}, err
 		}
 		if registryID != nil {
 			for index := range images {
 				images[index].RegistryID = registryID
 			}
 		}
-		return images, nil
+		return repositoryDiscoveryResult{images: images}, nil
 	}
 	if mode == models.GitRepositoryDiscoveryGitLabCI {
-		return discoverGitLabCI(root, repository.Entrypoints)
+		images, err := discoverGitLabCIWithMatcher(root, repository.Entrypoints, discoveryMatcher)
+		return repositoryDiscoveryResult{images: images}, err
 	}
-	roots, err := findKustomizationRoots(root, repository.Entrypoints)
+	explicitEntrypoints := len(repository.Entrypoints) > 0
+	roots, err := findKustomizationRootsWithMatcher(root, repository.Entrypoints, discoveryMatcher)
 	if err != nil {
-		return nil, err
+		return repositoryDiscoveryResult{}, err
 	}
 	if len(roots) == 0 {
 		if mode == models.GitRepositoryDiscoveryKustomize {
-			return nil, fmt.Errorf("no Kustomize entrypoints found")
+			return repositoryDiscoveryResult{}, fmt.Errorf("no Kustomize entrypoints found")
 		}
-		return discoverYAML(root)
+		images, err := discoverYAMLWithMatcher(root, discoveryMatcher)
+		return repositoryDiscoveryResult{images: images}, err
 	}
-	return discoverKustomizeRoots(root, roots)
+	images, warnings, err := discoverKustomizeRootsWithMatcher(root, roots, discoveryMatcher, explicitEntrypoints)
+	return repositoryDiscoveryResult{images: images, warnings: warnings}, err
 }
 
 func loadJustScanConfig(root string) (justScanConfig, bool, error) {
@@ -1328,7 +1413,17 @@ func loadJustScanConfig(root string) (justScanConfig, bool, error) {
 }
 
 func discoverConfiguredSources(ctx context.Context, root string, configuration justScanConfig, repository models.GitRepository) ([]DiscoveredImage, error) {
+	discoveryMatcher, err := newDiscoveryPathMatcher(root, repository.DiscoveryExcludes)
+	if err != nil {
+		return nil, err
+	}
+	discovery, err := discoverConfiguredSourcesWithMatcher(ctx, root, configuration, repository, discoveryMatcher)
+	return discovery.images, err
+}
+
+func discoverConfiguredSourcesWithMatcher(ctx context.Context, root string, configuration justScanConfig, repository models.GitRepository, discoveryMatcher discoveryPathMatcher) (repositoryDiscoveryResult, error) {
 	byRef := map[string]*DiscoveredImage{}
+	warnings := []DiscoveryCandidate{}
 	sources := append([]justScanSource{}, configuration.Discovery.Sources...)
 	for _, rule := range configuration.Discovery.Rules {
 		source := justScanSource{Type: rule.Type, Chart: rule.Chart, Values: rule.Values, ReleaseName: rule.ReleaseName, Paths: rule.Paths}
@@ -1345,40 +1440,45 @@ func discoverConfiguredSources(ctx context.Context, root string, configuration j
 		case "kustomize":
 			var roots []string
 			var err error
+			explicitRoots := len(source.Paths) > 0
 			if len(source.Paths) > 0 {
-				roots, err = findKustomizationRoots(root, source.Paths)
+				roots, err = findKustomizationRootsWithMatcher(root, source.Paths, discoveryMatcher)
 			} else {
 				discoveryRoot, resolveErr := resolveRepositoryPath(root, source.Root)
 				if resolveErr != nil {
 					err = resolveErr
+				} else if discoveryMatcher.Excluded(discoveryRoot) {
+					err = fmt.Errorf("Kustomize discovery root %q is excluded", source.Root)
 				} else {
-					roots, err = findKustomizationRoots(discoveryRoot, nil)
+					roots, err = findKustomizationRootsWithMatcher(discoveryRoot, nil, discoveryMatcher)
 				}
 			}
 			if err != nil {
-				return nil, fmt.Errorf(".justscan.yaml source %d (kustomize): %w", index+1, err)
+				return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d (kustomize): %w", index+1, err)
 			}
 			if len(roots) == 0 {
-				return nil, fmt.Errorf(".justscan.yaml source %d (kustomize): no entrypoints found", index+1)
+				return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d (kustomize): no entrypoints found", index+1)
 			}
-			if err := appendKustomizeRoots(root, byRef, roots); err != nil {
-				return nil, err
+			rootWarnings, err := appendKustomizeRootsWithMatcher(root, byRef, roots, discoveryMatcher, explicitRoots)
+			if err != nil {
+				return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d (kustomize): %w", index+1, err)
 			}
+			warnings = append(warnings, rootWarnings...)
 		case "manifests":
 			if len(source.Paths) == 0 {
-				return nil, fmt.Errorf(".justscan.yaml source %d (manifests): paths is required", index+1)
+				return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d (manifests): paths is required", index+1)
 			}
-			if err := appendManifestPaths(root, byRef, source.Paths); err != nil {
-				return nil, fmt.Errorf(".justscan.yaml source %d (manifests): %w", index+1, err)
+			if err := appendManifestPathsWithMatcher(root, byRef, source.Paths, discoveryMatcher); err != nil {
+				return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d (manifests): %w", index+1, err)
 			}
 		case "gitlab_ci", "gitlab-ci", "gitlab":
 			paths := source.Paths
 			if len(paths) == 0 && strings.TrimSpace(source.Root) != "" {
 				paths = []string{source.Root}
 			}
-			images, err := discoverGitLabCI(root, paths)
+			images, err := discoverGitLabCIWithMatcher(root, paths, discoveryMatcher)
 			if err != nil {
-				return nil, fmt.Errorf(".justscan.yaml source %d (gitlab_ci): %w", index+1, err)
+				return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d (gitlab_ci): %w", index+1, err)
 			}
 			for _, image := range images {
 				item := image
@@ -1391,14 +1491,30 @@ func discoverConfiguredSources(ctx context.Context, root string, configuration j
 				byRef[image.FullRef] = &item
 			}
 		case "helm":
+			chartPath, chartErr := resolveRepositoryPath(root, source.Chart)
+			if chartErr != nil {
+				return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d (helm): %w", index+1, chartErr)
+			}
+			if discoveryMatcher.Excluded(chartPath) {
+				return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d (helm): chart path %q is excluded", index+1, source.Chart)
+			}
+			for _, configuredValue := range source.Values {
+				valuePath, valueErr := resolveRepositoryPath(root, configuredValue)
+				if valueErr != nil {
+					return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d (helm): %w", index+1, valueErr)
+				}
+				if discoveryMatcher.Excluded(valuePath) {
+					return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d (helm): values path %q is excluded", index+1, configuredValue)
+				}
+			}
 			if err := appendHelmChartFromRoots(ctx, root, root, byRef, source, "", repository, nil, nil); err != nil {
-				return nil, fmt.Errorf(".justscan.yaml source %d (helm): %w", index+1, err)
+				return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d (helm): %w", index+1, err)
 			}
 		default:
-			return nil, fmt.Errorf(".justscan.yaml source %d has unsupported type %q", index+1, source.Type)
+			return repositoryDiscoveryResult{}, fmt.Errorf(".justscan.yaml source %d has unsupported type %q", index+1, source.Type)
 		}
 	}
-	return sortedDiscoveredImages(byRef), nil
+	return repositoryDiscoveryResult{images: sortedDiscoveredImages(byRef), warnings: warnings}, nil
 }
 
 func resolveRepositoryPath(root, relative string) (string, error) {
@@ -1417,10 +1533,23 @@ func resolveRepositoryPath(root, relative string) (string, error) {
 // Kubernetes manifests. It intentionally ignores Helm values and other
 // declarations because those are not proof that an image is deployed.
 func discoverYAML(root string) ([]DiscoveredImage, error) {
+	return discoverYAMLWithMatcher(root, emptyDiscoveryPathMatcher(root))
+}
+
+func discoverYAMLWithMatcher(root string, discoveryMatcher discoveryPathMatcher) ([]DiscoveredImage, error) {
 	byRef := map[string]*DiscoveredImage{}
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if entry == nil {
+			return nil
+		}
+		if discoveryMatcher.Excluded(path) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if entry.IsDir() {
 			if entry.Name() == ".git" {
@@ -1471,30 +1600,63 @@ func isAutoDiscoveryFixtureDirectory(relative string) bool {
 }
 
 func discoverKustomizeRoots(root string, roots []string) ([]DiscoveredImage, error) {
+	images, _, err := discoverKustomizeRootsWithMatcher(root, roots, emptyDiscoveryPathMatcher(root), true)
+	return images, err
+}
+
+func discoverKustomizeRootsWithMatcher(root string, roots []string, discoveryMatcher discoveryPathMatcher, failOnRenderError bool) ([]DiscoveredImage, []DiscoveryCandidate, error) {
 	byRef := map[string]*DiscoveredImage{}
-	if err := appendKustomizeRoots(root, byRef, roots); err != nil {
-		return nil, err
+	warnings, err := appendKustomizeRootsWithMatcher(root, byRef, roots, discoveryMatcher, failOnRenderError)
+	if err != nil {
+		return nil, nil, err
 	}
-	return sortedDiscoveredImages(byRef), nil
+	return sortedDiscoveredImages(byRef), warnings, nil
 }
 
 func appendKustomizeRoots(root string, byRef map[string]*DiscoveredImage, roots []string) error {
+	_, err := appendKustomizeRootsWithMatcher(root, byRef, roots, emptyDiscoveryPathMatcher(root), true)
+	return err
+}
+
+func appendKustomizeRootsWithMatcher(root string, byRef map[string]*DiscoveredImage, roots []string, discoveryMatcher discoveryPathMatcher, failOnRenderError bool) ([]DiscoveryCandidate, error) {
+	warnings := []DiscoveryCandidate{}
 	for _, target := range roots {
+		if discoveryMatcher.Excluded(target) {
+			return nil, fmt.Errorf("Kustomize entrypoint %q is excluded", relativePath(root, target))
+		}
 		output, err := renderKustomization(target)
 		if err != nil {
-			return fmt.Errorf("render %s: %w", relativePath(root, target), err)
+			if failOnRenderError {
+				return nil, fmt.Errorf("render %s: %w", relativePath(root, target), err)
+			}
+			path := relativePath(root, filepath.Join(target, kustomizationFilename(target)))
+			warnings = append(warnings, DiscoveryCandidate{
+				Path:         path,
+				DetectedType: "kustomize",
+				Confidence:   "ambiguous",
+				Evidence:     models.JSONObject{"error": err.Error(), "directory": relativePath(root, target)},
+				Status:       models.GitRepositoryCandidateUnresolved,
+			})
+			continue
 		}
 		entrypoint := relativePath(root, filepath.Join(target, kustomizationFilename(target)))
 		appendManifestImages(byRef, output, "(rendered)", entrypoint)
 	}
-	return nil
+	return warnings, nil
 }
 
 func appendManifestPaths(root string, byRef map[string]*DiscoveredImage, paths []string) error {
+	return appendManifestPathsWithMatcher(root, byRef, paths, emptyDiscoveryPathMatcher(root))
+}
+
+func appendManifestPathsWithMatcher(root string, byRef map[string]*DiscoveredImage, paths []string, discoveryMatcher discoveryPathMatcher) error {
 	for _, configuredPath := range paths {
 		path, err := resolveRepositoryPath(root, configuredPath)
 		if err != nil {
 			return err
+		}
+		if discoveryMatcher.Excluded(path) {
+			return fmt.Errorf("manifest path %q is excluded", configuredPath)
 		}
 		info, err := os.Stat(path)
 		if err != nil {
@@ -1504,6 +1666,15 @@ func appendManifestPaths(root string, byRef map[string]*DiscoveredImage, paths [
 			err = filepath.WalkDir(path, func(candidate string, entry os.DirEntry, walkErr error) error {
 				if walkErr != nil {
 					return walkErr
+				}
+				if entry == nil {
+					return nil
+				}
+				if discoveryMatcher.Excluded(candidate) {
+					if entry.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
 				}
 				if entry.IsDir() {
 					if entry.Name() == ".git" {
@@ -1973,13 +2144,27 @@ func renderKustomization(target string) ([]byte, error) {
 }
 
 func findKustomizationRoots(root string, entrypoints []string) ([]string, error) {
+	return findKustomizationRootsWithMatcher(root, entrypoints, emptyDiscoveryPathMatcher(root))
+}
+
+func findKustomizationRootsWithMatcher(root string, entrypoints []string, discoveryMatcher discoveryPathMatcher) ([]string, error) {
 	if len(entrypoints) > 0 {
 		roots := make([]string, 0, len(entrypoints))
 		seen := map[string]bool{}
 		for _, entrypoint := range entrypoints {
+			selectedPath, err := resolveRepositoryPath(root, entrypoint)
+			if err != nil {
+				return nil, err
+			}
+			if discoveryMatcher.Excluded(selectedPath) {
+				return nil, fmt.Errorf("Kustomize entrypoint %q is excluded", entrypoint)
+			}
 			target, err := resolveKustomizationEntrypoint(root, entrypoint)
 			if err != nil {
 				return nil, err
+			}
+			if discoveryMatcher.Excluded(target) {
+				return nil, fmt.Errorf("Kustomize entrypoint %q is excluded", entrypoint)
 			}
 			if !seen[target] {
 				seen[target] = true
@@ -1995,6 +2180,15 @@ func findKustomizationRoots(root string, entrypoints []string) ([]string, error)
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if entry == nil {
+			return nil
+		}
+		if discoveryMatcher.Excluded(path) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if entry.IsDir() {
 			if entry.Name() == ".git" {

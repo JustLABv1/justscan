@@ -15,6 +15,19 @@ Connect a Git repository in the application, validate access, then run discovery
 
 After a dry run, review discovered images, select the ones that should be tracked, then create scans. Excluded images remain visible in the review so their deployment context is retained without scheduling future scans.
 
+## Ignored discovery paths
+
+Configure **Ignored discovery paths** on a Git repository when automatic discovery should skip archived, generated, or deprecated content. Enter one glob per line. Patterns are matched against repository-relative paths, and matching files and directories are skipped before JustScan walks or renders them. For example:
+
+```text
+.archive/**
+**/deprecated/**
+```
+
+`.archive/**` skips the `.archive` directory at the repository root and everything below it. `**/deprecated/**` skips every `deprecated` directory at any depth. These patterns apply to automatic Kustomize, manifest, GitLab CI, and registry-reference discovery.
+
+Ignored paths are also enforced for configured Kustomize entrypoints. An explicitly selected entrypoint inside an ignored path is rejected rather than silently skipped. When Auto discovery finds a broken Kustomize root, JustScan reports that root while continuing to discover valid roots elsewhere in the repository.
+
 ## Registry image-reference discovery
 
 Choose **Registry image references** when image declarations are spread across deployment files, scripts, and other repository configuration. Select a configured registry from the workspace, or choose **Custom registry host or path** and enter a prefix such as `registry.example.com/team`. JustScan searches automatically and still shows the source file and line for each result so the dry-run review is auditable.

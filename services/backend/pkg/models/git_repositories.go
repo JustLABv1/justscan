@@ -62,6 +62,7 @@ type GitRepository struct {
 	DiscoveryRegistryID  *uuid.UUID `bun:"discovery_registry_id,type:uuid" json:"discovery_registry_id,omitempty"`
 	DiscoveryRegistry    string     `bun:"discovery_registry,type:text,notnull,default:''" json:"discovery_registry"`
 	Entrypoints          []string   `bun:"entrypoints,type:jsonb,notnull,default:'[]'" json:"entrypoints"`
+	DiscoveryExcludes    []string   `bun:"discovery_excludes,type:jsonb,notnull,default:'[]'" json:"discovery_excludes"`
 	TagIDs               []string   `bun:"tag_ids,type:jsonb,notnull,default:'[]'" json:"tag_ids"`
 	CreatedByID          uuid.UUID  `bun:"created_by_id,type:uuid,notnull" json:"created_by_id"`
 	OwnerType            string     `bun:"owner_type,type:text,notnull,default:'user'" json:"owner_type"`

@@ -23,6 +23,8 @@ export interface GitRepository {
   discovery_registry_id?: string | null;
   /** Registry host or path prefix used by registry-reference discovery. */
   discovery_registry?: string;
+  /** Repository-relative glob patterns excluded before automatic discovery. */
+  discovery_excludes?: string[];
   entrypoints: string[];
   tag_ids: string[];
   owner_type: OwnerType;

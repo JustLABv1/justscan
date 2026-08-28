@@ -67,6 +67,7 @@ type Draft = Required<
   discovery_registry_id: string;
   discovery_registry: string;
   registry_source: string;
+  discovery_excludes: string;
 };
 const CUSTOM_REGISTRY_VALUE = '__custom_registry__';
 const initialDraft: Draft = {
@@ -85,6 +86,7 @@ const initialDraft: Draft = {
   discovery_registry_id: '',
   discovery_registry: '',
   registry_source: '',
+  discovery_excludes: '',
 };
 
 export default function GitRepositoriesPage() {
@@ -178,6 +180,10 @@ export default function GitRepositoriesPage() {
         enabled: draft.enabled,
         rescan_policy: draft.rescan_policy,
         discovery_mode: draft.discovery_mode,
+        discovery_excludes: draft.discovery_excludes
+          .split('\n')
+          .map((value) => value.trim())
+          .filter(Boolean),
         entrypoints: usesEntrypoints
           ? draft.entrypoints
               .split('\n')
@@ -241,6 +247,7 @@ export default function GitRepositoriesPage() {
       registry_source:
         repository.discovery_registry_id ??
         (repository.discovery_registry ? CUSTOM_REGISTRY_VALUE : ''),
+      discovery_excludes: repository.discovery_excludes?.join('\n') ?? '',
     });
     overlay.open();
   }
@@ -494,6 +501,23 @@ export default function GitRepositoriesPage() {
                             : 'Render detected Kustomize roots, then fall back to plain manifests.'}
                   </Description>
                 </Select>
+                <div className="grid gap-2">
+                  <Label htmlFor="discovery-excludes">Ignored discovery paths</Label>
+                  <TextArea
+                    id="discovery-excludes"
+                    value={draft.discovery_excludes}
+                    onChange={(event) =>
+                      setDraft({ ...draft, discovery_excludes: event.target.value })
+                    }
+                    placeholder=".archive/**\n**/deprecated/**"
+                    rows={3}
+                    variant="secondary"
+                  />
+                  <Description>
+                    Optional. Add one repo-relative glob per line. Matching paths are skipped before
+                    automatic Kustomize, manifest, CI, or registry discovery scans.
+                  </Description>
+                </div>
                 {draft.discovery_mode === 'registry' ? (
                   <div className="grid gap-3 rounded-xl border border-divider/70 bg-surface-secondary p-3">
                     <Select

@@ -7,7 +7,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the OpenShip environment}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # PostgreSQL 18+ stores its cluster under a major-version subdirectory.
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d justscan"]
       interval: 10s

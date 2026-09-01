@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"net"
 	"runtime"
 	"strconv"
 	"time"
@@ -32,6 +33,7 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 		pgdriver.WithDatabase(dbName),
 		pgdriver.WithApplicationName("exflow"),
 		pgdriver.WithTLSConfig(nil),
+		withPostgresDialRetry(),
 		// pgdriver defaults socket reads to 10 seconds. A large scan-history
 		// deletion can legitimately spend longer waiting for row locks or
 		// removing SBOM dependents, so the driver deadline must not abort the
@@ -111,6 +113,45 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 	authfuncs.InitMultiOIDC(db)
 
 	return db
+}
+
+// withPostgresDialRetry tolerates the brief window where Docker's embedded
+// DNS server is reachable but has not registered a Compose service alias yet.
+// This is common during orchestrated container startup and should not make the
+// backend exit before PostgreSQL has had a chance to become discoverable.
+func withPostgresDialRetry() pgdriver.Option {
+	return func(conf *pgdriver.Config) {
+		conf.Dialer = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			const (
+				retryWindow = 90 * time.Second
+				retryDelay  = time.Second
+			)
+			deadline := time.Now().Add(retryWindow)
+			var lastErr error
+			for attempt := 1; ; attempt++ {
+				dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				conn, err := (&net.Dialer{}).DialContext(dialCtx, network, addr)
+				cancel()
+				if err == nil {
+					return conn, nil
+				}
+				lastErr = err
+				if ctx.Err() != nil || time.Now().Add(retryDelay).After(deadline) {
+					return nil, lastErr
+				}
+				if attempt == 1 || attempt%10 == 0 {
+					log.Warnf("PostgreSQL connection attempt %d to %s failed; retrying: %v", attempt, addr, err)
+				}
+				timer := time.NewTimer(retryDelay)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return nil, ctx.Err()
+				case <-timer.C:
+				}
+			}
+		}
+	}
 }
 
 func StartDatabase(dbDriver string, dbServer string, dbPort int, dbUser, dbPass, dbName string) *bun.DB {

@@ -20,6 +20,7 @@ description: Reference the current backend YAML settings and supported BACKEND_ 
 | `scanner.progress_heartbeat_seconds`                        | `30`                      | Scan progress heartbeat interval                                           |
 | `scanner.stale_timeout_seconds`                             | `7200`                    | Duration after which inactive scan work is stale                           |
 | `scanner.db_max_age_hours`                                  | `24`                      | Maximum local scanner database age                                         |
+| `scanner.scan_cache_cleanup_hours`                           | `24`                      | Interval for clearing retained Trivy image-analysis caches; `0` disables it |
 | `scanner.enable_osv_java_augmentation`                      | `true`                    | Enable OSV Java enrichment                                                 |
 | `vuln_kb.cache_days`                                        | `7`                       | NVD enrichment cache lifetime                                              |
 | `vuln_kb.nvd_api_key`                                       | Empty                     | Optional NVD API key for CVE enrichment                                    |

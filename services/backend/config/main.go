@@ -78,6 +78,7 @@ type ScannerConf struct {
 	StaleTimeoutSeconds       int    `mapstructure:"stale_timeout_seconds"`
 	Concurrency               int    `mapstructure:"concurrency"`
 	DBMaxAgeHours             int    `mapstructure:"db_max_age_hours"`
+	ScanCacheCleanupHours     int    `mapstructure:"scan_cache_cleanup_hours"`
 	EnableOSVJavaAugmentation bool   `mapstructure:"enable_osv_java_augmentation"`
 }
 
@@ -131,6 +132,8 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 	envBindings := map[string]string{
 		"log_level":                                  "BACKEND_LOG_LEVEL",
 		"port":                                       "BACKEND_PORT",
+		"allow_origins":                              "BACKEND_ALLOW_ORIGINS",
+		"database.driver":                            "BACKEND_DATABASE_DRIVER",
 		"database.server":                            "BACKEND_DATABASE_SERVER",
 		"database.port":                              "BACKEND_DATABASE_PORT",
 		"database.name":                              "BACKEND_DATABASE_NAME",
@@ -151,6 +154,7 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"scanner.stale_timeout_seconds":              "BACKEND_SCANNER_STALE_TIMEOUT_SECONDS",
 		"scanner.concurrency":                        "BACKEND_SCANNER_CONCURRENCY",
 		"scanner.db_max_age_hours":                   "BACKEND_SCANNER_DB_MAX_AGE_HOURS",
+		"scanner.scan_cache_cleanup_hours":           "BACKEND_SCANNER_SCAN_CACHE_CLEANUP_HOURS",
 		"scanner.enable_osv_java_augmentation":       "BACKEND_SCANNER_ENABLE_OSV_JAVA_AUGMENTATION",
 		"data_path":                                  "BACKEND_DATA_PATH",
 		"encryption.key":                             "BACKEND_ENCRYPTION_KEY",
@@ -196,6 +200,9 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 	}
 	if raw, ok := os.LookupEnv("BACKEND_SECURITY_CALLBACK_ALLOWED_HOSTS"); ok {
 		config.Security.CallbackAllowedHosts = splitConfigList(raw)
+	}
+	if raw, ok := os.LookupEnv("BACKEND_ALLOW_ORIGINS"); ok {
+		config.AllowOrigins = splitConfigList(raw)
 	}
 	if raw, ok := os.LookupEnv("BACKEND_SECURITY_CALLBACK_ALLOWED_CIDRS"); ok {
 		config.Security.CallbackAllowedCIDRs = splitConfigList(raw)
@@ -270,6 +277,9 @@ func (cm *ConfigurationManager) setDefaults(config *RestfulConf) {
 	}
 	if config.Scanner.DBMaxAgeHours == 0 {
 		config.Scanner.DBMaxAgeHours = 24
+	}
+	if !cm.viper.IsSet("scanner.scan_cache_cleanup_hours") {
+		config.Scanner.ScanCacheCleanupHours = 24
 	}
 	config.Scanner.EnableOSVJavaAugmentation = true
 	if !cm.viper.IsSet("vuln_kb.cve_history_enabled") {

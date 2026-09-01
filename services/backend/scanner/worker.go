@@ -131,7 +131,11 @@ func InitWorker(db *bun.DB) {
 		}
 		if TrivyEnabled() {
 			go func(workerID int, dir string) {
-				info, err := EnsureDatabasesFresh(context.Background(), dir)
+				var info *TrivyRuntimeInfo
+				var err error
+				withTrivyCacheUse(dir, func() {
+					info, err = EnsureDatabasesFresh(context.Background(), dir)
+				})
 				if err != nil {
 					log.Warnf("Scanner worker %d trivy DB warmup failed: %v", workerID, err)
 					return
@@ -177,7 +181,11 @@ func InitWorker(db *bun.DB) {
 			for range ticker.C {
 				for i := 0; i < concurrency; i++ {
 					dir := workerCacheDir(i)
-					if _, err := EnsureDatabasesFresh(context.Background(), dir); err != nil {
+					var err error
+					withTrivyCacheUse(dir, func() {
+						_, err = EnsureDatabasesFresh(context.Background(), dir)
+					})
+					if err != nil {
 						log.Warnf("Periodic DB refresh for worker %d failed: %v", i, err)
 					} else {
 						log.Infof("Periodic DB refresh for worker %d completed", i)
@@ -185,6 +193,7 @@ func InitWorker(db *bun.DB) {
 				}
 			}
 		}()
+		startTrivyScanCacheCleanup(concurrency)
 	}
 
 	// Backfill the KB before capturing historical intelligence so existing
@@ -249,7 +258,9 @@ func workerLoop(id int) {
 	for job := range jobQueue {
 		queuedScanIDs.Delete(job.ScanID)
 		activeWorkers.Add(1)
-		processScan(job, cacheDir)
+		withTrivyCacheUse(cacheDir, func() {
+			processScan(job, cacheDir)
+		})
 		activeWorkers.Add(-1)
 		completedJobs.Add(1)
 	}

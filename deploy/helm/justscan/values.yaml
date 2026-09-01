@@ -71,6 +71,8 @@ backend:
       staleTimeoutSeconds: 7200
       concurrency: 2
       dbMaxAgeHours: 7
+      # Remove retained Trivy image-analysis cache daily. Set 0 to disable.
+      scanCacheCleanupHours: 24
       enableOsvJavaAugmentation: true
 
     vulnKb:

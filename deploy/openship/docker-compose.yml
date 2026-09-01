@@ -67,8 +67,7 @@ services:
       start_period: 10s
 
   nginx:
-    # OpenShip resolves Compose build contexts from the repository root.
-    build: deploy/openship/nginx
+    build: nginx
     restart: unless-stopped
     depends_on:
       - frontend

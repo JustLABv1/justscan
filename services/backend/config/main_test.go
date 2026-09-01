@@ -1,6 +1,28 @@
 package config
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/spf13/viper"
+)
+
+func TestLoadConfigAllowsEnvironmentOnlyConfiguration(t *testing.T) {
+	t.Setenv("BACKEND_DATABASE_SERVER", "postgres")
+	t.Setenv("BACKEND_DATABASE_NAME", "justscan")
+	t.Setenv("BACKEND_DATABASE_PASSWORD", "database-password")
+	t.Setenv("BACKEND_JWT_SECRET", "0123456789abcdef0123456789abcdef")
+	t.Setenv("BACKEND_ENCRYPTION_KEY", "fedcba9876543210fedcba9876543210")
+
+	cm := &ConfigurationManager{viper: viper.New()}
+	missingPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := cm.LoadConfig(missingPath); err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cm.config.Database.Server != "postgres" {
+		t.Fatalf("database server = %q, want postgres", cm.config.Database.Server)
+	}
+}
 
 func TestValidateRejectsWeakSecretsByDefault(t *testing.T) {
 	cm := &ConfigurationManager{}

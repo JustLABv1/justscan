@@ -31,7 +31,7 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 		pgdriver.WithUser(dbUser),
 		pgdriver.WithPassword(dbPass),
 		pgdriver.WithDatabase(dbName),
-		pgdriver.WithApplicationName("exflow"),
+		pgdriver.WithApplicationName("justscan-backend"),
 		pgdriver.WithTLSConfig(nil),
 		withPostgresDialRetry(),
 		// pgdriver defaults socket reads to 10 seconds. A large scan-history

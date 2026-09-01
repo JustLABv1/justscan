@@ -56,12 +56,6 @@ func main() {
 
 	log.Info("Starting JustScan API. Version: ", version)
 
-	// Check if config file exists
-	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
-		log.Fatal("Config file not found.")
-		return
-	}
-
 	log.Info("Loading Config File: ", *configFile)
 	err := config.GetInstance().LoadConfig(*configFile)
 	if err != nil {

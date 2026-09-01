@@ -183,8 +183,10 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		}
 	}
 
-	// Read configuration file
-	if err := cm.viper.ReadInConfig(); err != nil {
+	// A file provides deployable defaults, but all settings can be supplied via
+	// BACKEND_* variables. This is important for platforms that inject secrets
+	// as environment variables instead of mounting configuration files.
+	if err := cm.viper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 

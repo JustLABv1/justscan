@@ -15,6 +15,7 @@ type ScannerSettings struct {
 	ProgressHeartbeatSeconds  int
 	StaleTimeoutSeconds       int
 	DBMaxAgeHours             int
+	ScanCacheCleanupHours     int
 	EnableOSVJavaAugmentation bool
 }
 
@@ -27,6 +28,7 @@ func effectiveScannerSettings() ScannerSettings {
 		ProgressHeartbeatSeconds:  int(defaultScanProgressHeartbeat.Seconds()),
 		StaleTimeoutSeconds:       int(defaultScanStaleTimeout.Seconds()),
 		DBMaxAgeHours:             24,
+		ScanCacheCleanupHours:     24,
 		EnableOSVJavaAugmentation: true,
 	}
 	if config.Config != nil {
@@ -43,6 +45,7 @@ func effectiveScannerSettings() ScannerSettings {
 		settings.ProgressHeartbeatSeconds = cfg.ProgressHeartbeatSeconds
 		settings.StaleTimeoutSeconds = cfg.StaleTimeoutSeconds
 		settings.DBMaxAgeHours = cfg.DBMaxAgeHours
+		settings.ScanCacheCleanupHours = cfg.ScanCacheCleanupHours
 		settings.EnableOSVJavaAugmentation = cfg.EnableOSVJavaAugmentation
 	}
 	if settings.Concurrency <= 0 {
@@ -60,6 +63,9 @@ func effectiveScannerSettings() ScannerSettings {
 	if settings.DBMaxAgeHours <= 0 {
 		settings.DBMaxAgeHours = 24
 	}
+	if settings.ScanCacheCleanupHours < 0 {
+		settings.ScanCacheCleanupHours = 0
+	}
 
 	if resolver := config.GetResolver(); resolver != nil {
 		settings.EnableTrivy = resolver.GetBool("scanner.enable_trivy", settings.EnableTrivy)
@@ -72,6 +78,7 @@ func effectiveScannerSettings() ScannerSettings {
 		settings.ProgressHeartbeatSeconds = resolver.GetInt("scanner.progress_heartbeat_seconds", settings.ProgressHeartbeatSeconds)
 		settings.StaleTimeoutSeconds = resolver.GetInt("scanner.stale_timeout_seconds", settings.StaleTimeoutSeconds)
 		settings.DBMaxAgeHours = resolver.GetInt("scanner.db_max_age_hours", settings.DBMaxAgeHours)
+		settings.ScanCacheCleanupHours = resolver.GetInt("scanner.scan_cache_cleanup_hours", settings.ScanCacheCleanupHours)
 		settings.EnableOSVJavaAugmentation = resolver.GetBool("scanner.enable_osv_java_augmentation", settings.EnableOSVJavaAugmentation)
 	}
 
@@ -89,6 +96,9 @@ func effectiveScannerSettings() ScannerSettings {
 	}
 	if settings.DBMaxAgeHours <= 0 {
 		settings.DBMaxAgeHours = 24
+	}
+	if settings.ScanCacheCleanupHours < 0 {
+		settings.ScanCacheCleanupHours = 0
 	}
 	return settings
 }

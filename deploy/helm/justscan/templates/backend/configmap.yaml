@@ -38,6 +38,7 @@ data:
       stale_timeout_seconds: {{ .Values.backend.config.scanner.staleTimeoutSeconds }}
       concurrency: {{ .Values.backend.config.scanner.concurrency }}
       db_max_age_hours: {{ .Values.backend.config.scanner.dbMaxAgeHours }}
+      scan_cache_cleanup_hours: {{ .Values.backend.config.scanner.scanCacheCleanupHours }}
       enable_osv_java_augmentation: {{ .Values.backend.config.scanner.enableOsvJavaAugmentation }}
 
     encryption:

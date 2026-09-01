@@ -174,6 +174,7 @@ If you plan to use OIDC, configure it before first login using the section below
 | `scanner.stale_timeout_seconds`        | Fail a scan only after this many seconds without recorded progress                                  | `7200`                           |
 | `scanner.concurrency`                  | Number of concurrent scans                                                                          | `2`                              |
 | `scanner.db_max_age_hours`             | Maximum age of each Trivy DB before JustScan refreshes it automatically                             | `24`                             |
+| `scanner.scan_cache_cleanup_hours`     | Interval for removing retained Trivy image-analysis caches; `0` disables the cleanup job           | `24`                             |
 | `scanner.enable_osv_java_augmentation` | Query the free OSV API for additional Maven/Java advisories and merge them into scan results        | `true`                           |
 | `encryption.key`                       | Key for encrypting registry credentials at rest. Should be a 32-char string.                        | `""`                             |
 | `vuln_kb.nvd_api_key`                  | NVD API key for enriched CVE data (optional, see [Getting an NVD API key](#getting-an-nvd-api-key)) | `""`                             |
@@ -226,6 +227,7 @@ scanner:
   stale_timeout_seconds: 7200
   concurrency: 2
   db_max_age_hours: 24
+  scan_cache_cleanup_hours: 24
   enable_osv_java_augmentation: true
 
 encryption:
@@ -396,7 +398,7 @@ docker compose up -d
 
 The compose file starts PostgreSQL, the backend, and the frontend together.
 
-When running from the default Trivy-enabled Docker images, JustScan refreshes Trivy's vulnerability DB and Java DB on container startup and again before scans whenever the cached DBs exceed `scanner.db_max_age_hours`. The cache is stored under `/app/data/trivy-cache`, so it survives container restarts when `/app/data` is persisted.
+When running from the default Trivy-enabled Docker images, JustScan refreshes Trivy's vulnerability DB and Java DB on container startup and again before scans whenever the cached DBs exceed `scanner.db_max_age_hours`. The cache is stored under `/app/data/trivy-cache`, so it survives container restarts when `/app/data` is persisted. To keep this persistent volume bounded, JustScan clears Trivy's retained image-analysis cache at startup and every `scanner.scan_cache_cleanup_hours` (24 by default); vulnerability and Java databases are retained. Set the interval to `0` only when an external cleanup policy is in place.
 
 For Artifactory Xray-only deployments, use the scannerless backend image by setting `JUSTSCAN_BACKEND_IMAGE_PREFIX=backend-minimal` and setting `scanner.enable_trivy: false` plus `scanner.enable_grype: false` in `deploy/docker-compose/backend-config.yaml`. Keep the default `backend` image if any registry should run local Trivy scans.
 

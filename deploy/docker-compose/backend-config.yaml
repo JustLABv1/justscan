@@ -37,6 +37,8 @@ scanner:
   stale_timeout_seconds: 7200
   concurrency: 2
   db_max_age_hours: 7
+  # Remove retained Trivy image-analysis cache daily. Set 0 to disable.
+  scan_cache_cleanup_hours: 24
   enable_osv_java_augmentation: true
 
 encryption:

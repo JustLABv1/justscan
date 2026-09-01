@@ -32,6 +32,7 @@ COPY --from=builder /app/backend/justscan-backend /app/
 COPY --from=builder /app/backend/justscan-mcp /app/
 COPY --from=helm-builder /out/helm /usr/local/bin/helm
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY config/config.yaml /etc/justscan/config.yaml
 
 RUN addgroup --system --gid 1001 justscan \
     && adduser --system --uid 1001 --ingroup justscan justscan
@@ -46,7 +47,7 @@ RUN chmod +x /app/docker-entrypoint.sh
 
 RUN chown -R justscan:justscan /app
 
-VOLUME [ "/etc/justscan", "/app/data" ]
+VOLUME [ "/app/data" ]
 
 EXPOSE 8080
 

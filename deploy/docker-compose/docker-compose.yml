@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: justscan
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env — must match database.password in backend-config.yaml}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,8 +26,25 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    environment:
+      BACKEND_DATABASE_DRIVER: postgres
+      BACKEND_DATABASE_SERVER: postgres
+      BACKEND_DATABASE_PORT: "5432"
+      BACKEND_DATABASE_NAME: justscan
+      BACKEND_DATABASE_USER: postgres
+      BACKEND_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      BACKEND_JWT_SECRET: ${BACKEND_JWT_SECRET:?Set BACKEND_JWT_SECRET in .env}
+      BACKEND_ENCRYPTION_KEY: ${BACKEND_ENCRYPTION_KEY:?Set BACKEND_ENCRYPTION_KEY in .env}
+      BACKEND_ALLOW_ORIGINS: ${BACKEND_ALLOW_ORIGINS:?Set BACKEND_ALLOW_ORIGINS in .env}
+      BACKEND_LOG_LEVEL: ${BACKEND_LOG_LEVEL:-info}
+      BACKEND_SCANNER_ENABLE_TRIVY: ${BACKEND_SCANNER_ENABLE_TRIVY:-true}
+      BACKEND_SCANNER_ENABLE_GRYPE: ${BACKEND_SCANNER_ENABLE_GRYPE:-false}
+      BACKEND_SCANNER_CONCURRENCY: ${BACKEND_SCANNER_CONCURRENCY:-2}
+      BACKEND_SCANNER_COMMAND_TIMEOUT_SECONDS: ${BACKEND_SCANNER_COMMAND_TIMEOUT_SECONDS:-7200}
+      BACKEND_SCANNER_DB_MAX_AGE_HOURS: ${BACKEND_SCANNER_DB_MAX_AGE_HOURS:-7}
+      BACKEND_SCANNER_SCAN_CACHE_CLEANUP_HOURS: ${BACKEND_SCANNER_SCAN_CACHE_CLEANUP_HOURS:-24}
+      BACKEND_VULN_KB_NVD_API_KEY: ${BACKEND_VULN_KB_NVD_API_KEY:-}
     volumes:
-      - ./backend-config.yaml:/etc/justscan/config.yaml
       - backend_data:/app/data
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/readyz || exit 1"]

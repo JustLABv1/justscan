@@ -400,7 +400,7 @@ The compose file starts PostgreSQL, the backend, and the frontend together.
 
 When running from the default Trivy-enabled Docker images, JustScan refreshes Trivy's vulnerability DB and Java DB on container startup and again before scans whenever the cached DBs exceed `scanner.db_max_age_hours`. The cache is stored under `/app/data/trivy-cache`, so it survives container restarts when `/app/data` is persisted. To keep this persistent volume bounded, JustScan clears Trivy's retained image-analysis cache at startup and every `scanner.scan_cache_cleanup_hours` (24 by default); vulnerability and Java databases are retained. Set the interval to `0` only when an external cleanup policy is in place.
 
-For Artifactory Xray-only deployments, use the scannerless backend image by setting `JUSTSCAN_BACKEND_IMAGE_PREFIX=backend-minimal` and setting `scanner.enable_trivy: false` plus `scanner.enable_grype: false` in `deploy/docker-compose/backend-config.yaml`. Keep the default `backend` image if any registry should run local Trivy scans.
+For Artifactory Xray-only Compose deployments, use the scannerless backend image by setting `JUSTSCAN_BACKEND_IMAGE_PREFIX=backend-minimal` plus `BACKEND_SCANNER_ENABLE_TRIVY=false` and `BACKEND_SCANNER_ENABLE_GRYPE=false` in `.env`. Keep the default `backend` image if any registry should run local Trivy scans.
 
 JustScan can also augment Java findings for Maven packages using the free OSV API. To avoid unnecessary outbound calls and stay within public-service limits, package/version query results are cached locally in the database and refreshed using the same cache window configured by `vuln_kb.cache_days`.
 
@@ -714,7 +714,7 @@ justscan_prepush_scan:
 
 **Check:**
 
-- Your frontend origin is listed in `allow_origins` in `config.yaml`
+- Your frontend origin is listed in `allow_origins` in `config.yaml` (or `BACKEND_ALLOW_ORIGINS` for Compose)
 - Example: if the frontend runs on port `3000`, add `"http://localhost:3000"` to the list
 
 ## Getting an NVD API Key

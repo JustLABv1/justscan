@@ -14,7 +14,7 @@ The supported Compose deployment runs PostgreSQL, the backend, frontend, documen
 
 ## Configure
 
-From the Compose deployment directory, create the environment file and review the backend configuration:
+From the Compose deployment directory, create the environment file:
 
 ```bash
 cd deploy/docker-compose
@@ -25,11 +25,14 @@ Set at least:
 
 | Setting             | Purpose                                                                         |
 | ------------------- | ------------------------------------------------------------------------------- |
-| `POSTGRES_PASSWORD` | PostgreSQL password; it must match `database.password` in `backend-config.yaml` |
+| `POSTGRES_PASSWORD` | PostgreSQL password                                                           |
+| `BACKEND_JWT_SECRET` | Long random secret used to sign sessions                                      |
+| `BACKEND_ENCRYPTION_KEY` | 64-character hex key used to encrypt stored registry credentials          |
+| `BACKEND_ALLOW_ORIGINS` | Comma-separated browser origins, such as `https://scan.example.com`        |
 | `JUSTSCAN_VERSION`  | Release tag to deploy, such as `v1.2.3`; defaults to `latest`                   |
 | `HTTP_PORT`         | Host port for nginx; defaults to `80`                                           |
 
-Replace every `change-me-in-production` value in `backend-config.yaml` before production use. Generate distinct values for `jwt.secret` and `encryption.key`, and set `allow_origins` to the URL users open in their browser. Keep database passwords, JWT secrets, encryption keys, and provider credentials in the host secret manager where possible.
+The Compose backend uses environment variables exclusively; it does not mount a mutable backend configuration file. Generate distinct values for `BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_KEY`, and set `BACKEND_ALLOW_ORIGINS` to the URL users open in their browser. Keep database passwords, JWT secrets, encryption keys, and provider credentials in the host secret manager where possible.
 
 The frontend uses the same-origin `/api` proxy by default, which keeps the bundled Compose deployment on one host. For a deployment where the browser must call a backend on another host, build the frontend with `NEXT_PUBLIC_API_URL` set to that backend's public URL (including `https://`); browser requests will then use that configured API origin. Local split-port development continues to use `http://localhost:8080` directly.
 
@@ -54,10 +57,9 @@ JUSTSCAN_BACKEND_IMAGE_PREFIX=backend-minimal
 JUSTSCAN_VERSION=v1.2.3
 ```
 
-```yaml
-scanner:
-  enable_trivy: false
-  enable_grype: false
+```dotenv
+BACKEND_SCANNER_ENABLE_TRIVY=false
+BACKEND_SCANNER_ENABLE_GRYPE=false
 ```
 
 Keep the default `backend` image if any registry will use local Trivy scanning.

@@ -21,20 +21,14 @@ Edit `.env`:
 
 | Variable | Description |
 |---|---|
-| `POSTGRES_PASSWORD` | Database password — must also be set in `backend-config.yaml` |
+| `POSTGRES_PASSWORD` | PostgreSQL password |
+| `BACKEND_JWT_SECRET` | Long random string for signing sessions |
+| `BACKEND_ENCRYPTION_KEY` | 64-character hex encryption key |
+| `BACKEND_ALLOW_ORIGINS` | Comma-separated browser origins, such as `https://scan.example.com` |
 | `JUSTSCAN_VERSION` | Image tag to deploy, e.g. `v1.2.3` (default: `latest`) |
 | `JUSTSCAN_BACKEND_IMAGE_PREFIX` | Backend image prefix. Use `backend-minimal` for Artifactory Xray-only deployments (default: `backend`) |
 
-### 2. Configure the backend
-
-Edit `backend-config.yaml` and replace all `change-me-in-production` placeholders:
-
-| Setting | Description |
-|---|---|
-| `database.password` | Must match `POSTGRES_PASSWORD` in `.env` |
-| `jwt.secret` | Long random string — `openssl rand -hex 32` |
-| `encryption.key` | 64-char hex string — `openssl rand -hex 32` |
-| `allow_origins` | Must include the URL users open in their browser for the frontend |
+The Compose deployment configures the backend exclusively through environment variables. The image contains safe non-secret defaults; do not bind-mount a configuration file into `/etc/justscan`.
 
 > **Note on `NEXT_PUBLIC_API_URL`:** The published frontend image has
 > `http://localhost:8080` baked in, which works for local deployments.
@@ -61,49 +55,16 @@ to at least two hours.
 
 JustScan supports OIDC providers such as Keycloak and Authentik.
 
-Enable and configure the `oidc:` block in `backend-config.yaml`:
-
-```yaml
-allow_origins:
-  - "https://scan.example.com"
-
-oidc:
-  enabled: true
-  issuer_url: "https://auth.example.com/application/o/justscan/"
-  client_id: "justscan"
-  client_secret: "replace-me"
-  redirect_uri: "https://scan.example.com/api/v1/auth/oidc/callback"
-  scopes: ["openid", "email", "profile"]
-  admin_groups:
-    - "justscan-admins"
-  admin_roles: []
-  groups_claim: "groups"
-  roles_claim: "roles"
-
-local_auth:
-  enabled: true
-```
+Configure OIDC through the administrator UI after first login. Keep secrets out of a Compose file; inject any optional backend secret as a `BACKEND_*` environment variable.
 
 Important details:
 
 - Register `oidc.redirect_uri` in your OIDC provider exactly as shown above.
-- Set the first `allow_origins` entry to the public frontend URL. After a successful OIDC login, JustScan redirects to that first origin plus `/auth/oidc/callback`.
+- Set `BACKEND_ALLOW_ORIGINS` to the public frontend URL. After a successful OIDC login, JustScan redirects to its first listed origin plus `/auth/oidc/callback`.
 - `local_auth.enabled: true` keeps password login enabled alongside OIDC.
 - `local_auth.enabled: false` makes the deployment OIDC-only and disables local login and self-registration.
 - Existing local users are automatically linked to OIDC on first login when their OIDC email matches the local account email.
 - Admin access is assigned from `oidc.admin_groups` and `oidc.admin_roles`, and is re-evaluated on every OIDC login.
-
-By default, this Docker Compose deployment reads the OIDC client secret from `backend-config.yaml`.
-
-If you want to inject it through an environment variable instead, add an `environment:` entry to the `backend` service in `docker-compose.yml`, for example:
-
-```yaml
-backend:
-  environment:
-    BACKEND_OIDC_CLIENT_SECRET: ${BACKEND_OIDC_CLIENT_SECRET}
-```
-
-Then set it in `.env` or your shell before starting the stack.
 
 ### 2b. Optional: use the Artifactory Xray-only backend image
 
@@ -114,12 +75,11 @@ JUSTSCAN_BACKEND_IMAGE_PREFIX=backend-minimal
 JUSTSCAN_VERSION=v1.2.3
 ```
 
-Also disable local scanner support in `backend-config.yaml`:
+Also disable local scanner support in `.env`:
 
-```yaml
-scanner:
-  enable_trivy: false
-  enable_grype: false
+```env
+BACKEND_SCANNER_ENABLE_TRIVY=false
+BACKEND_SCANNER_ENABLE_GRYPE=false
 ```
 
 Keep using the default `backend` image if any registry should still run local Trivy scans.
@@ -171,29 +131,30 @@ docker compose up -d frontend
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `POSTGRES_PASSWORD` | Yes | — | PostgreSQL password (must match `backend-config.yaml`) |
+| `POSTGRES_PASSWORD` | Yes | — | PostgreSQL password |
+| `BACKEND_JWT_SECRET` | Yes | — | Session-signing secret |
+| `BACKEND_ENCRYPTION_KEY` | Yes | — | 64-character hex encryption key |
+| `BACKEND_ALLOW_ORIGINS` | Yes | — | Comma-separated CORS origins |
 | `JUSTSCAN_VERSION` | No | `latest` | Image tag to pull, e.g. `v1.2.3` |
 | `JUSTSCAN_BACKEND_IMAGE_PREFIX` | No | `backend` | Backend image prefix. Set to `backend-minimal` for Artifactory Xray-only deployments |
 | `NEXT_PUBLIC_API_URL` | No* | `http://localhost:8080` | Backend URL seen by the browser — only used when building locally |
 | `BACKEND_PORT` | No | `8080` | Host port for the backend |
 | `FRONTEND_PORT` | No | `3000` | Host port for the frontend |
 
-### Backend configuration (`backend-config.yaml`)
+### Backend configuration
 
-All backend settings live here — edit this file directly. Key settings to review:
+The backend is configured through its `BACKEND_*` environment variables. Key settings to review:
 
 | Setting | Description |
 |---|---|
-| `allow_origins` | CORS allowed origins — **must match your frontend URL** |
-| `scanner.enable_trivy` | Enable local Trivy scans. Set to `false` when using the `backend-minimal` image |
-| `scanner.enable_grype` | Enable Grype augmentation for local Trivy scans. Must stay `false` with the `backend-minimal` image |
-| `scanner.concurrency` | Number of parallel Trivy scan workers (default: 2) |
-| `scanner.timeout` | Legacy fallback for the local scanner command timeout in seconds (default: 600) |
-| `scanner.command_timeout_seconds` | Local scanner command timeout in seconds (default: 7200) |
-| `scanner.progress_heartbeat_seconds` | How often active scans refresh their liveness timestamp (default: 30) |
-| `scanner.stale_timeout_seconds` | Fail a scan only after this many seconds without progress (default: 7200) |
-| `vuln_kb.nvd_api_key` | Optional NVD API key for faster CVE enrichment |
-| `log_level` | `debug`, `info`, `warn`, or `error` |
+| `BACKEND_ALLOW_ORIGINS` | CORS origins — **must match the frontend URL** |
+| `BACKEND_SCANNER_ENABLE_TRIVY` | Enable local Trivy scans; set to `false` for `backend-minimal` |
+| `BACKEND_SCANNER_ENABLE_GRYPE` | Enable Grype augmentation; must be `false` for `backend-minimal` |
+| `BACKEND_SCANNER_CONCURRENCY` | Number of parallel Trivy scan workers (default: 2) |
+| `BACKEND_SCANNER_COMMAND_TIMEOUT_SECONDS` | Local scanner command timeout (default: 7200) |
+| `BACKEND_SCANNER_SCAN_CACHE_CLEANUP_HOURS` | Scan-cache cleanup interval (default: 24; `0` disables) |
+| `BACKEND_VULN_KB_NVD_API_KEY` | Optional NVD API key for faster CVE enrichment |
+| `BACKEND_LOG_LEVEL` | `debug`, `info`, `warn`, or `error` |
 
 ---
 
@@ -210,14 +171,14 @@ docker compose up --build -d
 ## Troubleshooting
 
 **Backend exits immediately**
-Check that `backend-config.yaml` exists in this directory and that all required env vars are set:
+Check that `.env` has the required backend variables:
 ```bash
 docker compose logs backend
 ```
 
 **Frontend shows "Failed to fetch" errors**
 - Verify `NEXT_PUBLIC_API_URL` in `.env` points to a URL reachable from the browser
-- Verify `allow_origins` in `backend-config.yaml` includes your frontend URL
+- Verify `BACKEND_ALLOW_ORIGINS` includes your frontend URL
 - Rebuild the frontend image after any change to `NEXT_PUBLIC_API_URL`:
   ```bash
   docker compose build frontend && docker compose up -d frontend

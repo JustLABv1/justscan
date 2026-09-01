@@ -132,6 +132,8 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 	envBindings := map[string]string{
 		"log_level":                                  "BACKEND_LOG_LEVEL",
 		"port":                                       "BACKEND_PORT",
+		"allow_origins":                              "BACKEND_ALLOW_ORIGINS",
+		"database.driver":                            "BACKEND_DATABASE_DRIVER",
 		"database.server":                            "BACKEND_DATABASE_SERVER",
 		"database.port":                              "BACKEND_DATABASE_PORT",
 		"database.name":                              "BACKEND_DATABASE_NAME",
@@ -198,6 +200,9 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 	}
 	if raw, ok := os.LookupEnv("BACKEND_SECURITY_CALLBACK_ALLOWED_HOSTS"); ok {
 		config.Security.CallbackAllowedHosts = splitConfigList(raw)
+	}
+	if raw, ok := os.LookupEnv("BACKEND_ALLOW_ORIGINS"); ok {
+		config.AllowOrigins = splitConfigList(raw)
 	}
 	if raw, ok := os.LookupEnv("BACKEND_SECURITY_CALLBACK_ALLOWED_CIDRS"); ok {
 		config.Security.CallbackAllowedCIDRs = splitConfigList(raw)

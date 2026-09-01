@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: justscan
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the OpenShip environment}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d justscan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    image: ghcr.io/justlabv1/justscan:${JUSTSCAN_BACKEND_IMAGE_PREFIX:-backend}-${JUSTSCAN_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      BACKEND_DATABASE_DRIVER: postgres
+      BACKEND_DATABASE_SERVER: postgres
+      BACKEND_DATABASE_PORT: "5432"
+      BACKEND_DATABASE_NAME: justscan
+      BACKEND_DATABASE_USER: postgres
+      BACKEND_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the OpenShip environment}
+      BACKEND_JWT_SECRET: ${BACKEND_JWT_SECRET:?Set BACKEND_JWT_SECRET in the OpenShip environment}
+      BACKEND_ENCRYPTION_KEY: ${BACKEND_ENCRYPTION_KEY:?Set BACKEND_ENCRYPTION_KEY in the OpenShip environment}
+      BACKEND_ALLOW_ORIGINS: ${BACKEND_ALLOW_ORIGINS:?Set BACKEND_ALLOW_ORIGINS in the OpenShip environment}
+      BACKEND_LOG_LEVEL: ${BACKEND_LOG_LEVEL:-info}
+      BACKEND_SCANNER_ENABLE_TRIVY: ${BACKEND_SCANNER_ENABLE_TRIVY:-true}
+      BACKEND_SCANNER_ENABLE_GRYPE: ${BACKEND_SCANNER_ENABLE_GRYPE:-false}
+      BACKEND_SCANNER_CONCURRENCY: ${BACKEND_SCANNER_CONCURRENCY:-2}
+      BACKEND_SCANNER_COMMAND_TIMEOUT_SECONDS: ${BACKEND_SCANNER_COMMAND_TIMEOUT_SECONDS:-7200}
+      BACKEND_SCANNER_DB_MAX_AGE_HOURS: ${BACKEND_SCANNER_DB_MAX_AGE_HOURS:-7}
+      BACKEND_SCANNER_SCAN_CACHE_CLEANUP_HOURS: ${BACKEND_SCANNER_SCAN_CACHE_CLEANUP_HOURS:-24}
+      BACKEND_VULN_KB_NVD_API_KEY: ${BACKEND_VULN_KB_NVD_API_KEY:-}
+    volumes:
+      - backend_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/readyz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    image: ghcr.io/justlabv1/justscan:frontend-${JUSTSCAN_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  docs:
+    image: ghcr.io/justlabv1/justscan:docs-${JUSTSCAN_VERSION:-latest}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/docs"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  nginx:
+    build: ../docker-compose/nginx
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+      - docs
+    ports:
+      - "80"
+
+volumes:
+  postgres_data:
+  backend_data:

@@ -66,7 +66,7 @@ services:
       start_period: 10s
 
   nginx:
-    build: ../docker-compose/nginx
+    build: ./nginx
     restart: unless-stopped
     depends_on:
       - frontend

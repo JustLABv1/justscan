@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -228,6 +229,14 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 }
 
 func splitConfigList(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if strings.HasPrefix(raw, "[") {
+		var values []string
+		if err := json.Unmarshal([]byte(raw), &values); err == nil {
+			return values
+		}
+	}
+
 	values := strings.Split(raw, ",")
 	result := make([]string, 0, len(values))
 	for _, value := range values {

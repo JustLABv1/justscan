@@ -24,6 +24,13 @@ func TestLoadConfigAllowsEnvironmentOnlyConfiguration(t *testing.T) {
 	}
 }
 
+func TestSplitConfigListAcceptsJSONArrays(t *testing.T) {
+	values := splitConfigList(`["http://localhost:3000", "https://justscan.justlab.app"]`)
+	if len(values) != 2 || values[0] != "http://localhost:3000" || values[1] != "https://justscan.justlab.app" {
+		t.Fatalf("splitConfigList() = %#v", values)
+	}
+}
+
 func TestValidateRejectsWeakSecretsByDefault(t *testing.T) {
 	cm := &ConfigurationManager{}
 	cfg := &RestfulConf{

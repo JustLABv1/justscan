@@ -83,8 +83,28 @@ func init() {
 			)`,
 			`CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_digests_window ON notification_digests (rule_id, channel_id, window_start, window_end)`,
 			`CREATE INDEX IF NOT EXISTS idx_notification_digests_status ON notification_digests (status, window_end)`,
-			`ALTER TABLE notification_queue_jobs ADD CONSTRAINT fk_notification_queue_digest FOREIGN KEY (digest_id) REFERENCES notification_digests(id) ON DELETE SET NULL`,
-			`ALTER TABLE notification_digests ADD CONSTRAINT fk_notification_digests_queue_job FOREIGN KEY (queue_job_id) REFERENCES notification_queue_jobs(id) ON DELETE SET NULL`,
+			`DO $$ BEGIN
+				IF NOT EXISTS (
+					SELECT 1 FROM pg_constraint
+					WHERE conname = 'fk_notification_queue_digest'
+						AND conrelid = 'notification_queue_jobs'::regclass
+				) THEN
+					ALTER TABLE notification_queue_jobs
+						ADD CONSTRAINT fk_notification_queue_digest
+						FOREIGN KEY (digest_id) REFERENCES notification_digests(id) ON DELETE SET NULL;
+				END IF;
+			END $$`,
+			`DO $$ BEGIN
+				IF NOT EXISTS (
+					SELECT 1 FROM pg_constraint
+					WHERE conname = 'fk_notification_digests_queue_job'
+						AND conrelid = 'notification_digests'::regclass
+				) THEN
+					ALTER TABLE notification_digests
+						ADD CONSTRAINT fk_notification_digests_queue_job
+						FOREIGN KEY (queue_job_id) REFERENCES notification_queue_jobs(id) ON DELETE SET NULL;
+				END IF;
+			END $$`,
 			`ALTER TABLE notification_delivery_logs ADD COLUMN IF NOT EXISTS rule_id UUID NULL`,
 			`ALTER TABLE notification_delivery_logs ADD COLUMN IF NOT EXISTS event_id UUID NULL`,
 			`ALTER TABLE notification_delivery_logs ADD COLUMN IF NOT EXISTS queue_job_id UUID NULL`,

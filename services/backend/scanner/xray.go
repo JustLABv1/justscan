@@ -36,6 +36,7 @@ const xrayMissingArtifactWindow = 2 * time.Minute
 const xrayBlockedSummaryWaitWindow = 45 * time.Second
 const xrayFreshScanSettleDelay = 8 * time.Second
 const registryWarmupRetryInterval = 10 * time.Second
+const registryPreparationRetryInterval = 3 * time.Second
 
 // Set to 0 to disable truncation and persist full request/response bodies.
 const xrayRequestLogBodyLimit = 0
@@ -328,7 +329,13 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	artifactRepoPath := selectedCandidate.Path
 	repoPath := selectedCandidate.RepoPath
 	artifactPath := selectedCandidate.ArtifactPath
-	if resolvedDigest, resolveErr := client.resolveImageDigest(ctx, imageRepoPath, imageTag, scan.Platform); resolveErr != nil {
+	var resolvedDigest string
+	resolveErr := client.retryRegistryPreparation(ctx, "image manifest and digest resolution", registryPreparationRetryInterval, func() error {
+		var attemptErr error
+		resolvedDigest, attemptErr = client.resolveImageDigest(ctx, imageRepoPath, imageTag, scan.Platform)
+		return attemptErr
+	})
+	if resolveErr != nil {
 		if _, blocked := normalizeXrayDownloadBlockedError(resolveErr); !blocked {
 			return fmt.Errorf("resolve the requested image digest: %w", resolveErr)
 		}
@@ -1334,6 +1341,34 @@ func (c *xrayClient) warmImageInArtifactory(ctx context.Context, imageRepoPath, 
 func (c *xrayClient) reportProgress(message string) {
 	if c.progress != nil {
 		c.progress(message)
+	}
+}
+
+// retryRegistryPreparation keeps transient registry transport and gateway
+// failures in the preparing_image stage. Manifest reads are idempotent, so the
+// complete resolution can safely restart when Artifactory closes a connection
+// while fetching an uncached manifest from its upstream registry.
+func (c *xrayClient) retryRegistryPreparation(ctx context.Context, operation string, retryInterval time.Duration, operationFn func() error) error {
+	for attempt := 1; ; attempt++ {
+		err := operationFn()
+		if err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return fmt.Errorf("%s stopped after %d attempt(s): %w", operation, attempt, ctx.Err())
+		}
+		if !isRetriableRegistryRequestError(err) {
+			return err
+		}
+
+		c.reportProgress(fmt.Sprintf("Preparing image retry %d in %s after a transient Artifactory registry error: %v", attempt, retryInterval, err))
+		timer := time.NewTimer(retryInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return fmt.Errorf("%s stopped after %d attempt(s): %w", operation, attempt, ctx.Err())
+		case <-timer.C:
+		}
 	}
 }
 
@@ -4346,7 +4381,7 @@ func shouldWarnBlockedReindexError(err error) bool {
 	}
 }
 
-func isRetriableRegistryWarmupError(err error) bool {
+func isRetriableRegistryRequestError(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
@@ -4380,6 +4415,10 @@ func isRetriableRegistryWarmupError(err error) bool {
 	default:
 		return false
 	}
+}
+
+func isRetriableRegistryWarmupError(err error) bool {
+	return isRetriableRegistryRequestError(err)
 }
 
 func xrayIssueID(issue xraySummaryIssue) string {

@@ -55,6 +55,44 @@ func TestXrayWarmupRetriesPreserveCompletedBlobs(t *testing.T) {
 	}
 }
 
+func TestXrayPreparationRetriesEOF(t *testing.T) {
+	attempts := 0
+	var progress []string
+	client := &xrayClient{progress: func(message string) { progress = append(progress, message) }}
+	err := client.retryRegistryPreparation(context.Background(), "digest resolution", time.Millisecond, func() error {
+		attempts++
+		if attempts == 1 {
+			return io.EOF
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected EOF to be retried, got %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected two attempts, got %d", attempts)
+	}
+	if len(progress) != 1 || !strings.Contains(progress[0], "Preparing image retry 1") {
+		t.Fatalf("expected a visible preparation retry update, got %#v", progress)
+	}
+}
+
+func TestXrayPreparationDoesNotRetryPermanentError(t *testing.T) {
+	attempts := 0
+	client := &xrayClient{}
+	want := errors.New("invalid manifest")
+	err := client.retryRegistryPreparation(context.Background(), "digest resolution", time.Millisecond, func() error {
+		attempts++
+		return want
+	})
+	if !errors.Is(err, want) {
+		t.Fatalf("expected permanent error, got %v", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("expected one attempt, got %d", attempts)
+	}
+}
+
 func TestXrayWarmupAndPollingCancelInFlightRequests(t *testing.T) {
 	for _, operation := range []string{"warm", "status", "summary"} {
 		t.Run(operation, func(t *testing.T) {

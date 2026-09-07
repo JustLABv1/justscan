@@ -126,8 +126,10 @@ const XRAY_PROGRESS_STEPS: StepDefinition[] = [
   {
     key: 'preparing_image',
     title: 'Preparing Image',
-    description: 'Resolving the requested platform and immutable image digest.',
-    detailMessages: ['Reading the manifest, image digest, and configuration from Artifactory.'],
+    description: 'Resolving the requested platform and immutable image digest from Artifactory.',
+    detailMessages: [
+      'Reading the manifest, image digest, and configuration from Artifactory. Transient upstream or cache responses are retried here.',
+    ],
   },
   {
     key: 'warming_cache',

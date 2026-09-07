@@ -173,6 +173,11 @@ If you plan to use OIDC, configure it before first login using the section below
 | `scanner.progress_heartbeat_seconds`   | How often long-running scans refresh their liveness timestamp while work is still active            | `30`                             |
 | `scanner.stale_timeout_seconds`        | Fail a scan only after this many seconds without recorded progress                                  | `7200`                           |
 | `scanner.concurrency`                  | Number of concurrent scans                                                                          | `2`                              |
+| `scanner.xray_concurrency`             | Slots in each Xray preparation/import pool per backend replica                                      | `2`                              |
+| `scanner.xray_max_active`              | Maximum active Xray coordinators, including remote provider waits                                   | `32`                             |
+| `scanner.xray_warmup_timeout_seconds`  | Deadline for Xray image preparation and Artifactory cache warming                                   | `600`                            |
+| `scanner.xray_provider_timeout_seconds`| Deadline for each Xray status or summary wait                                                       | `900`                            |
+| `scanner.xray_timeout_seconds`         | Overall deadline for an Xray scan after a worker claims it                                          | `3600`                           |
 | `scanner.db_max_age_hours`             | Maximum age of each Trivy DB before JustScan refreshes it automatically                             | `24`                             |
 | `scanner.scan_cache_cleanup_hours`     | Interval for removing retained Trivy image-analysis caches; `0` disables the cleanup job           | `24`                             |
 | `scanner.enable_osv_java_augmentation` | Query the free OSV API for additional Maven/Java advisories and merge them into scan results        | `true`                           |
@@ -548,7 +553,7 @@ Important values exposed by the chart include:
 
 - `imagePullSecrets` for private image or chart pulls from GHCR
 - `nameOverride`, `fullnameOverride`, and `serviceAccount.name` for release naming and service account control
-- `backend.config.scanner.enableTrivy`, `backend.config.scanner.trivyPath`, `backend.config.scanner.grypePath`, `backend.config.scanner.enableGrype`, `backend.config.scanner.timeout`, `backend.config.scanner.commandTimeoutSeconds`, `backend.config.scanner.progressHeartbeatSeconds`, `backend.config.scanner.staleTimeoutSeconds`, `backend.config.scanner.concurrency`, `backend.config.scanner.dbMaxAgeHours`, and `backend.config.scanner.enableOsvJavaAugmentation`
+- `backend.config.scanner.enableTrivy`, `backend.config.scanner.trivyPath`, `backend.config.scanner.grypePath`, `backend.config.scanner.enableGrype`, `backend.config.scanner.timeout`, `backend.config.scanner.commandTimeoutSeconds`, `backend.config.scanner.progressHeartbeatSeconds`, `backend.config.scanner.staleTimeoutSeconds`, `backend.config.scanner.concurrency`, `backend.config.scanner.xrayConcurrency`, `backend.config.scanner.xrayMaxActive`, `backend.config.scanner.xrayWarmupTimeoutSeconds`, `backend.config.scanner.xrayProviderTimeoutSeconds`, `backend.config.scanner.xrayTimeoutSeconds`, `backend.config.scanner.dbMaxAgeHours`, and `backend.config.scanner.enableOsvJavaAugmentation`
 - `backend.config.vulnKb.cacheDays`, `backend.config.vulnKb.cveHistoryEnabled`, `backend.config.vulnKb.cveHistoryIntervalMinutes`, and `backend.config.vulnKb.cveHistoryInitialLookbackHours` for vulnerability knowledge-base caching and CVE history polling
 - `backend.strategy.type` for the backend Deployment strategy (`RollingUpdate` or `Recreate`)
 - `backend.config.oidc.debug`, `backend.config.oidc.adminGroups`, `backend.config.oidc.adminRoles`, `backend.config.oidc.groupsClaim`, and `backend.config.oidc.rolesClaim`

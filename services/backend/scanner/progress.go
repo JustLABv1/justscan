@@ -37,19 +37,11 @@ func scanStaleTimeout() time.Duration {
 }
 
 func xraySummaryWaitWindow() time.Duration {
-	waitWindow := scanStaleTimeout()
-	if waitWindow <= 0 {
-		return defaultXraySummaryWaitWindow
-	}
-	return waitWindow
+	return time.Duration(effectiveScannerSettings().XrayProviderTimeoutSeconds) * time.Second
 }
 
 func registryWarmupWaitWindow() time.Duration {
-	waitWindow := scanStaleTimeout()
-	if waitWindow <= 0 {
-		return defaultRegistryWarmupWaitWindow
-	}
-	return waitWindow
+	return time.Duration(effectiveScannerSettings().XrayWarmupTimeoutSeconds) * time.Second
 }
 
 func scanWatchdogPollInterval() time.Duration {
@@ -89,6 +81,15 @@ func touchScanProgress(ctx context.Context, db *bun.DB, scanID uuid.UUID, progre
 	return nil
 }
 
+// Liveness is independent of meaningful provider/transfer progress.
+func touchScanHeartbeat(ctx context.Context, db *bun.DB, scanID uuid.UUID, at time.Time) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	_, err := db.NewUpdate().Model((*models.Scan)(nil)).Set("last_heartbeat_at = ?", at).
+		Where("id = ? AND status = ?", scanID, models.ScanStatusRunning).Exec(ctx)
+	return err
+}
+
 func startScanProgressHeartbeat(ctx context.Context, db *bun.DB, scanID uuid.UUID) func() {
 	if db == nil || scanID == uuid.Nil {
 		return func() {}
@@ -98,7 +99,7 @@ func startScanProgressHeartbeat(ctx context.Context, db *bun.DB, scanID uuid.UUI
 		return func() {}
 	}
 
-	if err := touchScanProgress(ctx, db, scanID, time.Now()); err != nil {
+	if err := touchScanHeartbeat(ctx, db, scanID, time.Now()); err != nil {
 		log.Warnf("Scanner heartbeat failed to initialize for scan %s: %v", scanID, err)
 	}
 
@@ -117,7 +118,7 @@ func startScanProgressHeartbeat(ctx context.Context, db *bun.DB, scanID uuid.UUI
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := touchScanProgress(context.Background(), db, scanID, time.Now()); err != nil {
+				if err := touchScanHeartbeat(context.Background(), db, scanID, time.Now()); err != nil {
 					log.Warnf("Scanner heartbeat failed for scan %s: %v", scanID, err)
 				}
 			}
@@ -173,7 +174,7 @@ func recoverInterruptedScans(ctx context.Context, db *bun.DB, now time.Time) (in
 	if err := db.NewSelect().Model(&scans).
 		Column("id", "scan_provider", "external_status", "current_step", "status", "last_progress_at").
 		Where("status = ?", models.ScanStatusRunning).
-		Where("last_progress_at IS NULL OR last_progress_at < ?", cutoff).
+		Where("GREATEST(last_heartbeat_at, last_progress_at) IS NULL OR GREATEST(last_heartbeat_at, last_progress_at) < ?", cutoff).
 		Scan(ctx); err != nil {
 		return 0, fmt.Errorf("failed to query interrupted running scans: %w", err)
 	}
@@ -199,7 +200,7 @@ func recoverInterruptedScans(ctx context.Context, db *bun.DB, now time.Time) (in
 		result, err := db.NewUpdate().Model(scan).
 			Column(columns...).
 			Where("id = ? AND status = ?", scan.ID, models.ScanStatusRunning).
-			Where("last_progress_at IS NULL OR last_progress_at < ?", cutoff).
+			Where("GREATEST(last_heartbeat_at, last_progress_at) IS NULL OR GREATEST(last_heartbeat_at, last_progress_at) < ?", cutoff).
 			Exec(ctx)
 		if err != nil {
 			return recovered, fmt.Errorf("failed to mark interrupted scan %s as failed: %w", scan.ID, err)
@@ -231,19 +232,17 @@ func failStaleScans(ctx context.Context, db *bun.DB, now time.Time, staleTimeout
 	cutoff := now.Add(-staleTimeout)
 	var scans []models.Scan
 	if err := db.NewSelect().Model(&scans).
-		Where("status IN (?)", bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning})).
-		Where("last_progress_at IS NULL OR last_progress_at < ?", cutoff).
+		Where("status = ?", models.ScanStatusRunning).
+		Where("GREATEST(last_heartbeat_at, last_progress_at) IS NULL OR GREATEST(last_heartbeat_at, last_progress_at) < ?", cutoff).
 		Scan(ctx); err != nil {
 		return fmt.Errorf("failed to query stale scans: %w", err)
 	}
 
 	for i := range scans {
 		scan := &scans[i]
-		if scan.Status == models.ScanStatusRunning {
-			CancelScan(scan.ID)
-		}
 		message := staleScanFailureMessage(scan, staleTimeout, now)
 		if persistFailedScan(ctx, db, scan, message, &cutoff) {
+			CancelScan(scan.ID)
 			finishFailedScan(ctx, db, scan, message)
 		}
 	}

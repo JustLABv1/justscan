@@ -274,6 +274,16 @@ func addRegisteredRoutes(paths map[string]any, routes []gin.RouteInfo) {
 			operation["responses"].(map[string]any)["401"] = map[string]any{"description": "Authentication required"}
 		}
 
+		if route.Method == "GET" && (normalizedPath == "/scans" || normalizedPath == "/scans/{id}") {
+			operation["description"] = "Scan responses include optional queue_position for pending scans: a one-based approximate rank among visible pending scans in the same provider lane and selected workspace, ordered by created_at and id. Running and terminal scans omit queue_position. last_progress_at records scan progress; optional last_heartbeat_at records worker liveness."
+		}
+		if route.Method == "GET" && normalizedPath == "/scans/queue-summary" {
+			operation["description"] = "Workspace-scoped durable scan counts. Administrators additionally receive xray_queue_depth (buffered submissions), xray_active (claimed coordinators), xray_work_active and xray_work_capacity (combined preparation and import pools). Existing worker metrics describe the local scanner pool."
+		}
+		if route.Method == "PUT" && normalizedPath == "/admin/settings/scanner" {
+			operation["description"] = "Update scanner settings. Positive integer xray_concurrency and xray_max_active require restart. Positive integer xray_warmup_timeout_seconds, xray_provider_timeout_seconds and xray_timeout_seconds apply to subsequently started stages/scans. Defaults are 2 slots per stage, 32 coordinators, 600, 900 and 3600 seconds respectively. Responses identify restart_required settings."
+		}
+
 		if strings.HasPrefix(normalizedPath, "/admin/") {
 			operation["x-justscan-access"] = "admin"
 		} else if strings.HasPrefix(normalizedPath, "/public/") || strings.HasPrefix(normalizedPath, "/shared/") || strings.HasPrefix(normalizedPath, "/auth/") {

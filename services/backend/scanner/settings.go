@@ -8,6 +8,12 @@ import "justscan-backend/config"
 // age, engine toggles, and OSV enrichment are intentionally resolved at use
 // time so an admin update takes effect without silently requiring a restart.
 type ScannerSettings struct {
+	XrayConcurrency            int
+	XrayMaxActive              int
+	XrayWarmupTimeoutSeconds   int
+	XrayProviderTimeoutSeconds int
+	XrayTimeoutSeconds         int
+
 	EnableTrivy               bool
 	EnableGrype               bool
 	Concurrency               int
@@ -21,6 +27,12 @@ type ScannerSettings struct {
 
 func effectiveScannerSettings() ScannerSettings {
 	settings := ScannerSettings{
+		XrayConcurrency:            2,
+		XrayMaxActive:              32,
+		XrayWarmupTimeoutSeconds:   600,
+		XrayProviderTimeoutSeconds: 900,
+		XrayTimeoutSeconds:         3600,
+
 		EnableTrivy:               true,
 		EnableGrype:               false,
 		Concurrency:               2,
@@ -33,6 +45,22 @@ func effectiveScannerSettings() ScannerSettings {
 	}
 	if config.Config != nil {
 		cfg := config.Config.Scanner
+		if cfg.XrayConcurrency > 0 {
+			settings.XrayConcurrency = cfg.XrayConcurrency
+		}
+		if cfg.XrayMaxActive > 0 {
+			settings.XrayMaxActive = cfg.XrayMaxActive
+		}
+		if cfg.XrayWarmupTimeoutSeconds > 0 {
+			settings.XrayWarmupTimeoutSeconds = cfg.XrayWarmupTimeoutSeconds
+		}
+		if cfg.XrayProviderTimeoutSeconds > 0 {
+			settings.XrayProviderTimeoutSeconds = cfg.XrayProviderTimeoutSeconds
+		}
+		if cfg.XrayTimeoutSeconds > 0 {
+			settings.XrayTimeoutSeconds = cfg.XrayTimeoutSeconds
+		}
+
 		settings.EnableTrivy = cfg.EnableTrivy
 		settings.EnableGrype = cfg.EnableGrype
 		settings.Concurrency = cfg.Concurrency
@@ -68,6 +96,12 @@ func effectiveScannerSettings() ScannerSettings {
 	}
 
 	if resolver := config.GetResolver(); resolver != nil {
+		settings.XrayConcurrency = resolver.GetInt("scanner.xray_concurrency", settings.XrayConcurrency)
+		settings.XrayMaxActive = resolver.GetInt("scanner.xray_max_active", settings.XrayMaxActive)
+		settings.XrayWarmupTimeoutSeconds = resolver.GetInt("scanner.xray_warmup_timeout_seconds", settings.XrayWarmupTimeoutSeconds)
+		settings.XrayProviderTimeoutSeconds = resolver.GetInt("scanner.xray_provider_timeout_seconds", settings.XrayProviderTimeoutSeconds)
+		settings.XrayTimeoutSeconds = resolver.GetInt("scanner.xray_timeout_seconds", settings.XrayTimeoutSeconds)
+
 		settings.EnableTrivy = resolver.GetBool("scanner.enable_trivy", settings.EnableTrivy)
 		settings.EnableGrype = resolver.GetBool("scanner.enable_grype", settings.EnableGrype)
 		settings.Concurrency = resolver.GetInt("scanner.concurrency", settings.Concurrency)
@@ -99,6 +133,21 @@ func effectiveScannerSettings() ScannerSettings {
 	}
 	if settings.ScanCacheCleanupHours < 0 {
 		settings.ScanCacheCleanupHours = 0
+	}
+	if settings.XrayConcurrency <= 0 {
+		settings.XrayConcurrency = 2
+	}
+	if settings.XrayMaxActive <= 0 {
+		settings.XrayMaxActive = 32
+	}
+	if settings.XrayWarmupTimeoutSeconds <= 0 {
+		settings.XrayWarmupTimeoutSeconds = 600
+	}
+	if settings.XrayProviderTimeoutSeconds <= 0 {
+		settings.XrayProviderTimeoutSeconds = 900
+	}
+	if settings.XrayTimeoutSeconds <= 0 {
+		settings.XrayTimeoutSeconds = 3600
 	}
 	return settings
 }

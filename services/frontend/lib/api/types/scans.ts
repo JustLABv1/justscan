@@ -157,6 +157,8 @@ export interface Comment {
 }
 
 export interface Scan {
+  queue_position?: number;
+  last_heartbeat_at?: string | null;
   id: string;
   image_name: string;
   image_tag: string;
@@ -378,6 +380,10 @@ export interface ArtifactFilterOptions {
 }
 
 export interface ScanQueueSummary {
+  xray_queue_depth?: number;
+  xray_active?: number;
+  xray_work_active?: number;
+  xray_work_capacity?: number;
   queued_in_justscan: number;
   active: number;
   worker_capacity: number;

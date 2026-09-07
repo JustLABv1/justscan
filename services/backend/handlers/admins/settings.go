@@ -9,6 +9,7 @@ import (
 	"justscan-backend/config"
 	"justscan-backend/middlewares"
 	"justscan-backend/pkg/models"
+	"justscan-backend/scanner"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -47,6 +48,22 @@ func GetSettings(c *gin.Context, db *bun.DB) {
 	result := make(map[string]string)
 	for _, s := range settings {
 		result[s.Key] = s.Value
+	}
+	effective := scanner.EffectiveScannerSettings()
+	if _, exists := result["scanner.xray_concurrency"]; !exists {
+		result["scanner.xray_concurrency"] = strconv.Itoa(effective.XrayConcurrency)
+	}
+	if _, exists := result["scanner.xray_max_active"]; !exists {
+		result["scanner.xray_max_active"] = strconv.Itoa(effective.XrayMaxActive)
+	}
+	if _, exists := result["scanner.xray_warmup_timeout_seconds"]; !exists {
+		result["scanner.xray_warmup_timeout_seconds"] = strconv.Itoa(effective.XrayWarmupTimeoutSeconds)
+	}
+	if _, exists := result["scanner.xray_provider_timeout_seconds"]; !exists {
+		result["scanner.xray_provider_timeout_seconds"] = strconv.Itoa(effective.XrayProviderTimeoutSeconds)
+	}
+	if _, exists := result["scanner.xray_timeout_seconds"]; !exists {
+		result["scanner.xray_timeout_seconds"] = strconv.Itoa(effective.XrayTimeoutSeconds)
 	}
 	// `timeout_seconds` was the original admin API key. Keep returning it as
 	// an alias while persistence uses the canonical command_timeout_seconds
@@ -199,6 +216,12 @@ func UpdateXRayLogRetention(c *gin.Context, db *bun.DB) {
 // UpdateScannerSettings updates DB-backed scanner settings.
 func UpdateScannerSettings(c *gin.Context, db *bun.DB) {
 	var req struct {
+		XrayConcurrency            *int `json:"xray_concurrency"`
+		XrayMaxActive              *int `json:"xray_max_active"`
+		XrayWarmupTimeoutSeconds   *int `json:"xray_warmup_timeout_seconds"`
+		XrayProviderTimeoutSeconds *int `json:"xray_provider_timeout_seconds"`
+		XrayTimeoutSeconds         *int `json:"xray_timeout_seconds"`
+
 		EnableTrivy               *bool `json:"enable_trivy"`
 		EnableGrype               *bool `json:"enable_grype"`
 		Concurrency               *int  `json:"concurrency"`
@@ -253,13 +276,54 @@ func UpdateScannerSettings(c *gin.Context, db *bun.DB) {
 	if req.EnableOSVJavaAugmentation != nil {
 		settings["scanner.enable_osv_java_augmentation"] = boolStr(*req.EnableOSVJavaAugmentation)
 	}
+	if req.XrayConcurrency != nil {
+		if *req.XrayConcurrency < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "xray_concurrency must be >= 1"})
+			return
+		}
+		settings["scanner.xray_concurrency"] = strconv.Itoa(*req.XrayConcurrency)
+	}
+	if req.XrayMaxActive != nil {
+		if *req.XrayMaxActive < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "xray_max_active must be >= 1"})
+			return
+		}
+		settings["scanner.xray_max_active"] = strconv.Itoa(*req.XrayMaxActive)
+	}
+	if req.XrayWarmupTimeoutSeconds != nil {
+		if *req.XrayWarmupTimeoutSeconds < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "xray_warmup_timeout_seconds must be >= 1"})
+			return
+		}
+		settings["scanner.xray_warmup_timeout_seconds"] = strconv.Itoa(*req.XrayWarmupTimeoutSeconds)
+	}
+	if req.XrayProviderTimeoutSeconds != nil {
+		if *req.XrayProviderTimeoutSeconds < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "xray_provider_timeout_seconds must be >= 1"})
+			return
+		}
+		settings["scanner.xray_provider_timeout_seconds"] = strconv.Itoa(*req.XrayProviderTimeoutSeconds)
+	}
+	if req.XrayTimeoutSeconds != nil {
+		if *req.XrayTimeoutSeconds < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "xray_timeout_seconds must be >= 1"})
+			return
+		}
+		settings["scanner.xray_timeout_seconds"] = strconv.Itoa(*req.XrayTimeoutSeconds)
+	}
 	for key, value := range settings {
 		if err := upsertSystemSetting(c, db, key, value); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update setting: " + key})
 			return
 		}
 	}
-	restartRequired := make([]string, 0, 1)
+	restartRequired := make([]string, 0, 3)
+	if req.XrayConcurrency != nil {
+		restartRequired = append(restartRequired, "xray_concurrency")
+	}
+	if req.XrayMaxActive != nil {
+		restartRequired = append(restartRequired, "xray_max_active")
+	}
 	if req.Concurrency != nil {
 		// Worker goroutines are intentionally fixed at process start. This is
 		// explicit so an operator knows a concurrency change takes effect on
@@ -272,6 +336,7 @@ func UpdateScannerSettings(c *gin.Context, db *bun.DB) {
 		"live_applies": []string{
 			"enable_trivy", "enable_grype", "command_timeout_seconds",
 			"db_max_age_hours", "enable_osv_java_augmentation",
+			"xray_warmup_timeout_seconds", "xray_provider_timeout_seconds", "xray_timeout_seconds",
 		},
 	})
 }

@@ -10,3 +10,27 @@ Tune concurrency and command timeouts to match the image size, registry bandwidt
 Tune concurrency and timeouts only after confirming registry reachability and scanner health. A full queue or database refresh can be expected during startup; stale scans or repeated timeouts need evidence from scan progress and backend logs before increasing global limits.
 
 See [registry and Xray modes](/scan-and-analyze/registries-and-xray) for the credentials and behavior expected by each Xray mode.
+
+## Xray capacity and deadlines
+
+Xray has its own queue and bounded coordinators. Local Trivy workers do not wait behind Xray downloads or remote polling. Each Xray coordinator acquires a preparation slot before claiming a pending scan, releases it while waiting for Xray, and acquires a slot again to import results. Up to `scanner.xray_max_active` coordinators can run per backend replica; `scanner.xray_concurrency` sets the size of each of two separate pools: preparation and import. Completed provider results therefore do not wait behind cold downloads. These limits require a backend restart. They are also available in the administrator scanner runtime panel.
+
+| Setting                                 | Default | Meaning                                                                             |
+| --------------------------------------- | ------- | ----------------------------------------------------------------------------------- |
+| `scanner.xray_concurrency`              | `2`     | Slots in each preparation/import pool per replica (two pools)                       |
+| `scanner.xray_max_active`               | `32`    | Maximum active coordinators, including provider waits                               |
+| `scanner.xray_warmup_timeout_seconds`   | `600`   | Deadline for manifest/configuration resolution and cache warming, including retries |
+| `scanner.xray_provider_timeout_seconds` | `900`   | Deadline for each artifact-status or summary wait                                   |
+| `scanner.xray_timeout_seconds`          | `3600`  | Overall deadline from worker claim through import, including capacity waits         |
+
+The earliest applicable deadline wins. Timeout changes apply to subsequently started stages/scans. They do not extend a deadline already running. `scanner.command_timeout_seconds` controls local scanner commands; `scanner.stale_timeout_seconds` controls recovery of workers that have stopped reporting liveness. Neither sets Xray's stage deadlines.
+
+Warm-up logs report layer numbers and bytes transferred. Completed blobs are reused across retries within the scan. Transfers use the selected image digest; an explicitly requested platform must match. Full mode waits for an addressable artifact before requesting a rescan, without first waiting for initial analysis to complete. Provider status changes appear in the step output. A missing completion timestamp is accepted only with other freshness evidence; if Xray supplies neither a usable new timestamp nor an observed pending-to-completed transition, Full mode fails instead of importing an unverified result.
+
+Queue positions are approximate ranks among visible pending scans for the same provider in the selected workspace. Other workspaces, recovery, concurrent workers, and multiple replicas can affect actual start order. Pending scans remain durable without expiring just because capacity is busy. Running scans retain their step and output in the database; coordinator execution is not resumed across a process restart, and stale interrupted runs must be resubmitted after recovery marks them failed.
+
+## Upgrade notes
+
+Migration `116_scan_heartbeat` adds nullable `scans.last_heartbeat_at`. Run backend migrations before starting the upgraded workers. `last_progress_at` now records meaningful scan progress, while `last_heartbeat_at` records worker liveness. Recovery checks the newer timestamp so existing rows without a heartbeat remain compatible. The scan-detail and scan-list APIs add optional `queue_position` and `last_heartbeat_at` fields. Queue summary adds administrator-only `xray_queue_depth`, `xray_active`, `xray_work_active`, and `xray_work_capacity`; its existing worker metrics describe the local scanner pool.
+
+Use the [backend configuration reference](/reference/backend-configuration) for environment overrides and [troubleshooting](/operate/troubleshooting) when a stage times out.

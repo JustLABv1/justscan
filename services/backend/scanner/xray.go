@@ -41,6 +41,10 @@ const registryWarmupRetryInterval = 10 * time.Second
 const xrayRequestLogBodyLimit = 0
 
 type xrayClient struct {
+	progress         func(string)
+	observeStatus    func(xrayArtifactPathCandidate, xrayArtifactScanStatus) error
+	freshRequestedAt *time.Time
+
 	baseURL            string
 	registryURL        string
 	artifactoryID      string
@@ -302,6 +306,13 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		return err
 	}
 	ctx = xrayScanContext(ctx, scan.ID, scan.RegistryID)
+	client.progress = func(message string) { recordScanStepOutput(ctx, db, scan.ID, message) }
+	if err := setScanStep(ctx, db, scan, models.ScanStepPreparingImage); err != nil {
+		return err
+	}
+	parentCtx := ctx
+	ctx, cancelWarmup := context.WithTimeout(ctx, registryWarmupWaitWindow())
+	defer cancelWarmup()
 
 	repoKey, artifactName, imageTag, err := xrayImageParts(scan.ImageName, scan.ImageTag, registry)
 	if err != nil {
@@ -317,9 +328,38 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	artifactRepoPath := selectedCandidate.Path
 	repoPath := selectedCandidate.RepoPath
 	artifactPath := selectedCandidate.ArtifactPath
-	if imageConfig, configErr := client.imageConfigMetadata(ctx, imageRepoPath, imageTag, scan.Platform); configErr != nil {
+	if resolvedDigest, resolveErr := client.resolveImageDigest(ctx, imageRepoPath, imageTag, scan.Platform); resolveErr != nil {
+		if _, blocked := normalizeXrayDownloadBlockedError(resolveErr); !blocked {
+			return fmt.Errorf("resolve the requested image digest: %w", resolveErr)
+		}
+		recordScanStepOutput(ctx, db, scan.ID, "Artifactory blocked manifest access; checking available policy findings.")
+	} else if resolvedDigest != "" {
+		scan.ImageDigest = resolvedDigest
+		exportComponentName = xrayExportComponentName(artifactName, imageTag, scan.ImageDigest)
+		artifactCandidates = buildXrayArtifactPathCandidates(client.artifactoryID, repoKey, artifactName, imageTag, manifestFilename, resolvedDigest)
+		selectedCandidate = preferredXrayArtifactCandidate(artifactCandidates)
+		artifactRepoPath = selectedCandidate.Path
+		repoPath = selectedCandidate.RepoPath
+		artifactPath = selectedCandidate.ArtifactPath
+		if _, err := db.NewUpdate().Model(scan).
+			Column("image_digest").
+			Where("id = ?", scan.ID).
+			Exec(ctx); err != nil {
+			return fmt.Errorf("failed to persist xray image digest: %w", err)
+		}
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Resolved image digest %s for suppression and reporting.", resolvedDigest))
+	}
+
+	imageReference := scan.ImageDigest
+	if imageReference == "" {
+		imageReference = imageTag
+	}
+	if imageConfig, configErr := client.imageConfigMetadata(ctx, imageRepoPath, imageReference, scan.Platform); configErr != nil {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to load image config metadata from Artifactory: %v", configErr))
 	} else if len(imageConfig) > 0 {
+		if err := validateXrayImagePlatform(imageConfig, scan.Platform); err != nil {
+			return err
+		}
 		scan.ImageConfig = imageConfig
 		architecture, osFamily, osName := xrayImageMetadataFields(imageConfig)
 		if architecture != "" {
@@ -339,24 +379,6 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		}
 		recordScanStepOutput(ctx, db, scan.ID, "Loaded image config metadata from Artifactory for richer scan details.")
 	}
-	if resolvedDigest, resolveErr := client.resolveImageDigest(ctx, imageRepoPath, imageTag, scan.Platform); resolveErr != nil {
-		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to resolve image digest before starting the Xray flow: %v", resolveErr))
-	} else if resolvedDigest != "" {
-		scan.ImageDigest = resolvedDigest
-		exportComponentName = xrayExportComponentName(artifactName, imageTag, scan.ImageDigest)
-		artifactCandidates = buildXrayArtifactPathCandidates(client.artifactoryID, repoKey, artifactName, imageTag, manifestFilename, resolvedDigest)
-		selectedCandidate = preferredXrayArtifactCandidate(artifactCandidates)
-		artifactRepoPath = selectedCandidate.Path
-		repoPath = selectedCandidate.RepoPath
-		artifactPath = selectedCandidate.ArtifactPath
-		if _, err := db.NewUpdate().Model(scan).
-			Column("image_digest").
-			Where("id = ?", scan.ID).
-			Exec(ctx); err != nil {
-			return fmt.Errorf("failed to persist xray image digest: %w", err)
-		}
-		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Resolved image digest %s for suppression and reporting.", resolvedDigest))
-	}
 
 	componentID := "docker://" + exportComponentName
 	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "warming_artifactory_cache", models.ScanStepWarmingCache); err != nil {
@@ -368,8 +390,17 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	scan.ExternalStatus = "warming_artifactory_cache"
 	scan.CurrentStep = models.ScanStepWarmingCache
 
-	if err := client.warmImageInArtifactory(ctx, imageRepoPath, imageTag, scan.Platform); err != nil {
+	// Pin preparation and analysis to the digest resolved above, even if the tag moves.
+	warmErr := client.warmImageInArtifactory(ctx, imageRepoPath, imageReference, scan.Platform)
+	cancelWarmup()
+	ctx = parentCtx
+	if err := warmErr; err != nil {
 		if normalizedMessage, ok := normalizeXrayDownloadBlockedError(err); ok {
+			xrayPermit(ctx).release()
+			if err := setScanStep(ctx, db, scan, models.ScanStepWaitingForXray); err != nil {
+				return err
+			}
+			recordScanStepOutput(ctx, db, scan.ID, "Artifactory blocked the download; checking available Xray policy evidence.")
 			targets := blockedViolationLookupTargets(err, repoKey, artifactRepoPath)
 
 			// In Full mode, request a best-effort artifact scan, then poll the summary
@@ -411,11 +442,15 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 				normalizedMessage += "\n" + enrichment
 			}
 			recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Artifactory reported a blocking policy while warming %s.", artifactPath))
-			if err := updateXrayMetadata(ctx, db, scan.ID, componentID, models.ScanExternalStatusBlockedByXrayPolicy, models.ScanStepFailed); err != nil {
+			if err := updateXrayMetadata(ctx, db, scan.ID, componentID, models.ScanExternalStatusBlockedByXrayPolicy, models.ScanStepImportingResults); err != nil {
 				return err
 			}
 			scan.ExternalStatus = models.ScanExternalStatusBlockedByXrayPolicy
-			scan.CurrentStep = models.ScanStepFailed
+			scan.CurrentStep = models.ScanStepImportingResults
+			if err := xrayPermit(ctx).acquireImport(ctx); err != nil {
+				return err
+			}
+			defer xrayPermit(ctx).release()
 
 			if blockedSummary != nil {
 				if err := persistXraySummaryFindings(ctx, db, scan, blockedSummary); err != nil {
@@ -476,10 +511,36 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Artifactory cache warm-up completed for %s.", artifactPath))
 
-	baselineStatus, baselineCandidate, err := client.waitForArtifactStatus(ctx, artifactCandidates, nil, false)
+	// Only digest paths may establish freshness. A mutable tag or an index
+	// for another platform must never substitute for the selected image.
+	artifactCandidates = xrayDigestCandidates(artifactCandidates, scan.ImageDigest)
+	// Provider polling does not occupy download/import capacity.
+	xrayPermit(ctx).release()
+	if err := setScanStep(ctx, db, scan, models.ScanStepIndexingArtifact); err != nil {
+		return err
+	}
+	if err := updateXrayMetadata(ctx, db, scan.ID, componentID, "waiting_for_initial_xray", models.ScanStepIndexingArtifact); err != nil {
+		return err
+	}
+	scan.ExternalStatus = "waiting_for_initial_xray"
+	client.observeStatus = func(candidate xrayArtifactPathCandidate, status xrayArtifactScanStatus) error {
+		if scan.ExternalStatus == status.Status {
+			return nil
+		}
+		if err := updateXrayMetadata(ctx, db, scan.ID, componentID, status.Status, scan.CurrentStep); err != nil {
+			return err
+		}
+		scan.ExternalStatus = status.Status
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray reports %s for %s.", status.Status, candidate.ArtifactPath))
+		return nil
+	}
+	// Full mode needs an addressable artifact and baseline, not a completed
+	// initial analysis. Limited mode waits for the existing provider result.
+	baselineStatus, baselineCandidate, err := client.waitForArtifactStatusUntil(ctx, artifactCandidates, nil, false, mode != models.XrayModeFull)
 	if err != nil {
 		return err
 	}
+	artifactCandidates = []xrayArtifactPathCandidate{baselineCandidate}
 	artifactRepoPath = baselineCandidate.Path
 	repoPath = baselineCandidate.RepoPath
 	artifactPath = baselineCandidate.ArtifactPath
@@ -489,7 +550,12 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 
 	if mode == models.XrayModeFull {
+		// scanArtifact documents the Docker name:tag identifier. Guard it
+		// against tag movement while keeping status and import bound to the digest.
 		freshComponentID := "docker://" + buildImageRef(artifactName, imageTag)
+		if err := client.verifyImageDigest(ctx, imageRepoPath, imageTag, scan.Platform, scan.ImageDigest); err != nil {
+			return err
+		}
 		if err := updateXrayMetadata(ctx, db, scan.ID, freshComponentID, "queued", models.ScanStepQueuedInXray); err != nil {
 			return err
 		}
@@ -497,6 +563,8 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		scan.ExternalStatus = "queued"
 		scan.CurrentStep = models.ScanStepQueuedInXray
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Requesting a fresh Xray scan for component %s.", freshComponentID))
+		requestedAt := time.Now().UTC()
+		client.freshRequestedAt = &requestedAt
 		if err := client.triggerFreshArtifactScan(ctx, freshComponentID); err != nil {
 			return err
 		}
@@ -521,6 +589,9 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		artifactPath = freshCandidate.ArtifactPath
 		scan.XrayProviderScannedAt = freshStatus.Time
 		if err := persistXrayProviderScannedAt(ctx, db, scan.ID, freshStatus.Time); err != nil {
+			return err
+		}
+		if err := client.verifyImageDigest(ctx, imageRepoPath, imageTag, scan.Platform, scan.ImageDigest); err != nil {
 			return err
 		}
 		recordScanStepOutput(ctx, db, scan.ID, "Xray confirmed completion of the requested fresh scan.")
@@ -550,6 +621,12 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	}
 	scan.ExternalStatus = "importing"
 	scan.CurrentStep = models.ScanStepImportingResults
+	recordScanStepOutput(ctx, db, scan.ID, "Waiting for Xray result import capacity.")
+	if err := xrayPermit(ctx).acquireImport(ctx); err != nil {
+		return err
+	}
+	defer xrayPermit(ctx).release()
+
 	recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray returned %d artifact summaries. Importing findings now.", len(summary.Artifacts)))
 
 	if err := persistXraySummaryFindings(ctx, db, scan, summary); err != nil {
@@ -645,7 +722,18 @@ func persistTrivyFallbackSBOM(ctx context.Context, db *bun.DB, scan *models.Scan
 	if scan == nil {
 		return fmt.Errorf("scan is required")
 	}
-	sbom, err := RunSBOMScan(ctx, scan.ImageName, scan.ImageTag, nil, scan.Platform, "")
+	if !TrivyEnabled() {
+		return fmt.Errorf("local Trivy scanner is disabled")
+	}
+	if scan.ImageDigest == "" {
+		return fmt.Errorf("no verified image digest is available for SBOM fallback")
+	}
+	_, envVars, err := ResolveRegistryForScan(ctx, db, scan.ImageName, scan.RegistryID)
+	if err != nil {
+		return err
+	}
+	recordScanStepOutput(ctx, db, scan.ID, "Generating a local Trivy SBOM for the verified image digest.")
+	sbom, err := RunSBOMScan(ctx, scan.ImageName, scan.ImageDigest, envVars, scan.Platform, "")
 	if err != nil {
 		return err
 	}
@@ -998,6 +1086,17 @@ func (c *xrayClient) scanArtifact(ctx context.Context, componentID string) error
 	return err
 }
 
+func (c *xrayClient) verifyImageDigest(ctx context.Context, repo, tag, platform, expected string) error {
+	actual, err := c.resolveImageDigest(ctx, repo, tag, platform)
+	if err != nil {
+		return fmt.Errorf("verify Xray rescan image identity: %w", err)
+	}
+	if expected == "" || actual != expected {
+		return fmt.Errorf("image tag changed during the Xray scan (expected %s, found %s); submit a new scan", expected, actual)
+	}
+	return nil
+}
+
 func (c *xrayClient) triggerFreshArtifactScan(ctx context.Context, componentID string) error {
 	var lastErr error
 	for attempt := 1; attempt <= 3; attempt++ {
@@ -1208,32 +1307,33 @@ func xrayExportPathCandidates(artifactoryID string, candidatePaths ...string) []
 
 func (c *xrayClient) warmImageInArtifactory(ctx context.Context, imageRepoPath, tag, platform string) error {
 	waitWindow := registryWarmupWaitWindow()
-	deadline := time.Now().Add(waitWindow)
-	var lastErr error
-
-	for {
-		seenManifests := make(map[string]bool)
-		seenBlobs := make(map[string]bool)
+	ctx, cancel := context.WithTimeout(ctx, waitWindow)
+	defer cancel()
+	seenManifests := make(map[string]bool)
+	seenBlobs := make(map[string]bool)
+	for attempt := 1; ; attempt++ {
 		err := c.warmManifestReference(ctx, imageRepoPath, tag, platform, seenManifests, seenBlobs)
+		if ctx.Err() != nil {
+			return fmt.Errorf("Artifactory cache warm-up deadline/cancellation after %d attempt(s), %d blobs completed: %w", attempt, len(seenBlobs), ctx.Err())
+		}
 		if err == nil {
 			return nil
 		}
 		if !isRetriableRegistryWarmupError(err) {
 			return err
 		}
-
-		lastErr = err
-		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out after %s warming the artifactory cache: %w", waitWindow, lastErr)
-		}
-
-		log.Warnf("Artifactory cache warm-up for %s hit a transient error; retrying in %s: %v", buildImageRef(imageRepoPath, tag), registryWarmupRetryInterval, err)
-
+		c.reportProgress(fmt.Sprintf("Artifactory warm-up retry %d in %s; preserving %d completed blobs: %v", attempt, registryWarmupRetryInterval, len(seenBlobs), err))
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("Artifactory cache warm-up stopped: %w", ctx.Err())
 		case <-time.After(registryWarmupRetryInterval):
 		}
+	}
+}
+
+func (c *xrayClient) reportProgress(message string) {
+	if c.progress != nil {
+		c.progress(message)
 	}
 }
 
@@ -1244,7 +1344,6 @@ func (c *xrayClient) warmManifestReference(ctx context.Context, imageRepoPath, r
 	if seenManifests[reference] {
 		return nil
 	}
-	seenManifests[reference] = true
 
 	manifest, mediaType, _, err := c.fetchRegistryManifest(ctx, imageRepoPath, reference)
 	if err != nil {
@@ -1254,7 +1353,7 @@ func (c *xrayClient) warmManifestReference(ctx context.Context, imageRepoPath, r
 	if isRegistryManifestIndex(mediaType, manifest) {
 		targets := selectManifestDescriptors(manifest.Manifests, platform)
 		if len(targets) == 0 {
-			return fmt.Errorf("registry manifest list for %s did not contain a usable image manifest", reference)
+			return fmt.Errorf("registry manifest list for %s did not contain requested platform %q", reference, platform)
 		}
 		for _, target := range targets {
 			if target.Digest == "" {
@@ -1264,18 +1363,21 @@ func (c *xrayClient) warmManifestReference(ctx context.Context, imageRepoPath, r
 				return err
 			}
 		}
+		seenManifests[reference] = true
 		return nil
 	}
 
 	if err := c.warmBlob(ctx, imageRepoPath, manifest.Config.Digest, seenBlobs); err != nil {
 		return err
 	}
-	for _, layer := range manifest.Layers {
+	for index, layer := range manifest.Layers {
+		c.reportProgress(fmt.Sprintf("Warming layer %d/%d (%s); %d blobs already complete.", index+1, len(manifest.Layers), layer.Digest, len(seenBlobs)))
 		if err := c.warmBlob(ctx, imageRepoPath, layer.Digest, seenBlobs); err != nil {
 			return err
 		}
 	}
 
+	seenManifests[reference] = true
 	return nil
 }
 
@@ -1333,7 +1435,7 @@ func (c *xrayClient) resolveImageManifest(ctx context.Context, imageRepoPath, re
 	if isRegistryManifestIndex(mediaType, manifest) {
 		targets := selectManifestDescriptors(manifest.Manifests, platform)
 		if len(targets) == 0 {
-			return nil, "", fmt.Errorf("registry manifest list for %s did not contain a usable image manifest", reference)
+			return nil, "", fmt.Errorf("registry manifest list for %s did not contain requested platform %q", reference, platform)
 		}
 		for _, target := range targets {
 			if digest := strings.TrimSpace(target.Digest); digest != "" {
@@ -1392,7 +1494,6 @@ func (c *xrayClient) warmBlob(ctx context.Context, imageRepoPath, digest string,
 	if digest == "" || seenBlobs[digest] {
 		return nil
 	}
-	seenBlobs[digest] = true
 
 	response, err := c.doRegistryRequest(ctx, http.MethodGet, registryBlobPath(imageRepoPath, digest), nil)
 	if err != nil {
@@ -1400,11 +1501,36 @@ func (c *xrayClient) warmBlob(ctx context.Context, imageRepoPath, digest string,
 	}
 	defer response.Body.Close()
 
-	if _, err := io.Copy(io.Discard, response.Body); err != nil {
+	reader := &xrayBlobProgressReader{reader: response.Body, digest: digest, total: response.ContentLength, report: c.reportProgress, lastReport: time.Now()}
+	if size, err := io.Copy(io.Discard, reader); err != nil {
 		return fmt.Errorf("failed to read registry blob %s: %w", digest, err)
+	} else {
+		c.reportProgress(fmt.Sprintf("Cached blob %s (%d bytes).", digest, size))
 	}
-
+	seenBlobs[digest] = true
 	return nil
+}
+
+type xrayBlobProgressReader struct {
+	reader            io.Reader
+	digest            string
+	total, downloaded int64
+	lastReport        time.Time
+	report            func(string)
+}
+
+func (r *xrayBlobProgressReader) Read(buffer []byte) (int, error) {
+	n, err := r.reader.Read(buffer)
+	r.downloaded += int64(n)
+	if n > 0 && time.Since(r.lastReport) >= 5*time.Second {
+		message := fmt.Sprintf("Downloading blob %s: %d bytes received", r.digest, r.downloaded)
+		if r.total > 0 {
+			message += fmt.Sprintf(" of %d", r.total)
+		}
+		r.report(message + ".")
+		r.lastReport = time.Now()
+	}
+	return n, err
 }
 
 func (c *xrayClient) pollArtifactSummary(ctx context.Context, candidates []xrayArtifactPathCandidate) (*xraySummaryResponse, xrayArtifactPathCandidate, error) {
@@ -1416,6 +1542,13 @@ func (c *xrayClient) pollArtifactSummary(ctx context.Context, candidates []xrayA
 // (or to pass through a pending state), preventing Full mode from importing a
 // known stale result after a scanArtifact request.
 func (c *xrayClient) waitForArtifactStatus(ctx context.Context, candidates []xrayArtifactPathCandidate, baseline *time.Time, requireFresh bool) (xrayArtifactScanStatus, xrayArtifactPathCandidate, error) {
+	return c.waitForArtifactStatusUntil(ctx, candidates, baseline, requireFresh, true)
+}
+
+func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates []xrayArtifactPathCandidate, baseline *time.Time, requireFresh, requireDone bool) (xrayArtifactScanStatus, xrayArtifactPathCandidate, error) {
+	ctx, cancel := context.WithTimeout(ctx, xraySummaryWaitWindow())
+	defer cancel()
+
 	candidates = dedupeXrayArtifactPathCandidates(candidates)
 	if len(candidates) == 0 {
 		return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("missing Xray artifact status path")
@@ -1423,7 +1556,7 @@ func (c *xrayClient) waitForArtifactStatus(ctx context.Context, candidates []xra
 
 	deadline := time.Now().Add(xraySummaryWaitWindow())
 	var missingSince time.Time
-	seenPending := false
+	seenPending := make(map[string]bool)
 	for {
 		allMissing := true
 		for _, candidate := range candidates {
@@ -1440,13 +1573,23 @@ func (c *xrayClient) waitForArtifactStatus(ctx context.Context, candidates []xra
 				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("failed to read Xray artifact status for %s: %w", candidate.ArtifactPath, err)
 			}
 			allMissing = false
+			if c.observeStatus != nil {
+				if err := c.observeStatus(candidate, status); err != nil {
+					return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, err
+				}
+			}
 			switch status.Status {
 			case "PENDING", "IN_PROGRESS", "SCANNING", "INDEXING":
-				seenPending = true
-			case "DONE":
-				if !requireFresh || seenPending || (baseline != nil && status.Time != nil && status.Time.After(*baseline)) {
+				seenPending[candidate.ArtifactPath] = true
+				if !requireDone {
 					return status, candidate, nil
 				}
+			case "DONE":
+				if !requireFresh || seenPending[candidate.ArtifactPath] || xrayCompletionIsFresh(status.Time, baseline, c.freshRequestedAt) {
+					return status, candidate, nil
+				}
+			case "FAILED", "ERROR", "SCAN_FAILED":
+				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("Xray reported %s for %s", status.Status, candidate.ArtifactPath)
 			case "NOT_SUPPORTED":
 				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("Xray does not support scanning artifact %s", candidate.ArtifactPath)
 			}
@@ -1470,13 +1613,25 @@ func (c *xrayClient) waitForArtifactStatus(ctx context.Context, candidates []xra
 		}
 		select {
 		case <-ctx.Done():
-			return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, ctx.Err()
+			return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("waiting for Xray artifact status (fresh=%t); completion freshness must be evidenced by a timestamp or observed transition: %w", requireFresh, ctx.Err())
 		case <-time.After(xraySummaryPollInterval):
 		}
 	}
 }
 
+func xrayCompletionIsFresh(completed, baseline, requestedAt *time.Time) bool {
+	if completed == nil {
+		return false
+	}
+	if baseline != nil {
+		return completed.After(*baseline)
+	}
+	return requestedAt != nil && !completed.Before(*requestedAt)
+}
+
 func (c *xrayClient) pollArtifactSummaryWithin(ctx context.Context, candidates []xrayArtifactPathCandidate, waitWindow time.Duration) (*xraySummaryResponse, xrayArtifactPathCandidate, error) {
+	ctx, cancel := context.WithTimeout(ctx, waitWindow)
+	defer cancel()
 	candidates = dedupeXrayArtifactPathCandidates(candidates)
 	if len(candidates) == 0 {
 		return nil, xrayArtifactPathCandidate{}, fmt.Errorf("missing xray artifact summary path")
@@ -1547,7 +1702,7 @@ func (c *xrayClient) pollArtifactSummaryWithin(ctx context.Context, candidates [
 
 		select {
 		case <-ctx.Done():
-			return nil, xrayArtifactPathCandidate{}, ctx.Err()
+			return nil, xrayArtifactPathCandidate{}, fmt.Errorf("waiting for Xray artifact summary: %w", ctx.Err())
 		case <-time.After(xraySummaryPollInterval):
 		}
 	}
@@ -2837,6 +2992,20 @@ func buildXrayArtifactPathCandidates(artifactoryID, repository, artifactName, re
 	}
 
 	return dedupeXrayArtifactPathCandidates(results)
+}
+
+func xrayDigestCandidates(candidates []xrayArtifactPathCandidate, digest string) []xrayArtifactPathCandidate {
+	result := make([]xrayArtifactPathCandidate, 0, len(candidates))
+	reference := xrayDigestArtifactReference(digest)
+	if reference == "" {
+		return result
+	}
+	for _, candidate := range candidates {
+		if strings.HasSuffix(candidate.Path, "/"+reference+"/manifest.json") {
+			result = append(result, candidate)
+		}
+	}
+	return result
 }
 
 func xrayRepositoryCandidates(repository string) []string {
@@ -4431,6 +4600,20 @@ func isRegistryManifestIndex(mediaType string, manifest *registryManifest) bool 
 	return normalized == "application/vnd.oci.image.index.v1+json" || normalized == "application/vnd.docker.distribution.manifest.list.v2+json" || len(manifest.Manifests) > 0
 }
 
+func validateXrayImagePlatform(imageConfig models.JSONObject, platform string) error {
+	if platform == "" {
+		return nil
+	}
+	parts := strings.Split(strings.TrimSpace(platform), "/")
+	os, _ := imageConfig["os"].(string)
+	arch, _ := imageConfig["architecture"].(string)
+	variant, _ := imageConfig["variant"].(string)
+	if len(parts) < 2 || !strings.EqualFold(parts[0], os) || !strings.EqualFold(parts[1], arch) || (len(parts) >= 3 && !strings.EqualFold(parts[2], variant)) {
+		return fmt.Errorf("requested platform %q does not match image configuration %s/%s/%s", platform, os, arch, variant)
+	}
+	return nil
+}
+
 func selectManifestDescriptors(items []registryManifestDescriptor, platform string) []registryManifestDescriptor {
 	if len(items) == 0 {
 		return nil
@@ -4443,9 +4626,7 @@ func selectManifestDescriptors(items []registryManifestDescriptor, platform stri
 				matched = append(matched, item)
 			}
 		}
-		if len(matched) > 0 {
-			return matched
-		}
+		return matched
 	}
 
 	for _, item := range items {

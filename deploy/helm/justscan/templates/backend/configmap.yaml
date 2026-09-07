@@ -37,6 +37,11 @@ data:
       progress_heartbeat_seconds: {{ .Values.backend.config.scanner.progressHeartbeatSeconds }}
       stale_timeout_seconds: {{ .Values.backend.config.scanner.staleTimeoutSeconds }}
       concurrency: {{ .Values.backend.config.scanner.concurrency }}
+      xray_concurrency: {{ .Values.backend.config.scanner.xrayConcurrency }}
+      xray_max_active: {{ .Values.backend.config.scanner.xrayMaxActive }}
+      xray_warmup_timeout_seconds: {{ .Values.backend.config.scanner.xrayWarmupTimeoutSeconds }}
+      xray_provider_timeout_seconds: {{ .Values.backend.config.scanner.xrayProviderTimeoutSeconds }}
+      xray_timeout_seconds: {{ .Values.backend.config.scanner.xrayTimeoutSeconds }}
       db_max_age_hours: {{ .Values.backend.config.scanner.dbMaxAgeHours }}
       scan_cache_cleanup_hours: {{ .Values.backend.config.scanner.scanCacheCleanupHours }}
       enable_osv_java_augmentation: {{ .Values.backend.config.scanner.enableOsvJavaAugmentation }}

@@ -25,6 +25,7 @@ import (
 
 // ScanJob represents a queued scan job
 type ScanJob struct {
+	xrayWork    *xrayWorkPermit
 	ScanID      uuid.UUID
 	DB          *bun.DB
 	EnvVars     []string // optional registry credentials
@@ -50,6 +51,10 @@ var (
 // Queue depth is intentionally paired with the durable workspace-scoped counts
 // in the queue summary handler; it is not used for authorization decisions.
 type QueueStats struct {
+	XrayDepth         int
+	XrayActive        int
+	XrayWorkActive    int
+	XrayWorkCapacity  int
 	Depth             int
 	Capacity          int
 	ActiveWorkers     int
@@ -77,6 +82,10 @@ func GetQueueStats() QueueStats {
 		}
 	}
 	return QueueStats{
+		XrayDepth:         len(xrayJobQueue),
+		XrayActive:        int(xrayActiveCoordinators.Load()),
+		XrayWorkActive:    len(xrayWorkPool) + len(xrayImportPool),
+		XrayWorkCapacity:  cap(xrayWorkPool) + cap(xrayImportPool),
 		Depth:             depth,
 		Capacity:          capacity,
 		ActiveWorkers:     active,
@@ -115,6 +124,7 @@ func InitWorker(db *bun.DB) {
 	startScanBackgroundJobReconciler(db)
 
 	jobQueue = make(chan ScanJob, 64)
+	initXrayWorkers()
 	workerPoolSize.Store(int64(concurrency))
 
 	for i := 0; i < concurrency; i++ {
@@ -215,7 +225,16 @@ func EnqueueScan(scanID uuid.UUID, db *bun.DB, envVars []string, platform, archi
 // tying up a request goroutine while the scanner is saturated. The scan row
 // remains pending for the recovery dispatcher.
 func EnqueueScanContext(ctx context.Context, scanID uuid.UUID, db *bun.DB, envVars []string, platform, archivePath string) error {
-	if db == nil || jobQueue == nil {
+	return enqueueScanForProvider(ctx, scanID, db, envVars, platform, archivePath, models.ScanProviderTrivy)
+}
+
+func enqueueScanForProvider(ctx context.Context, scanID uuid.UUID, db *bun.DB, envVars []string, platform, archivePath, provider string) error {
+	queue := jobQueue
+	if provider == models.ScanProviderArtifactoryXray {
+		queue = xrayJobQueue
+	}
+
+	if db == nil || queue == nil {
 		return ErrScanQueueUnavailable
 	}
 	if ctx == nil {
@@ -244,7 +263,7 @@ func EnqueueScanContext(ctx context.Context, scanID uuid.UUID, db *bun.DB, envVa
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case jobQueue <- ScanJob{ScanID: scanID, DB: db, EnvVars: envVars, Platform: platform, ArchivePath: archivePath}:
+	case queue <- ScanJob{ScanID: scanID, DB: db, EnvVars: envVars, Platform: platform, ArchivePath: archivePath}:
 		reserved = false
 		return nil
 	default:
@@ -284,13 +303,20 @@ func startPendingScanRecovery(db *bun.DB) {
 }
 
 func recoverPendingScanBatch(db *bun.DB) {
+	for _, provider := range []string{models.ScanProviderTrivy, models.ScanProviderArtifactoryXray} {
+		recoverPendingProviderBatch(db, provider)
+	}
+}
+
+func recoverPendingProviderBatch(db *bun.DB, provider string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var scans []models.Scan
 	if err := db.NewSelect().Model(&scans).
 		Where("status = ?", models.ScanStatusPending).
-		OrderExpr("created_at ASC").
-		Limit(64).
+		Where("COALESCE(NULLIF(scan_provider, ''), 'trivy') = ?", provider).
+		OrderExpr("created_at ASC, id ASC").
+		Limit(128).
 		Scan(ctx); err != nil {
 		log.Warnf("Scanner pending recovery query failed: %v", err)
 		return
@@ -317,7 +343,7 @@ func recoverPendingScanBatch(db *bun.DB) {
 				continue
 			}
 		}
-		if err := EnqueueScanContext(ctx, scan.ID, db, envVars, scan.Platform, archivePath); err != nil {
+		if err := enqueueScanForProvider(ctx, scan.ID, db, envVars, scan.Platform, archivePath, scan.ScanProvider); err != nil {
 			if !errors.Is(err, ErrScanQueueFull) {
 				log.Warnf("Scanner pending recovery could not enqueue %s: %v", scan.ID, err)
 			}
@@ -373,10 +399,10 @@ func recoverScansAfterRestart(ctx context.Context, db *bun.DB, now time.Time) (i
 				continue
 			}
 		}
-		if err := EnqueueScanContext(ctx, scan.ID, db, envVars, scan.Platform, archivePath); err != nil {
+		if err := enqueueScanForProvider(ctx, scan.ID, db, envVars, scan.Platform, archivePath, scan.ScanProvider); err != nil {
 			if errors.Is(err, ErrScanQueueFull) {
 				log.Warnf("Scanner startup queue full; leaving pending scan %s for a later recovery pass", scan.ID)
-				break
+				continue
 			}
 			log.Warnf("Scanner startup could not requeue pending scan %s: %v", scan.ID, err)
 			continue
@@ -397,7 +423,7 @@ func recoverScansAfterRestart(ctx context.Context, db *bun.DB, now time.Time) (i
 	var running []models.Scan
 	if err := db.NewSelect().Model(&running).
 		Where("status = ?", models.ScanStatusRunning).
-		Where("last_progress_at IS NULL OR last_progress_at < ?", cutoff).
+		Where("GREATEST(last_heartbeat_at, last_progress_at) IS NULL OR GREATEST(last_heartbeat_at, last_progress_at) < ?", cutoff).
 		Scan(ctx); err != nil {
 		return requeued, 0, fmt.Errorf("load stale running scans for recovery: %w", err)
 	}
@@ -412,7 +438,7 @@ func recoverScansAfterRestart(ctx context.Context, db *bun.DB, now time.Time) (i
 			Set("completed_at = ?", now).
 			Set("last_progress_at = ?", now).
 			Where("id = ? AND status = ?", scan.ID, models.ScanStatusRunning).
-			Where("last_progress_at IS NULL OR last_progress_at < ?", cutoff).
+			Where("GREATEST(last_heartbeat_at, last_progress_at) IS NULL OR GREATEST(last_heartbeat_at, last_progress_at) < ?", cutoff).
 			Exec(ctx)
 		if err != nil {
 			return requeued, recovered, fmt.Errorf("mark interrupted scan %s: %w", scan.ID, err)
@@ -478,6 +504,11 @@ func processScan(job ScanJob, cacheDir string) {
 
 	// Create a cancellable context so this scan can be interrupted via CancelScan().
 	ctx, cancel := context.WithCancel(context.Background())
+	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
+		cancel()
+		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(effectiveScannerSettings().XrayTimeoutSeconds)*time.Second)
+		ctx = context.WithValue(ctx, xrayWorkPermitKey{}, job.xrayWork)
+	}
 	cancelMu.Lock()
 	cancelMap[scanID] = cancel
 	cancelMu.Unlock()
@@ -515,8 +546,11 @@ func processScan(job ScanJob, cacheDir string) {
 		err := processXrayScan(ctx, db, scan)
 		stopHeartbeat()
 		if err != nil {
-			if ctx.Err() != nil {
+			if errors.Is(ctx.Err(), context.Canceled) {
 				return
+			}
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				err = fmt.Errorf("Xray overall scan deadline exceeded while in %s: %w", scan.CurrentStep, err)
 			}
 			setFailed(db, scan, err.Error())
 			return
@@ -885,7 +919,7 @@ func persistFailedScan(ctx context.Context, db *bun.DB, scan *models.Scan, msg s
 		Column(columns...).
 		Where("id = ? AND status IN (?)", scan.ID, bun.In([]string{models.ScanStatusPending, models.ScanStatusRunning}))
 	if staleBefore != nil {
-		query = query.Where("last_progress_at IS NULL OR last_progress_at < ?", *staleBefore)
+		query = query.Where("GREATEST(last_heartbeat_at, last_progress_at) IS NULL OR GREATEST(last_heartbeat_at, last_progress_at) < ?", *staleBefore)
 	}
 	result, err := query.Exec(ctx)
 	if err != nil {

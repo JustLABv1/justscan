@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"justscan-backend/compliance"
+	"justscan-backend/functions/authz"
 	"justscan-backend/functions/blockedpolicy"
 	"justscan-backend/pkg/models"
 	"justscan-backend/scanner"
@@ -31,6 +32,17 @@ func GetScan(db *bun.DB) gin.HandlerFunc {
 		scan, _, _, ok := LoadAuthorizedScan(c, db, scanID)
 		if !ok {
 			return
+		}
+
+		if scan.Status == models.ScanStatusPending {
+			userID, isAdmin, orgIDs, authorized := authz.RequireOwnershipContext(c, db)
+			if !authorized {
+				return
+			}
+			if err := attachQueuePositions(c, db, []*models.Scan{scan}, userID, isAdmin, orgIDs); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load queue position"})
+				return
+			}
 		}
 
 		if scan.Status == models.ScanStatusCompleted {

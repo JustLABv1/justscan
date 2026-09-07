@@ -49,6 +49,7 @@ function SemanticBadge({
 const STATUS_ALIASES: Record<string, string> = {
   warming_artifactory_cache: 'warming_cache',
   indexing: 'indexing_artifact',
+  waiting_for_initial_xray: 'indexing_artifact',
   queued: 'queued_in_xray',
 };
 
@@ -61,10 +62,15 @@ const STATUS_CONFIG: Record<string, BadgeConfig> = {
   running: { tone: 'accent', animated: true },
   pending: { tone: 'default', label: 'queued in JustScan', animated: true },
   cancelled: { tone: 'warning' },
+  preparing_image: { tone: 'accent', label: 'preparing image', animated: true },
+  scanning_image: { tone: 'accent', label: 'scanning image', animated: true },
+  processing_results: { tone: 'accent', label: 'processing results', animated: true },
+  finalizing_report: { tone: 'accent', label: 'finalizing report', animated: true },
+  importing_results: { tone: 'accent', label: 'importing results', animated: true },
   warming_cache: { tone: 'accent', label: 'warming cache', animated: true },
-  indexing_artifact: { tone: 'warning', label: 'indexing artifact', animated: true },
+  indexing_artifact: { tone: 'warning', label: 'waiting for xray status', animated: true },
   queued_in_justscan: { tone: 'default', label: 'queued in JustScan', animated: true },
-  queued_in_xray: { tone: 'accent', label: 'queued in xray', animated: true },
+  queued_in_xray: { tone: 'accent', label: 'requesting xray scan', animated: true },
   blocked_by_xray_policy: { tone: 'warning', label: 'blocked by xray policy' },
   waiting_for_xray: { tone: 'warning', label: 'waiting for xray', animated: true },
 };
@@ -85,8 +91,8 @@ export function resolveDisplayStatus(
   if (status === 'pending' && currentStep === 'queued') {
     return 'queued_in_justscan';
   }
-  if (currentStep === 'queued_in_xray') {
-    return 'queued_in_xray';
+  if (status === 'running' && currentStep && currentStep !== 'queued') {
+    return currentStep;
   }
 
   const normalizedStatus = normalizeStatus(status);
@@ -95,7 +101,10 @@ export function resolveDisplayStatus(
   if (
     (normalizedStatus === 'pending' || normalizedStatus === 'running') &&
     normalizedExternalStatus &&
-    normalizedExternalStatus !== normalizedStatus
+    normalizedExternalStatus !== normalizedStatus &&
+    !['DONE', 'PENDING', 'IN_PROGRESS', 'SCANNING', 'INDEXING', 'FAILED', 'ERROR'].includes(
+      normalizedExternalStatus
+    )
   ) {
     return normalizedExternalStatus;
   }
@@ -113,9 +122,9 @@ export function formatStatusLabel(status: string) {
     blocked_by_xray_policy: 'blocked by xray policy',
     waiting_for_xray: 'waiting for xray',
     warming_cache: 'warming cache',
-    indexing_artifact: 'indexing artifact',
+    indexing_artifact: 'waiting for xray status',
     queued_in_justscan: 'queued in JustScan',
-    queued_in_xray: 'queued in xray',
+    queued_in_xray: 'requesting xray scan',
   };
 
   return labels[normalizedStatus] ?? normalizedStatus.replace(/_/g, ' ');

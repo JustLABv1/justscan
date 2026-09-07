@@ -14,6 +14,10 @@ import (
 
 // QueueSummary describes the visible workspace activity and the shared worker capacity.
 type QueueSummary struct {
+	XrayQueueDepth     *int       `json:"xray_queue_depth,omitempty"`
+	XrayActive         *int       `json:"xray_active,omitempty"`
+	XrayWorkActive     *int       `json:"xray_work_active,omitempty"`
+	XrayWorkCapacity   *int       `json:"xray_work_capacity,omitempty"`
 	QueuedInJustScan   int        `json:"queued_in_justscan"`
 	Active             int        `json:"active"`
 	WorkerCapacity     int        `json:"worker_capacity"`
@@ -83,6 +87,12 @@ WHERE ` + ownershipWhere + ` AND ` + scopeWhere
 			ActiveWorkers:     activeWorkers,
 			WorkerUtilization: workerUtilization,
 			OldestQueuedAt:    counts.OldestQueuedAt,
+		}
+		if isAdmin {
+			summary.XrayQueueDepth = &queue.XrayDepth
+			summary.XrayActive = &queue.XrayActive
+			summary.XrayWorkActive = &queue.XrayWorkActive
+			summary.XrayWorkCapacity = &queue.XrayWorkCapacity
 		}
 		if counts.OldestQueuedAt != nil {
 			summary.OldestQueuedLagSec = time.Since(counts.OldestQueuedAt.UTC()).Seconds()

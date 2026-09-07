@@ -69,6 +69,12 @@ type MCPConf struct {
 }
 
 type ScannerConf struct {
+	XrayConcurrency            int `mapstructure:"xray_concurrency"`
+	XrayMaxActive              int `mapstructure:"xray_max_active"`
+	XrayWarmupTimeoutSeconds   int `mapstructure:"xray_warmup_timeout_seconds"`
+	XrayProviderTimeoutSeconds int `mapstructure:"xray_provider_timeout_seconds"`
+	XrayTimeoutSeconds         int `mapstructure:"xray_timeout_seconds"`
+
 	EnableTrivy               bool   `mapstructure:"enable_trivy"`
 	TrivyPath                 string `mapstructure:"trivy_path"`
 	GrypePath                 string `mapstructure:"grype_path"`
@@ -152,6 +158,11 @@ func (cm *ConfigurationManager) LoadConfig(configFile string) error {
 		"scanner.timeout":                            "BACKEND_SCANNER_TIMEOUT",
 		"scanner.command_timeout_seconds":            "BACKEND_SCANNER_COMMAND_TIMEOUT_SECONDS",
 		"scanner.progress_heartbeat_seconds":         "BACKEND_SCANNER_PROGRESS_HEARTBEAT_SECONDS",
+		"scanner.xray_concurrency":                   "BACKEND_SCANNER_XRAY_CONCURRENCY",
+		"scanner.xray_max_active":                    "BACKEND_SCANNER_XRAY_MAX_ACTIVE",
+		"scanner.xray_warmup_timeout_seconds":        "BACKEND_SCANNER_XRAY_WARMUP_TIMEOUT_SECONDS",
+		"scanner.xray_provider_timeout_seconds":      "BACKEND_SCANNER_XRAY_PROVIDER_TIMEOUT_SECONDS",
+		"scanner.xray_timeout_seconds":               "BACKEND_SCANNER_XRAY_TIMEOUT_SECONDS",
 		"scanner.stale_timeout_seconds":              "BACKEND_SCANNER_STALE_TIMEOUT_SECONDS",
 		"scanner.concurrency":                        "BACKEND_SCANNER_CONCURRENCY",
 		"scanner.db_max_age_hours":                   "BACKEND_SCANNER_DB_MAX_AGE_HOURS",

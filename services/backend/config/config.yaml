@@ -25,6 +25,11 @@ allow_origins:
   - "http://localhost:4000"
 
 scanner:
+  xray_concurrency: 2
+  xray_max_active: 32
+  xray_warmup_timeout_seconds: 600
+  xray_provider_timeout_seconds: 900
+  xray_timeout_seconds: 3600
   trivy_path: trivy
   grype_path: grype
   enable_grype: false

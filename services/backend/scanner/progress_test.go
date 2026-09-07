@@ -72,12 +72,12 @@ func TestRecoverInterruptedScansLeavesPendingScansDurable(t *testing.T) {
 	runningID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	lastProgress := now.Add(-3 * time.Hour)
 
-	mock.ExpectQuery(`SELECT .* FROM "scans" AS "scan" WHERE \(status = 'running'\).*last_progress_at IS NULL OR last_progress_at <`).WillReturnRows(
+	mock.ExpectQuery(`SELECT .* FROM "scans" AS "scan" WHERE \(status = 'running'\).*GREATEST\(last_heartbeat_at, last_progress_at\) IS NULL OR GREATEST\(last_heartbeat_at, last_progress_at\) <`).WillReturnRows(
 		sqlmock.NewRows([]string{"id", "scan_provider", "external_status", "current_step", "status", "last_progress_at"}).
 			AddRow(runningID.String(), models.ScanProviderArtifactoryXray, "waiting_for_xray", models.ScanStepWaitingForXray, models.ScanStatusRunning, lastProgress),
 	)
 
-	mock.ExpectExec(`UPDATE "scans" AS "scan" SET .*"status" = 'failed'.*"current_step" = 'failed'.*"error_message" = 'scan interrupted because the backend restarted while in waiting for xray'.*"completed_at" = .*"last_progress_at" = .*"external_status" = 'failed'.*WHERE \(id = '22222222-2222-2222-2222-222222222222' AND status = 'running'\).*last_progress_at IS NULL OR last_progress_at <`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE "scans" AS "scan" SET .*"status" = 'failed'.*"current_step" = 'failed'.*"error_message" = 'scan interrupted because the backend restarted while in waiting for xray'.*"completed_at" = .*"last_progress_at" = .*"external_status" = 'failed'.*WHERE \(id = '22222222-2222-2222-2222-222222222222' AND status = 'running'\).*GREATEST\(last_heartbeat_at, last_progress_at\) IS NULL OR GREATEST\(last_heartbeat_at, last_progress_at\) <`).WillReturnResult(sqlmock.NewResult(0, 1))
 
 	recovered, err := recoverInterruptedScans(context.TODO(), db, now)
 	if err != nil {

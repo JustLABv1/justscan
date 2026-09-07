@@ -60,7 +60,7 @@ func DispatchScan(ctx context.Context, db *bun.DB, scan *models.Scan, envVars []
 		err = EnqueueScanContext(ctx, scan.ID, db, envVars, platform, archivePath)
 	case models.ScanProviderArtifactoryXray:
 		scan.CurrentStep = models.ScanStepQueued
-		err = EnqueueScanContext(ctx, scan.ID, db, envVars, platform, "")
+		err = enqueueScanForProvider(ctx, scan.ID, db, envVars, platform, "", provider)
 	default:
 		return fmt.Errorf("unsupported scan provider %q", provider)
 	}

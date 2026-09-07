@@ -8,3 +8,9 @@ JustScan serves its API below `/api/v1`. Use an organization token with the smal
 The main automation flow is: create a pipeline scan, poll the result or receive a callback, then use the terminal policy verdict to decide whether to continue. Preserve the scan identifier in the calling system for audit and troubleshooting, and distinguish policy failure from transport, authentication, or scanner errors.
 
 The <a href="/swagger/index.html">interactive API reference</a> lists all registered endpoints. It is generated from the running backend; the guides in this section remain the recommended starting point for authentication, pipeline scans, callbacks, and CI behavior.
+
+## Scan queue and runtime metadata
+
+Authenticated scan-list and scan-detail responses include optional `queue_position` for pending scans. It is a one-based approximate rank among visible pending scans in the same provider lane and selected workspace, ordered by creation time and ID. It is not a global queue position or an ETA. Running and terminal scans omit it. `last_progress_at` records meaningful progress; optional `last_heartbeat_at` records worker liveness.
+
+The queue-summary endpoint exposes additional administrator-only Xray metrics: `xray_queue_depth` (buffered submissions), `xray_active` (claimed coordinators), `xray_work_active` (occupied preparation/import slots), and `xray_work_capacity` (slot limit). Buffered depth excludes coordinators waiting to claim preparation capacity; durable pending counts remain the backlog view. See [Xray settings and migration requirements](/operate/scanners-and-xray).

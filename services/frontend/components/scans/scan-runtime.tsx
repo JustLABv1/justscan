@@ -120,55 +120,51 @@ const XRAY_PROGRESS_STEPS: StepDefinition[] = [
   {
     key: 'queued',
     title: 'Queued in JustScan',
-    description: 'Waiting for a JustScan worker before the scan can be submitted to Artifactory Xray.',
-    detailMessages: [
-      'JustScan has accepted the scan and is waiting for a local worker to start the Xray handoff.',
-      'Xray has not received the artifact scan request yet.',
-    ],
+    description: 'Waiting for Xray preparation capacity.',
+    detailMessages: ['Waiting for an available Xray coordinator and preparation slot.'],
+  },
+  {
+    key: 'preparing_image',
+    title: 'Preparing Image',
+    description: 'Resolving the requested platform and immutable image digest.',
+    detailMessages: ['Reading the manifest, image digest, and configuration from Artifactory.'],
   },
   {
     key: 'warming_cache',
     title: 'Warming Cache',
-    description: 'Pulling the image through Artifactory so Xray can inspect it.',
-    detailMessages: [
-      'Artifactory is warming the image path so Xray can access and index the artifact.',
-      'The image is being prepared in Artifactory before Xray starts its own analysis.',
-    ],
+    description: 'Downloading the selected image layers through Artifactory.',
+    detailMessages: ['Caching the selected image. Completed blobs are preserved across retries.'],
   },
   {
     key: 'indexing_artifact',
-    title: 'Indexing Artifact',
-    description: 'Registering manifests and layers for Xray analysis.',
+    title: 'Waiting for Initial Xray Status',
+    description: 'Waiting for Xray to expose the cached artifact.',
     detailMessages: [
-      'Xray is indexing the manifest and layer metadata for the image.',
-      'The artifact is being normalized so vulnerabilities can be mapped correctly.',
+      'The download has finished. Waiting for the provider to expose the artifact status.',
     ],
   },
   {
     key: 'queued_in_xray',
-    title: 'Queued in Xray',
-    description: 'The external artifact scan has been submitted and is waiting for execution.',
+    title: 'Requesting Xray Scan',
+    description: 'Sending the rescan request to Xray.',
     detailMessages: [
-      'The artifact scan has been submitted to Xray and is waiting in the provider queue.',
-      'JustScan is waiting for Xray to begin the artifact analysis step.',
+      'Submitting the rescan request. This stage does not measure the provider queue position.',
     ],
   },
   {
     key: 'waiting_for_xray',
     title: 'Waiting for Xray',
-    description: 'Xray is still processing the image and has not returned a final summary yet.',
+    description: 'Waiting for a completed result and artifact summary.',
     detailMessages: [
-      'Xray is still processing the image and has not published final findings yet.',
-      'The scan is active in Xray; JustScan will import the result automatically once it is ready.',
+      'Polling Xray for the selected artifact. The latest provider status appears in the activity log.',
     ],
   },
   {
     key: 'importing_results',
     title: 'Importing Results',
-    description: 'Collecting and persisting finished Xray findings.',
+    description: 'Importing findings, SBOM, policy context, and suppressions.',
     detailMessages: [
-      'Xray finished and JustScan is importing the findings into the local database.',
-      'The external scan result is being converted into JustScan findings and counters.',
+      'Waiting for import capacity or importing report data; a local SBOM fallback may also run.',
     ],
   },
 ];
@@ -182,15 +178,22 @@ const XRAY_STEP_KEYS = new Set<string>([
 ]);
 
 function xrayProgressSteps(mode?: 'full' | 'limited' | null): StepDefinition[] {
-  if (mode === 'limited') {
-    return XRAY_PROGRESS_STEPS.filter(
-      (step) => step.key !== 'indexing_artifact' && step.key !== 'queued_in_xray'
-    );
-  }
-  if (mode === 'full') {
-    return XRAY_PROGRESS_STEPS.filter((step) => step.key !== 'indexing_artifact');
-  }
-  return XRAY_PROGRESS_STEPS;
+  return XRAY_PROGRESS_STEPS.flatMap((step) => {
+    if (mode === 'limited' && step.key === 'queued_in_xray') return [];
+    if (mode === 'limited' && step.key === 'indexing_artifact') {
+      return [
+        {
+          ...step,
+          title: 'Waiting for Provider Result',
+          description: 'Waiting for the existing Xray analysis to complete.',
+          detailMessages: [
+            'The download has finished. Limited mode waits for the provider-managed result without requesting a rescan.',
+          ],
+        },
+      ];
+    }
+    return [step];
+  });
 }
 
 const TERMINAL_PROGRESS_STEPS: StepDefinition[] = [
@@ -382,7 +385,7 @@ function buildRuntimeWarning(
       title: 'Still waiting for execution capacity',
       detail:
         activeKey === 'queued_in_xray'
-          ? 'The artifact scan was submitted to Xray, which has not started the next execution phase yet.'
+          ? 'The rescan request is still being sent or retried. Check the latest request log.'
           : 'The request is accepted, but a JustScan worker has not started the handoff yet.',
     };
   }
@@ -395,7 +398,10 @@ function buildRuntimeWarning(
     };
   }
 
-  if (activeKey === 'waiting_for_xray' && activeStepElapsedSeconds >= 240) {
+  if (
+    (activeKey === 'waiting_for_xray' || activeKey === 'indexing_artifact') &&
+    activeStepElapsedSeconds >= 240
+  ) {
     return {
       title: 'Still waiting on Xray',
       detail:
@@ -466,22 +472,22 @@ function buildProgressModel(
   status: string,
   currentStep: string | null | undefined,
   scanProvider?: string | null,
-  xrayMode?: 'full' | 'limited' | null
+  xrayMode?: 'full' | 'limited' | null,
+  queuePosition?: number
 ): ProgressModel {
   const activeKey = resolveCurrentStep(status, currentStep, scanProvider);
   const xrayFlow = scanProvider === 'artifactory_xray' || XRAY_STEP_KEYS.has(activeKey);
   const steps = xrayFlow ? xrayProgressSteps(xrayMode) : LOCAL_PROGRESS_STEPS;
   const knownActiveIndex = steps.findIndex((step) => step.key === activeKey);
   const activeIndex = knownActiveIndex === -1 ? steps.length : Math.max(0, knownActiveIndex);
-  const resolvedStep =
-    knownActiveIndex === -1 ? describeStep(activeKey) : (steps[activeIndex] ?? steps[0]);
+  const resolvedStep = {
+    ...(knownActiveIndex === -1 ? describeStep(activeKey) : (steps[activeIndex] ?? steps[0])),
+  };
   const stepViews: StepView[] = [
-    ...steps.map(
-      (step, index): StepView => ({
-        ...step,
-        state: index < activeIndex ? 'complete' : index === activeIndex ? 'active' : 'pending',
-      })
-    ),
+    ...steps.map((step, index): StepView => ({
+      ...step,
+      state: index < activeIndex ? 'complete' : index === activeIndex ? 'active' : 'pending',
+    })),
     ...(knownActiveIndex === -1
       ? [
           {
@@ -492,6 +498,12 @@ function buildProgressModel(
         ]
       : []),
   ];
+
+  if (status === 'pending' && queuePosition != null) {
+    const title = `Queued in JustScan · ~#${queuePosition}`;
+    resolvedStep.title = title;
+    stepViews[0] = { ...stepViews[0], title };
+  }
 
   return {
     activeKey: resolvedStep.key,
@@ -669,12 +681,7 @@ function StepStatusBadge({ state, title }: { state: ProgressStepState; title: st
   }
 
   return (
-    <Badge
-      aria-label={`${title} is waiting`}
-      color="default"
-      placement="bottom-right"
-      size="sm"
-    />
+    <Badge aria-label={`${title} is waiting`} color="default" placement="bottom-right" size="sm" />
   );
 }
 
@@ -971,6 +978,7 @@ function ScanPipelineCard({
         color={pipelineStatusColor(status)}
         size="sm"
         value={progressPercent}
+        isIndeterminate={status === 'pending' || status === 'running'}
       >
         <ProgressBar.Track className="rounded-none">
           <ProgressBar.Fill className="rounded-none" />
@@ -994,7 +1002,9 @@ function ScanPipelineCard({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Chip color={pipelineStatusColor(status)} size="sm" variant="soft">
-            {scanStatusLabel(status)} · {progress.title}
+            {status === 'pending'
+              ? progress.title
+              : `${scanStatusLabel(status)} · ${progress.title}`}
           </Chip>
           {actions}
         </div>
@@ -1012,13 +1022,26 @@ function ScanPipelineCard({
 
       <Card.Footer className="flex-row flex-wrap items-center justify-between gap-3 px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
         <p className="font-mono text-sm text-muted">
-          {formatElapsed(elapsed)} elapsed · {Math.round(progressPercent)}%
+          {formatElapsed(elapsed)} elapsed ·{' '}
+          {status === 'pending' || status === 'running'
+            ? progress.eyebrow
+            : scanStatusLabel(status)}
         </p>
         <Chip color={pipelineStatusColor(status)} size="sm" variant="soft">
           {activeStep ? `${activeStep.title}...` : progress.eyebrow}
         </Chip>
       </Card.Footer>
     </Card>
+  );
+}
+
+function QueuePositionNote({ status, position }: { status: string; position?: number }) {
+  if (status !== 'pending' || position == null) return null;
+  return (
+    <p className="text-xs text-muted">
+      Approximate position among visible queued scans for this provider in the selected workspace.
+      Start order can change.
+    </p>
   );
 }
 
@@ -1030,6 +1053,7 @@ export function ScanningAnimation({
   xrayMode,
   currentStep,
   stepLogs,
+  queuePosition,
 }: {
   status: string;
   startedAt: string | null;
@@ -1037,6 +1061,7 @@ export function ScanningAnimation({
   scanProvider?: string | null;
   xrayMode?: 'full' | 'limited' | null;
   currentStep?: string | null;
+  queuePosition?: number;
   stepLogs?: ScanStepLog[] | null;
 }) {
   const startedAtMs = startedAt ? new Date(startedAt).getTime() : null;
@@ -1062,20 +1087,12 @@ export function ScanningAnimation({
 
   const baseStart = startedAtMs ?? fallbackStart ?? now;
   const elapsed = Math.max(0, Math.floor((now - baseStart) / 1000));
-  const progress = buildProgressModel(status, currentStep, scanProvider, xrayMode);
+  const progress = buildProgressModel(status, currentStep, scanProvider, xrayMode, queuePosition);
   const detailMessage =
     progress.detailMessages[detailTick % progress.detailMessages.length] ??
     progress.detailMessages[0];
   const orderedLogs = orderStepLogs(stepLogs);
   const providerName = providerLabel(scanProvider, orderedLogs);
-  const activeStepIndex = Math.max(
-    0,
-    progress.steps.findIndex((step) => step.state === 'active')
-  );
-  const progressPercent =
-    progress.steps.length <= 1
-      ? 100
-      : Math.round((activeStepIndex / (progress.steps.length - 1)) * 100);
   const runtimeSteps = resolvePipelineStepRuntime({
     progress,
     orderedLogs,
@@ -1108,12 +1125,13 @@ export function ScanningAnimation({
         elapsed={elapsed}
         image={image}
         progress={progress}
-        progressPercent={progressPercent}
+        progressPercent={0}
         providerName={providerName}
         runtimeSteps={runtimeSteps}
         status={status}
       />
 
+      <QueuePositionNote status={status} position={queuePosition} />
       {runtimeWarning ? (
         <Alert status="warning">
           <Alert.Indicator />

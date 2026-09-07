@@ -40,3 +40,11 @@ Test the configured channel, inspect notification delivery logs and queued jobs 
 ## Upgrade or restore does not recover registry access
 
 Confirm the restored deployment uses the same encryption key that protected the original registry credentials. Restore PostgreSQL first, then the backend data volume where applicable, start the backend, verify health, and test one non-production registry before reopening CI gates.
+
+## Xray warm-up or provider wait times out
+
+Check the failing stage first. **Preparing Image** resolves the manifest, platform, and digest. **Warming Cache** downloads blobs: the latest output identifies the layer and received bytes, and retry messages report how many blobs were preserved. Repeated failure on one large blob can indicate bandwidth or the five-minute per-request registry timeout. Completed blobs are not downloaded again during a retry of the same scan.
+
+After download, the initial provider wait and **Waiting for Xray** report the last observed Xray status. Check that the repository and its cache are indexed, the selected digest artifact exists, and the credential has Read access. Full mode additionally needs Manage Xray Metadata. A freshness timeout means JustScan could not verify a new completion for the same artifact; it does not substitute another candidate with findings. Check provider timestamps and status history before resubmitting.
+
+Use the independent [Xray deadlines](/operate/scanners-and-xray#xray-capacity-and-deadlines) rather than raising the stale-worker timeout. A recent `last_heartbeat_at` only confirms worker liveness. Queue rank is approximate and scoped to visible work; administrator queue-summary metrics distinguish active Xray coordinators from occupied preparation/import slots.

@@ -18,9 +18,9 @@ func TestDispatchXrayKeepsScanInJustScanQueueUntilWorkerHandoff(t *testing.T) {
 	defer cleanup()
 
 	scanID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
-	previousQueue := jobQueue
-	jobQueue = make(chan ScanJob, 1)
-	t.Cleanup(func() { jobQueue = previousQueue })
+	previousQueue := xrayJobQueue
+	xrayJobQueue = make(chan ScanJob, 1)
+	t.Cleanup(func() { xrayJobQueue = previousQueue })
 
 	mock.ExpectQuery(`SELECT .* FROM "scan_step_logs" AS "scan_step_log"`).
 		WillReturnError(sql.ErrNoRows)
@@ -40,7 +40,7 @@ func TestDispatchXrayKeepsScanInJustScanQueueUntilWorkerHandoff(t *testing.T) {
 	if scan.CurrentStep != models.ScanStepQueued {
 		t.Fatalf("current step = %q, want %q", scan.CurrentStep, models.ScanStepQueued)
 	}
-	if queued := <-jobQueue; queued.ScanID != scanID {
+	if queued := <-xrayJobQueue; queued.ScanID != scanID {
 		t.Fatalf("queued scan ID = %s, want %s", queued.ScanID, scanID)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

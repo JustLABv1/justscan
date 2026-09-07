@@ -2338,7 +2338,11 @@ function ScanDetailContent() {
         icon={<Shield01Icon size={18} />}
         status={
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+            <StatusBadge
+              status={scan.status}
+              currentStep={scan.current_step}
+              externalStatus={scan.external_status}
+            />
             <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
           </div>
         }
@@ -2580,6 +2584,7 @@ function ScanDetailContent() {
           image={`${scan.image_name}:${scan.image_tag}`}
           scanProvider={scan.scan_provider}
           xrayMode={scan.xray_mode}
+          queuePosition={scan.queue_position}
           currentStep={scan.current_step}
           stepLogs={scan.step_logs}
         />

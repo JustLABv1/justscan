@@ -19,3 +19,13 @@ Use the standard backend image when any registry uses local Trivy scanning. An X
 When Xray returns a CycloneDX export, JustScan retains its package inventory and dependency relationships for the **Packages & SBOM** investigation view. The export uses the canonical Artifactory component name and path returned by Xray's artifact summary; this matters for Docker artifacts whose requested image reference differs from Artifactory's stored path.
 
 The registry credential needs Xray **Read** access to export component details. If Xray's SBOM export is unavailable or denied, JustScan keeps the Xray vulnerability result and attempts a local Trivy CycloneDX fallback. The package view identifies this as **Trivy fallback** and records the export failure, so the evidence source is never confused with Xray. A fallback needs the backend to be able to pull the image with the configured registry credentials; it is reported as unavailable when that pull cannot be performed.
+
+## Follow an Xray scan
+
+The pipeline separates **Preparing Image**, **Warming Cache**, initial provider status/result, **Requesting Xray Scan** (Full mode), **Waiting for Xray**, and **Importing Results**. Cache warming ends when the download ends. Initial provider waiting is shown separately; Full mode does not require that initial analysis to finish before submitting its rescan. The request stage represents the HTTP submission, not Xray's internal queue position. Limited mode omits the rescan stage.
+
+Active scans show a stage indicator rather than an estimated completion percentage. While pending, scan detail shows an approximate queue position among visible scans for that provider and workspace. During downloads, inspect the latest layer and byte output; during provider waits, inspect the observed Xray status. A heartbeat indicates a live worker, not forward progress. Imports can include SBOM fallback generation and policy/suppression processing.
+
+The requested platform must exist; JustScan does not silently fall back to another architecture. Full mode binds status checks and result import to one digest artifact and checks for tag movement before the rescan and after completion. If the tag changed, submit a new scan. A provider that does not expose the selected digest artifact cannot produce verified results for that image; check repository indexing instead of importing a different tag or architecture.
+
+See [Xray capacity and deadlines](/operate/scanners-and-xray#xray-capacity-and-deadlines) and [Xray timeout troubleshooting](/operate/troubleshooting#xray-warm-up-or-provider-wait-times-out).

@@ -159,6 +159,14 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 			}
 		}
 
+		scanPointers := make([]*models.Scan, len(scans))
+		for i := range scans {
+			scanPointers[i] = &scans[i]
+		}
+		if err := attachQueuePositions(c, db, scanPointers, userID, isAdmin, accessibleOrgIDs); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load queue positions"})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"data":  scans,
 			"total": total,

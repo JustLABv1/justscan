@@ -8,7 +8,9 @@ import (
 )
 
 type Scan struct {
-	bun.BaseModel `bun:"table:scans"`
+	QueuePosition   *int       `bun:"-" json:"queue_position,omitempty"`
+	LastHeartbeatAt *time.Time `bun:"last_heartbeat_at,type:timestamptz" json:"last_heartbeat_at,omitempty"`
+	bun.BaseModel   `bun:"table:scans"`
 
 	ID                      uuid.UUID              `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
 	ImageName               string                 `bun:"image_name,type:text,notnull" json:"image_name"`

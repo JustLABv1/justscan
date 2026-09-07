@@ -364,6 +364,14 @@ function ArtifactHistoryRows({
                   status={scan.status}
                   externalStatus={scan.external_status}
                 />
+                {scan.status === 'pending' && scan.queue_position != null && (
+                  <span
+                    className="text-xs text-muted"
+                    title="Approximate position among visible queued scans for this provider in this workspace"
+                  >
+                    Queue ~#{scan.queue_position}
+                  </span>
+                )}
                 <PolicyFailureChip summary={scan.compliance_summary} />
                 <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
               </div>

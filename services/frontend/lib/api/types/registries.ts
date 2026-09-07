@@ -155,6 +155,12 @@ export interface OIDCDebugSession {
 }
 
 export interface ScannerSettings {
+  xray_concurrency?: number;
+  xray_max_active?: number;
+  xray_warmup_timeout_seconds?: number;
+  xray_provider_timeout_seconds?: number;
+  xray_timeout_seconds?: number;
+
   enable_trivy?: boolean;
   enable_grype?: boolean;
   concurrency?: number;

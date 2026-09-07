@@ -22,7 +22,7 @@ const XRAY_STEP_LABELS: Record<string, string> = {
   queued: 'Queued',
   warming_cache: 'Warming Cache',
   indexing_artifact: 'Indexing Artifact',
-  queued_in_xray: 'Queued in Xray',
+  queued_in_xray: 'Requesting Xray Scan',
   waiting_for_xray: 'Waiting for Xray',
   importing_results: 'Importing Results',
   failed: 'Failed',
@@ -189,7 +189,11 @@ export function RecentActivityRow({ scan }: { scan: Scan }) {
           {scan.image_name}:{scan.image_tag}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
-          <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+          <StatusBadge
+            status={scan.status}
+            currentStep={scan.current_step}
+            externalStatus={scan.external_status}
+          />
           <span className="text-zinc-500">{scanContextLabel(scan)}</span>
           <span className="text-zinc-400" title={fullDate(eventTime)}>
             {timeAgo(eventTime)}

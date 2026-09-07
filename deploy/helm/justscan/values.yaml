@@ -70,6 +70,13 @@ backend:
       progressHeartbeatSeconds: 30
       staleTimeoutSeconds: 7200
       concurrency: 2
+      # Xray uses separate coordinator and preparation/import pools so remote
+      # waits do not occupy local scanner workers.
+      xrayConcurrency: 2
+      xrayMaxActive: 32
+      xrayWarmupTimeoutSeconds: 600
+      xrayProviderTimeoutSeconds: 900
+      xrayTimeoutSeconds: 3600
       dbMaxAgeHours: 7
       # Remove retained Trivy image-analysis cache daily. Set 0 to disable.
       scanCacheCleanupHours: 24

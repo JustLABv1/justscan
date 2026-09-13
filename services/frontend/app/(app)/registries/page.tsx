@@ -863,7 +863,7 @@ export default function RegistriesPage() {
                         <h3 className="text-sm font-semibold">Xray scan behavior</h3>
                         <p className="mt-1 text-sm text-muted">
                           Map images to Artifactory and choose whether this credential can request a
-                          fresh Xray scan.
+                          scan request whose resulting provider status JustScan verifies as fresh.
                         </p>
                       </div>
                       <div className="grid gap-4 md:grid-cols-2">

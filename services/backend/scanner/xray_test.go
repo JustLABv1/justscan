@@ -412,6 +412,103 @@ func TestShouldTreatIgnoreRuleLookupAsUnavailable(t *testing.T) {
 	}
 }
 
+func TestGetViolationsQualifiesRepositoryAndPaginates(t *testing.T) {
+	requests := 0
+	client := &xrayClient{baseURL: "http://xray.test", artifactoryID: "default"}
+	client.httpClient = newTestHTTPClient(func(req *http.Request) (*http.Response, error) {
+		requests++
+		var body xrayViolationsRequest
+		if err := decodeJSONBody(req, &body); err != nil {
+			return nil, err
+		}
+		if got := body.Filters.Resources.Artifacts[0].Repository; got != "default/docker-remote-cache" {
+			t.Fatalf("repository was not qualified: %q", got)
+		}
+		if body.Pagination.Offset == 0 {
+			items := make([]map[string]any, 100)
+			for i := range items {
+				items[i] = map[string]any{"violation_id": fmt.Sprintf("v-%d", i)}
+			}
+			return jsonResponse(200, map[string]any{"total_violations": 101, "violations": items}), nil
+		}
+		if body.Pagination.Offset != 100 {
+			t.Fatalf("unexpected pagination offset %d", body.Pagination.Offset)
+		}
+		return jsonResponse(200, map[string]any{"total_violations": 101, "violations": []map[string]any{{"violation_id": "v-100"}}}), nil
+	})
+
+	result, err := client.getViolations(context.Background(), []xrayViolationLookupTarget{{Repository: "docker-remote-cache", Path: "image/tag/manifest.json"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requests != 2 || len(result.Violations) != 101 {
+		t.Fatalf("expected two pages and 101 violations, got %d requests and %d violations", requests, len(result.Violations))
+	}
+}
+
+func TestGetIgnoreRulesPaginates(t *testing.T) {
+	requests := 0
+	client := &xrayClient{baseURL: "http://xray.test"}
+	client.httpClient = newTestHTTPClient(func(req *http.Request) (*http.Response, error) {
+		requests++
+		page := req.URL.Query().Get("page_num")
+		if page == "1" {
+			items := make([]map[string]any, 100)
+			for i := range items {
+				items[i] = map[string]any{"external_id": fmt.Sprintf("rule-%d", i)}
+			}
+			return jsonResponse(200, map[string]any{"ignore_rules": items}), nil
+		}
+		if page != "2" {
+			t.Fatalf("unexpected page %q", page)
+		}
+		return jsonResponse(200, map[string]any{"ignore_rules": []map[string]any{{"external_id": "rule-100"}}}), nil
+	})
+
+	rules, err := client.getIgnoreRules(context.Background(), "CVE-2026-1000", []string{"default/repo/image/tag/manifest.json"}, "image", "tag")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requests != 2 || len(rules) != 101 {
+		t.Fatalf("expected two pages and 101 rules, got %d requests and %d rules", requests, len(rules))
+	}
+}
+
+func TestXrayResponseBodyForLogOmitsBinaryAndBoundsText(t *testing.T) {
+	binary := xrayResponseBodyForLog([]byte{'P', 'K', 0x03, 0x04, 0xff}, "application/zip")
+	if !strings.Contains(binary, "binary response omitted") || !strings.Contains(binary, "bytes=5") {
+		t.Fatalf("binary response was not summarized: %q", binary)
+	}
+	textBody := strings.Repeat("a", xrayRequestLogBodyLimit+100)
+	logged := xrayResponseBodyForLog([]byte(textBody), "application/json")
+	if len(logged) >= len(textBody) || !strings.HasSuffix(logged, "...[truncated]") {
+		t.Fatalf("text response was not bounded: %d bytes", len(logged))
+	}
+}
+
+func TestRegistryXrayValidationChecksConfiguredRepository(t *testing.T) {
+	client := &xrayClient{baseURL: "http://xray.test", configuredRepository: "docker-local"}
+	client.httpClient = newTestHTTPClient(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/xray/api/v1/system/ping":
+			return jsonResponse(200, map[string]string{"status": "pong"}), nil
+		case "/artifactory/api/repositories":
+			return jsonResponse(200, []map[string]string{{"key": "docker-local", "packageType": "Docker", "rclass": "local"}}), nil
+		default:
+			return jsonResponse(404, map[string]string{"error": "not found"}), nil
+		}
+	})
+
+	message, err := (&RegistryXrayTestClient{client: client}).ValidateConfiguration(context.Background())
+	if err != nil || !strings.Contains(message, "docker-local is visible") {
+		t.Fatalf("configuration validation failed: %q, %v", message, err)
+	}
+	client.configuredRepository = "missing"
+	if _, err := (&RegistryXrayTestClient{client: client}).ValidateConfiguration(context.Background()); err == nil || !strings.Contains(err.Error(), "not visible") {
+		t.Fatalf("missing configured repository was accepted: %v", err)
+	}
+}
+
 func TestIsRetriableXrayScanArtifactErrorTreatsGatewayTimeoutAsRetriable(t *testing.T) {
 	if got := isRetriableXrayScanArtifactError(&xrayHTTPError{StatusCode: http.StatusGatewayTimeout}); !got {
 		t.Fatal("expected gateway timeout to be treated as retriable for scanArtifact")

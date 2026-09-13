@@ -5,12 +5,12 @@ description: Configure image registry access and select Trivy, Grype, or Xray an
 
 > Helm dependency authentication uses [Helm registry credentials](./helm-registry-credentials), not the image registries described here.
 
-Create registries in **Workspace setup → Registries**. Credentials are encrypted at rest with the configured encryption key. Test a registry connection before relying on it in a scheduled or CI workflow. Use **Set as workspace default** to choose the default registry for the active workspace. Organization editors set this for every workspace member; a personal workspace is naturally private. System registries are admin-managed but available as read-only scan sources. An organization editor can hide or show individual system registries for the whole workspace from each registry's action menu. Hidden entries stay visible but dimmed on this management page so they can be restored, while normal scan pickers omit them.
+Create registries in **Workspace setup → Registries**. Credentials are encrypted at rest with the configured encryption key. Test a registry connection before relying on it in a scheduled or CI workflow. For Xray registries, the health check verifies both the Xray ping and Artifactory Docker-repository visibility; it does not submit a scan or test the Full-mode mutation permission. Use **Set as workspace default** to choose the default registry for the active workspace. Organization editors set this for every workspace member; a personal workspace is naturally private. System registries are admin-managed but available as read-only scan sources. An organization editor can hide or show individual system registries for the whole workspace from each registry's action menu. Hidden entries stay visible but dimmed on this management page so they can be restored, while normal scan pickers omit them.
 
 ## Xray modes
 
 - **Limited** reads an existing Xray result after warming the image through Artifactory. It is suitable for consumer credentials and does not trigger a rescan.
-- **Full** requires Xray Read and Manage Xray Metadata. JustScan requests a fresh `scanArtifact` run and fails with an actionable error when permission is missing.
+- **Full** requires Xray Read and Manage Xray Metadata. JustScan calls `scanArtifact`, then requires a newer completion timestamp or an observed pending-to-completed transition before importing the result. Xray documents this endpoint as a scan request rather than a forced reindex operation.
 
 Use the standard backend image when any registry uses local Trivy scanning. An Xray-only deployment can use the minimal backend image with local scanners disabled. Verify the custom CA chain if Artifactory or the registry uses internal TLS, then test both the registry connection and a real small scan before enabling a CI gate.
 
@@ -22,10 +22,12 @@ The registry credential needs Xray **Read** access to export component details. 
 
 ## Follow an Xray scan
 
-The pipeline separates **Preparing Image**, **Warming Cache**, initial provider status/result, **Requesting Xray Scan** (Full mode), **Waiting for Xray**, and **Importing Results**. Cache warming ends when the download ends. Initial provider waiting is shown separately; Full mode does not require that initial analysis to finish before submitting its rescan. The request stage represents the HTTP submission, not Xray's internal queue position. Limited mode omits the rescan stage.
+The pipeline separates **Preparing Image**, **Warming Cache**, initial provider status/result, **Requesting Xray Scan** (Full mode), **Waiting for Xray**, and **Importing Results**. Cache warming ends when the download ends. Initial provider waiting is shown separately; Full mode does not require that initial analysis to finish before submitting its scan request. The request stage represents the HTTP submission, not Xray's internal queue position. Limited mode omits this stage.
 
 Active scans show a stage indicator rather than an estimated completion percentage. While pending, scan detail shows an approximate queue position among visible scans for that provider and workspace. During downloads, inspect the latest layer and byte output; during provider waits, inspect the observed Xray status. A heartbeat indicates a live worker, not forward progress. Imports can include SBOM fallback generation and policy/suppression processing.
 
-The requested platform must exist; JustScan does not silently fall back to another architecture. Full mode binds status checks and result import to one digest artifact and checks for tag movement before the rescan and after completion. If the tag changed, submit a new scan. A provider that does not expose the selected digest artifact cannot produce verified results for that image; check repository indexing instead of importing a different tag or architecture.
+Xray `PARTIAL` is terminal and JustScan imports the available findings, but records the external outcome as **completed partially** rather than presenting it as an unqualified completion. Inspect the Xray debug response to identify which provider pillar did not complete.
+
+The requested platform must exist; JustScan does not silently fall back to another architecture. Full mode binds status checks and result import to one digest artifact and checks for tag movement before the scan request and after completion. If the tag changed, submit a new scan. A provider that does not expose the selected digest artifact cannot produce verified results for that image; check repository indexing instead of importing a different tag or architecture.
 
 See [Xray capacity and deadlines](/operate/scanners-and-xray#xray-capacity-and-deadlines) and [Xray timeout troubleshooting](/operate/troubleshooting#xray-warm-up-or-provider-wait-times-out).

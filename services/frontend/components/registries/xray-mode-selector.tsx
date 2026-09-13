@@ -48,7 +48,7 @@ export function XrayModeSelector({ value, onChange }: XrayModeSelectorProps) {
           <Radio.Content>
             <Label>Full</Label>
             <Description>
-              Request and confirm a fresh scan. Requires Xray Read and Manage Xray Metadata; a
+              Request a scan and verify that Xray advances the provider result. Requires Xray Read and Manage Xray Metadata; a
               denied request fails the scan.
             </Description>
           </Radio.Content>

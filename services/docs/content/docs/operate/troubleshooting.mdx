@@ -31,7 +31,7 @@ Compare the provider callback URL with the exact HTTPS URL used by the deployed 
 
 ## Xray scan cannot start or returns incomplete data
 
-Confirm the registry's Xray mode and credentials match the intended behavior. Limited mode reads an existing result after warming through Artifactory; full mode needs Xray Read and Manage Xray Metadata to request a fresh scan. Inspect the scan step and backend logs before retrying.
+Confirm the registry's Xray mode and credentials match the intended behavior. Limited mode reads an existing result after warming through Artifactory; full mode needs Xray Read and Manage Xray Metadata to request a scan and verify that the provider result advances. Inspect the scan step and backend logs before retrying.
 
 ## Notifications do not arrive
 

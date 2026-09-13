@@ -248,8 +248,9 @@ type xrayArtifactPathCandidate struct {
 
 type xrayArtifactStatusResponse struct {
 	Overall struct {
-		Status string `json:"status"`
-		Time   string `json:"time"`
+		Status    string `json:"status"`
+		Time      string `json:"time"`
+		UpdatedAt string `json:"updated_at"`
 	} `json:"overall"`
 }
 
@@ -1144,7 +1145,7 @@ func (c *xrayClient) artifactStatus(ctx context.Context, candidate xrayArtifactP
 		return xrayArtifactScanStatus{}, err
 	}
 	status := xrayArtifactScanStatus{Status: strings.ToUpper(strings.TrimSpace(response.Overall.Status))}
-	if rawTime := strings.TrimSpace(response.Overall.Time); rawTime != "" {
+	if rawTime := firstNonEmpty(response.Overall.Time, response.Overall.UpdatedAt); rawTime != "" {
 		if parsed, err := time.Parse(time.RFC3339, rawTime); err == nil {
 			status.Time = &parsed
 		}
@@ -1619,7 +1620,7 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 				if !requireDone {
 					return status, candidate, nil
 				}
-			case "DONE":
+			case "DONE", "PARTIAL":
 				if !requireFresh || seenPending[candidate.ArtifactPath] || xrayCompletionIsFresh(status.Time, baseline, c.freshRequestedAt) {
 					return status, candidate, nil
 				}
@@ -1648,7 +1649,10 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 		}
 		select {
 		case <-ctx.Done():
-			return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("waiting for Xray artifact status (fresh=%t); completion freshness must be evidenced by a timestamp or observed transition: %w", requireFresh, ctx.Err())
+			if requireFresh {
+				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("waiting for a fresh Xray artifact status; completion freshness must be evidenced by a timestamp or observed transition: %w", ctx.Err())
+			}
+			return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("waiting for Xray artifact status: %w", ctx.Err())
 		case <-time.After(xraySummaryPollInterval):
 		}
 	}

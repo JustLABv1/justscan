@@ -166,6 +166,44 @@ func TestXrayFreshCompletionWithoutBaselineTimestamp(t *testing.T) {
 	}
 }
 
+func TestXrayPartialStatusIsTerminal(t *testing.T) {
+	updatedAt := time.Now().UTC().Truncate(time.Second)
+	client := &xrayClient{baseURL: "http://xray.test", httpClient: newTestHTTPClient(func(*http.Request) (*http.Response, error) {
+		return jsonResponse(200, map[string]any{"overall": map[string]string{
+			"status":     "PARTIAL",
+			"updated_at": updatedAt.Format(time.RFC3339),
+		}}), nil
+	})}
+
+	status, _, err := client.waitForArtifactStatus(context.Background(), []xrayArtifactPathCandidate{{Path: "a", ArtifactPath: "repo/a"}}, nil, false)
+	if err != nil {
+		t.Fatalf("PARTIAL status was not accepted as terminal: %v", err)
+	}
+	if status.Status != "PARTIAL" || status.Time == nil || !status.Time.Equal(updatedAt) {
+		t.Fatalf("unexpected partial status: %#v", status)
+	}
+}
+
+func TestXrayUnknownStatusFailsImmediately(t *testing.T) {
+	client := &xrayClient{baseURL: "http://xray.test", httpClient: newTestHTTPClient(func(*http.Request) (*http.Response, error) {
+		return jsonResponse(200, map[string]any{"overall": map[string]string{"status": "NEW_PROVIDER_STATE"}}), nil
+	})}
+
+	_, _, err := client.waitForArtifactStatus(context.Background(), []xrayArtifactPathCandidate{{Path: "a", ArtifactPath: "repo/a"}}, nil, false)
+	if err == nil || !strings.Contains(err.Error(), "unsupported artifact status") {
+		t.Fatalf("unknown status did not fail clearly: %v", err)
+	}
+}
+
+func TestCompletedXrayExternalStatusPreservesPartial(t *testing.T) {
+	if got := completedXrayExternalStatus("PARTIAL"); got != "completed_partial" {
+		t.Fatalf("partial provider outcome was lost: %q", got)
+	}
+	if got := completedXrayExternalStatus("DONE"); got != "completed" {
+		t.Fatalf("done provider outcome changed: %q", got)
+	}
+}
+
 func TestXrayExplicitPlatformNeverFallsBack(t *testing.T) {
 	items := []registryManifestDescriptor{{Digest: "sha256:a", Platform: &registryManifestPlatform{OS: "linux", Architecture: "amd64"}}}
 	if len(selectManifestDescriptors(items, "linux/arm64")) != 0 {

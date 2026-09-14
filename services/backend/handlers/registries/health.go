@@ -109,10 +109,11 @@ func CheckRegistryHealth(ctx context.Context, registry *models.Registry) (string
 		if err != nil {
 			return "unhealthy", err.Error(), now
 		}
-		if err := client.Ping(ctx); err != nil {
+		message, err := client.ValidateConfiguration(ctx)
+		if err != nil {
 			return "unhealthy", err.Error(), now
 		}
-		return "healthy", "Xray ping succeeded", now
+		return "healthy", message, now
 	}
 	if err := scanner.ValidateProviderSelection(registry.ScanProvider); err != nil {
 		return "unknown", err.Error(), now

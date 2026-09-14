@@ -1,5 +1,86 @@
 {
-  "generated_at": "2026-08-01T22:16:04.561640+00:00",
-  "nodes": {},
+  "generated_at": "2026-09-13T17:20:50.173828+00:00",
+  "nodes": {
+    "header": {
+      "code_fingerprint": "",
+      "label": "Header",
+      "last": "2026-08-01T22:22:45.936925+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-01T22:22:45.936925+00:00",
+          "outcome": "useful",
+          "q": "A few more issues: why can I access the login or signup page when I am already logged in, and why does the landing page top nav show the login button instead of the logged-in state?"
+        }
+      ],
+      "score": 0.372072527,
+      "source_file": "",
+      "status": "tentative",
+      "uses": 1
+    },
+    "middlewares_auth": {
+      "code_fingerprint": "bace65ba85aedd1eea622d719a20578a3a8ce549ea91f4d69a2a75c47af20621",
+      "label": "middlewares/auth.go",
+      "last": "2026-08-01T22:22:45.936925+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-01T22:22:45.936925+00:00",
+          "outcome": "useful",
+          "q": "A few more issues: why can I access the login or signup page when I am already logged in, and why does the landing page top nav show the login button instead of the logged-in state?"
+        }
+      ],
+      "score": 0.372072527,
+      "source_file": "middlewares/auth.go",
+      "status": "tentative",
+      "uses": 1
+    },
+    "scanner_xray": {
+      "code_fingerprint": "36f40c878e4315a7c5307d14068b31a2ae224b08d17c8a4d6bd1e88f53983bf3",
+      "label": "xray.go",
+      "last": "2026-09-13T17:19:15.551324+00:00",
+      "provenance": [
+        {
+          "date": "2026-09-13T17:19:15.551324+00:00",
+          "outcome": "useful",
+          "q": "Xray scans complete in Xray but all JustScan scans end failed with fresh=false context deadline exceeded"
+        }
+      ],
+      "score": 0.999974697,
+      "source_file": "scanner/xray.go",
+      "status": "tentative",
+      "uses": 1
+    },
+    "scanner_xrayartifactscanstatus": {
+      "code_fingerprint": "36f40c878e4315a7c5307d14068b31a2ae224b08d17c8a4d6bd1e88f53983bf3",
+      "label": "xrayArtifactScanStatus",
+      "last": "2026-09-13T17:19:15.551324+00:00",
+      "provenance": [
+        {
+          "date": "2026-09-13T17:19:15.551324+00:00",
+          "outcome": "useful",
+          "q": "Xray scans complete in Xray but all JustScan scans end failed with fresh=false context deadline exceeded"
+        }
+      ],
+      "score": 0.999974697,
+      "source_file": "scanner/xray.go",
+      "status": "tentative",
+      "uses": 1
+    },
+    "scanner_xrayartifactstatusresponse": {
+      "code_fingerprint": "36f40c878e4315a7c5307d14068b31a2ae224b08d17c8a4d6bd1e88f53983bf3",
+      "label": "xrayArtifactStatusResponse",
+      "last": "2026-09-13T17:19:15.551324+00:00",
+      "provenance": [
+        {
+          "date": "2026-09-13T17:19:15.551324+00:00",
+          "outcome": "useful",
+          "q": "Xray scans complete in Xray but all JustScan scans end failed with fresh=false context deadline exceeded"
+        }
+      ],
+      "score": 0.999974697,
+      "source_file": "scanner/xray.go",
+      "status": "tentative",
+      "uses": 1
+    }
+  },
   "version": 1
 }

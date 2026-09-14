@@ -325,6 +325,9 @@ function statusChipColors(status: string): { background: string; color: string; 
   if (status === 'completed') {
     return { background: '#dcfce7', color: '#15803d', border: '#86efac' };
   }
+  if (status === 'completed_partial') {
+    return { background: '#fffbeb', color: '#b45309', border: '#fcd34d' };
+  }
   if (status === 'blocked_by_xray_policy') {
     return { background: '#fff7ed', color: '#c2410c', border: '#fdba74' };
   }

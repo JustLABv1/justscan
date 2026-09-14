@@ -875,7 +875,7 @@ export default function NewScanPage() {
                             </Alert.Title>
                             <Alert.Description>
                               {selectedRegistry.xray_mode === 'full'
-                                ? 'JustScan will request and confirm a fresh Xray scan after Artifactory resolves the artifact.'
+                                ? 'JustScan will request an Xray scan and verify that its provider result advances after Artifactory resolves the artifact.'
                                 : 'JustScan pulls through Artifactory and imports provider results. A cached image is not force-rescanned, so result freshness cannot be verified.'}
                             </Alert.Description>
                           </Alert.Content>

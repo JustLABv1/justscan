@@ -58,6 +58,7 @@ const STATUS_CONFIG: Record<string, BadgeConfig> = {
   degraded: { tone: 'warning' },
   stale: { tone: 'warning' },
   completed: { tone: 'success' },
+  completed_partial: { tone: 'warning', label: 'completed partially' },
   failed: { tone: 'danger' },
   running: { tone: 'accent', animated: true },
   pending: { tone: 'default', label: 'queued in JustScan', animated: true },
@@ -113,6 +114,10 @@ export function resolveDisplayStatus(
     return normalizedExternalStatus;
   }
 
+  if (normalizedStatus === 'completed' && normalizedExternalStatus === 'completed_partial') {
+    return normalizedExternalStatus;
+  }
+
   return normalizedStatus;
 }
 
@@ -120,6 +125,7 @@ export function formatStatusLabel(status: string) {
   const normalizedStatus = normalizeStatus(status);
   const labels: Record<string, string> = {
     blocked_by_xray_policy: 'blocked by xray policy',
+    completed_partial: 'completed partially',
     waiting_for_xray: 'waiting for xray',
     warming_cache: 'warming cache',
     indexing_artifact: 'waiting for xray status',

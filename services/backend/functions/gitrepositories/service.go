@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -221,7 +222,7 @@ func CancelRun(ctx context.Context, db *bun.DB, repositoryID, runID uuid.UUID) (
 		return nil, err
 	}
 	activeStatuses := []string{models.GitRepositoryRunQueued, models.GitRepositoryRunDiscovering, models.GitRepositoryRunScanning}
-	if !containsRunStatus(activeStatuses, run.Status) {
+	if !slices.Contains(activeStatuses, run.Status) {
 		return nil, ErrRunNotCancellable
 	}
 
@@ -287,15 +288,6 @@ func CancelRun(ctx context.Context, db *bun.DB, repositoryID, runID uuid.UUID) (
 	run.ErrorMessage = "Cancelled by user"
 	run.CompletedAt = &now
 	return &run, nil
-}
-
-func containsRunStatus(statuses []string, status string) bool {
-	for _, candidate := range statuses {
-		if candidate == status {
-			return true
-		}
-	}
-	return false
 }
 
 // CreateDiscovery performs a persisted dry run. It clones and inspects the

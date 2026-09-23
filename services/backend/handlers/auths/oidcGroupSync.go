@@ -302,38 +302,6 @@ func resolveRouteCandidate(ctx context.Context, db *bun.DB, userID uuid.UUID, pr
 	}
 }
 
-func ensureOrgForMapping(ctx context.Context, db *bun.DB, userID uuid.UUID, providerName string, mapping models.OIDCGroupOrgMapping, claim, suffix string) (uuid.UUID, error) {
-	switch mapping.ProvisioningMode {
-	case "create_org":
-		orgName, err := renderOrgName(mapping, claim, suffix, providerName)
-		if err != nil {
-			return uuid.Nil, err
-		}
-		return findOrCreateOrgByName(ctx, db, userID, orgName, mapping, claim, providerName)
-	case "existing_org", "":
-		if mapping.OrgID == nil {
-			return uuid.Nil, fmt.Errorf("existing_org mapping %s is missing org_id", mapping.ID)
-		}
-		exists, err := db.NewSelect().Model((*models.Org)(nil)).Where("id = ?", *mapping.OrgID).Exists(ctx)
-		if err != nil {
-			return uuid.Nil, err
-		}
-		if exists {
-			return *mapping.OrgID, nil
-		}
-		if !mapping.RecreateMissingOrg {
-			return uuid.Nil, nil
-		}
-		orgName, err := renderOrgName(mapping, claim, suffix, providerName)
-		if err != nil {
-			return uuid.Nil, err
-		}
-		return recreateMissingOrg(ctx, db, userID, *mapping.OrgID, orgName, mapping, claim, providerName)
-	default:
-		return uuid.Nil, fmt.Errorf("unsupported provisioning mode %q", mapping.ProvisioningMode)
-	}
-}
-
 func renderOrgName(mapping models.OIDCGroupOrgMapping, claim, suffix, providerName string) (string, error) {
 	return renderOIDCNameTemplate(mapping.ID.String(), mapping.MatchType, mapping.OrgNameTemplate, claim, suffix, providerName)
 }

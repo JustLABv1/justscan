@@ -14,7 +14,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 	"github.com/uptrace/bun"
 )
 
@@ -139,13 +138,13 @@ func CreateOIDCProvider(c *gin.Context, db *bun.DB) {
 		ClientID:         body.ClientID,
 		ClientSecret:     body.ClientSecret,
 		RedirectURI:      body.RedirectURI,
-		Scopes:           pq.StringArray(body.Scopes),
-		AdminGroups:      pq.StringArray(body.AdminGroups),
-		AdminRoles:       pq.StringArray(body.AdminRoles),
-		IncludedGroups:   pq.StringArray(normalizeStringList(body.IncludedGroups)),
-		ExcludedGroups:   pq.StringArray(normalizeStringList(body.ExcludedGroups)),
-		IncludedOrgNames: pq.StringArray(normalizeStringList(body.IncludedOrgNames)),
-		ExcludedOrgNames: pq.StringArray(normalizeStringList(body.ExcludedOrgNames)),
+		Scopes:           body.Scopes,
+		AdminGroups:      body.AdminGroups,
+		AdminRoles:       body.AdminRoles,
+		IncludedGroups:   normalizeStringList(body.IncludedGroups),
+		ExcludedGroups:   normalizeStringList(body.ExcludedGroups),
+		IncludedOrgNames: normalizeStringList(body.IncludedOrgNames),
+		ExcludedOrgNames: normalizeStringList(body.ExcludedOrgNames),
 		GroupsClaim:      body.GroupsClaim,
 		RolesClaim:       body.RolesClaim,
 		Enabled:          enabled,
@@ -211,25 +210,25 @@ func UpdateOIDCProvider(c *gin.Context, db *bun.DB) {
 		existing.RedirectURI = body.RedirectURI
 	}
 	if body.Scopes != nil {
-		existing.Scopes = pq.StringArray(body.Scopes)
+		existing.Scopes = body.Scopes
 	}
 	if body.AdminGroups != nil {
-		existing.AdminGroups = pq.StringArray(body.AdminGroups)
+		existing.AdminGroups = body.AdminGroups
 	}
 	if body.AdminRoles != nil {
-		existing.AdminRoles = pq.StringArray(body.AdminRoles)
+		existing.AdminRoles = body.AdminRoles
 	}
 	if body.IncludedGroups != nil {
-		existing.IncludedGroups = pq.StringArray(normalizeStringList(body.IncludedGroups))
+		existing.IncludedGroups = normalizeStringList(body.IncludedGroups)
 	}
 	if body.ExcludedGroups != nil {
-		existing.ExcludedGroups = pq.StringArray(normalizeStringList(body.ExcludedGroups))
+		existing.ExcludedGroups = normalizeStringList(body.ExcludedGroups)
 	}
 	if body.IncludedOrgNames != nil {
-		existing.IncludedOrgNames = pq.StringArray(normalizeStringList(body.IncludedOrgNames))
+		existing.IncludedOrgNames = normalizeStringList(body.IncludedOrgNames)
 	}
 	if body.ExcludedOrgNames != nil {
-		existing.ExcludedOrgNames = pq.StringArray(normalizeStringList(body.ExcludedOrgNames))
+		existing.ExcludedOrgNames = normalizeStringList(body.ExcludedOrgNames)
 	}
 	if body.GroupsClaim != "" {
 		existing.GroupsClaim = body.GroupsClaim

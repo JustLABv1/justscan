@@ -567,3 +567,35 @@ func TestCloneRejectsIncompleteStoredAuthentication(t *testing.T) {
 		})
 	}
 }
+
+func discoverRepository(ctx context.Context, root string, repository models.GitRepository) ([]DiscoveredImage, error) {
+	discoveryMatcher, err := newDiscoveryPathMatcher(root, repository.DiscoveryExcludes)
+	if err != nil {
+		return nil, err
+	}
+	discovery, err := discoverRepositoryWithMatcher(ctx, root, repository, discoveryMatcher)
+	if err != nil {
+		return nil, err
+	}
+	return discovery.images, nil
+}
+
+// discoverYAML is the generic fallback for repositories containing plain
+// Kubernetes manifests. It intentionally ignores Helm values and other
+// declarations because those are not proof that an image is deployed.
+func discoverYAML(root string) ([]DiscoveredImage, error) {
+	return discoverYAMLWithMatcher(root, emptyDiscoveryPathMatcher(root))
+}
+
+func findKustomizationRoots(root string, entrypoints []string) ([]string, error) {
+	return findKustomizationRootsWithMatcher(root, entrypoints, emptyDiscoveryPathMatcher(root))
+}
+
+func appendHelmChart(ctx context.Context, root string, byRef map[string]*DiscoveredImage, source justScanSource) error {
+	return appendHelmChartFromRoots(ctx, root, root, byRef, source, "", models.GitRepository{}, nil, nil)
+}
+
+func findDiscoveryCandidates(root string, rules []models.GitRepositoryDiscoveryRule, configuration justScanConfig, helmSources []models.GitRepositoryHelmSource) []DiscoveryCandidate {
+	discoveryMatcher := emptyDiscoveryPathMatcher(root)
+	return findDiscoveryCandidatesWithMatcher(root, rules, configuration, helmSources, discoveryMatcher)
+}

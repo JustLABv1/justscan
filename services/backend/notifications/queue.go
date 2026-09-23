@@ -652,7 +652,7 @@ func buildDigestPayload(ctx context.Context, db *bun.DB, digestID uuid.UUID, rul
 		payload.LowCount += itemPayload.LowCount
 		payload.UnknownCount += itemPayload.UnknownCount
 		payload.SuppressedCount += itemPayload.SuppressedCount
-		payload.HighestCVSS = maxFloat(payload.HighestCVSS, itemPayload.HighestCVSS)
+		payload.HighestCVSS = max(payload.HighestCVSS, itemPayload.HighestCVSS)
 		if severityRank(itemPayload.HighestSeverity) > severityRank(payload.HighestSeverity) {
 			payload.HighestSeverity = itemPayload.HighestSeverity
 		}
@@ -775,11 +775,4 @@ func payloadFromJSONObject(raw models.JSONObject) (Payload, error) {
 		payload.Timestamp = time.Now().UTC()
 	}
 	return payload, nil
-}
-
-func maxFloat(left float64, right float64) float64 {
-	if right > left {
-		return right
-	}
-	return left
 }

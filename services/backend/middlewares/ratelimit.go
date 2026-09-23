@@ -47,12 +47,6 @@ func SetAuthRegisterRateLimit(limit int) {
 	authRegisterLimiter.mu.Unlock()
 }
 
-func SetAuthLoginRateLimit(limit int) {
-	authLoginLimiter.mu.Lock()
-	authLoginLimiter.limit = limit
-	authLoginLimiter.mu.Unlock()
-}
-
 func (rl *ipRateLimiter) check(ip string) (allowed bool, remaining int) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()

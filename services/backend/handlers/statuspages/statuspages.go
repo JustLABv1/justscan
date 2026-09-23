@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1194,7 +1195,7 @@ func loadGitRepositoryStatusPageItems(ctx context.Context, db *bun.DB, page *mod
 			return nil, err
 		}
 		for _, image := range images {
-			if len(source.ImageNames) > 0 && !containsStatusPageGitImageName(source.ImageNames, image.ImageName) {
+			if len(source.ImageNames) > 0 && !slices.Contains(source.ImageNames, image.ImageName) {
 				continue
 			}
 			item := StatusPageItem{
@@ -1694,15 +1695,6 @@ func normalizeStatusPageGitImageNames(imageNames []string) models.StringList {
 		result = append(result, imageName)
 	}
 	return result
-}
-
-func containsStatusPageGitImageName(imageNames models.StringList, imageName string) bool {
-	for _, candidate := range imageNames {
-		if candidate == imageName {
-			return true
-		}
-	}
-	return false
 }
 
 func compileStatusPagePatterns(patterns models.StringList) ([]*regexp.Regexp, error) {

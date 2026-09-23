@@ -1001,14 +1001,6 @@ func managedHelmChartRepository(ctx context.Context, db *bun.DB, source models.G
 	return repository, nil
 }
 
-func discoverRuleSources(ctx context.Context, root string, rules []models.GitRepositoryDiscoveryRule, repository models.GitRepository) ([]DiscoveredImage, error) {
-	discoveryMatcher, err := newDiscoveryPathMatcher(root, repository.DiscoveryExcludes)
-	if err != nil {
-		return nil, err
-	}
-	return discoverRuleSourcesWithMatcher(ctx, root, rules, repository, discoveryMatcher)
-}
-
 func discoverRuleSourcesWithMatcher(ctx context.Context, root string, rules []models.GitRepositoryDiscoveryRule, repository models.GitRepository, discoveryMatcher discoveryPathMatcher) ([]DiscoveredImage, error) {
 	configuration := justScanConfig{Version: 1}
 	for _, rule := range rules {
@@ -1048,11 +1040,6 @@ func mergeDiscoveredImages(groups ...[]DiscoveredImage) []DiscoveredImage {
 		}
 	}
 	return sortedDiscoveredImages(byRef)
-}
-
-func findDiscoveryCandidates(root string, rules []models.GitRepositoryDiscoveryRule, configuration justScanConfig, helmSources []models.GitRepositoryHelmSource) []DiscoveryCandidate {
-	discoveryMatcher := emptyDiscoveryPathMatcher(root)
-	return findDiscoveryCandidatesWithMatcher(root, rules, configuration, helmSources, discoveryMatcher)
 }
 
 func findDiscoveryCandidatesWithMatcher(root string, rules []models.GitRepositoryDiscoveryRule, configuration justScanConfig, helmSources []models.GitRepositoryHelmSource, discoveryMatcher discoveryPathMatcher) []DiscoveryCandidate {
@@ -1145,10 +1132,6 @@ func chartFilename(path string) string {
 		}
 	}
 	return ""
-}
-
-func kustomizeValuesFiles(root string) map[string]bool {
-	return kustomizeValuesFilesWithMatcher(root, emptyDiscoveryPathMatcher(root))
 }
 
 func kustomizeValuesFilesWithMatcher(root string, discoveryMatcher discoveryPathMatcher) map[string]bool {
@@ -1326,18 +1309,6 @@ func defaultTimezone(value string) string {
 	return value
 }
 
-func discoverRepository(ctx context.Context, root string, repository models.GitRepository) ([]DiscoveredImage, error) {
-	discoveryMatcher, err := newDiscoveryPathMatcher(root, repository.DiscoveryExcludes)
-	if err != nil {
-		return nil, err
-	}
-	discovery, err := discoverRepositoryWithMatcher(ctx, root, repository, discoveryMatcher)
-	if err != nil {
-		return nil, err
-	}
-	return discovery.images, nil
-}
-
 func discoverRepositoryWithMatcher(ctx context.Context, root string, repository models.GitRepository, discoveryMatcher discoveryPathMatcher) (repositoryDiscoveryResult, error) {
 	if repositoryConfig, configured, err := loadJustScanConfig(root); err != nil {
 		return repositoryDiscoveryResult{}, err
@@ -1410,15 +1381,6 @@ func loadJustScanConfig(root string) (justScanConfig, bool, error) {
 		return configuration, true, nil
 	}
 	return justScanConfig{}, false, nil
-}
-
-func discoverConfiguredSources(ctx context.Context, root string, configuration justScanConfig, repository models.GitRepository) ([]DiscoveredImage, error) {
-	discoveryMatcher, err := newDiscoveryPathMatcher(root, repository.DiscoveryExcludes)
-	if err != nil {
-		return nil, err
-	}
-	discovery, err := discoverConfiguredSourcesWithMatcher(ctx, root, configuration, repository, discoveryMatcher)
-	return discovery.images, err
 }
 
 func discoverConfiguredSourcesWithMatcher(ctx context.Context, root string, configuration justScanConfig, repository models.GitRepository, discoveryMatcher discoveryPathMatcher) (repositoryDiscoveryResult, error) {
@@ -1529,13 +1491,6 @@ func resolveRepositoryPath(root, relative string) (string, error) {
 	return path, nil
 }
 
-// discoverYAML is the generic fallback for repositories containing plain
-// Kubernetes manifests. It intentionally ignores Helm values and other
-// declarations because those are not proof that an image is deployed.
-func discoverYAML(root string) ([]DiscoveredImage, error) {
-	return discoverYAMLWithMatcher(root, emptyDiscoveryPathMatcher(root))
-}
-
 func discoverYAMLWithMatcher(root string, discoveryMatcher discoveryPathMatcher) ([]DiscoveredImage, error) {
 	byRef := map[string]*DiscoveredImage{}
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
@@ -1599,11 +1554,6 @@ func isAutoDiscoveryFixtureDirectory(relative string) bool {
 	return false
 }
 
-func discoverKustomizeRoots(root string, roots []string) ([]DiscoveredImage, error) {
-	images, _, err := discoverKustomizeRootsWithMatcher(root, roots, emptyDiscoveryPathMatcher(root), true)
-	return images, err
-}
-
 func discoverKustomizeRootsWithMatcher(root string, roots []string, discoveryMatcher discoveryPathMatcher, failOnRenderError bool) ([]DiscoveredImage, []DiscoveryCandidate, error) {
 	byRef := map[string]*DiscoveredImage{}
 	warnings, err := appendKustomizeRootsWithMatcher(root, byRef, roots, discoveryMatcher, failOnRenderError)
@@ -1611,11 +1561,6 @@ func discoverKustomizeRootsWithMatcher(root string, roots []string, discoveryMat
 		return nil, nil, err
 	}
 	return sortedDiscoveredImages(byRef), warnings, nil
-}
-
-func appendKustomizeRoots(root string, byRef map[string]*DiscoveredImage, roots []string) error {
-	_, err := appendKustomizeRootsWithMatcher(root, byRef, roots, emptyDiscoveryPathMatcher(root), true)
-	return err
 }
 
 func appendKustomizeRootsWithMatcher(root string, byRef map[string]*DiscoveredImage, roots []string, discoveryMatcher discoveryPathMatcher, failOnRenderError bool) ([]DiscoveryCandidate, error) {
@@ -1643,10 +1588,6 @@ func appendKustomizeRootsWithMatcher(root string, byRef map[string]*DiscoveredIm
 		appendManifestImages(byRef, output, "(rendered)", entrypoint)
 	}
 	return warnings, nil
-}
-
-func appendManifestPaths(root string, byRef map[string]*DiscoveredImage, paths []string) error {
-	return appendManifestPathsWithMatcher(root, byRef, paths, emptyDiscoveryPathMatcher(root))
 }
 
 func appendManifestPathsWithMatcher(root string, byRef map[string]*DiscoveredImage, paths []string, discoveryMatcher discoveryPathMatcher) error {
@@ -1711,10 +1652,6 @@ func appendManifestFile(root string, byRef map[string]*DiscoveredImage, path str
 	}
 	appendManifestImages(byRef, content, relativePath(root, path), "")
 	return nil
-}
-
-func appendHelmChart(ctx context.Context, root string, byRef map[string]*DiscoveredImage, source justScanSource) error {
-	return appendHelmChartFromRoots(ctx, root, root, byRef, source, "", models.GitRepository{}, nil, nil)
 }
 
 func appendHelmChartFromRoots(ctx context.Context, valuesRoot, chartRoot string, byRef map[string]*DiscoveredImage, source justScanSource, chartLabel string, repository models.GitRepository, dependencyRegistryID *uuid.UUID, helmCredentialIDs ...*uuid.UUID) error {
@@ -2029,30 +1966,6 @@ func helmRepositoryHost(repository string) string {
 	return strings.TrimSpace(trimmed)
 }
 
-func matchingHelmRegistry(ctx context.Context, db *bun.DB, registries []models.Registry, repository models.GitRepository, host, endpoint string) (*models.Registry, error) {
-	dependencyPath := helmRepositoryPath(endpoint)
-	var best *models.Registry
-	bestScore := -1
-	for index := range registries {
-		registry := &registries[index]
-		if helmRepositoryHost(registry.URL) != host {
-			continue
-		}
-		allowed, err := registryBelongsToRepository(ctx, db, registry, repository)
-		if err != nil {
-			return nil, err
-		}
-		if allowed {
-			score := helmRegistryMatchScore(dependencyPath, helmRepositoryPath(registry.URL))
-			if score > bestScore {
-				best = registry
-				bestScore = score
-			}
-		}
-	}
-	return best, nil
-}
-
 // matchingHelmCredential resolves only the dedicated Helm credential resource.
 // A tie is unsafe: the user must choose the intended credential explicitly.
 func matchingHelmCredential(ctx context.Context, db *bun.DB, credentials []models.HelmRegistryCredential, repository models.GitRepository, endpoint string, selected *models.HelmRegistryCredential) (*models.HelmRegistryCredential, error) {
@@ -2141,10 +2054,6 @@ func renderKustomization(target string) ([]byte, error) {
 		return nil, err
 	}
 	return resources.AsYaml()
-}
-
-func findKustomizationRoots(root string, entrypoints []string) ([]string, error) {
-	return findKustomizationRootsWithMatcher(root, entrypoints, emptyDiscoveryPathMatcher(root))
 }
 
 func findKustomizationRootsWithMatcher(root string, entrypoints []string, discoveryMatcher discoveryPathMatcher) ([]string, error) {

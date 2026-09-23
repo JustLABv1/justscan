@@ -515,48 +515,6 @@ func TestIsRetriableXrayScanArtifactErrorTreatsGatewayTimeoutAsRetriable(t *test
 	}
 }
 
-func TestIsNonFatalXrayIndexErrorTreatsPermissionDeniedAsNonFatal(t *testing.T) {
-	tests := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{name: "forbidden", err: &xrayHTTPError{StatusCode: http.StatusForbidden}, want: true},
-		{name: "unauthorized", err: &xrayHTTPError{StatusCode: http.StatusUnauthorized}, want: true},
-		{name: "conflict", err: &xrayHTTPError{StatusCode: http.StatusConflict}, want: true},
-		{name: "bad gateway", err: &xrayHTTPError{StatusCode: http.StatusBadGateway}, want: false},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := isNonFatalXrayIndexError(test.err); got != test.want {
-				t.Fatalf("isNonFatalXrayIndexError() = %v, want %v", got, test.want)
-			}
-		})
-	}
-}
-
-func TestIsNonFatalXrayScanArtifactErrorTreatsPermissionDeniedAsNonFatal(t *testing.T) {
-	tests := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{name: "forbidden", err: &xrayHTTPError{StatusCode: http.StatusForbidden}, want: true},
-		{name: "unauthorized", err: &xrayHTTPError{StatusCode: http.StatusUnauthorized}, want: true},
-		{name: "conflict", err: &xrayHTTPError{StatusCode: http.StatusConflict}, want: true},
-		{name: "bad request", err: &xrayHTTPError{StatusCode: http.StatusBadRequest}, want: false},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := isNonFatalXrayScanArtifactError(test.err); got != test.want {
-				t.Fatalf("isNonFatalXrayScanArtifactError() = %v, want %v", got, test.want)
-			}
-		})
-	}
-}
-
 func TestParseXrayIgnoredViolationRulesFromExport(t *testing.T) {
 	payload, err := buildTestExportZip(map[string]any{
 		"violations": []any{
@@ -875,27 +833,6 @@ func TestDescribeNonFatalXrayIgnoreRuleSyncErrorExplainsPermissionIssue(t *testi
 	}
 }
 
-func TestShouldWarnBlockedReindexErrorSuppressesExpectedStatuses(t *testing.T) {
-	tests := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{name: "forbidden", err: &xrayHTTPError{StatusCode: http.StatusForbidden}, want: false},
-		{name: "unauthorized", err: &xrayHTTPError{StatusCode: http.StatusUnauthorized}, want: false},
-		{name: "conflict", err: &xrayHTTPError{StatusCode: http.StatusConflict}, want: false},
-		{name: "bad gateway", err: &xrayHTTPError{StatusCode: http.StatusBadGateway}, want: true},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := shouldWarnBlockedReindexError(test.err); got != test.want {
-				t.Fatalf("shouldWarnBlockedReindexError() = %v, want %v", got, test.want)
-			}
-		})
-	}
-}
-
 func TestExportComponentCycloneDXSkipsEmptyPathFallbackWhenPathsProvided(t *testing.T) {
 	requestedPaths := make([]string, 0, 2)
 	client := &xrayClient{
@@ -1186,20 +1123,6 @@ func TestDoRegistryRequestUsesDedicatedRegistryClient(t *testing.T) {
 	defer response.Body.Close()
 	if !registryClientUsed {
 		t.Fatal("expected registryHTTPClient to service registry requests")
-	}
-}
-
-func TestDescribeNonFatalXrayIndexErrorExplainsPermissionIssue(t *testing.T) {
-	message := describeNonFatalXrayIndexError("plain-images/alpine/3.23/manifest.json", &xrayHTTPError{StatusCode: http.StatusForbidden})
-	if want := "re-index permissions"; !containsFold(message, want) {
-		t.Fatalf("expected %q to contain %q", message, want)
-	}
-}
-
-func TestDescribeNonFatalXrayScanArtifactErrorExplainsKnownServerFailure(t *testing.T) {
-	message := describeNonFatalXrayScanArtifactError("docker://plain-images/alpine:3.23", &xrayHTTPError{StatusCode: http.StatusInternalServerError, Body: `{"error":"Failed to scan component"}`})
-	if want := "explicit scanArtifact request"; !containsFold(message, want) {
-		t.Fatalf("expected %q to contain %q", message, want)
 	}
 }
 

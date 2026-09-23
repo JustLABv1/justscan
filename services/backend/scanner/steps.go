@@ -232,26 +232,3 @@ func recordScanStepOutput(ctx context.Context, db *bun.DB, scanID uuid.UUID, mes
 		log.Warnf("Failed to append step output for scan %s: %v", scanID, err)
 	}
 }
-
-func xrayCurrentStep(externalStatus string) string {
-	switch externalStatus {
-	case "warming_artifactory_cache":
-		return models.ScanStepWarmingCache
-	case "indexing":
-		return models.ScanStepIndexingArtifact
-	case "queued":
-		return models.ScanStepQueuedInXray
-	case "waiting_for_xray":
-		return models.ScanStepWaitingForXray
-	case "importing":
-		return models.ScanStepImportingResults
-	case "completed":
-		return models.ScanStepCompleted
-	case models.ScanStatusCancelled:
-		return models.ScanStepCancelled
-	case models.ScanExternalStatusBlockedByXrayPolicy:
-		return models.ScanStepFailed
-	default:
-		return models.ScanStepQueued
-	}
-}

@@ -47,10 +47,6 @@ func discoverGitLabCIWithMatcher(root string, paths []string, discoveryMatcher d
 	return sortedDiscoveredImages(byRef), nil
 }
 
-func gitLabCIConfigFiles(root string, paths []string) ([]string, error) {
-	return gitLabCIConfigFilesWithMatcher(root, paths, emptyDiscoveryPathMatcher(root))
-}
-
 func gitLabCIConfigFilesWithMatcher(root string, paths []string, discoveryMatcher discoveryPathMatcher) ([]string, error) {
 	explicitPaths := len(paths) > 0
 	if len(paths) == 0 {
@@ -77,10 +73,6 @@ func gitLabCIConfigFilesWithMatcher(root string, paths []string, discoveryMatche
 	}
 	sort.Strings(files)
 	return files, nil
-}
-
-func gitLabCIPathMatches(root, raw string) ([]string, error) {
-	return gitLabCIPathMatchesWithMatcher(root, raw, emptyDiscoveryPathMatcher(root), false)
 }
 
 func gitLabCIPathMatchesWithMatcher(root, raw string, discoveryMatcher discoveryPathMatcher, explicitPath bool) ([]string, error) {
@@ -147,10 +139,6 @@ func gitLabCIPathMatchesWithMatcher(root, raw string, discoveryMatcher discovery
 	return result, nil
 }
 
-func gitLabCIWalkFiles(root, directory string) ([]string, error) {
-	return gitLabCIWalkFilesWithMatcher(root, directory, emptyDiscoveryPathMatcher(root))
-}
-
 func gitLabCIWalkFilesWithMatcher(root, directory string, discoveryMatcher discoveryPathMatcher) ([]string, error) {
 	files := []string{}
 	err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, walkErr error) error {
@@ -182,10 +170,6 @@ func gitLabCIWalkFilesWithMatcher(root, directory string, discoveryMatcher disco
 	}
 	sort.Strings(files)
 	return files, nil
-}
-
-func appendGitLabCIFile(root, file string, byRef map[string]*DiscoveredImage, visited map[string]bool, depth int) error {
-	return appendGitLabCIFileWithMatcher(root, file, byRef, visited, depth, emptyDiscoveryPathMatcher(root))
 }
 
 func appendGitLabCIFileWithMatcher(root, file string, byRef map[string]*DiscoveredImage, visited map[string]bool, depth int, discoveryMatcher discoveryPathMatcher) error {
@@ -427,10 +411,6 @@ func gitLabCILocalIncludes(value any) []string {
 		}
 	}
 	return result
-}
-
-func resolveGitLabCILocalInclude(root, includingFile, include string) (string, error) {
-	return resolveGitLabCILocalIncludeWithMatcher(root, includingFile, include, emptyDiscoveryPathMatcher(root))
 }
 
 func resolveGitLabCILocalIncludeWithMatcher(root, includingFile, include string, discoveryMatcher discoveryPathMatcher) (string, error) {

@@ -53,24 +53,6 @@ func RequireOwnershipContext(c *gin.Context, db *bun.DB) (uuid.UUID, bool, []uui
 	return userID, isAdmin, accessibleOrgIDs, true
 }
 
-func RequireAdmin(c *gin.Context, db *bun.DB) (uuid.UUID, bool) {
-	userID, isAdmin, ok := RequireRequestUser(c, db)
-	if !ok {
-		return uuid.Nil, false
-	}
-	if !isAdmin {
-		c.JSON(http.StatusForbidden, gin.H{"error": "admin access required"})
-		return uuid.Nil, false
-	}
-
-	return userID, true
-}
-
-func LoadAuthorizedOrg(c *gin.Context, db *bun.DB, orgID uuid.UUID) (*models.Org, uuid.UUID, bool, bool) {
-	org, _, userID, isAdmin, ok := RequireOrgRole(c, db, orgID, models.OrgRoleViewer)
-	return org, userID, isAdmin, ok
-}
-
 // IsOrgTokenRequest returns true when the request was authenticated with an org-scoped API token.
 func IsOrgTokenRequest(c *gin.Context) bool {
 	_, ok := c.Get(middlewares.AuthContextOrgTokenOrgID)

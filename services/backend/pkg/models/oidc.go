@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 	"github.com/uptrace/bun"
 )
 
@@ -12,26 +11,26 @@ import (
 type OIDCProvider struct {
 	bun.BaseModel `bun:"table:oidc_providers"`
 
-	Name             string         `bun:"name,pk,type:text" json:"name"`
-	DisplayName      string         `bun:"display_name,type:text,notnull" json:"display_name"`
-	ButtonColor      string         `bun:"button_color,type:text,notnull,default:''" json:"button_color"`
-	IssuerURL        string         `bun:"issuer_url,type:text,notnull" json:"issuer_url"`
-	ClientID         string         `bun:"client_id,type:text,notnull" json:"client_id"`
-	ClientSecret     string         `bun:"client_secret,type:text,notnull,default:''" json:"client_secret,omitempty"`
-	RedirectURI      string         `bun:"redirect_uri,type:text,notnull,default:''" json:"redirect_uri"`
-	Scopes           pq.StringArray `bun:"scopes,type:text[],notnull,default:'{}'" json:"scopes"`
-	AdminGroups      pq.StringArray `bun:"admin_groups,type:text[],notnull,default:'{}'" json:"admin_groups"`
-	AdminRoles       pq.StringArray `bun:"admin_roles,type:text[],notnull,default:'{}'" json:"admin_roles"`
-	IncludedGroups   pq.StringArray `bun:"included_groups,type:text[],notnull,default:'{}'" json:"included_groups"`
-	ExcludedGroups   pq.StringArray `bun:"excluded_groups,type:text[],notnull,default:'{}'" json:"excluded_groups"`
-	IncludedOrgNames pq.StringArray `bun:"included_org_names,type:text[],notnull,default:'{}'" json:"included_org_names"`
-	ExcludedOrgNames pq.StringArray `bun:"excluded_org_names,type:text[],notnull,default:'{}'" json:"excluded_org_names"`
-	GroupsClaim      string         `bun:"groups_claim,type:text,notnull,default:'groups'" json:"groups_claim"`
-	RolesClaim       string         `bun:"roles_claim,type:text,notnull,default:'roles'" json:"roles_claim"`
-	Enabled          bool           `bun:"enabled,type:bool,notnull,default:true" json:"enabled"`
-	SortOrder        int            `bun:"sort_order,type:int,notnull,default:0" json:"sort_order"`
-	CreatedAt        time.Time      `bun:"created_at,type:timestamptz,notnull,default:now()" json:"created_at"`
-	UpdatedAt        time.Time      `bun:"updated_at,type:timestamptz,notnull,default:now()" json:"updated_at"`
+	Name             string    `bun:"name,pk,type:text" json:"name"`
+	DisplayName      string    `bun:"display_name,type:text,notnull" json:"display_name"`
+	ButtonColor      string    `bun:"button_color,type:text,notnull,default:''" json:"button_color"`
+	IssuerURL        string    `bun:"issuer_url,type:text,notnull" json:"issuer_url"`
+	ClientID         string    `bun:"client_id,type:text,notnull" json:"client_id"`
+	ClientSecret     string    `bun:"client_secret,type:text,notnull,default:''" json:"client_secret,omitempty"`
+	RedirectURI      string    `bun:"redirect_uri,type:text,notnull,default:''" json:"redirect_uri"`
+	Scopes           []string  `bun:"scopes,array,type:text[],notnull,default:'{}'" json:"scopes"`
+	AdminGroups      []string  `bun:"admin_groups,array,type:text[],notnull,default:'{}'" json:"admin_groups"`
+	AdminRoles       []string  `bun:"admin_roles,array,type:text[],notnull,default:'{}'" json:"admin_roles"`
+	IncludedGroups   []string  `bun:"included_groups,array,type:text[],notnull,default:'{}'" json:"included_groups"`
+	ExcludedGroups   []string  `bun:"excluded_groups,array,type:text[],notnull,default:'{}'" json:"excluded_groups"`
+	IncludedOrgNames []string  `bun:"included_org_names,array,type:text[],notnull,default:'{}'" json:"included_org_names"`
+	ExcludedOrgNames []string  `bun:"excluded_org_names,array,type:text[],notnull,default:'{}'" json:"excluded_org_names"`
+	GroupsClaim      string    `bun:"groups_claim,type:text,notnull,default:'groups'" json:"groups_claim"`
+	RolesClaim       string    `bun:"roles_claim,type:text,notnull,default:'roles'" json:"roles_claim"`
+	Enabled          bool      `bun:"enabled,type:bool,notnull,default:true" json:"enabled"`
+	SortOrder        int       `bun:"sort_order,type:int,notnull,default:0" json:"sort_order"`
+	CreatedAt        time.Time `bun:"created_at,type:timestamptz,notnull,default:now()" json:"created_at"`
+	UpdatedAt        time.Time `bun:"updated_at,type:timestamptz,notnull,default:now()" json:"updated_at"`
 }
 
 // OIDCProviderPublic is the subset returned to unauthenticated clients (login page).

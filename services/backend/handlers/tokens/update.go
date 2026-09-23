@@ -8,7 +8,6 @@ import (
 	"justscan-backend/pkg/models"
 
 	"github.com/gin-gonic/gin"
-	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"
 )
 

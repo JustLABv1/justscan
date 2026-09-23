@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { joinClassNames } from '@/components/ui/form-styles';
 
 export type SurfaceIconTone = 'default' | 'accent' | 'success' | 'warning' | 'danger';
 export type SurfaceIconSize = 'sm' | 'md' | 'lg';
@@ -17,10 +18,6 @@ const sizeClasses: Record<SurfaceIconSize, string> = {
   md: 'size-10 rounded-2xl text-base',
   lg: 'size-12 rounded-2xl text-lg',
 };
-
-function joinClassNames(...classes: Array<string | undefined | false>) {
-  return classes.filter(Boolean).join(' ');
-}
 
 interface SurfaceIconProps {
   icon: ReactNode;

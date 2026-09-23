@@ -13,6 +13,7 @@ import {
   getToken,
   listPublicVulnerabilities,
   reScanPublic,
+  subscribeToAuth,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { updatePublicHistoryEntry } from '@/lib/publicScanHistory';
@@ -39,6 +40,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
+import { isAbortError } from '@/lib/utils';
 
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   CRITICAL: {
@@ -158,12 +160,6 @@ function ScannerDatabaseCard({
 
 const LIMIT = 25;
 
-function subscribeToAuth(onChange: () => void) {
-  if (typeof window === 'undefined') return () => {};
-  window.addEventListener('storage', onChange);
-  return () => window.removeEventListener('storage', onChange);
-}
-
 type ResultTab = 'overview' | 'timeline';
 
 function publicScanStatusTone(status?: string | null): {
@@ -184,13 +180,6 @@ function publicScanStatusTone(status?: string | null): {
 
 function publicScanProviderLabel(scanProvider?: string | null): string {
   return scanProvider === 'artifactory_xray' ? 'Artifactory Xray' : 'Built-in scanner';
-}
-
-function isAbortError(error: unknown): boolean {
-  return (
-    (error instanceof Error && error.name === 'AbortError') ||
-    (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
-  );
 }
 
 export default function PublicScanResultPage() {

@@ -76,6 +76,12 @@ export const getTokenType = (): 'admin' | 'user' | null => {
   return 'user';
 };
 
+export function subscribeToAuth(onChange: () => void) {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('storage', onChange);
+  return () => window.removeEventListener('storage', onChange);
+}
+
 export const getAuthSnapshot = (): AuthSnapshot => {
   const token = getToken();
   const payload = token ? parseTokenPayload(token) : null;

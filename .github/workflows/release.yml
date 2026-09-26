@@ -49,7 +49,7 @@ jobs:
             type=raw,value=beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: services/cli/Dockerfile
@@ -98,7 +98,7 @@ jobs:
             type=raw,value=backend-minimal-beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=backend-minimal-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: services/backend
           file: services/backend/Dockerfile
@@ -110,7 +110,7 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
 
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: services/backend
           file: services/backend/Dockerfile
@@ -150,7 +150,7 @@ jobs:
             type=raw,value=frontend-beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=frontend-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: services/frontend
           file: services/frontend/Dockerfile
@@ -191,7 +191,7 @@ jobs:
             type=raw,value=docs-beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=docs-latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: services/docs
           file: services/docs/Dockerfile
@@ -228,7 +228,7 @@ jobs:
             type=raw,value=beta,enable=${{ contains(github.ref_name, '-beta.') }}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-beta.') }}
 
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: Dockerfile

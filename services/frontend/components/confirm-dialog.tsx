@@ -52,7 +52,7 @@ function ConfirmDialogUI({
 
   return (
     <Modal state={state}>
-      <Modal.Backdrop>
+      <Modal.Backdrop isDismissable={false}>
         <Modal.Container size="sm" placement="center">
           <Modal.Dialog>
             <Modal.Body className="px-6 pb-2">

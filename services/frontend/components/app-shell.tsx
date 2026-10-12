@@ -569,7 +569,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     workScope.kind,
     workScope.kind === 'org' ? (workScope.orgName ?? workScope.orgId) : 'personal'
   );
-  const desktopCollapsed = isAdminRoute ? false : collapsed;
+  const desktopCollapsed = collapsed;
   const navigationGroups = isAdminRoute
     ? adminNavigationGroups
     : [
@@ -671,27 +671,65 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               }`}
               variant="default"
             >
-              <div className={`flex shrink-0 items-center gap-3 px-3 py-3 ${desktopCollapsed ? 'justify-center' : ''}`}>
+              <div
+                className={`flex shrink-0 items-center py-3 ${
+                  desktopCollapsed ? 'justify-center gap-1 px-2' : 'gap-3 px-3'
+                }`}
+              >
                 <Link
                   href={isAdminRoute ? '/admin' : '/dashboard'}
                   aria-label={isAdminRoute ? 'JustScan administration' : 'JustScan dashboard'}
-                  className="flex min-w-0 flex-1 items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className={`flex min-w-0 items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                    desktopCollapsed ? 'shrink-0' : 'flex-1'
+                  }`}
                 >
-                  <Logo size={36} className="shrink-0" />
+                  <Logo size={desktopCollapsed ? 28 : 36} className="shrink-0" />
                   {!desktopCollapsed ? (
                     <span className="truncate text-base font-semibold tracking-tight">
                       {isAdminRoute ? 'Administration' : 'JustScan'}
                     </span>
                   ) : null}
                 </Link>
+                <Tooltip>
+                  <Tooltip.Trigger>
+                    <Button
+                      isIconOnly
+                      size={desktopCollapsed ? 'sm' : 'md'}
+                      onPress={toggleCollapsed}
+                      variant="tertiary"
+                      aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                    >
+                      {desktopCollapsed ? (
+                        <SidebarRight01Icon size={18} />
+                      ) : (
+                        <SidebarLeft01Icon size={18} />
+                      )}
+                    </Button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Content placement="right">
+                    {desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                  </Tooltip.Content>
+                </Tooltip>
               </div>
 
               {isAdminRoute ? (
-                <div className="mx-3 mb-3 rounded-xl bg-surface-secondary px-3 py-2.5">
-                  <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
-                    System scope
-                  </p>
-                  <p className="mt-0.5 text-sm font-medium">Platform control plane</p>
+                <div
+                  className={`mx-3 mb-3 rounded-xl bg-surface-secondary ${
+                    desktopCollapsed ? 'flex justify-center p-2' : 'px-3 py-2.5'
+                  }`}
+                  aria-label="System scope: Platform control plane"
+                  title={desktopCollapsed ? 'System scope: Platform control plane' : undefined}
+                >
+                  {desktopCollapsed ? (
+                    <Shield01Icon size={18} aria-hidden />
+                  ) : (
+                    <>
+                      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
+                        System scope
+                      </p>
+                      <p className="mt-0.5 text-sm font-medium">Platform control plane</p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div id="tour-workspace-section" className={`shrink-0 ${desktopCollapsed ? 'px-2' : 'px-3 pb-2'}`}>
@@ -827,10 +865,10 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               {isAdminRoute ? (
                 <div className="shrink-0 px-3 pb-3">
                   <SidebarNavLink
-                    href="/dashboard"
-                    itemLabel="Exit administration"
-                    Icon={DashboardSquare01Icon}
-                    mode="desktop"
+                  href="/dashboard"
+                  itemLabel="Exit administration"
+                  Icon={DashboardSquare01Icon}
+                  mode={desktopCollapsed ? 'collapsed' : 'desktop'}
                     active={false}
                     inviteCount={0}
                   />
@@ -898,21 +936,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </Dropdown.Menu>
                   </Dropdown.Popover>
                 </Dropdown>
-                {!isAdminRoute ? (
-                  <Tooltip isDisabled={!desktopCollapsed}>
-                  <Tooltip.Trigger>
-                    <Button
-                      isIconOnly
-                      onPress={toggleCollapsed}
-                      variant="tertiary"
-                      aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                    >
-                      {desktopCollapsed ? <SidebarRight01Icon size={18} /> : <SidebarLeft01Icon size={18} />}
-                    </Button>
-                  </Tooltip.Trigger>
-                  <Tooltip.Content placement="right">Expand sidebar</Tooltip.Content>
-                  </Tooltip>
-                ) : null}
               </div>
             </Surface>
 

@@ -619,7 +619,7 @@ export default function SuppressionsPage() {
       />
 
       <Modal state={imagesModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header>

@@ -657,7 +657,7 @@ function OrgDetailContent() {
 
       {/* Policy editor modal */}
       <Modal state={policyModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog>
               <Modal.Header>
@@ -933,7 +933,7 @@ function OrgDetailContent() {
       </Modal>
 
       <Modal state={inviteModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>

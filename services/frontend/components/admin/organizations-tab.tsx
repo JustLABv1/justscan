@@ -278,7 +278,7 @@ export function OrganizationsTab() {
       </Card>
 
       <Modal state={orgModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="cover" placement="center">
             <Modal.Dialog>
               <Modal.Header>
@@ -536,7 +536,7 @@ export function OrganizationsTab() {
       </Modal>
 
       <Modal state={inviteModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>
@@ -584,7 +584,7 @@ export function OrganizationsTab() {
       </Modal>
 
       <Modal state={tokenModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>

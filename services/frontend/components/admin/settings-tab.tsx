@@ -309,7 +309,7 @@ export function SettingsTab() {
       </div>
 
       <Modal state={maintenanceModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>

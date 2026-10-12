@@ -572,7 +572,7 @@ export default function OrgsPage() {
       </LoadableCollectionState>
 
       <Modal state={modal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>

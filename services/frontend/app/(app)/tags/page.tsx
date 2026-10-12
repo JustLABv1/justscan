@@ -610,7 +610,7 @@ export default function TagsPage() {
       </LoadableCollectionState>
 
       <Modal state={modal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>
@@ -703,7 +703,7 @@ export default function TagsPage() {
         </Modal.Backdrop>
       </Modal>
       <Modal state={shareModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>

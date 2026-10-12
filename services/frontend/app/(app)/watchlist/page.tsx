@@ -316,7 +316,7 @@ export default function WatchlistPage() {
   const [imageName, setImageName] = useState('');
   const [imageTag, setImageTag] = useState('latest');
   const [schedule, setSchedule] = useState('0 2 * * *');
-  const [timezone, setTimezone] = useState(getBrowserTimezone());
+  const [timezone, setTimezone] = useState(() => getBrowserTimezone());
   const [hourCycle, setHourCycle] = useState<HourCyclePreference>('locale');
   const [enabled, setEnabled] = useState(true);
   const [registryId, setRegistryId] = useState('');
@@ -325,6 +325,9 @@ export default function WatchlistPage() {
   const [triggering, setTriggering] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkActionSaving, setBulkActionSaving] = useState(false);
+  const [bulkSchedule, setBulkSchedule] = useState('0 2 * * *');
+  const [bulkTimezone, setBulkTimezone] = useState(() => getBrowserTimezone());
+  const [bulkScheduleError, setBulkScheduleError] = useState('');
   const [bulkInput, setBulkInput] = useState('');
   const [importedFileName, setImportedFileName] = useState('');
   const fileImportRef = useRef<HTMLInputElement>(null);
@@ -343,6 +346,7 @@ export default function WatchlistPage() {
   const [postureNow] = useState(() => Date.now());
   const modal = useOverlayState();
   const bulkModal = useOverlayState();
+  const bulkScheduleModal = useOverlayState();
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
@@ -440,6 +444,15 @@ export default function WatchlistPage() {
     setFormError('');
     bulkModal.open();
   }
+  function openBulkSchedule() {
+    const selectedItems = items.filter((item) => selectedIds.has(item.id));
+    const schedules = [...new Set(selectedItems.map((item) => item.schedule ?? '0 2 * * *'))];
+    const timezones = [...new Set(selectedItems.map((item) => item.timezone || 'UTC'))];
+    setBulkSchedule(schedules.length === 1 ? schedules[0] : '0 2 * * *');
+    setBulkTimezone(timezones.length === 1 ? timezones[0] : getBrowserTimezone());
+    setBulkScheduleError('');
+    bulkScheduleModal.open();
+  }
   function openEdit(item: WatchlistItem) {
     if (!canMutateItem(item)) return;
     setEditing(item);
@@ -536,6 +549,31 @@ export default function WatchlistPage() {
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Bulk action failed');
       await load();
+    } finally {
+      setBulkActionSaving(false);
+    }
+  }
+  async function handleBulkScheduleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const ids = [...selectedIds];
+    if (!ids.length || bulkActionSaving) return;
+    setBulkActionSaving(true);
+    setBulkScheduleError('');
+    try {
+      await bulkWatchlistAction(ids, 'schedule', {
+        schedule: bulkSchedule.trim(),
+        timezone: bulkTimezone.trim(),
+      });
+      toast.success(
+        `Schedule updated for ${ids.length} watchlist item${ids.length === 1 ? '' : 's'}`
+      );
+      setSelectedIds(new Set());
+      bulkScheduleModal.close();
+      await load();
+    } catch (error: unknown) {
+      setBulkScheduleError(
+        error instanceof Error ? error.message : 'Could not update the schedules'
+      );
     } finally {
       setBulkActionSaving(false);
     }
@@ -1019,6 +1057,14 @@ export default function WatchlistPage() {
                 </Button>
                 <Button
                   size="sm"
+                  variant="secondary"
+                  isDisabled={bulkActionSaving}
+                  onPress={openBulkSchedule}
+                >
+                  Set schedule
+                </Button>
+                <Button
+                  size="sm"
                   variant="danger"
                   isDisabled={bulkActionSaving}
                   onPress={() => {
@@ -1248,7 +1294,7 @@ export default function WatchlistPage() {
       )}
 
       <Modal state={modal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
@@ -1410,7 +1456,7 @@ export default function WatchlistPage() {
         </Modal.Backdrop>
       </Modal>
       <Modal state={bulkModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>
@@ -1482,8 +1528,75 @@ export default function WatchlistPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+      <Modal state={bulkScheduleModal}>
+        <Modal.Backdrop isDismissable={false}>
+          <Modal.Container size="sm" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>Set schedule for selected items</Modal.Heading>
+                <Modal.CloseTrigger />
+              </Modal.Header>
+              <Modal.Body>
+                <form
+                  id="bulk-watchlist-schedule-form"
+                  onSubmit={handleBulkScheduleSubmit}
+                  className="space-y-4"
+                >
+                  {bulkScheduleError ? (
+                    <StatusAlert
+                      status="danger"
+                      title="Schedule was not updated"
+                      description={bulkScheduleError}
+                    />
+                  ) : null}
+                  <FormField
+                    label="Schedule (cron)"
+                    placeholder="0 2 * * *"
+                    value={bulkSchedule}
+                    onChange={(event) => setBulkSchedule(event.target.value)}
+                    required
+                    className="bg-surface-secondary"
+                    description="This schedule and timezone will replace the values on every selected item."
+                  />
+                  <p className="text-xs font-medium text-accent">
+                    Preview: {cronToHuman(bulkSchedule, { timezone: bulkTimezone, hourCycle })}
+                  </p>
+                  <div className="space-y-2">
+                    <FormField
+                      label="Timezone"
+                      list="watchlist-bulk-timezone-options"
+                      placeholder="Europe/Berlin"
+                      value={bulkTimezone}
+                      onChange={(event) => setBulkTimezone(event.target.value)}
+                      required
+                      className="bg-surface-secondary"
+                    />
+                    <datalist id="watchlist-bulk-timezone-options">
+                      {TIMEZONE_OPTIONS.map((zone) => (
+                        <option key={zone} value={zone} />
+                      ))}
+                    </datalist>
+                  </div>
+                </form>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="secondary" onPress={bulkScheduleModal.close}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  form="bulk-watchlist-schedule-form"
+                  isPending={bulkActionSaving}
+                >
+                  Apply schedule
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
       <Modal state={shareModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="overflow-hidden">
               <Modal.Header>

@@ -661,7 +661,7 @@ func validateArchiveTags(ctx context.Context, db *bun.DB, orgID uuid.UUID, tagID
 	if err != nil {
 		return fmt.Errorf("validate archive tags: %w", err)
 	}
-	if count != len(tagIDs) {
+	if count != int64(len(tagIDs)) {
 		return fmt.Errorf("one or more tags are not available to this organization")
 	}
 	return nil
@@ -681,7 +681,7 @@ func validatePersonalArchiveTags(ctx context.Context, db *bun.DB, userID uuid.UU
 	if err != nil {
 		return fmt.Errorf("validate personal archive tags: %w", err)
 	}
-	if count != len(tagIDs) {
+	if count != int64(len(tagIDs)) {
 		return fmt.Errorf("one or more tags are not available to this user")
 	}
 	return nil

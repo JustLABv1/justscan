@@ -242,7 +242,7 @@ func (s *server) listScans(ctx context.Context, input ListScansInput) (ListScans
 	if err != nil {
 		return ListScansOutput{}, err
 	}
-	if err := query.OrderExpr("created_at DESC").Limit(limit).Offset((page - 1) * limit).Scan(ctx); err != nil {
+	if err := query.OrderExpr("created_at DESC").Limit(int64(limit)).Offset(int64((page - 1) * limit)).Scan(ctx); err != nil {
 		return ListScansOutput{}, fmt.Errorf("list scans: %w", err)
 	}
 
@@ -255,7 +255,7 @@ func (s *server) listScans(ctx context.Context, input ListScansInput) (ListScans
 		result = append(result, summarizeScan(scan, intelligence[scan.ID]))
 	}
 
-	return ListScansOutput{Scans: result, Total: total, Page: page, Limit: limit}, nil
+	return ListScansOutput{Scans: result, Total: int(total), Page: page, Limit: limit}, nil
 }
 
 func (s *server) getScan(ctx context.Context, input GetScanInput) (GetScanOutput, error) {

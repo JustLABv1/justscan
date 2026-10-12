@@ -110,8 +110,8 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 
 		if err := listQuery.
 			OrderExpr("created_at DESC").
-			Limit(limit).
-			Offset(offset).
+			Limit(int64(limit)).
+			Offset(int64(offset)).
 			Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list Helm runs"})
 			return

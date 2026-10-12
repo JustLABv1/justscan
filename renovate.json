@@ -34,6 +34,18 @@
       "minimumReleaseAge": "2 days"
     },
     {
+      "description": "Keep Kustomize on structured-merge-diff v6 while Kubernetes 0.37 requires it",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["sigs.k8s.io/kustomize/api", "sigs.k8s.io/kustomize/kyaml"],
+      "allowedVersions": "<=0.21.2"
+    },
+    {
+      "description": "Keep kube-openapi aligned with Kubernetes 0.37 and structured-merge-diff v6",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["k8s.io/kube-openapi"],
+      "allowedVersions": "v0.0.0-20260721132016-d427ff9ee9ad"
+    },
+    {
       "description": "Go modules",
       "matchManagers": ["gomod"],
       "groupName": "go dependencies",

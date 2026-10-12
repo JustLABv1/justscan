@@ -305,7 +305,7 @@ func loadPolicyResults(ctx context.Context, db bun.IDB, orgID, scanID uuid.UUID)
 		Scan(ctx); err != nil {
 		return 0, nil, err
 	}
-	return policyCount, results, nil
+	return int(policyCount), results, nil
 }
 
 func runCallbackWorker(ctx context.Context, db *bun.DB) {

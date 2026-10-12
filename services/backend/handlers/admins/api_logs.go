@@ -73,7 +73,7 @@ func GetAPIRequestLogs(c *gin.Context, db *bun.DB) {
 		}
 	}
 
-	total, err := q.Limit(limit).Offset(offset).ScanAndCount(c.Request.Context(), &entries)
+	total, err := q.Limit(int64(limit)).Offset(int64(offset)).ScanAndCount(c.Request.Context(), &entries)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load API request logs"})
 		return

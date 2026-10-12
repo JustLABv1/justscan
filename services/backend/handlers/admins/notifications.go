@@ -173,7 +173,7 @@ func ListNotificationDeliveries(c *gin.Context, db *bun.DB) {
 		Join("JOIN notification_channels nc ON nc.id = ndl.channel_id").
 		Where("ndl.channel_id = ?", id).
 		OrderExpr("ndl.created_at DESC").
-		Limit(limit).
+		Limit(int64(limit)).
 		Scan(c.Request.Context(), &deliveries); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load delivery history"})
 		return

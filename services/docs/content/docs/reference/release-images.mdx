@@ -13,6 +13,14 @@ description: Reference the published JustScan container image families.
 
 Use the same release version for every service. Stable releases also publish `latest`; beta releases publish matching beta tags. Pin a numbered release in production and upgrade backend, frontend, and docs together. This portal documents the current release rather than maintaining versioned documentation archives.
 
+## OS security updates
+
+Image builds pull fresh base images. The backend and combined image also rebuild their OS package installation stage instead of reusing that stage from the build cache. Application build stages can still use the cache.
+
+The frontend, documentation, and combined images use Node 26.11.1 with OpenSSL 3.5.9, which fixes CVE-2026-84782. The Alpine 3.24 backend temporarily installs the pinned Expat 2.9.0-r0 package from Alpine's edge repository to fix CVE-2026-77214; the remaining packages use the Alpine 3.24 repositories. Remove this exception when Alpine 3.24 provides Expat 2.9.0 or a backported fix.
+
+Existing published images do not change when an upstream package is patched. Build and publish a new release, deploy the updated images together, and rescan those images to verify the fix. For local Docker builds, use `--pull --no-cache` when applying OS security updates.
+
 ## Creating a release
 
 Create and push a semver tag such as `v2.5.4`:

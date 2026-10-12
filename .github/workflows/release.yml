@@ -102,6 +102,8 @@ jobs:
         with:
           context: services/backend
           file: services/backend/Dockerfile
+          pull: true
+          no-cache-filters: runtime-base
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -114,6 +116,8 @@ jobs:
         with:
           context: services/backend
           file: services/backend/Dockerfile
+          pull: true
+          no-cache-filters: runtime-base
           target: runner-minimal
           push: true
           tags: ${{ steps.meta-minimal.outputs.tags }}
@@ -154,6 +158,7 @@ jobs:
         with:
           context: services/frontend
           file: services/frontend/Dockerfile
+          pull: true
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -195,6 +200,7 @@ jobs:
         with:
           context: services/docs
           file: services/docs/Dockerfile
+          pull: true
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -232,6 +238,8 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          pull: true
+          no-cache-filters: runner
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

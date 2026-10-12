@@ -165,6 +165,7 @@ jobs:
         with:
           context: services/frontend
           file: services/frontend/Dockerfile
+          pull: true
           push: false
 
   docs-image-build:
@@ -182,6 +183,7 @@ jobs:
         with:
           context: services/docs
           file: services/docs/Dockerfile
+          pull: true
           push: false
 
   backend-image-build:
@@ -202,6 +204,8 @@ jobs:
         with:
           context: services/backend
           file: services/backend/Dockerfile
+          pull: true
+          no-cache-filters: runtime-base
           target: ${{ matrix.target }}
           push: false
 
@@ -237,4 +241,6 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          pull: true
+          no-cache-filters: runner
           push: false

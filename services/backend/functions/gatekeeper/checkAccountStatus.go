@@ -5,7 +5,6 @@ import (
 
 	"justscan-backend/pkg/models"
 
-	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"
 )
 

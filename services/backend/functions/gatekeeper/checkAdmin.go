@@ -6,7 +6,6 @@ import (
 	"justscan-backend/pkg/models"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"
 )
 

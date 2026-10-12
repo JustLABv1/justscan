@@ -76,7 +76,7 @@ func ListKBEntries(db *bun.DB) gin.HandlerFunc {
 
 		var entries []models.VulnKBEntry
 		if err := base.OrderExpr("cvss_score DESC NULLS LAST, vuln_id").
-			Limit(limit).Offset(offset).
+			Limit(int64(limit)).Offset(int64(offset)).
 			Scan(c.Request.Context(), &entries); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query KB"})
 			return

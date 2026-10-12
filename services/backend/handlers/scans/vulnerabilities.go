@@ -163,8 +163,8 @@ func ListVulnerabilities(db *bun.DB) gin.HandlerFunc {
 			ColumnExpr("v.*").
 			Where("v.scan_id = ?", scanID).
 			OrderExpr(orderExpr).
-			Limit(limit).
-			Offset(offset)
+			Limit(int64(limit)).
+			Offset(int64(offset))
 
 		q = applyVulnerabilityFilters(c, q)
 

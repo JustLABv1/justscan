@@ -87,7 +87,7 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		totalQuery = authz.ApplyOwnershipVisibility(totalQuery, "scan", "user_id", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID, isAdmin, accessibleOrgIDs)
 		totalQuery = authz.ApplyWorkspaceScope(c, totalQuery, "scan", "owner_user_id", "owner_org_id", "org_scans", "scan_id", userID)
 		total, _ := totalQuery.Count(ctx)
-		result.TotalScans = total
+		result.TotalScans = int(total)
 
 		// Status counts
 		type statusRow struct {
@@ -221,7 +221,7 @@ func GetStats(db *bun.DB) gin.HandlerFunc {
 		watchlistQuery = authz.ApplyOwnershipVisibility(watchlistQuery, "", "user_id", "owner_user_id", "owner_org_id", "org_watchlist_items", "watchlist_item_id", userID, isAdmin, accessibleOrgIDs)
 		watchlistQuery = authz.ApplyWorkspaceScope(c, watchlistQuery, "", "owner_user_id", "owner_org_id", "org_watchlist_items", "watchlist_item_id", userID)
 		wlCount, _ := watchlistQuery.Count(ctx)
-		result.WatchlistCount = wlCount
+		result.WatchlistCount = int(wlCount)
 
 		c.JSON(http.StatusOK, result)
 	}

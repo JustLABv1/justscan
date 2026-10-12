@@ -24,7 +24,7 @@ func init() {
 				ON git_repository_image_registry_override_rules(repository_id, updated_at DESC)`,
 		} {
 			if _, err := db.NewRaw(statement).Exec(ctx); err != nil {
-				return fmt.Errorf("migration 104 Git repository image registry override rules: %w", err)
+				return fmt.Errorf("migration 117 Git repository image registry override rules: %w", err)
 			}
 		}
 		return nil

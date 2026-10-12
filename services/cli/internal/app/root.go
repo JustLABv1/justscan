@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -304,22 +305,13 @@ func validateScanOptions(registryID string, tagIDs []string, source string, time
 			return fmt.Errorf("tag ID must be a UUID: %w", err)
 		}
 	}
-	if !contains([]string{"generic", "justscan_cli", "github_actions", "gitlab_ci", "n8n"}, source) {
+	if !slices.Contains([]string{"generic", "justscan_cli", "github_actions", "gitlab_ci", "n8n"}, source) {
 		return errors.New("source must be justscan_cli, generic, github_actions, gitlab_ci, or n8n")
 	}
 	if !noWait && (timeout <= 0 || interval <= 0) {
 		return errors.New("timeout and poll interval must be positive")
 	}
 	return nil
-}
-
-func contains(values []string, value string) bool {
-	for _, candidate := range values {
-		if candidate == value {
-			return true
-		}
-	}
-	return false
 }
 
 func validateOutput(format string) error {

@@ -311,8 +311,8 @@ func ListPipelineScans(db *bun.DB) gin.HandlerFunc {
 		if err := query.
 			Where("pipeline_scan_request.org_id = ?", orgID).
 			OrderExpr("pipeline_scan_request.created_at DESC").
-			Limit(limit).
-			Offset((page - 1) * limit).
+			Limit(int64(limit)).
+			Offset(int64((page - 1) * limit)).
 			Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list pipeline scans"})
 			return

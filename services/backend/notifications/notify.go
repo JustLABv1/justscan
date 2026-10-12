@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/smtp"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -326,76 +325,6 @@ func buildScanURL(scanID string) string {
 	return baseURL + "/scans/" + trimmedScanID
 }
 
-func channelMatches(channel models.NotificationChannel, payload Payload) bool {
-	if len(channel.OrgIDs) > 0 && !hasAnyOrgMatch(channel.OrgIDs, payload.OrgIDs) {
-		return false
-	}
-	if len(channel.ImagePatterns) > 0 && !matchesAnyImagePattern(channel.ImagePatterns, payload.ImageName, payload.ImageTag) {
-		return false
-	}
-	if strings.TrimSpace(channel.MinSeverity) != "" {
-		channelSeverity := normalizeSeverity(channel.MinSeverity)
-		payloadSeverity := highestSeverity(payload)
-		if severityRank(payloadSeverity) < severityRank(channelSeverity) {
-			return false
-		}
-	}
-	return true
-}
-
-func hasAnyOrgMatch(channelOrgIDs []string, payloadOrgIDs []string) bool {
-	if len(payloadOrgIDs) == 0 {
-		return false
-	}
-	payloadSet := make(map[string]struct{}, len(payloadOrgIDs))
-	for _, orgID := range payloadOrgIDs {
-		payloadSet[strings.TrimSpace(orgID)] = struct{}{}
-	}
-	for _, orgID := range channelOrgIDs {
-		if _, ok := payloadSet[strings.TrimSpace(orgID)]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-func matchesAnyImagePattern(patterns []string, imageName string, imageTag string) bool {
-	imageRef := strings.TrimSuffix(strings.TrimSpace(imageName)+":"+strings.TrimSpace(imageTag), ":")
-	for _, pattern := range patterns {
-		if wildcardMatch(pattern, imageName) || wildcardMatch(pattern, imageRef) {
-			return true
-		}
-	}
-	return false
-}
-
-func wildcardMatch(pattern string, target string) bool {
-	if strings.TrimSpace(pattern) == "" {
-		return false
-	}
-	var sb strings.Builder
-	sb.WriteString("(?i)^")
-	for _, ch := range pattern {
-		switch ch {
-		case '*':
-			sb.WriteString(".*")
-		case '?':
-			sb.WriteString(".")
-		case '.', '+', '(', ')', '[', ']', '{', '}', '^', '$', '|', '\\':
-			sb.WriteString(`\\`)
-			sb.WriteRune(ch)
-		default:
-			sb.WriteRune(ch)
-		}
-	}
-	sb.WriteString("$")
-	re, err := regexp.Compile(sb.String())
-	if err != nil {
-		return strings.EqualFold(pattern, target)
-	}
-	return re.MatchString(target)
-}
-
 func highestSeverity(payload Payload) string {
 	switch {
 	case payload.CriticalCount > 0:
@@ -432,19 +361,6 @@ func severityRank(severity string) int {
 	default:
 		return -1
 	}
-}
-
-func recordDelivery(db *bun.DB, channelID uuid.UUID, event, triggeredBy, status, errorMessage, details string) {
-	recordDeliveryWithContext(db, deliveryContext{
-		ChannelID:   channelID,
-		Event:       event,
-		TriggeredBy: triggeredBy,
-		Status:      status,
-		Error:       errorMessage,
-		Details:     details,
-		ScopeType:   models.NotificationScopeSystem,
-		ScopeRef:    "",
-	})
 }
 
 type discordEmbed struct {

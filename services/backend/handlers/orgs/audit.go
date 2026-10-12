@@ -39,8 +39,8 @@ func ListOrgAuditLog(db *bun.DB) gin.HandlerFunc {
 			Join("LEFT JOIN users u ON u.id::text = audit.user_id").
 			Where("audit.org_id = ?", orgID).
 			OrderExpr("audit.created_at DESC").
-			Limit(limit).
-			Offset(offset)
+			Limit(int64(limit)).
+			Offset(int64(offset))
 
 		total, err := q.Count(c.Request.Context())
 		if err != nil {

@@ -1054,10 +1054,6 @@ func NewRegistryXrayTestClient(registry *models.Registry) (*RegistryXrayTestClie
 	return &RegistryXrayTestClient{client: client}, nil
 }
 
-func (c *RegistryXrayTestClient) Ping(ctx context.Context) error {
-	return c.client.ping(ctx)
-}
-
 func (c *RegistryXrayTestClient) ValidateConfiguration(ctx context.Context) (string, error) {
 	if err := c.client.ping(ctx); err != nil {
 		return "", err
@@ -3014,24 +3010,6 @@ func (c *xrayClient) contextualAnalysis(ctx context.Context, vulnerabilityID, co
 	return response, nil
 }
 
-func (c *xrayClient) enrichBlockedScanMessage(ctx context.Context, targets []xrayViolationLookupTarget, baseMessage string) string {
-	if len(targets) == 0 {
-		return baseMessage
-	}
-
-	violations, err := c.getViolations(ctx, targets)
-	if err != nil {
-		log.Warnf("Failed to enrich blocked Xray scan with violations data for targets %+v: %v", targets, err)
-		return baseMessage
-	}
-
-	enrichment := formatBlockedViolationsSummary(violations)
-	if enrichment == "" {
-		return baseMessage
-	}
-	return baseMessage + "\n" + enrichment
-}
-
 func blockedViolationLookupTargets(err error, fallbackRepository, fallbackArtifactPath string) []xrayViolationLookupTarget {
 	targets := make([]xrayViolationLookupTarget, 0, 4)
 	seen := make(map[string]bool)
@@ -4378,38 +4356,6 @@ func isRetriableXrayScanArtifactError(err error) bool {
 	return false
 }
 
-func isNonFatalXrayIndexError(err error) bool {
-	var httpErr *xrayHTTPError
-	if !errors.As(err, &httpErr) {
-		return false
-	}
-
-	switch httpErr.StatusCode {
-	case http.StatusForbidden, http.StatusUnauthorized, http.StatusConflict:
-		return true
-	default:
-		return false
-	}
-}
-
-func isNonFatalXrayScanArtifactError(err error) bool {
-	if isRetriableXrayScanArtifactError(err) {
-		return true
-	}
-
-	var httpErr *xrayHTTPError
-	if !errors.As(err, &httpErr) {
-		return false
-	}
-
-	switch httpErr.StatusCode {
-	case http.StatusForbidden, http.StatusUnauthorized:
-		return true
-	default:
-		return false
-	}
-}
-
 func isRetriableXrayRequestError(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
@@ -4438,38 +4384,6 @@ func isRetriableXrayRequestError(err error) bool {
 	}
 }
 
-func describeNonFatalXrayIndexError(repoPath string, err error) string {
-	var httpErr *xrayHTTPError
-	if errors.As(err, &httpErr) {
-		switch httpErr.StatusCode {
-		case http.StatusForbidden, http.StatusUnauthorized:
-			return fmt.Sprintf("Xray skipped the optional index request for %s because the configured credentials do not have re-index permissions. Continuing with the existing artifact state.", repoPath)
-		case http.StatusConflict:
-			return fmt.Sprintf("Xray reported that %s is already being indexed. Continuing to wait for the artifact summary.", repoPath)
-		}
-	}
-
-	return fmt.Sprintf("Xray index request returned a non-fatal response for %s. Continuing anyway: %v", repoPath, err)
-}
-
-func describeNonFatalXrayScanArtifactError(componentID string, err error) string {
-	var httpErr *xrayHTTPError
-	if errors.As(err, &httpErr) {
-		body := strings.ToLower(strings.TrimSpace(httpErr.Body))
-		if httpErr.StatusCode == http.StatusForbidden || httpErr.StatusCode == http.StatusUnauthorized {
-			return fmt.Sprintf("Xray skipped the optional scanArtifact request for %s because the configured credentials do not have scan trigger permissions. Continuing to poll the artifact summary.", componentID)
-		}
-		if httpErr.StatusCode == http.StatusInternalServerError && strings.Contains(body, "failed to scan component") {
-			return fmt.Sprintf("Xray did not accept the explicit scanArtifact request for %s, but the artifact summary endpoint can still return results. Continuing to poll Xray.", componentID)
-		}
-		if httpErr.StatusCode == http.StatusConflict {
-			return fmt.Sprintf("Xray reported that %s is already queued or scanning. Continuing to poll the artifact summary.", componentID)
-		}
-	}
-
-	return fmt.Sprintf("Xray scanArtifact returned a non-fatal response for %s. Continuing to poll the artifact summary: %v", componentID, err)
-}
-
 func describeNonFatalXraySBOMImportError(err error) string {
 	var httpErr *xrayHTTPError
 	if errors.As(err, &httpErr) {
@@ -4487,20 +4401,6 @@ func describeNonFatalXraySBOMImportError(err error) string {
 	}
 
 	return fmt.Sprintf("Xray returned vulnerability results, but the optional SBOM component import did not complete: %v", err)
-}
-
-func shouldWarnBlockedReindexError(err error) bool {
-	var httpErr *xrayHTTPError
-	if !errors.As(err, &httpErr) {
-		return true
-	}
-
-	switch httpErr.StatusCode {
-	case http.StatusForbidden, http.StatusUnauthorized, http.StatusConflict:
-		return false
-	default:
-		return true
-	}
 }
 
 func isRetriableRegistryRequestError(err error) bool {

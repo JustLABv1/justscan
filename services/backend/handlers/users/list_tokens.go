@@ -32,8 +32,8 @@ func ListUserTokens(c *gin.Context, db *bun.DB) {
 		Column("id", "description", "type", "disabled", "disabled_reason", "created_at", "expires_at").
 		Where("user_id = ? AND type IN (?)", userID, bun.In([]string{"personal", "cli_session"})).
 		OrderExpr("created_at DESC").
-		Limit(limit).
-		Offset(offset)
+		Limit(int64(limit)).
+		Offset(int64(offset))
 
 	total, err := q.Count(c.Request.Context())
 	if err != nil {

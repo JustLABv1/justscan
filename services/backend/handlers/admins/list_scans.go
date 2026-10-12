@@ -56,8 +56,8 @@ func ListAdminScans(c *gin.Context, db *bun.DB) {
 		ColumnExpr("s.platform, s.architecture, s.created_at, s.started_at, s.completed_at").ColumnExpr("s.helm_chart, s.helm_source_path, COALESCE(s.share_token, '') AS share_token, COALESCE(s.share_visibility, '') AS share_visibility").ColumnExpr("COALESCE(u.email, '') AS owner_email, COALESCE(u.username, '') AS owner_username").
 		Join("LEFT JOIN users u ON u.id = s.user_id").
 		OrderExpr("s.created_at DESC").
-		Limit(limit).
-		Offset(offset)
+		Limit(int64(limit)).
+		Offset(int64(offset))
 
 	if status := c.Query("status"); status != "" {
 		q = q.Where("s.status = ?", status)

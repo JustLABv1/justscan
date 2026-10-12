@@ -8,7 +8,6 @@ import (
 	"justscan-backend/functions/httperror"
 	"justscan-backend/pkg/models"
 
-	_ "github.com/lib/pq"
 	"github.com/uptrace/bun"
 
 	"github.com/gin-gonic/gin"

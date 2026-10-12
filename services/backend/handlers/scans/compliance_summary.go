@@ -3,6 +3,7 @@ package scans
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -180,22 +181,14 @@ func dedupeAndSortStrings(values []string) []string {
 	if len(values) == 0 {
 		return nil
 	}
-
-	seen := make(map[string]struct{}, len(values))
 	result := make([]string, 0, len(values))
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed == "" {
-			continue
+		if value = strings.TrimSpace(value); value != "" {
+			result = append(result, value)
 		}
-		if _, ok := seen[trimmed]; ok {
-			continue
-		}
-		seen[trimmed] = struct{}{}
-		result = append(result, trimmed)
 	}
-	sort.Strings(result)
-	return result
+	slices.Sort(result)
+	return slices.Compact(result)
 }
 
 func summarizePolicyRules(rules models.PolicyRuleList) []string {

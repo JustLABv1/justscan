@@ -168,7 +168,7 @@ func matchPendingEvents(ctx context.Context, db *bun.DB, limit int) error {
 		Model(&events).
 		Where("matched_at IS NULL").
 		OrderExpr("created_at ASC").
-		Limit(limit).
+		Limit(int64(limit)).
 		Scan(ctx); err != nil {
 		if err == sql.ErrNoRows {
 			return nil
@@ -370,7 +370,7 @@ func queueDueDigests(ctx context.Context, db *bun.DB, limit int) error {
 		Where("status = ?", models.NotificationDigestStatusOpen).
 		Where("window_end <= ?", time.Now().UTC()).
 		OrderExpr("window_end ASC").
-		Limit(limit).
+		Limit(int64(limit)).
 		Scan(ctx); err != nil {
 		if err == sql.ErrNoRows {
 			return nil
@@ -432,7 +432,7 @@ func processQueueBatch(ctx context.Context, db *bun.DB, workerID string, limit i
 		Where("next_attempt_at <= ?", now).
 		Where("(leased_until IS NULL OR leased_until < ?)", now).
 		OrderExpr("next_attempt_at ASC").
-		Limit(limit).
+		Limit(int64(limit)).
 		Scan(ctx); err != nil {
 		if err == sql.ErrNoRows {
 			return nil
@@ -652,7 +652,7 @@ func buildDigestPayload(ctx context.Context, db *bun.DB, digestID uuid.UUID, rul
 		payload.LowCount += itemPayload.LowCount
 		payload.UnknownCount += itemPayload.UnknownCount
 		payload.SuppressedCount += itemPayload.SuppressedCount
-		payload.HighestCVSS = maxFloat(payload.HighestCVSS, itemPayload.HighestCVSS)
+		payload.HighestCVSS = max(payload.HighestCVSS, itemPayload.HighestCVSS)
 		if severityRank(itemPayload.HighestSeverity) > severityRank(payload.HighestSeverity) {
 			payload.HighestSeverity = itemPayload.HighestSeverity
 		}
@@ -775,11 +775,4 @@ func payloadFromJSONObject(raw models.JSONObject) (Payload, error) {
 		payload.Timestamp = time.Now().UTC()
 	}
 	return payload, nil
-}
-
-func maxFloat(left float64, right float64) float64 {
-	if right > left {
-		return right
-	}
-	return left
 }

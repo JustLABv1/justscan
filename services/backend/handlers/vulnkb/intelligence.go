@@ -138,7 +138,7 @@ func GetKBHistory(db *bun.DB) gin.HandlerFunc {
 		eventQuery := db.NewSelect().Model(&events).
 			Where("vuln_id = ?", vulnID).
 			OrderExpr("observed_at DESC, id DESC").
-			Limit(limit + 1)
+			Limit(int64(limit + 1))
 		if beforeAt != nil && beforeID != nil {
 			eventQuery.Where("(observed_at, id) < (?, ?)", *beforeAt, *beforeID)
 		}
@@ -178,7 +178,7 @@ func GetKBHistory(db *bun.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, PublicVulnerabilityIntelligenceHistoryResponse{
 			Data:         data,
-			Total:        total,
+			Total:        int(total),
 			HasMore:      hasMore,
 			NextBeforeAt: nextBeforeAt,
 			NextBeforeID: nextBeforeID,
@@ -236,8 +236,8 @@ func GetKBExposure(db *bun.DB) gin.HandlerFunc {
 			ColumnExpr("v.id AS finding_id, v.scan_id, s.image_name, s.image_tag, s.completed_at, v.pkg_name AS package_name, v.installed_version, v.fixed_version, v.severity AS scan_severity, v.cvss_score AS scan_cvss_score").
 			ColumnExpr("p.id AS posture_id, p.state AS posture_state, p.cve_state AS posture_cve_state, p.severity AS posture_severity, p.cvss_score AS posture_cvss_score, p.reason AS posture_reason, p.observed_at AS posture_observed_at, p.change_event_id AS posture_change_event_id, p.updated_at AS posture_updated_at").
 			OrderExpr("s.completed_at DESC NULLS LAST, v.id DESC").
-			Limit(limit).
-			Offset((page-1)*limit).
+			Limit(int64(limit)).
+			Offset(int64((page-1)*limit)).
 			Scan(c.Request.Context(), &rows); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authorized CVE exposure"})
 			return
@@ -275,10 +275,10 @@ func GetKBExposure(db *bun.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, VulnerabilityExposureResponse{
 			Data:    data,
-			Total:   total,
+			Total:   int(total),
 			Page:    page,
 			Limit:   limit,
-			HasMore: page*limit < total,
+			HasMore: int64(page)*int64(limit) < total,
 			Summary: summary,
 		})
 	}

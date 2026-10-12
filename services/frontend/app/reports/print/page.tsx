@@ -8,7 +8,7 @@ import {
   Switch,
   useOverlayState,
 } from '@heroui/react';
-import { getToken, req, type ApiRequestOptions } from '@/lib/api';
+import { getToken, req, type ApiRequestOptions, subscribeToAuth } from '@/lib/api';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -27,12 +27,6 @@ const PAGE_BATCH_SIZE = 4;
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
-}
-
-function subscribeToAuth(onChange: () => void) {
-  if (typeof window === 'undefined') return () => {};
-  window.addEventListener('storage', onChange);
-  return () => window.removeEventListener('storage', onChange);
 }
 
 interface Comment {

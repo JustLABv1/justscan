@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.27
+# syntax=docker/dockerfile:1.28
 FROM reg.mini.dev/go:v1.27.1 AS builder
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 

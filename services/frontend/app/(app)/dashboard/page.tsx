@@ -65,6 +65,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isAbortError } from '@/lib/utils';
 
 // ── severity config ──────────────────────────────────────────────────
 const SEV = [
@@ -170,13 +171,6 @@ function toTimestamp(value?: string | null): number | null {
   if (!value) return null;
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : parsed;
-}
-
-function isAbortError(error: unknown): boolean {
-  return (
-    (error instanceof Error && error.name === 'AbortError') ||
-    (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
-  );
 }
 
 function sumAvgFindings(point: DashboardVulnTrendPoint): number {

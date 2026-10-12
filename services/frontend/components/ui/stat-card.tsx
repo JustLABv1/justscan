@@ -8,6 +8,7 @@ import {
   type SurfaceIconTone,
   type SurfaceIconVariant,
 } from '@/components/ui/surface-icon';
+import { joinClassNames } from '@/components/ui/form-styles';
 
 type StatCardTone = SurfaceIconTone | 'neutral';
 type StatCardVariant = 'compact' | 'stacked';
@@ -30,10 +31,6 @@ interface StatCardProps {
   hintClassName?: string;
   hintStyle?: CSSProperties;
   inline?: boolean;
-}
-
-function joinClassNames(...classes: Array<string | undefined | false>) {
-  return classes.filter(Boolean).join(' ');
 }
 
 export function StatCard({

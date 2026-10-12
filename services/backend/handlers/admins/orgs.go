@@ -68,9 +68,9 @@ func ListOrgs(c *gin.Context, db *bun.DB) {
 			AllowRescans:       org.AllowRescans,
 			AllowMemberInvites: org.AllowMemberInvites,
 			AllowOrgTokens:     org.AllowOrgTokens,
-			MemberCount:        memberCount,
-			PendingInviteCount: pendingInviteCount,
-			ActiveTokenCount:   activeTokenCount,
+			MemberCount:        int(memberCount),
+			PendingInviteCount: int(pendingInviteCount),
+			ActiveTokenCount:   int(activeTokenCount),
 		})
 	}
 

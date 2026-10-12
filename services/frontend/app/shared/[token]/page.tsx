@@ -19,6 +19,7 @@ import {
   listScans,
   listSharedVulnerabilities,
   rescanShared,
+  subscribeToAuth,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { Button, Card, ListBox, Select, useOverlayState } from '@heroui/react';
@@ -28,6 +29,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ScanningAnimation, ScanStepTimeline } from '../../../components/scans/scan-runtime';
+import { isAbortError } from '@/lib/utils';
 
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   CRITICAL: {
@@ -112,12 +114,6 @@ function SourceBadge({ source }: { source?: string }) {
 
 const LIMIT = 25;
 
-function subscribeToAuth(onChange: () => void) {
-  if (typeof window === 'undefined') return () => {};
-  window.addEventListener('storage', onChange);
-  return () => window.removeEventListener('storage', onChange);
-}
-
 type XrayWatchPolicyMatch = {
   watchName: string;
   watchID: string;
@@ -185,13 +181,6 @@ function vulnerabilityHasXrayPolicy(vulnerability: Vulnerability): boolean {
     policyMatches.length > 0 ||
     xrayWatchNames(vulnerability).length > 0 ||
     vulnerability.xray_is_blocking === true
-  );
-}
-
-function isAbortError(error: unknown): boolean {
-  return (
-    (error instanceof Error && error.name === 'AbortError') ||
-    (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
   );
 }
 

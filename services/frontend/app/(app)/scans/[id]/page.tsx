@@ -145,6 +145,7 @@ import {
   type ReactNode,
 } from 'react';
 import { ScanningAnimation, ScanStepTimeline } from '../../../../components/scans/scan-runtime';
+import { isAbortError } from '@/lib/utils';
 
 const inputCls = nativeFieldClassName;
 const selectTriggerCls = heroSelectTriggerClassName;
@@ -489,13 +490,6 @@ function buildPaginationItems(currentPage: number, totalPages: number): Array<nu
 
 function scanImageHref(imageName: string) {
   return `/scans/images/${imageName.split('/').map(encodeURIComponent).join('/')}`;
-}
-
-function isAbortError(error: unknown): boolean {
-  return (
-    (error instanceof Error && error.name === 'AbortError') ||
-    (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
-  );
 }
 
 function ScanOverviewMetric({

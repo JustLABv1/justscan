@@ -11,7 +11,6 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
-	"github.com/uptrace/bun/extra/bunotel"
 	"github.com/uptrace/bun/migrate"
 
 	"justscan-backend/config"
@@ -43,7 +42,6 @@ func StartPostgres(dbServer string, dbPort int, dbUser string, dbPass string, db
 
 	sqldb := sql.OpenDB(pgconn)
 	db := bun.NewDB(sqldb, pgdialect.New(), bun.WithDiscardUnknownColumns())
-	db.AddQueryHook(bunotel.NewQueryHook(bunotel.WithDBName(dbName)))
 
 	// Register m2m join models so bun can resolve their relations
 	db.RegisterModel((*models.ScanTag)(nil))

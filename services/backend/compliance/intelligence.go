@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -458,21 +459,14 @@ func policyImpactReason(impact string, reasons []string) string {
 }
 
 func uniqueSortedStrings(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
 	result := make([]string, 0, len(values))
 	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
+		if value = strings.TrimSpace(value); value != "" {
+			result = append(result, value)
 		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
 	}
-	sort.Strings(result)
-	return result
+	slices.Sort(result)
+	return slices.Compact(result)
 }
 
 func nonNilViolations(violations models.ViolationList) models.ViolationList {

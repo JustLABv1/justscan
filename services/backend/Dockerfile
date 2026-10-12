@@ -26,7 +26,12 @@ FROM alpine:3.24 AS runtime-base
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 WORKDIR /app
 
-RUN apk add --upgrade --no-cache ca-certificates git tzdata libcrypto3 libssl3
+# Alpine 3.24 still packages Expat 2.8.5, affected by CVE-2026-77214.
+# Temporarily install only the fixed Expat package from edge; keep the base and
+# all other packages on 3.24. Remove this once 3.24 ships Expat >= 2.9.0.
+RUN apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
+    libexpat=2.9.0-r0 \
+    && apk add --upgrade --no-cache ca-certificates git tzdata libcrypto3 libssl3
 
 COPY --from=builder /app/backend/justscan-backend /app/
 COPY --from=builder /app/backend/justscan-mcp /app/

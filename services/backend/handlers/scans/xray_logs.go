@@ -37,7 +37,7 @@ func ListScanXRayRequestLogs(db *bun.DB) gin.HandlerFunc {
 			Model(&entries).
 			Where("scan_id = ?", scanID).
 			OrderExpr("created_at ASC").
-			Limit(limit).
+			Limit(int64(limit)).
 			Scan(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load xray request logs"})
 			return

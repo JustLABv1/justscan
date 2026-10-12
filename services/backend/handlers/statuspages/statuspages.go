@@ -728,8 +728,8 @@ func ViewStatusPageItemVulnerabilitiesBySlug(db *bun.DB) gin.HandlerFunc {
 		q := db.NewSelect().Model(&vulns).
 			Where("scan_id = ?", scan.ID).
 			OrderExpr(orderExpr).
-			Limit(limit).
-			Offset(offset)
+			Limit(int64(limit)).
+			Offset(int64(offset))
 
 		if sev := c.Query("severity"); sev != "" {
 			q = q.Where("severity = ?", sev)

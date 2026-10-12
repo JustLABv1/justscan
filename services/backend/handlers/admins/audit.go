@@ -65,8 +65,8 @@ func GetAuditLogs(c *gin.Context, db *bun.DB) {
 	}
 
 	total, err := q.
-		Limit(limit).
-		Offset(offset).
+		Limit(int64(limit)).
+		Offset(int64(offset)).
 		ScanAndCount(c.Request.Context(), &entries)
 
 	if err != nil {

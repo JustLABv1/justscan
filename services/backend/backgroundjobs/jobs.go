@@ -258,7 +258,7 @@ func ListAuthorized(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin b
 
 	query := db.NewSelect().Model((*models.BackgroundJob)(nil)).
 		Where("NOT EXISTS (SELECT 1 FROM background_job_dismissals AS dismissal WHERE dismissal.job_id = background_job.id AND dismissal.user_id = ?)", userID).
-		OrderExpr("created_at DESC").Limit(limit)
+		OrderExpr("created_at DESC").Limit(int64(limit))
 	if !isAdmin {
 		query = query.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
 			q = q.Where("user_id = ?", userID)

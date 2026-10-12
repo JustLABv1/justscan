@@ -210,7 +210,7 @@ func GetMCPActivity(c *gin.Context, db *bun.DB) {
 	}
 
 	var entries []MCPInteractionAdmin
-	total, err := q.OrderExpr("i.created_at DESC").Limit(limit).Offset((page-1)*limit).ScanAndCount(c.Request.Context(), &entries)
+	total, err := q.OrderExpr("i.created_at DESC").Limit(int64(limit)).Offset(int64((page-1)*limit)).ScanAndCount(c.Request.Context(), &entries)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load MCP activity"})
 		return
@@ -272,7 +272,7 @@ func queryMCPInteractions(ctx context.Context, db *bun.DB, from, to time.Time, l
 	q := mcpInteractionColumns(db.NewSelect().TableExpr("mcp_interactions AS i")).
 		Where("i.created_at >= ?", from).
 		Where("i.created_at < ?", to).
-		OrderExpr("i.created_at DESC").Limit(limit).Offset(offset)
+		OrderExpr("i.created_at DESC").Limit(int64(limit)).Offset(int64(offset))
 	if err := q.Scan(ctx, &entries); err != nil {
 		return nil, err
 	}

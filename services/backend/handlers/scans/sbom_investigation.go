@@ -101,7 +101,7 @@ func LoadSBOMGraph(ctx context.Context, db *bun.DB, scanID uuid.UUID, focus stri
 	// claim that its dependency relationships are known.
 	legacyInventory := err == sql.ErrNoRows
 	components := make([]models.SBOMComponent, 0)
-	query := db.NewSelect().Model(&components).Where("scan_id = ?", scanID).OrderExpr("is_root DESC, name, version").Limit(limit + 1)
+	query := db.NewSelect().Model(&components).Where("scan_id = ?", scanID).OrderExpr("is_root DESC, name, version").Limit(int64(limit + 1))
 	if focusID, err := uuid.Parse(focus); err == nil {
 		query = query.Where("id = ? OR id IN (SELECT to_component_id FROM sbom_dependencies WHERE from_component_id = ?) OR id IN (SELECT from_component_id FROM sbom_dependencies WHERE to_component_id = ?)", focusID, focusID, focusID)
 	}

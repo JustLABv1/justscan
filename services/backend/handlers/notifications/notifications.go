@@ -328,8 +328,8 @@ func ListDeliveries(c *gin.Context, db *bun.DB, scope Scope) {
 		Where("ndl.scope_type = ?", scope.Type).
 		Where("ndl.scope_ref = ?", scope.Ref).
 		OrderExpr("ndl.created_at DESC, ndl.id DESC").
-		Limit(limit+1).
-		Offset(offset).
+		Limit(int64(limit+1)).
+		Offset(int64(offset)).
 		Scan(c.Request.Context(), &deliveries); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load deliveries"})
 		return
@@ -357,7 +357,7 @@ func ListQueue(c *gin.Context, db *bun.DB, scope Scope) {
 		Where("nqj.scope_ref = ?", scope.Ref).
 		Where("nqj.status != ?", models.NotificationQueueStatusDelivered).
 		OrderExpr("nqj.created_at DESC").
-		Limit(limit).
+		Limit(int64(limit)).
 		Scan(c.Request.Context(), &jobs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load queue jobs"})
 		return
@@ -463,7 +463,7 @@ func validateNotificationRule(ctx context.Context, db *bun.DB, scope Scope, rule
 	if err != nil {
 		return err
 	}
-	if count != len(rule.ChannelIDs) {
+	if count != int64(len(rule.ChannelIDs)) {
 		return fmt.Errorf("one or more channels are missing or outside this scope")
 	}
 	return nil

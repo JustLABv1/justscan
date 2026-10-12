@@ -37,11 +37,11 @@ type adminDashboardQueues struct {
 }
 
 type adminDashboardCounts struct {
-	Users             int `json:"users"`
-	Tokens            int `json:"tokens"`
-	ActiveChannels    int `json:"active_channels"`
-	IdentityProviders int `json:"identity_providers"`
-	GlobalRegistries  int `json:"global_registries"`
+	Users             int64 `json:"users"`
+	Tokens            int64 `json:"tokens"`
+	ActiveChannels    int64 `json:"active_channels"`
+	IdentityProviders int64 `json:"identity_providers"`
+	GlobalRegistries  int64 `json:"global_registries"`
 }
 
 type adminDashboardInsights struct {
@@ -114,7 +114,7 @@ func GetDashboard(c *gin.Context, db *bun.DB) {
 	response.ScannerHealth = scanner.GetHealthReport(ctx)
 
 	totalScans, _ := db.NewSelect().TableExpr("scans").Count(ctx)
-	response.TotalScans = totalScans
+	response.TotalScans = int(totalScans)
 
 	type statusRow struct {
 		Status         string `bun:"status"`

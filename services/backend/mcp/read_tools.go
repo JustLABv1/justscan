@@ -220,7 +220,7 @@ func (s *server) listWatchlists(ctx context.Context, input ListWatchlistsInput) 
 		return ListWatchlistsOutput{}, fmt.Errorf("count watchlists: %w", err)
 	}
 	items := make([]models.WatchlistItem, 0, limit)
-	if err := buildQuery(&items).OrderExpr("created_at DESC").Limit(limit).Offset((page - 1) * limit).Scan(ctx); err != nil {
+	if err := buildQuery(&items).OrderExpr("created_at DESC").Limit(int64(limit)).Offset(int64((page - 1) * limit)).Scan(ctx); err != nil {
 		return ListWatchlistsOutput{}, fmt.Errorf("list watchlists: %w", err)
 	}
 	if err := watchlisthandlers.AttachWatchlistPosture(ctx, s.db, items, s.identity.IsAdmin, s.identity.AccessibleOrgIDs); err != nil {
@@ -231,7 +231,7 @@ func (s *server) listWatchlists(ctx context.Context, input ListWatchlistsInput) 
 	for _, item := range items {
 		result = append(result, summarizeWatchlist(item))
 	}
-	return ListWatchlistsOutput{Watchlists: result, Total: total, Page: page, Limit: limit}, nil
+	return ListWatchlistsOutput{Watchlists: result, Total: int(total), Page: page, Limit: limit}, nil
 }
 
 func (s *server) getWatchlist(ctx context.Context, input GetWatchlistInput) (GetWatchlistOutput, error) {

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -321,6 +322,11 @@ func CreateDiscovery(ctx context.Context, repositoryID uuid.UUID) (*models.GitRe
 		failRun(ctx, db, run, err)
 		return run, nil, err
 	}
+	images, err = applyImageRegistryOverrides(ctx, db, repository.ID, images)
+	if err != nil {
+		failRun(ctx, db, run, err)
+		return run, nil, err
+	}
 	completedAt := time.Now()
 	run.CommitSHA = commitSHA
 	run.TargetCount = len(uniqueTargetFiles(images))
@@ -406,6 +412,11 @@ func processRun(runID uuid.UUID) {
 	}
 	run.Status, run.StartedAt = models.GitRepositoryRunDiscovering, &now
 	images, candidates, commitSHA, err := DiscoverReview(ctx, repository)
+	if err != nil {
+		failRun(ctx, db, &run, err)
+		return
+	}
+	images, err = applyImageRegistryOverrides(ctx, db, repository.ID, images)
 	if err != nil {
 		failRun(ctx, db, &run, err)
 		return
@@ -644,6 +655,54 @@ func imageRegistryOverrides(ctx context.Context, db *bun.DB, repositoryID uuid.U
 		result[override.FullRef] = override.RegistryID
 	}
 	return result
+}
+
+func applyImageRegistryOverrides(ctx context.Context, db *bun.DB, repositoryID uuid.UUID, images []DiscoveredImage) ([]DiscoveredImage, error) {
+	var overrides []models.GitRepositoryImageRegistryOverride
+	if err := db.NewSelect().Model(&overrides).Where("repository_id = ?", repositoryID).Scan(ctx); err != nil {
+		return nil, fmt.Errorf("load exact image registry overrides: %w", err)
+	}
+	exactRegistryIDs := make(map[string]uuid.UUID, len(overrides))
+	for _, override := range overrides {
+		exactRegistryIDs[override.FullRef] = override.RegistryID
+	}
+
+	var rules []models.GitRepositoryImageRegistryOverrideRule
+	if err := db.NewSelect().Model(&rules).
+		Where("repository_id = ?", repositoryID).
+		OrderExpr("updated_at DESC, created_at DESC, pattern ASC").
+		Scan(ctx); err != nil {
+		return nil, fmt.Errorf("load image registry override rules: %w", err)
+	}
+	type compiledRule struct {
+		pattern    *regexp.Regexp
+		registryID uuid.UUID
+	}
+	compiledRules := make([]compiledRule, 0, len(rules))
+	for _, rule := range rules {
+		pattern, err := regexp.Compile(rule.Pattern)
+		if err != nil {
+			// Rules are validated when saved. Skip only rules that were corrupted
+			// outside the API so they cannot prevent unrelated images from scanning.
+			continue
+		}
+		compiledRules = append(compiledRules, compiledRule{pattern: pattern, registryID: rule.RegistryID})
+	}
+
+	for index := range images {
+		if registryID, ok := exactRegistryIDs[images[index].FullRef]; ok {
+			images[index].RegistryID = &registryID
+			continue
+		}
+		for _, rule := range compiledRules {
+			if rule.pattern.MatchString(images[index].FullRef) {
+				registryID := rule.registryID
+				images[index].RegistryID = &registryID
+				break
+			}
+		}
+	}
+	return images, nil
 }
 
 func uniqueImageRefs(refs []string) []string {

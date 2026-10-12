@@ -921,7 +921,7 @@ export function NotificationManager({
       </div>
 
       <Modal state={channelModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog>
               <Modal.Header>
@@ -1163,7 +1163,7 @@ export function NotificationManager({
       </Modal>
 
       <Modal state={ruleModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="cover" placement="center">
             <Modal.Dialog>
               <Modal.Header>

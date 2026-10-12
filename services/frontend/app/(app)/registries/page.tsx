@@ -775,7 +775,7 @@ export default function RegistriesPage() {
       </LoadableCollectionState>
 
       <Modal state={modal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container className="px-3 sm:px-6" size="lg" placement="center" scroll="inside">
             <Modal.Dialog className="max-w-3xl">
               <Modal.Header className="border-b border-surface-border px-5 py-4 sm:px-6">
@@ -990,7 +990,7 @@ export default function RegistriesPage() {
         </Modal.Backdrop>
       </Modal>
       <Modal state={shareModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header

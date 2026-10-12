@@ -69,6 +69,15 @@ export interface GitRepositoryImageRegistryOverride {
   updated_at: string;
 }
 
+export interface GitRepositoryImageRegistryOverrideRule {
+  id: string;
+  repository_id: string;
+  pattern: string;
+  registry_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type GitRepositoryCandidateStatus = 'unresolved' | 'auto_accepted' | 'resolved' | 'ignored';
 
 export interface GitRepositoryRunCandidate {

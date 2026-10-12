@@ -21,6 +21,7 @@ import {
 import {
   Cancel01Icon,
   Clock01Icon,
+  Delete01Icon,
   Download01Icon,
   Folder01Icon,
   GitBranchIcon,
@@ -47,6 +48,7 @@ import {
   deleteGitRepositoryHelmSource,
   deleteGitRepositoryImageExclusion,
   deleteGitRepositoryImageRegistryOverride,
+  deleteGitRepositoryImageRegistryOverrideRule,
   discoverGitRepository,
   exportGitRepositoryDiscoveryRules,
   getGitRepository,
@@ -56,12 +58,14 @@ import {
   listGitRepositoryHelmSources,
   listGitRepositoryImageExclusions,
   listGitRepositoryImageRegistryOverrides,
+  listGitRepositoryImageRegistryOverrideRules,
   listGitRepositoryLatestImageScans,
   listGitRepositoryRuns,
   listHelmRegistryCredentials,
   listRegistries,
   runGitRepository,
   setGitRepositoryImageRegistryOverride,
+  setGitRepositoryImageRegistryOverrideRule,
   updateGitRepositoryHelmSource,
   type GitRepository,
   type GitRepositoryDiscoveryMode,
@@ -69,6 +73,7 @@ import {
   type GitRepositoryHelmSourceInput,
   type GitRepositoryImageExclusion,
   type GitRepositoryImageRegistryOverride,
+  type GitRepositoryImageRegistryOverrideRule,
   type GitRepositoryLatestImageScan,
   type GitRepositoryRun,
   type GitRepositoryRunCandidate,
@@ -189,6 +194,24 @@ function ImageRegistrySelect({
       </Description>
     </Select>
   );
+}
+
+function imageRepositoryRegistryPattern(fullRef: string) {
+  const digestIndex = fullRef.indexOf('@');
+  const taggedRef = digestIndex >= 0 ? fullRef.slice(0, digestIndex) : fullRef;
+  const lastSlash = taggedRef.lastIndexOf('/');
+  const lastColon = taggedRef.lastIndexOf(':');
+  const repository = lastColon > lastSlash ? taggedRef.slice(0, lastColon) : taggedRef;
+  const escapedRepository = repository.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return `^${escapedRepository}(?::[^/]+|@.+)?$`;
+}
+
+function imageRegistryRuleMatches(pattern: string, fullRef: string) {
+  try {
+    return new RegExp(pattern).test(fullRef);
+  } catch {
+    return false;
+  }
 }
 
 function imageRegistryHost(imageRef: string): string | null {
@@ -378,6 +401,13 @@ export default function GitRepositoryDetailPage() {
   const [imageRegistryOverrides, setImageRegistryOverrides] = useState<
     GitRepositoryImageRegistryOverride[]
   >([]);
+  const [imageRegistryOverrideRules, setImageRegistryOverrideRules] = useState<
+    GitRepositoryImageRegistryOverrideRule[]
+  >([]);
+  const [registryRulePattern, setRegistryRulePattern] = useState('');
+  const [registryRuleRegistryID, setRegistryRuleRegistryID] = useState('');
+  const [registryRuleError, setRegistryRuleError] = useState('');
+  const [savingRegistryRule, setSavingRegistryRule] = useState(false);
   const [registries, setRegistries] = useState<Registry[]>([]);
   const [latestImageScans, setLatestImageScans] = useState<GitRepositoryLatestImageScan[]>([]);
   const reviewOverlay = useOverlayState();
@@ -401,6 +431,7 @@ export default function GitRepositoryDetailPage() {
         nextRuns,
         nextExclusions,
         nextImageRegistryOverrides,
+        nextImageRegistryOverrideRules,
         nextRegistries,
         nextLatestImageScans,
         nextHelmSources,
@@ -410,6 +441,7 @@ export default function GitRepositoryDetailPage() {
         listGitRepositoryRuns(id),
         listGitRepositoryImageExclusions(id),
         listGitRepositoryImageRegistryOverrides(id),
+        listGitRepositoryImageRegistryOverrideRules(id),
         listRegistries().catch(() => []),
         listGitRepositoryLatestImageScans(id),
         listGitRepositoryHelmSources(id),
@@ -419,6 +451,7 @@ export default function GitRepositoryDetailPage() {
       setRuns(nextRuns);
       setImageExclusions(nextExclusions);
       setImageRegistryOverrides(nextImageRegistryOverrides);
+      setImageRegistryOverrideRules(nextImageRegistryOverrideRules);
       setRegistries(nextRegistries);
       setLatestImageScans(nextLatestImageScans);
       setHelmSources(nextHelmSources);
@@ -792,27 +825,126 @@ export default function GitRepositoryDetailPage() {
 
   async function updateImageRegistry(imageRef: string, registryID: string | null) {
     const current = imageRegistryOverrides.find((override) => override.full_ref === imageRef);
-    if (!registryID && !current) return;
+    const matchingRule = imageRegistryOverrideRules.find((rule) =>
+      imageRegistryRuleMatches(rule.pattern, imageRef)
+    );
+    if (!registryID && !current && !matchingRule) return;
+    if (!registryID && matchingRule) {
+      const matchedImageCount = (preview?.images ?? []).filter((image) =>
+        imageRegistryRuleMatches(matchingRule.pattern, image.full_ref)
+      ).length;
+      if (
+        matchedImageCount > 1 &&
+        !(await confirm({
+          title: 'Remove registry pattern?',
+          message: `This pattern currently matches ${matchedImageCount} discovered images. Removing it clears the registry override for all of them and future matching refs.`,
+          confirmLabel: 'Remove pattern',
+          variant: 'danger',
+        }))
+      ) {
+        return;
+      }
+    }
     setSavingImageRegistryRef(imageRef);
     try {
       if (registryID) {
-        const override = await setGitRepositoryImageRegistryOverride(id, imageRef, registryID);
+        const pattern = imageRepositoryRegistryPattern(imageRef);
+        const [override, rule] = await Promise.all([
+          setGitRepositoryImageRegistryOverride(id, imageRef, registryID),
+          setGitRepositoryImageRegistryOverrideRule(id, pattern, registryID),
+        ]);
         setImageRegistryOverrides((overrides) => [
           override,
           ...overrides.filter((item) => item.full_ref !== imageRef),
         ]);
-        success('Image registry override saved.');
-      } else if (current) {
-        await deleteGitRepositoryImageRegistryOverride(id, current.id);
-        setImageRegistryOverrides((overrides) =>
-          overrides.filter((item) => item.id !== current.id)
-        );
+        setImageRegistryOverrideRules((rules) => [
+          rule,
+          ...rules.filter((item) => item.pattern !== pattern),
+        ]);
+        success('Registry override saved for this image and future tags.');
+      } else {
+        if (current) {
+          await deleteGitRepositoryImageRegistryOverride(id, current.id);
+          setImageRegistryOverrides((overrides) =>
+            overrides.filter((item) => item.id !== current.id)
+          );
+        }
+        if (matchingRule) {
+          await deleteGitRepositoryImageRegistryOverrideRule(id, matchingRule.id);
+          setImageRegistryOverrideRules((rules) =>
+            rules.filter((item) => item.id !== matchingRule.id)
+          );
+        }
         success('Image registry override cleared.');
       }
     } catch (caught) {
       error(caught instanceof Error ? caught.message : 'Could not update the image registry.');
+      void load();
     } finally {
       setSavingImageRegistryRef(null);
+    }
+  }
+
+  async function saveImageRegistryOverrideRule(event: React.FormEvent) {
+    event.preventDefault();
+    const pattern = registryRulePattern.trim();
+    if (!pattern || !registryRuleRegistryID) {
+      setRegistryRuleError('Enter a pattern and choose a registry.');
+      return;
+    }
+    try {
+      new RegExp(pattern);
+    } catch {
+      setRegistryRuleError('Enter a valid regular expression.');
+      return;
+    }
+    setSavingRegistryRule(true);
+    setRegistryRuleError('');
+    try {
+      const rule = await setGitRepositoryImageRegistryOverrideRule(
+        id,
+        pattern,
+        registryRuleRegistryID
+      );
+      setImageRegistryOverrideRules((rules) => [
+        rule,
+        ...rules.filter((item) => item.pattern !== pattern),
+      ]);
+      setRegistryRulePattern('');
+      success('Registry pattern saved.');
+    } catch (caught) {
+      setRegistryRuleError(
+        caught instanceof Error ? caught.message : 'Could not save the registry pattern.'
+      );
+    } finally {
+      setSavingRegistryRule(false);
+    }
+  }
+
+  async function removeImageRegistryOverrideRule(rule: GitRepositoryImageRegistryOverrideRule) {
+    const matchedImageCount = (preview?.images ?? []).filter((image) =>
+      imageRegistryRuleMatches(rule.pattern, image.full_ref)
+    ).length;
+    if (
+      matchedImageCount > 1 &&
+      !(await confirm({
+        title: 'Remove registry pattern?',
+        message: `This pattern currently matches ${matchedImageCount} discovered images. Removing it clears the registry override for all of them and future matching refs.`,
+        confirmLabel: 'Remove pattern',
+        variant: 'danger',
+      }))
+    ) {
+      return;
+    }
+    setSavingRegistryRule(true);
+    try {
+      await deleteGitRepositoryImageRegistryOverrideRule(id, rule.id);
+      setImageRegistryOverrideRules((rules) => rules.filter((item) => item.id !== rule.id));
+      success('Registry pattern removed.');
+    } catch (caught) {
+      error(caught instanceof Error ? caught.message : 'Could not remove the registry pattern.');
+    } finally {
+      setSavingRegistryRule(false);
     }
   }
 
@@ -1325,6 +1457,107 @@ export default function GitRepositoryDetailPage() {
               </div>
             </Card.Header>
             <Card.Content className="p-0">
+              <div className="m-4 space-y-3 rounded-xl border border-divider/70 bg-surface-secondary p-4">
+                <div>
+                  <p className="text-sm font-medium">Registry override patterns</p>
+                  <p className="mt-1 text-xs text-muted">
+                    Changing a discovered image creates a pattern for its repository across tags.
+                    Add broader RE2-compatible patterns here. Exact image overrides take precedence;
+                    when patterns overlap, the most recently updated pattern wins.
+                  </p>
+                </div>
+                {imageRegistryOverrideRules.length > 0 ? (
+                  <div className="space-y-2">
+                    {imageRegistryOverrideRules.map((rule) => {
+                      const ruleRegistry = registryByID.get(rule.registry_id);
+                      const matchCount = previewImages.filter((image) =>
+                        imageRegistryRuleMatches(rule.pattern, image.full_ref)
+                      ).length;
+                      return (
+                        <div
+                          key={rule.id}
+                          className="flex min-w-0 items-center gap-3 rounded-lg border border-divider/70 bg-surface px-3 py-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <code className="block break-all text-xs text-foreground">
+                              {rule.pattern}
+                            </code>
+                            <p className="mt-1 text-xs text-muted">
+                              {ruleRegistry?.name ?? 'Registry unavailable'} · matches {matchCount}{' '}
+                              {matchCount === 1 ? 'discovered image' : 'discovered images'}
+                            </p>
+                          </div>
+                          <Button
+                            aria-label={`Remove registry pattern ${rule.pattern}`}
+                            isDisabled={savingRegistryRule}
+                            isIconOnly
+                            size="sm"
+                            variant="tertiary"
+                            onPress={() => void removeImageRegistryOverrideRule(rule)}
+                          >
+                            <Delete01Icon size={16} />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                <form
+                  onSubmit={saveImageRegistryOverrideRule}
+                  className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto]"
+                >
+                  <div className="space-y-2">
+                    <FormField
+                      label="Image ref regex"
+                      placeholder="^ghcr\\.io/team/api(:.*)?$"
+                      value={registryRulePattern}
+                      onChange={(event) => setRegistryRulePattern(event.target.value)}
+                      className="bg-surface"
+                      description="Match against full discovered image refs. Example: ^ghcr\\.io/team/api(:.*)?$. Uses Go RE2 syntax."
+                    />
+                  </div>
+                  <Select
+                    aria-label="Registry for image ref pattern"
+                    isDisabled={savingRegistryRule || registries.length === 0}
+                    value={registryRuleRegistryID || '__none__'}
+                    onChange={(value) =>
+                      setRegistryRuleRegistryID(String(value === '__none__' ? '' : (value ?? '')))
+                    }
+                    variant="secondary"
+                  >
+                    <Label>Registry</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="__none__">Choose a registry</ListBox.Item>
+                        {registries.map((registry) => (
+                          <ListBox.Item
+                            key={registry.id}
+                            id={registry.id}
+                            textValue={registry.name}
+                          >
+                            {registry.name}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                  <Button
+                    isDisabled={!registryRulePattern.trim() || !registryRuleRegistryID}
+                    isPending={savingRegistryRule}
+                    type="submit"
+                    variant="secondary"
+                  >
+                    Save pattern
+                  </Button>
+                  {registryRuleError ? (
+                    <p className="text-xs text-danger md:col-span-3">{registryRuleError}</p>
+                  ) : null}
+                </form>
+              </div>
               <div className="m-4 mb-0">
                 <SearchField
                   aria-label="Search discovered images"
@@ -1396,8 +1629,13 @@ export default function GitRepositoryDetailPage() {
                   const locations = locationsFor(image);
                   const exclusion = exclusionByRef.get(image.full_ref);
                   const registryOverride = imageRegistryOverrideByRef.get(image.full_ref);
-                  const selectedRegistry = registryOverride
-                    ? registryByID.get(registryOverride.registry_id)
+                  const registryOverrideRule = imageRegistryOverrideRules.find((rule) =>
+                    imageRegistryRuleMatches(rule.pattern, image.full_ref)
+                  );
+                  const selectedRegistryID =
+                    registryOverride?.registry_id ?? registryOverrideRule?.registry_id;
+                  const selectedRegistry = selectedRegistryID
+                    ? registryByID.get(selectedRegistryID)
                     : undefined;
                   const inferredRegistry = image.registry_id
                     ? registryByID.get(image.registry_id)
@@ -1453,9 +1691,10 @@ export default function GitRepositoryDetailPage() {
                                   Excluded
                                 </Chip>
                               ) : null}
-                              {registryOverride ? (
+                              {registryOverride || registryOverrideRule ? (
                                 <Chip className="shrink-0" color="accent" size="sm" variant="soft">
                                   {selectedRegistry?.name ?? 'Configured override'}
+                                  {!registryOverride && registryOverrideRule ? ' · regex' : ''}
                                 </Chip>
                               ) : image.registry_id ? (
                                 <Chip
@@ -1496,7 +1735,7 @@ export default function GitRepositoryDetailPage() {
                                 <div className="mt-4 border-t border-divider/70 pt-4">
                                   <ImageRegistrySelect
                                     registries={registries}
-                                    value={registryOverride?.registry_id ?? null}
+                                    value={selectedRegistryID ?? null}
                                     isDisabled={savingImageRegistryRef === image.full_ref}
                                     onChange={(value) =>
                                       void updateImageRegistry(image.full_ref, value)
@@ -1705,7 +1944,11 @@ export default function GitRepositoryDetailPage() {
       </Card>
 
       <Modal>
-        <Modal.Backdrop isOpen={reviewOverlay.isOpen} onOpenChange={reviewOverlay.setOpen}>
+        <Modal.Backdrop
+          isDismissable={false}
+          isOpen={reviewOverlay.isOpen}
+          onOpenChange={reviewOverlay.setOpen}
+        >
           <Modal.Container size="lg">
             <Modal.Dialog>
               <Modal.CloseTrigger />
@@ -1874,7 +2117,11 @@ export default function GitRepositoryDetailPage() {
         </Modal.Backdrop>
       </Modal>
       <Modal>
-        <Modal.Backdrop isOpen={helmSourceOverlay.isOpen} onOpenChange={helmSourceOverlay.setOpen}>
+        <Modal.Backdrop
+          isDismissable={false}
+          isOpen={helmSourceOverlay.isOpen}
+          onOpenChange={helmSourceOverlay.setOpen}
+        >
           <Modal.Container size="lg">
             <Modal.Dialog>
               <Modal.CloseTrigger />

@@ -957,7 +957,7 @@ export default function StatusPagesPage() {
       </div>
 
       <Modal state={modal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog>
               <Modal.Header>
@@ -1941,7 +1941,7 @@ export default function StatusPagesPage() {
         </Modal.Backdrop>
       </Modal>
       <Modal state={shareModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>

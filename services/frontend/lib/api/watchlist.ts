@@ -29,10 +29,15 @@ export const createWatchlistItems = (data: {
   org_id?: string;
 }) => req<{ data: WatchlistItem[]; created: number }>('POST', '/api/v1/watchlist/bulk', data);
 
-export const bulkWatchlistAction = (ids: string[], action: 'enable' | 'disable' | 'delete') =>
+export const bulkWatchlistAction = (
+  ids: string[],
+  action: 'enable' | 'disable' | 'delete' | 'schedule',
+  schedule?: { schedule: string; timezone: string }
+) =>
   req<{ updated: number; action: string }>('POST', '/api/v1/watchlist/bulk-actions', {
     ids,
     action,
+    ...(schedule ?? {}),
   });
 
 export const updateWatchlistItem = (id: string, data: Partial<WatchlistItem>) =>

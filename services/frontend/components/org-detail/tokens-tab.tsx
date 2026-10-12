@@ -133,7 +133,7 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
 
   return (
     <Modal state={state}>
-      <Modal.Backdrop>
+      <Modal.Backdrop isDismissable={false}>
         <Modal.Container size="md" placement="center">
           <Modal.Dialog className="overflow-hidden">
             <Modal.Header>
@@ -215,7 +215,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
 
   return (
     <Modal state={state}>
-      <Modal.Backdrop isDismissable>
+      <Modal.Backdrop isDismissable={false}>
         <Modal.Container size="md" placement="center">
           <Modal.Dialog className="overflow-hidden">
             <Modal.Header>

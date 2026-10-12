@@ -122,6 +122,20 @@ type GitRepositoryImageRegistryOverride struct {
 	UpdatedAt    time.Time `bun:"updated_at,type:timestamptz" json:"updated_at"`
 }
 
+// GitRepositoryImageRegistryOverrideRule applies a registry selection to all
+// discovered image refs matched by its regular expression.
+type GitRepositoryImageRegistryOverrideRule struct {
+	bun.BaseModel `bun:"table:git_repository_image_registry_override_rules"`
+
+	ID           uuid.UUID `bun:",pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	RepositoryID uuid.UUID `bun:"repository_id,type:uuid,notnull" json:"repository_id"`
+	Pattern      string    `bun:"pattern,type:text,notnull" json:"pattern"`
+	RegistryID   uuid.UUID `bun:"registry_id,type:uuid,notnull" json:"registry_id"`
+	CreatedByID  uuid.UUID `bun:"created_by_id,type:uuid,notnull" json:"created_by_id"`
+	CreatedAt    time.Time `bun:"created_at,type:timestamptz,default:now()" json:"created_at"`
+	UpdatedAt    time.Time `bun:"updated_at,type:timestamptz" json:"updated_at"`
+}
+
 type GitRepositoryDiscoveryRule struct {
 	bun.BaseModel `bun:"table:git_repository_discovery_rules"`
 

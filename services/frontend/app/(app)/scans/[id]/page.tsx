@@ -2377,7 +2377,7 @@ function ScanDetailContent() {
         </Alert>
       ) : null}
       <Modal state={shareModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="sm" placement="center">
             <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header>
@@ -4299,7 +4299,7 @@ function ScanDetailContent() {
       )}
 
       <Modal state={scanAccessModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
               <Modal.Header>
@@ -4491,7 +4491,7 @@ function ScanDetailContent() {
       {confirmDialog}
 
       <Modal state={xrayPolicyDetailsModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog className="surface-modal overflow-hidden rounded-[24px] w-[min(900px,calc(100vw-1.5rem))] max-w-none">
               <Modal.Header>

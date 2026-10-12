@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -393,6 +394,110 @@ func DeleteImageRegistryOverride(db *bun.DB) gin.HandlerFunc {
 			Where("id = ? AND repository_id = ?", overrideID, item.ID).
 			Exec(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear image registry override"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"result": "deleted"})
+	}
+}
+
+func ListImageRegistryOverrideRules(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok {
+			return
+		}
+		var rules []models.GitRepositoryImageRegistryOverrideRule
+		if err := db.NewSelect().Model(&rules).
+			Where("repository_id = ?", item.ID).
+			OrderExpr("updated_at DESC, created_at DESC, pattern ASC").
+			Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load image registry override rules"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"data": rules})
+	}
+}
+
+func SetImageRegistryOverrideRule(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok || !requireEdit(c, db, item) {
+			return
+		}
+		var body struct {
+			Pattern    string `json:"pattern"`
+			RegistryID string `json:"registry_id"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		body.Pattern = strings.TrimSpace(body.Pattern)
+		if body.Pattern == "" || len(body.Pattern) > 2048 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "pattern must contain between 1 and 2048 characters"})
+			return
+		}
+		if _, err := regexp.Compile(body.Pattern); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid image reference regular expression: " + err.Error()})
+			return
+		}
+		registryID, err := uuid.Parse(strings.TrimSpace(body.RegistryID))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "a valid registry_id is required"})
+			return
+		}
+		var registry models.Registry
+		if err := db.NewSelect().Model(&registry).Where("id = ?", registryID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "registry not found"})
+			return
+		}
+		available, err := registryAvailableToRepository(c, db, item, &registry)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check registry access"})
+			return
+		}
+		if !available {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "registry must be available to the same workspace"})
+			return
+		}
+		userID, _, _ := authz.RequireRequestUser(c, db)
+		now := time.Now()
+		rule := &models.GitRepositoryImageRegistryOverrideRule{
+			RepositoryID: item.ID,
+			Pattern:      body.Pattern,
+			RegistryID:   registryID,
+			CreatedByID:  userID,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+		if _, err := db.NewInsert().Model(rule).
+			On("CONFLICT (repository_id, pattern) DO UPDATE").
+			Set("registry_id = EXCLUDED.registry_id").
+			Set("updated_at = EXCLUDED.updated_at").
+			Returning("*").
+			Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save image registry override rule"})
+			return
+		}
+		c.JSON(http.StatusOK, rule)
+	}
+}
+
+func DeleteImageRegistryOverrideRule(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		item, ok := load(c, db)
+		if !ok || !requireEdit(c, db, item) {
+			return
+		}
+		ruleID, err := uuid.Parse(c.Param("ruleId"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid image registry override rule ID"})
+			return
+		}
+		if _, err := db.NewDelete().Model((*models.GitRepositoryImageRegistryOverrideRule)(nil)).
+			Where("id = ? AND repository_id = ?", ruleID, item.ID).
+			Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete image registry override rule"})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"result": "deleted"})

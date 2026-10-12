@@ -439,7 +439,7 @@ export default function GitRepositoriesPage() {
       </LoadableCollectionState>
       {dialog}
       <Modal>
-        <Modal.Backdrop isOpen={overlay.isOpen} onOpenChange={overlay.setOpen}>
+        <Modal.Backdrop isDismissable={false} isOpen={overlay.isOpen} onOpenChange={overlay.setOpen}>
           <Modal.Container size="lg">
             <Modal.Dialog>
               <Modal.CloseTrigger />

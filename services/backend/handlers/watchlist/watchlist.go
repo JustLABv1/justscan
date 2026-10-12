@@ -391,17 +391,30 @@ func BulkCreateWatchlistItems(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
-// BulkWatchlistActions is deliberately limited to state changes and deletion;
+// BulkWatchlistActions applies bounded state, schedule, and deletion changes;
 // scans use the normal per-item endpoint so each receives its own scan result.
 func BulkWatchlistActions(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body struct {
-			IDs    []uuid.UUID `json:"ids" binding:"required,min=1,max=250"`
-			Action string      `json:"action" binding:"required,oneof=enable disable delete"`
+			IDs      []uuid.UUID `json:"ids" binding:"required,min=1,max=250"`
+			Action   string      `json:"action" binding:"required,oneof=enable disable delete schedule"`
+			Schedule string      `json:"schedule"`
+			Timezone string      `json:"timezone"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+		if body.Action == "schedule" {
+			body.Schedule = strings.TrimSpace(body.Schedule)
+			body.Timezone = strings.TrimSpace(body.Timezone)
+			if body.Timezone == "" {
+				body.Timezone = "UTC"
+			}
+			if err := scheduler.ValidateSchedule(body.Schedule, body.Timezone); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 		}
 		userID, isAdmin, ok := authz.RequireRequestUser(c, db)
 		if !ok {
@@ -429,6 +442,18 @@ func BulkWatchlistActions(db *bun.DB) gin.HandlerFunc {
 			}
 			for _, id := range body.IDs {
 				scheduler.UnscheduleWatchlistItem(id.String())
+			}
+		} else if body.Action == "schedule" {
+			if _, err := db.NewUpdate().Model((*models.WatchlistItem)(nil)).
+				Set("schedule = ?, timezone = ?, updated_at = now()", body.Schedule, body.Timezone).
+				Where("id IN (?)", bun.In(body.IDs)).Exec(c.Request.Context()); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update watchlist schedules"})
+				return
+			}
+			for index := range items {
+				items[index].Schedule = body.Schedule
+				items[index].Timezone = body.Timezone
+				scheduler.SyncWatchlistItem(db, items[index])
 			}
 		} else {
 			enabled := body.Action == "enable"

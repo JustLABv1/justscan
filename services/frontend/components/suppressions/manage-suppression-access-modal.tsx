@@ -53,7 +53,7 @@ export function ManageSuppressionAccessModal({
 }: ManageSuppressionAccessModalProps) {
   return (
     <Modal state={state}>
-      <Modal.Backdrop isDismissable>
+      <Modal.Backdrop isDismissable={false}>
         <Modal.Container size="md" placement="center">
           <Modal.Dialog>
             <Modal.Header>

@@ -1313,7 +1313,7 @@ export function ScanStepTimeline({
       ) : null}
 
       <Modal state={xrayDebugModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="full" placement="center">
             <Modal.Dialog className="max-h-[85vh] overflow-hidden">
               <Modal.Header>

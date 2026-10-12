@@ -1249,7 +1249,7 @@ export function IdentityTab() {
       )}
 
       <Modal state={providerModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="cover" placement="center">
             <Modal.Dialog className="mx-auto w-full max-w-[1040px]">
               <Modal.Header>
@@ -1625,7 +1625,7 @@ export function IdentityTab() {
       </Modal>
 
       <Modal state={mappingModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>
@@ -1895,7 +1895,7 @@ export function IdentityTab() {
       </Modal>
 
       <Modal state={overrideModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>

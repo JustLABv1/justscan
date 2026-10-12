@@ -474,7 +474,7 @@ export function ScansTab() {
       </Card>
 
       <Modal state={tagModal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>

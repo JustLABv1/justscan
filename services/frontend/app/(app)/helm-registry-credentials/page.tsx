@@ -496,7 +496,7 @@ export default function HelmRegistryCredentialsPage() {
         </Card>
       </LoadableCollectionState>
       <Modal isOpen={modal.isOpen} onOpenChange={modal.setOpen}>
-        <Modal.Backdrop>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container>
             <Modal.Dialog>
               <Modal.Header>
@@ -589,7 +589,7 @@ export default function HelmRegistryCredentialsPage() {
         </Modal.Backdrop>
       </Modal>
       <Modal isOpen={shareModal.isOpen} onOpenChange={shareModal.setOpen}>
-        <Modal.Backdrop>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container>
             <Modal.Dialog>
               <Modal.Header>

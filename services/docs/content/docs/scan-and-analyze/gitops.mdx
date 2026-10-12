@@ -88,9 +88,13 @@ A fully qualified image from an unconfigured custom registry is kept exactly as 
 
 ## Per-image registry and credential
 
-If different discovered images need different registry access, expand the image and choose **Image registry / credential**. The selection is stored for that exact image reference and is used by manual and scheduled repository scans. Choose **Automatic matching** to return to host-based matching and the default behavior.
+If different discovered images need different registry access, expand the image and choose **Image registry / credential**. JustScan stores the selection for that exact image reference and creates an anchored pattern for the same repository across tags. The pattern is applied in dry-run previews and manual or scheduled scans, so a new tag does not lose the registry choice.
 
-Registry entries include their credentials, so create a separate entry in **Workspace setup → Registries** when two images use the same registry URL with different tokens. Give the entries distinct names, then assign the appropriate entry to each discovered image. The selected registry must be available in the repository's workspace.
+The **Registry override patterns** section shows the saved patterns and how many images in the latest dry run they match. Add a regular expression there to cover multiple repositories or hosts. Patterns use Go's RE2 syntax and are matched against the full discovered image reference. For example, `^ghcr\.io/team/api(:.*)?$` matches `ghcr.io/team/api` with any tag. Use `^` and `$` to limit a rule to the intended image names.
+
+Exact image overrides take precedence over patterns. If multiple patterns match, the most recently updated pattern wins. Removing a pattern removes its registry choice from all matching images; JustScan asks for confirmation when it matches several images in the latest dry run. Choose **Automatic matching** in an image's selector to clear its exact override and the matching pattern.
+
+Registry entries include their credentials, so create a separate entry in **Workspace setup → Registries** when two images use the same registry URL with different tokens. Give the entries distinct names, then assign the appropriate entry or pattern to each discovered image. The selected registry must be available in the repository's workspace.
 
 ## Repository-owned configuration
 

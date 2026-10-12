@@ -325,7 +325,7 @@ export function RegistriesTab() {
       </Card>
 
       <Modal state={modal}>
-        <Modal.Backdrop isDismissable>
+        <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog>
               <Modal.Header>

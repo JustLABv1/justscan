@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.28
-FROM reg.mini.dev/go:v1.27.3 AS builder
+FROM golang:1.27.3-bookworm AS builder
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 
 WORKDIR /app/backend
@@ -11,8 +11,8 @@ RUN go mod download
 COPY . .
 
 ARG APP_VERSION=dev
-RUN CGO_ENABLED=0 go build -ldflags="-X main.version=${APP_VERSION}" -o justscan-backend
-RUN CGO_ENABLED=0 go build -o justscan-mcp ./cmd/justscan-mcp
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${APP_VERSION}" -o justscan-backend
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o justscan-mcp ./cmd/justscan-mcp
 
 FROM builder AS helm-builder
 
@@ -20,7 +20,7 @@ FROM builder AS helm-builder
 # Helm under the backend module graph so Go's minimal-version selection uses the
 # patched oras-go version required by JustScan. `go install pkg@version` would
 # ignore this module graph and restore Helm's oras-go v2.6.1 dependency.
-RUN CGO_ENABLED=0 go build -mod=mod -o /out/helm helm.sh/helm/v4/cmd/helm
+RUN CGO_ENABLED=0 go build -mod=mod -trimpath -ldflags="-s -w" -o /out/helm helm.sh/helm/v4/cmd/helm
 
 FROM alpine:3.24 AS runtime-base
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"

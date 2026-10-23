@@ -1,10 +1,7 @@
 FROM ghcr.io/aquasecurity/trivy:latest AS trivy-bin
 
-FROM reg.mini.dev/node:26.12.1-dev AS base
-USER root
-
 # Stage 1: Build the frontend
-FROM reg.mini.dev/node:26.12.1-dev AS frontend-builder
+FROM node:26.12.1-alpine3.24 AS frontend-builder
 USER root
 WORKDIR /app/frontend
 
@@ -24,7 +21,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm run build
 
 # Stage 2: Build the documentation service
-FROM reg.mini.dev/node:26.12.1-dev AS docs-builder
+FROM node:26.12.1-alpine3.24 AS docs-builder
 USER root
 WORKDIR /app/docs
 
@@ -40,28 +37,31 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm run build
 
 # Stage 3: Build the backend
-FROM reg.mini.dev/go:v1.27.3 AS backend-builder
+FROM golang:1.27.3-bookworm AS backend-builder
 WORKDIR /app/backend
 COPY services/backend/go.mod services/backend/go.sum ./
 RUN go mod download
 COPY services/backend/ ./
 ARG APP_VERSION=dev
-RUN CGO_ENABLED=0 go build -ldflags="-X main.version=${APP_VERSION}" -o justscan-backend
-RUN CGO_ENABLED=0 go build -o justscan-mcp ./cmd/justscan-mcp
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${APP_VERSION}" -o justscan-backend
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o justscan-mcp ./cmd/justscan-mcp
 
 FROM backend-builder AS helm-builder
 
 # Build Helm under the backend module graph so the patched oras-go version
 # selected by JustScan is also used by the runtime Helm CLI.
-RUN CGO_ENABLED=0 go build -mod=mod -o /out/helm helm.sh/helm/v4/cmd/helm
+RUN CGO_ENABLED=0 go build -mod=mod -trimpath -ldflags="-s -w" -o /out/helm helm.sh/helm/v4/cmd/helm
 
 # Stage 4: Create the final image
-FROM base AS runner
+# Copy only Node into the runtime so npm, Yarn, and headers add no layers.
+FROM alpine:3.24 AS runner
+COPY --from=frontend-builder /usr/local/bin/node /usr/local/bin/node
 WORKDIR /app
 
 # Install necessary packages
 RUN apk add --upgrade --no-cache \
     ca-certificates \
+    libstdc++ \
     git \
     tini \
     postgresql-client \

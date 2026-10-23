@@ -15,6 +15,8 @@ The OIDC callback and public application URL must use the same HTTPS hostname th
 4. Configure the groups and roles claim names, then list the identity-provider groups or roles that should grant the JustScan `admin` role.
 5. Test normal sign-in, administrator mapping, and any organization claim mappings before relying on the provider in production.
 
+OIDC providers that publish RSA signing keys must use keys of at most 4096 bits. Larger RSA keys in the provider’s JWKS are rejected by the JWK parser to prevent excessive CPU consumption. If sign-in fails after upgrading, check the provider’s signing-key size.
+
 ## OIDC-first administrator setup
 
 For an installation that starts with OIDC:

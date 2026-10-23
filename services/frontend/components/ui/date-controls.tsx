@@ -28,13 +28,21 @@ export const DateField = Object.assign(Aria.DateField, {
   }: Aria.GroupProps & { variant?: string; fullWidth?: boolean }) => (
     <Aria.Group
       className={cn(
-        'flex items-center gap-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-ring',
+        'flex h-8 min-w-0 items-center gap-1 rounded-lg border border-input bg-transparent px-2.5 text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
         typeof className === 'string' && className
       )}
       {...props}
     />
   ),
-  Input: Aria.DateInput,
+  Input: ({ className, ...props }: Aria.DateInputProps) => (
+    <Aria.DateInput
+      className={cn(
+        'inline-flex min-w-0 items-center whitespace-nowrap text-base md:text-sm',
+        typeof className === 'string' && className
+      )}
+      {...props}
+    />
+  ),
   Segment: ({ className, ...props }: Aria.DateSegmentProps) => (
     <Aria.DateSegment
       className={cn(

@@ -1,4 +1,4 @@
-FROM reg.mini.dev/node:26.11.1-dev AS builder
+FROM reg.mini.dev/node:v26.12.1-dev AS builder
 
 USER root
 WORKDIR /app
@@ -11,7 +11,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
-FROM reg.mini.dev/node:26.11.1 AS runner
+FROM reg.mini.dev/node:v26.12.1 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

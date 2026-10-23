@@ -62,12 +62,16 @@ WORKDIR /app
 RUN apk add --upgrade --no-cache \
     ca-certificates \
     libstdc++ \
+    libatomic \
     git \
     tini \
     postgresql-client \
     tzdata \
     libcrypto3 \
     libssl3
+
+# Fail the build if the target architecture is missing a Node runtime library.
+RUN node --version
 
 COPY --from=trivy-bin /usr/local/bin/trivy /usr/local/bin/trivy
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh

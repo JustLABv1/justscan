@@ -15,7 +15,7 @@ import type { BackgroundJob } from '@/lib/api/types/background-jobs';
 import { timeAgo } from '@/lib/time';
 import { useToast } from '@/components/toast';
 import { useWorkScope } from '@/hooks/use-work-scope';
-import { Badge, Button, ButtonGroup, Chip, Drawer, ProgressBar, Spinner } from '@/components/ui';
+import { Button, ButtonGroup, Chip, Drawer, ProgressBar, Spinner } from '@/components/ui';
 import {
   Activity01Icon,
   Alert02Icon,
@@ -275,7 +275,58 @@ function BackgroundJobCard({
   );
 }
 
-export function BackgroundProcessCenter() {
+function ActivityTrigger({
+  collapsed,
+  activeCount,
+  onPress,
+}: {
+  collapsed: boolean;
+  activeCount: number;
+  onPress: () => void;
+}) {
+  return (
+    <div className="relative w-full">
+      <Button
+        aria-label={
+          activeCount > 0
+            ? `Background processes, ${activeCount} active`
+            : 'Background processes, no active jobs'
+        }
+        className={
+          collapsed
+            ? 'relative w-full text-muted-foreground'
+            : 'w-full justify-start gap-2 text-muted-foreground hover:text-foreground'
+        }
+        isIconOnly={collapsed}
+        size="default"
+        onPress={onPress}
+        variant="ghost"
+      >
+        {activeCount > 0 ? (
+          <Spinner size="sm" aria-hidden />
+        ) : (
+          <Activity01Icon aria-hidden size={17} />
+        )}
+        {!collapsed ? (
+          <>
+            <span className="flex-1 text-left">Activity</span>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {activeCount > 0 ? `${activeCount} running` : 'Idle'}
+            </span>
+          </>
+        ) : null}
+      </Button>
+      {collapsed && activeCount > 0 ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export function BackgroundProcessCenter({ collapsed = false }: { collapsed?: boolean }) {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
@@ -451,30 +502,14 @@ export function BackgroundProcessCenter() {
 
   return (
     <>
-      <Badge.Anchor className="shrink-0">
-        <Button
-          aria-label={
-            activeCount > 0
-              ? `Background processes, ${activeCount} active`
-              : 'Background processes, no active jobs'
-          }
-          className=" justify-center md:w-auto md:gap-2 "
-          size="sm"
-          onPress={() => {
-            setIsOpen(true);
-            void loadJobs();
-          }}
-          variant="ghost"
-        >
-          <Activity01Icon aria-hidden size={17} />
-          <span className="hidden md:inline">Background processes</span>
-        </Button>
-        {activeCount > 0 ? (
-          <Badge color="accent" size="sm">
-            {activeCount > 99 ? '99+' : activeCount}
-          </Badge>
-        ) : null}
-      </Badge.Anchor>
+      <ActivityTrigger
+        collapsed={collapsed}
+        activeCount={activeCount}
+        onPress={() => {
+          setIsOpen(true);
+          void loadJobs();
+        }}
+      />
 
       <Drawer.Backdrop isOpen={isOpen} onOpenChange={setIsOpen} variant="blur">
         <Drawer.Content placement="right">

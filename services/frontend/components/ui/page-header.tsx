@@ -1,3 +1,7 @@
+'use client';
+
+import { createPortal } from 'react-dom';
+import { usePageHeaderSlots } from './page-header-slots';
 import { Breadcrumbs, Typography } from '@/components/ui';
 import type { ReactNode } from 'react';
 
@@ -19,6 +23,46 @@ export interface PageTitleProps {
   breadcrumbs?: BreadcrumbItem[];
 }
 
+function ShellPageTitle({ title, status, meta, actions, breadcrumbs }: PageTitleProps) {
+  const slots = usePageHeaderSlots();
+  if (!slots) return null;
+  return (
+    <>
+      {slots.heading
+        ? createPortal(
+            <div id="tour-page-header" className="flex min-w-0 items-center gap-2">
+              {breadcrumbs && breadcrumbs.length > 1 ? (
+                <Breadcrumbs className="min-w-0 text-sm">
+                  {breadcrumbs.map((item, index) => (
+                    <Breadcrumbs.Item
+                      key={`${item.href ?? 'current'}:${item.label}`}
+                      href={index === breadcrumbs.length - 1 ? undefined : item.href}
+                    >
+                      {item.label}
+                    </Breadcrumbs.Item>
+                  ))}
+                </Breadcrumbs>
+              ) : (
+                <span aria-current="page" className="truncate font-medium">
+                  {title}
+                </span>
+              )}
+            </div>,
+            slots.heading
+          )
+        : null}
+      {slots.actions && actions ? createPortal(actions, slots.actions) : null}
+      <h1 className="sr-only">{title}</h1>
+      {status || meta ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {status}
+          {meta}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export function PageTitle({
   title,
   status,
@@ -28,6 +72,8 @@ export function PageTitle({
   actions,
   breadcrumbs,
 }: PageTitleProps) {
+  const slots = usePageHeaderSlots();
+  if (slots) return <ShellPageTitle {...{ title, status, meta, actions, breadcrumbs }} />;
   return (
     <header
       id="tour-page-header"

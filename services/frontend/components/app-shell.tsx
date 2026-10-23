@@ -82,7 +82,13 @@ import {
   useAIContextBridge,
 } from '@/components/assistant/ai-context-bridge';
 import { ADMIN_AREAS, type AdminTab } from '@/app/(app)/admin/_components/admin-tabs';
+import { openBackgroundProcessCenter } from '@/lib/api/background-jobs';
 import { BackgroundProcessCenter } from '@/components/background-process-center';
+import {
+  PageHeaderSlotsProvider,
+  PageHeadingSlot,
+  PageActionsSlot,
+} from '@/components/ui/page-header-slots';
 import { Logo } from '@/components/logo';
 import { ToastProvider } from '@/components/toast';
 
@@ -289,7 +295,9 @@ function ShellTooltip({
 export function AppShell({ children, initialUser }: AppShellProps) {
   return (
     <AIContextBridgeProvider>
-      <AppShellInner initialUser={initialUser}>{children}</AppShellInner>
+      <PageHeaderSlotsProvider>
+        <AppShellInner initialUser={initialUser}>{children}</AppShellInner>
+      </PageHeaderSlotsProvider>
     </AIContextBridgeProvider>
   );
 }
@@ -933,6 +941,12 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               </div>
             ) : null}
 
+            <div className={cn('shrink-0 pb-2', desktopCollapsed ? 'px-3' : 'px-4')}>
+              <ShellTooltip label="Background activity" enabled={desktopCollapsed}>
+                <BackgroundProcessCenter collapsed={desktopCollapsed} />
+              </ShellTooltip>
+            </div>
+
             <div
               className={cn(
                 'shrink-0 border-t border-border pt-2 pb-3',
@@ -1028,7 +1042,9 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
           </Surface>
 
           <div className="shell-content flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:my-2 md:mr-2 md:rounded-xl">
-            <div className={`flex h-14 shrink-0 items-center gap-2.5 ${contentRailClass}`}>
+            <div
+              className={`flex min-h-14 shrink-0 flex-wrap items-center gap-2.5 py-2 ${contentRailClass}`}
+            >
               <>
                 <Button
                   aria-label="Open navigation menu"
@@ -1203,6 +1219,18 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                         className="flex flex-col gap-2 p-3"
                         style={{ borderTop: '1px solid var(--border-subtle)' }}
                       >
+                        <Button
+                          fullWidth
+                          variant="ghost"
+                          className="justify-start gap-2 text-muted-foreground"
+                          onPress={() => {
+                            setMobileNavOpen(false);
+                            openBackgroundProcessCenter();
+                          }}
+                        >
+                          <Activity01Icon aria-hidden size={17} />
+                          Activity
+                        </Button>
                         <Dropdown>
                           <Dropdown.Trigger
                             className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left"
@@ -1212,7 +1240,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                               <div
                                 className="size-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
                                 style={{
-                                  background: 'color-mix(in oklab, var(--primary) 12%, transparent)',
+                                  background:
+                                    'color-mix(in oklab, var(--primary) 12%, transparent)',
                                   color: 'var(--accent-soft-foreground)',
                                   border:
                                     '1px solid color-mix(in oklab, var(--primary) 18%, transparent)',
@@ -1293,7 +1322,10 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                 textValue="Retake Tour"
                               >
                                 <div className="flex items-center gap-2">
-                                  <AiContentGenerator01Icon size={14} className="text-muted-foreground" />
+                                  <AiContentGenerator01Icon
+                                    size={14}
+                                    className="text-muted-foreground"
+                                  />
                                   <Label>Retake Tour</Label>
                                 </div>
                               </Dropdown.Item>
@@ -1331,11 +1363,15 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                 <span aria-hidden className="text-muted-foreground">
                   —
                 </span>
-                <span aria-current="page" className="truncate font-medium">
-                  {currentSection === 'Dashboard' ? 'Overview' : currentSection}
-                </span>
+                <PageHeadingSlot
+                  fallback={currentSection === 'Dashboard' ? 'Overview' : currentSection}
+                />
               </nav>
-              <div id="tour-topbar-actions" className="ml-auto flex shrink-0 items-center gap-1.5">
+              <div
+                id="tour-topbar-actions"
+                className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2"
+              >
+                <PageActionsSlot />
                 <Button
                   aria-label="Open command palette"
                   className=" md:hidden"
@@ -1345,12 +1381,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                 >
                   <Search01Icon size={16} />
                 </Button>
-                <Tooltip delay={250}>
-                  <Tooltip.Trigger className="block">
-                    <BackgroundProcessCenter />
-                  </Tooltip.Trigger>
-                  <Tooltip.Content placement="bottom">Background processes</Tooltip.Content>
-                </Tooltip>
                 <div className="md:hidden">
                   <Dropdown>
                     <Dropdown.Trigger id="tour-user-menu" aria-label="Open user menu">

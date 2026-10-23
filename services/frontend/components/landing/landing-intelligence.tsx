@@ -2,7 +2,7 @@
 
 import { LandingButtonLink } from '@/components/landing/landing-controls';
 import { LandingReveal } from '@/components/landing/landing-motion';
-import { Button, Card, Chip, Link } from '@heroui/react';
+import { Button, Card, Chip, Link } from '@/components/ui';
 import {
   ArrowUpRight01Icon,
   CheckmarkCircle02Icon,

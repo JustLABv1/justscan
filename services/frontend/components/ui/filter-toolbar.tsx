@@ -1,6 +1,6 @@
 'use client';
 
-import { Chip, Disclosure, Toolbar } from '@heroui/react';
+import { Chip, Disclosure, Toolbar } from '@/components/ui';
 import { FilterIcon } from 'hugeicons-react';
 import type { ReactNode } from 'react';
 

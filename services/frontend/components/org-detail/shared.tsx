@@ -8,7 +8,7 @@ import {
 } from '@/components/evilcharts/charts/bar-chart';
 import { typedChartConfigFromSeries } from '@/components/ui/chart-adapter';
 import { OrgPolicy, OrgRiskScore, Scan, TrendPoint } from '@/lib/api';
-import { Card } from '@heroui/react';
+import { Card } from '@/components/ui';
 
 export type OrgScanItem = Scan & {
   compliance: { policy_id: string; policy_name: string; status: string; evaluated_at?: string }[];

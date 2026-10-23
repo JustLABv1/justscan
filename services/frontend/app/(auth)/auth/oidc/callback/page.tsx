@@ -88,7 +88,7 @@ export default function OIDCCallbackPage() {
   return (
     <div className="flex flex-col items-center justify-center gap-4">
       <Logo size={60} />
-      <div className="size-6 border-2 border-accent-500/30 border-t-accent-500 rounded-full animate-spin" />
+      <div className="size-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
       <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Completing sign-in…</p>
     </div>
   );

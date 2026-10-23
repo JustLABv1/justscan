@@ -21,7 +21,7 @@ import {
   Select,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Cancel01Icon,
   CopyLinkIcon,

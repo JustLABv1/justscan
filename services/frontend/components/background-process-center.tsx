@@ -15,7 +15,7 @@ import type { BackgroundJob } from '@/lib/api/types/background-jobs';
 import { timeAgo } from '@/lib/time';
 import { useToast } from '@/components/toast';
 import { useWorkScope } from '@/hooks/use-work-scope';
-import { Badge, Button, ButtonGroup, Chip, Drawer, ProgressBar, Spinner } from '@heroui/react';
+import { Badge, Button, ButtonGroup, Chip, Drawer, ProgressBar, Spinner } from '@/components/ui';
 import {
   Activity01Icon,
   Alert02Icon,
@@ -199,7 +199,9 @@ function BackgroundJobCard({
               </ProgressBar.Track>
             </ProgressBar>
             <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
-              <span>{formatPhase(job.phase) || (active ? 'Working…' : jobStatusLabel(job.status))}</span>
+              <span>
+                {formatPhase(job.phase) || (active ? 'Working…' : jobStatusLabel(job.status))}
+              </span>
               <span className="tabular-nums">
                 {progressCurrent.toLocaleString()} / {progressTotal.toLocaleString()} (
                 {Math.round(progressPercent)}%)
@@ -220,7 +222,9 @@ function BackgroundJobCard({
         ) : null}
         {!active ? (
           <p className="text-[11px] text-muted">
-            {job.finished_at ? `${jobStatusLabel(job.status)} ${timeAgo(job.finished_at)}` : 'Finished'}
+            {job.finished_at
+              ? `${jobStatusLabel(job.status)} ${timeAgo(job.finished_at)}`
+              : 'Finished'}
           </p>
         ) : null}
       </div>
@@ -229,11 +233,11 @@ function BackgroundJobCard({
         <div className="border-t border-border bg-surface-tertiary/30 p-2.5">
           {scanHref && !active ? (
             <ButtonGroup fullWidth size="sm" variant="secondary">
-              <Button
-                render={(props: any) => <a {...props} href={scanHref} />}
-              >
-                View scan
-                <ArrowRight01Icon aria-hidden size={15} />
+              <Button asChild>
+                <a href={scanHref}>
+                  View scan
+                  <ArrowRight01Icon aria-hidden size={15} />
+                </a>
               </Button>
               <Button
                 aria-label={`Remove ${job.title || 'background process'} from the process center`}
@@ -246,14 +250,11 @@ function BackgroundJobCard({
               </Button>
             </ButtonGroup>
           ) : scanHref ? (
-            <Button
-              fullWidth
-              render={(props: any) => <a {...props} href={scanHref} />}
-              size="sm"
-              variant="secondary"
-            >
-              View scan
-              <ArrowRight01Icon aria-hidden size={15} />
+            <Button fullWidth asChild size="sm" variant="secondary">
+              <a href={scanHref}>
+                View scan
+                <ArrowRight01Icon aria-hidden size={15} />
+              </a>
             </Button>
           ) : (
             <Button
@@ -396,7 +397,9 @@ export function BackgroundProcessCenter() {
       const job = (event as CustomEvent<{ job?: BackgroundJob }>).detail?.job;
       if (!job) return;
       previousStatusesRef.current.set(job.id, job.status);
-      setJobs((current) => mergeJobs(current, [job, ...current.filter((item) => item.id !== job.id)]));
+      setJobs((current) =>
+        mergeJobs(current, [job, ...current.filter((item) => item.id !== job.id)])
+      );
       setJobsScopeKey(scopeKey);
       jobsScopeKeyRef.current = scopeKey;
       void loadJobs();

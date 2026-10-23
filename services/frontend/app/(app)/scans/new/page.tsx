@@ -4,7 +4,7 @@ import { useToast } from '@/components/toast';
 import { FormAlert, StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import {
-  heroSelectTriggerClassName,
+  fieldSelectTriggerClassName,
   joinClassNames,
   nativeFieldClassName,
 } from '@/components/ui/form-styles';
@@ -43,7 +43,7 @@ import {
   Select,
   TextArea,
   useFilter,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowDown01Icon,
   ArrowLeft01Icon,
@@ -59,7 +59,7 @@ import type { Key } from 'react';
 import { useEffect, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 
 type ScanSourceKind = 'public' | 'private_registry' | 'artifactory_xray' | 'local_archive';
 
@@ -116,7 +116,7 @@ function ScanSourceCard({
 }) {
   return (
     <Radio
-      className="scan-source-card group relative min-h-40 w-full cursor-pointer flex-col items-start gap-0 rounded-2xl border border-surface-border bg-surface px-5 py-5 text-left data-[focus-visible=true]:border-accent data-[selected=true]:border-accent/50 data-[selected=true]:bg-accent/10 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-60"
+      className="scan-source-card group relative min-h-40 w-full cursor-pointer flex-col items-start gap-0 rounded-2xl border border-border bg-surface px-5 py-5 text-left data-[focus-visible=true]:border-accent data-[selected=true]:border-accent/50 data-[selected=true]:bg-accent/10 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-60"
       isDisabled={disabled}
       value={source}
     >
@@ -725,7 +725,7 @@ export default function NewScanPage() {
               </p>
             ) : null}
             {privateRegistries.length === 0 || xrayRegistries.length === 0 ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-border pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
                 <p className="text-sm text-muted">
                   Configure registries to enable private and Artifactory scan routes.
                 </p>
@@ -749,7 +749,7 @@ export default function NewScanPage() {
             >
               {scanSource === 'local_archive' ? (
                 <ScanWizardField label="OCI/Docker archive">
-                  <div className="rounded-2xl border border-dashed border-surface-border bg-surface-secondary px-4 py-4">
+                  <div className="rounded-2xl border border-dashed border-border bg-surface-secondary px-4 py-4">
                     <input
                       aria-label="OCI or Docker archive"
                       accept=".tar,.tgz,.tar.gz,.oci"
@@ -797,7 +797,7 @@ export default function NewScanPage() {
                 />
               </div>
               {hasRoutingSection ? (
-                <div className="space-y-4 border-t border-surface-border pt-5">
+                <div className="space-y-4 border-t border-border pt-5">
                   <div className="space-y-1.5">
                     <h3 className="text-base font-semibold text-zinc-900 dark:text-white">
                       Routing
@@ -1020,7 +1020,7 @@ export default function NewScanPage() {
                 </Disclosure.Trigger>
               </Disclosure.Heading>
               <Disclosure.Content>
-                <Disclosure.Body className="border-t border-surface-border px-5 py-5">
+                <Disclosure.Body className="border-t border-border px-5 py-5">
                   <div className="space-y-4">
                     {scanSource !== 'local_archive' ? (
                       <ScanWizardField

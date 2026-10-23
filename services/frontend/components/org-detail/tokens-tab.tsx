@@ -22,7 +22,7 @@ import {
   Table,
   useOverlayState,
   type SortDescriptor,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Cancel01Icon,
   Copy01Icon,
@@ -457,7 +457,7 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
       <div className="surface-card rounded-2xl overflow-hidden">
         {loading ? (
           <div className="flex justify-center py-8">
-            <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+            <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
           </div>
         ) : tokens.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-6 text-center gap-3">

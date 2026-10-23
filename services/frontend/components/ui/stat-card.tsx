@@ -1,6 +1,6 @@
 'use client';
 
-import { Card } from '@heroui/react';
+import { Card } from '@/components/ui';
 import type { CSSProperties, ReactNode } from 'react';
 
 import {

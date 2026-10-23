@@ -31,7 +31,7 @@ import type { AdminDashboard, AdminDashboardVulnerabilityTrendPoint } from '@/li
 import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Card, Chip, Link, Skeleton } from '@heroui/react';
+import { Button, Card, Chip, Link, Skeleton } from '@/components/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 function formatCompact(value: number) {

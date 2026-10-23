@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Spinner } from '@heroui/react';
+import { Button, Spinner } from '@/components/ui';
 import type { ReactNode } from 'react';
 
 import { StatusAlert } from '@/components/ui/form-alert';

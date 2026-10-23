@@ -15,7 +15,7 @@ import { deferEffect } from '@/lib/defer-effect';
 import { getHelmImageSourceLabel } from '@/lib/helm-image-overrides';
 import { PublicHelmRunHistoryEntry, updateHelmPublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip, Spinner, Table } from '@heroui/react';
+import { Alert, Button, Card, Chip, Spinner, Table } from '@/components/ui';
 import {
   AlertCircleIcon,
   ArrowReloadHorizontalIcon,

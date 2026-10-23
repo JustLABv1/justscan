@@ -11,7 +11,7 @@ import {
 import { VulnerabilityKBTable } from '@/components/vulnkb/vulnerability-kb-table';
 import { listKBEntries, type VulnKBEntry } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Spinner } from '@heroui/react';
+import { Spinner } from '@/components/ui';
 import { InformationCircleIcon } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useReducer, useRef } from 'react';

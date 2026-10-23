@@ -4,8 +4,8 @@ import { FormField } from '@/components/ui/form-field';
 import {
   fieldDescriptionClassName,
   fieldLabelClassName,
-  heroFieldClassName,
-  heroSelectTriggerClassName,
+  fieldInputClassName,
+  fieldSelectTriggerClassName,
 } from '@/components/ui/form-styles';
 import type { ConditionOption, ConditionValue } from '@/components/notifications/condition-catalog';
 import {
@@ -16,8 +16,8 @@ import {
   mergeConditionOptions,
   normalizeConditionValue,
 } from '@/components/notifications/condition-catalog';
-import { ComboBox, Input, Label, ListBox, Select, Tag, TagGroup } from '@heroui/react';
-import type { Key } from '@heroui/react';
+import { ComboBox, Input, Label, ListBox, Select, Tag, TagGroup } from '@/components/ui';
+import type { Key } from '@/components/ui';
 import { useEffect, useMemo, useState } from 'react';
 
 type ConditionValueControlProps = {
@@ -76,7 +76,7 @@ function StaticConditionValueControl({
       }}
       variant="primary"
     >
-      <Select.Trigger className={heroSelectTriggerClassName}>
+      <Select.Trigger className={fieldSelectTriggerClassName}>
         <span
           className={selectedValues.length > 0 ? selectedLabelClassName : 'truncate text-muted'}
         >
@@ -175,7 +175,7 @@ function DynamicSingleValueControl({
     >
       <Label className={fieldLabelClassName}>{definition.label}</Label>
       <ComboBox.InputGroup>
-        <Input className={heroFieldClassName} placeholder={definition.placeholder} />
+        <Input className={fieldInputClassName} placeholder={definition.placeholder} />
         <ComboBox.Trigger />
       </ComboBox.InputGroup>
       {definition.description ? (
@@ -296,7 +296,7 @@ function DynamicMultiValueControl({
         <Label className="sr-only">Add {definition.label}</Label>
         <ComboBox.InputGroup>
           <Input
-            className={heroFieldClassName}
+            className={fieldInputClassName}
             placeholder={definition.placeholder ?? 'Search and add values'}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && allowsCustom && inputValue.trim()) {

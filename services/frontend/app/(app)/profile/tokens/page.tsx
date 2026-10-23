@@ -19,7 +19,7 @@ import {
   Modal,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Clock01Icon,
   Copy01Icon,

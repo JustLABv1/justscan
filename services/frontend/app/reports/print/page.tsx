@@ -7,7 +7,7 @@ import {
   SearchField,
   Switch,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import { getToken, req, type ApiRequestOptions, subscribeToAuth } from '@/lib/api';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';

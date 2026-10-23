@@ -46,7 +46,7 @@ import {
   Table,
   TextArea,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Refresh01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 

@@ -3,7 +3,7 @@
 import { useToast } from '@/components/toast';
 import { adminUpdateScannerSettings, getAdminSettings } from '@/lib/api/admin';
 import type { ScannerSettings } from '@/lib/api/types/registries';
-import { Button, Card, Description, Input, Label, Switch, TextField } from '@heroui/react';
+import { Button, Card, Description, Input, Label, Switch, TextField } from '@/components/ui';
 import { useEffect, useState } from 'react';
 
 export function ScannerRuntimePanel() {

@@ -2,7 +2,7 @@
 
 import { FormField } from '@/components/ui/form-field';
 import { changePassword, getUserDetails, setUser, updateUserDetails, User } from '@/lib/api';
-import { Avatar, Button, Card } from '@heroui/react';
+import { Avatar, Button, Card } from '@/components/ui';
 import { PencilEdit02Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';

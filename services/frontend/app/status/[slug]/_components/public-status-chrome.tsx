@@ -3,7 +3,7 @@
 import { Logo } from '@/components/logo';
 import type { StatusPageUpdate } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip } from '@heroui/react';
+import { Alert, Button, Card, Chip } from '@/components/ui';
 import {
   Clock01Icon,
   Globe02Icon,

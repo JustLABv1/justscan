@@ -4,7 +4,7 @@ import { ManageSuppressionAccessModal } from '@/components/suppressions/manage-s
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
@@ -39,7 +39,7 @@ import {
   Separator,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import { Delete01Icon, SecurityLockIcon, Shield01Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -68,7 +68,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 const LIMIT = 50;
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 
 export default function SuppressionsPage() {
   const router = useRouter();
@@ -411,7 +411,7 @@ export default function SuppressionsPage() {
           loadingFallback={
             <Card className="overflow-hidden">
               <div className="flex justify-center py-16" role="status">
-                <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
                 <span className="sr-only">Loading suppressions</span>
               </div>
             </Card>
@@ -673,7 +673,7 @@ export default function SuppressionsPage() {
 
                   {imagesLoading ? (
                     <div className="flex justify-center py-8">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
                     </div>
                   ) : imagesError ? (
                     <div className="flex flex-col items-center gap-3 py-8 text-center">

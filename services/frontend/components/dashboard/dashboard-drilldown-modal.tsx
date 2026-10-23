@@ -7,7 +7,7 @@ import { RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { Scan, WatchlistItem } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { getWatchlistPosture } from '@/lib/watchlist-posture';
-import { Button, Card, Chip, Link as HeroLink, Modal, useOverlayState } from '@heroui/react';
+import { Button, Card, Chip, Link as UiLink, Modal, useOverlayState } from '@/components/ui';
 import { CheckmarkCircle02Icon, Clock01Icon, Shield01Icon } from 'hugeicons-react';
 
 export type DashboardDrilldownKey = 'total' | 'completed' | 'watchlist' | 'watchlist_attention';
@@ -61,17 +61,17 @@ function WatchlistModalRow({ item }: { item: WatchlistItem }) {
             Quick actions
           </p>
           <div className="flex items-center gap-2">
-            <HeroLink href="/watchlist" className="no-underline">
+            <UiLink href="/watchlist" className="no-underline">
               <Button size="sm" variant="secondary" className="h-8 px-3 text-xs font-medium">
                 Open in watchlist
               </Button>
-            </HeroLink>
+            </UiLink>
             {item.last_scan_id ? (
-              <HeroLink href={`/scans/details/${item.last_scan_id}`} className="no-underline">
+              <UiLink href={`/scans/details/${item.last_scan_id}`} className="no-underline">
                 <Button size="sm" variant="primary" className="h-8 px-3 text-xs font-medium">
                   Open last scan
                 </Button>
-              </HeroLink>
+              </UiLink>
             ) : null}
           </div>
         </div>
@@ -144,9 +144,9 @@ function DrilldownPrimaryAction({
   onClose: () => void;
 }) {
   return (
-    <HeroLink href={href} className="no-underline" onPress={onClose}>
+    <UiLink href={href} className="no-underline" onPress={onClose}>
       <Button>{label}</Button>
-    </HeroLink>
+    </UiLink>
   );
 }
 
@@ -249,16 +249,16 @@ function CompactScanRow({ scan, showActions = false }: { scan: Scan; showActions
         <div className="flex shrink-0 flex-col items-end gap-2">
           {showActions ? (
             <div className="flex items-center gap-2">
-              <HeroLink href={`/scans/details/${scan.id}`} className="no-underline">
+              <UiLink href={`/scans/details/${scan.id}`} className="no-underline">
                 <Button size="sm" variant="primary" className="h-8 px-3 text-xs font-medium">
                   Open scan
                 </Button>
-              </HeroLink>
-              <HeroLink href="/scans" className="no-underline">
+              </UiLink>
+              <UiLink href="/scans" className="no-underline">
                 <Button size="sm" variant="secondary" className="h-8 px-3 text-xs font-medium">
                   Open in scans
                 </Button>
-              </HeroLink>
+              </UiLink>
             </div>
           ) : null}
         </div>

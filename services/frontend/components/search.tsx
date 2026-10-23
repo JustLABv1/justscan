@@ -21,7 +21,7 @@ import {
   SearchField,
   Spinner,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowRight01Icon,
   Building04Icon,

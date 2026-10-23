@@ -7,7 +7,7 @@ import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
@@ -47,7 +47,7 @@ import {
   Select,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Delete01Icon,
   PencilEdit01Icon,
@@ -59,7 +59,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { XrayMode } from '@/lib/api/types/registries';
 
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 
 const AUTH_TYPE_LABEL: Record<string, string> = {
   none: 'Public',
@@ -778,7 +778,7 @@ export default function RegistriesPage() {
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container className="px-3 sm:px-6" size="lg" placement="center" scroll="inside">
             <Modal.Dialog className="max-w-3xl">
-              <Modal.Header className="border-b border-surface-border px-5 py-4 sm:px-6">
+              <Modal.Header className="border-b border-border px-5 py-4 sm:px-6">
                 <div className="min-w-0">
                   <Modal.Heading>{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
                   <p className="mt-1 text-sm text-muted">
@@ -792,7 +792,7 @@ export default function RegistriesPage() {
                   {formError ? (
                     <FormAlert description={formError} title="Registry save failed" />
                   ) : null}
-                  <section className="space-y-4 border-b border-surface-border pb-5">
+                  <section className="space-y-4 border-b border-border pb-5">
                     <div>
                       <h3 className="text-sm font-semibold">Registry connection</h3>
                       <p className="mt-1 text-sm text-muted">
@@ -858,7 +858,7 @@ export default function RegistriesPage() {
                     </div>
                   </section>
                   {scanProvider === 'artifactory_xray' && (
-                    <section className="space-y-4 border-b border-surface-border pb-5">
+                    <section className="space-y-4 border-b border-border pb-5">
                       <div>
                         <h3 className="text-sm font-semibold">Xray scan behavior</h3>
                         <p className="mt-1 text-sm text-muted">
@@ -971,7 +971,7 @@ export default function RegistriesPage() {
                   </section>
                 </form>
               </Modal.Body>
-              <Modal.Footer className="border-t border-surface-border px-5 py-4 sm:px-6">
+              <Modal.Footer className="border-t border-border px-5 py-4 sm:px-6">
                 <Button onPress={modal.close} type="button" variant="secondary">
                   Cancel
                 </Button>
@@ -1038,7 +1038,7 @@ export default function RegistriesPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

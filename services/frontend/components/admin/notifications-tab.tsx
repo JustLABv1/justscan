@@ -18,7 +18,7 @@ import {
   SearchField,
   Select,
   Table,
-} from '@heroui/react';
+} from '@/components/ui';
 import { Delete01Icon, Notification01Icon, Refresh01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RowActionsMenu } from '../ui/row-actions-menu';

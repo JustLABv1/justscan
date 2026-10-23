@@ -30,7 +30,7 @@ import {
   Switch,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export function OrganizationsTab() {

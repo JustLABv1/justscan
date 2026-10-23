@@ -11,7 +11,7 @@ import { OrgVulnerabilityDefaults } from '@/components/org-detail/vulnerability-
 import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RouteLoadingState } from '@/components/route-state';
 import {
@@ -55,13 +55,13 @@ import {
   Switch,
   Tabs,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import { ArrowLeft01Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 
 const RULE_TYPE_LABELS: Record<string, string> = {
   max_cvss: 'Max CVSS Score',
@@ -485,7 +485,7 @@ function OrgDetailContent() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
       </div>
     );
   }
@@ -772,7 +772,7 @@ function OrgDetailContent() {
                               onChange={(e) =>
                                 setRuleField(idx, 'value', parseFloat(e.target.value))
                               }
-                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
+                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-primary/40"
                             />
                           </div>
                         )}
@@ -822,7 +822,7 @@ function OrgDetailContent() {
                                 onChange={(e) =>
                                   setRuleField(idx, 'value', parseInt(e.target.value))
                                 }
-                                className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
+                                className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-primary/40"
                               />
                             </div>
                           </div>
@@ -842,7 +842,7 @@ function OrgDetailContent() {
                               min={0}
                               value={rule.value ?? 0}
                               onChange={(e) => setRuleField(idx, 'value', parseInt(e.target.value))}
-                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
+                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-primary/40"
                             />
                           </div>
                         )}
@@ -891,7 +891,7 @@ function OrgDetailContent() {
                               value={rule.cve_id ?? ''}
                               onChange={(e) => setRuleField(idx, 'cve_id', e.target.value)}
                               placeholder="CVE-2024-12345"
-                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
+                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-primary/40"
                             />
                           </div>
                         )}

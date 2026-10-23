@@ -8,9 +8,9 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusAlert } from '@/components/ui/form-alert';
 import {
   fieldLabelClassName,
-  heroFieldClassName,
-  heroSelectTriggerClassName,
-  heroTextAreaClassName,
+  fieldInputClassName,
+  fieldSelectTriggerClassName,
+  fieldTextAreaClassName,
 } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
@@ -64,7 +64,7 @@ import {
   Table,
   TextArea,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Delete01Icon,
   EyeIcon,
@@ -75,9 +75,9 @@ import {
 } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-const fieldCls = heroFieldClassName;
-const textareaCls = heroTextAreaClassName;
-const selectTriggerCls = heroSelectTriggerClassName;
+const fieldCls = fieldInputClassName;
+const textareaCls = fieldTextAreaClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 const fieldLabelCls = fieldLabelClassName;
 
 const visibilityOptions = [
@@ -1003,7 +1003,7 @@ export default function StatusPagesPage() {
                       {statusPageSteps.map((step, index) => (
                         <li key={step} className="relative min-w-0 text-center">
                           <span
-                            className={`mx-auto flex size-6 items-center justify-center rounded-full border-2 text-xs font-semibold ${index > formStep ? 'border-default-300 bg-surface text-default-500' : ''}`}
+                            className={`mx-auto flex size-6 items-center justify-center rounded-full border-2 text-xs font-semibold ${index > formStep ? 'border-border bg-surface text-muted-foreground' : ''}`}
                             style={
                               index < formStep
                                 ? {
@@ -1192,7 +1192,7 @@ export default function StatusPagesPage() {
                             <Radio
                               key={mode}
                               value={mode}
-                              className="group relative flex h-full min-h-28 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-surface-hovered data-[selected=true]:border-accent data-[selected=true]:bg-accent/5"
+                              className="group relative flex h-full min-h-28 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-secondary data-[selected=true]:border-accent data-[selected=true]:bg-accent/5"
                             >
                               <Radio.Control className="absolute right-3 top-3">
                                 <Radio.Indicator />
@@ -1231,7 +1231,7 @@ export default function StatusPagesPage() {
                                 <Radio
                                   key={mode}
                                   value={mode}
-                                  className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-surface-hovered data-[selected=true]:border-accent data-[selected=true]:bg-accent/5"
+                                  className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-secondary data-[selected=true]:border-accent data-[selected=true]:bg-accent/5"
                                 >
                                   <Radio.Control className="absolute right-3 top-3">
                                     <Radio.Indicator />
@@ -1312,7 +1312,7 @@ export default function StatusPagesPage() {
                                 variant="secondary"
                                 className="w-full gap-0 bg-surface transition-colors data-[selected=true]:bg-accent/5"
                               >
-                                <Checkbox.Content className="flex w-full min-w-0 items-start justify-start gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hovered">
+                                <Checkbox.Content className="flex w-full min-w-0 items-start justify-start gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary">
                                   <Checkbox.Control className="mt-0.5">
                                     <Checkbox.Indicator />
                                   </Checkbox.Control>
@@ -1425,7 +1425,7 @@ export default function StatusPagesPage() {
                                       variant="secondary"
                                       className="w-full bg-surface"
                                     >
-                                      <Checkbox.Content className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left hover:bg-surface-hovered">
+                                      <Checkbox.Content className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left hover:bg-secondary">
                                         <Checkbox.Control>
                                           <Checkbox.Indicator />
                                         </Checkbox.Control>
@@ -1986,7 +1986,7 @@ export default function StatusPagesPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>
@@ -2047,7 +2047,7 @@ export default function StatusPagesPage() {
                         onChange={(value) => setShareOrgId(String(value))}
                       >
                         <Select.Trigger
-                          className={`${heroFieldClassName} flex-1 bg-surface-secondary`}
+                          className={`${fieldInputClassName} flex-1 bg-surface-secondary`}
                         >
                           <Select.Value />
                           <Select.Indicator />

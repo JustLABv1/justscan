@@ -31,7 +31,7 @@ import {
   Table,
   useOverlayState,
   type SortDescriptor,
-} from '@heroui/react';
+} from '@/components/ui';
 import { Delete01Icon, PlusSignIcon, UserAdd01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -338,7 +338,7 @@ export default function OrgsPage() {
         loading={loading}
         loadingFallback={
           <div className="flex justify-center items-center h-48" role="status">
-            <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
+            <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-primary animate-spin" />
             <span className="sr-only">Loading organizations</span>
           </div>
         }

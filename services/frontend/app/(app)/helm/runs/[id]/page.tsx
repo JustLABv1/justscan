@@ -23,7 +23,7 @@ import {
   Label,
   Spinner,
   Table,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowLeft01Icon,
   CopyLinkIcon,

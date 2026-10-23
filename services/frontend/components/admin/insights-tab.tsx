@@ -28,7 +28,7 @@ import {
   SearchField,
   Select,
   Table,
-} from '@heroui/react';
+} from '@/components/ui';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 

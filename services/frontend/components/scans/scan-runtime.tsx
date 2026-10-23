@@ -13,7 +13,7 @@ import {
   ProgressBar,
   ScrollShadow,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Clock01Icon,
   CloudUploadIcon,

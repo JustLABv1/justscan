@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, ListBox, Select } from '@heroui/react';
+import { Button, ListBox, Select } from '@/components/ui';
 
 type OrganizationOption = {
   id: string;

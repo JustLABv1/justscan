@@ -24,7 +24,7 @@ import {
   Table,
   type SortDescriptor,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import { Download01Icon, GitBranchIcon, PackageIcon, ShareKnowledgeIcon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 

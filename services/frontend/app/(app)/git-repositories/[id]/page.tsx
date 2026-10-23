@@ -17,7 +17,7 @@ import {
   Spinner,
   TextArea,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Cancel01Icon,
   Clock01Icon,
@@ -1645,7 +1645,7 @@ export default function GitRepositoryDetailPage() {
                   return (
                     <div
                       key={image.id}
-                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 border-b border-divider/70 px-4 py-3 last:border-b-0 transition-colors hover:bg-surface-hovered"
+                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 border-b border-divider/70 px-4 py-3 last:border-b-0 transition-colors hover:bg-secondary"
                     >
                       <Checkbox
                         aria-label={`Select ${image.full_ref}`}

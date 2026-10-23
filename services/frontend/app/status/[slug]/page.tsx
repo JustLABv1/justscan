@@ -33,7 +33,7 @@ import {
   Table,
   Tooltip,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowRight01Icon,
   Cancel01Icon,
@@ -691,7 +691,7 @@ function ScanTimeline({
                       onBlur={() => setHoveredId(null)}
                       onMouseEnter={() => setHoveredId(scan.scan_id)}
                       onMouseLeave={() => setHoveredId(null)}
-                      className="relative flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                      className="relative flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                     >
                       <span
                         className="relative flex size-4 shrink-0 items-center justify-center rounded-full transition-all duration-200"
@@ -1353,7 +1353,7 @@ export default function PublicStatusPage() {
             <h1 className="text-lg font-semibold text-foreground">
               {needsAuth ? 'Authentication Required' : 'Status Page Unavailable'}
             </h1>
-            <p className="text-sm text-default-500 mt-1.5">{error}</p>
+            <p className="text-sm text-muted-foreground mt-1.5">{error}</p>
           </div>
           {needsAuth && (
             <Link

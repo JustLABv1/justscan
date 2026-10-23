@@ -27,7 +27,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   type Key,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowRight01Icon,
   Clock01Icon,

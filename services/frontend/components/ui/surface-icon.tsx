@@ -6,7 +6,7 @@ export type SurfaceIconSize = 'sm' | 'md' | 'lg';
 export type SurfaceIconVariant = 'default' | 'repository';
 
 const toneClasses: Record<SurfaceIconTone, string> = {
-  default: 'bg-default-100 text-default-600 dark:bg-default-200/10 dark:text-default-400',
+  default: 'bg-secondary text-foreground dark:bg-secondary/10 dark:text-muted-foreground',
   accent: 'bg-accent/10 text-accent',
   success: 'bg-success/10 text-success',
   warning: 'bg-warning/10 text-warning',

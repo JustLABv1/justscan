@@ -166,7 +166,7 @@ function HelmGroupContent() {
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
       <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-        <span className="size-4 rounded-full border-2 border-accent-400/30 border-t-accent-400 animate-spin" />
+        <span className="size-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
         Loading helm chart scan…
       </div>
     </div>
@@ -341,7 +341,7 @@ function HelmGroupContent() {
                 key={scan.id}
                 // @ts-expect-error — href only passed to Link
                 href={isLinkable ? href : undefined}
-                className={`flex flex-col sm:grid items-center px-4 py-3 gap-2 transition-colors ${isLinkable ? 'hover:bg-accent-500/5 cursor-pointer group' : ''}`}
+                className={`flex flex-col sm:grid items-center px-4 py-3 gap-2 transition-colors ${isLinkable ? 'hover:bg-primary/5 cursor-pointer group' : ''}`}
                 style={{
                   gridTemplateColumns: '1fr 120px 1fr 60px 60px 60px 60px 110px',
                   borderBottom: i < scans.length - 1 ? '1px solid var(--border-subtle)' : 'none',
@@ -396,7 +396,7 @@ export default function SharedHelmGroupPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
-        <span className="size-5 rounded-full border-2 border-accent-400/30 border-t-accent-400 animate-spin" />
+        <span className="size-5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
       </div>
     }>
       <HelmGroupContent />

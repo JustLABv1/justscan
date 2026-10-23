@@ -11,7 +11,7 @@ import { useToast } from '@/components/toast';
 import { ArtifactSummary, listScans, Scan } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Checkbox, Chip, Pagination, Table } from '@heroui/react';
+import { Button, Checkbox, Chip, Pagination, Table } from '@/components/ui';
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,

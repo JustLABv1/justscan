@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert } from '@heroui/react';
+import { Alert } from '@/components/ui';
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';

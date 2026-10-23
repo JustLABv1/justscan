@@ -13,7 +13,7 @@ import {
   Table,
   TextArea,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Delete01Icon,
   GitBranchIcon,
@@ -341,7 +341,7 @@ export default function GitRepositoriesPage() {
           <Table.ScrollContainer>
             <Table.Content aria-label="Git repositories" className="md:min-w-[720px]">
               <Table.Header>
-                <Table.Column>Repository</Table.Column>
+                <Table.Column isRowHeader>Repository</Table.Column>
                 <Table.Column className="hidden md:table-cell">Ref</Table.Column>
                 <Table.Column className="hidden md:table-cell">Schedule</Table.Column>
                 <Table.Column className="hidden md:table-cell">Last run</Table.Column>

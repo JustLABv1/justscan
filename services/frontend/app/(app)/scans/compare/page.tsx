@@ -1,16 +1,16 @@
 'use client';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { compareScans, listScans, Scan, ScanComparison, Vulnerability } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Button, Card, ListBox, Select, Table } from '@heroui/react';
+import { Button, Card, ListBox, Select, Table } from '@/components/ui';
 import { ArrowLeft01Icon } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 
 function SevBadge({ sev }: { sev: string }) {
   const cfg: Record<string, { color: string; bg: string }> = {
@@ -206,7 +206,7 @@ function ComparePageInner() {
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           {scansLoading ? (
             <div className="flex-1 flex items-center justify-center py-4">
-              <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+              <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
             </div>
           ) : (
             <>
@@ -339,7 +339,7 @@ export default function ComparePage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center h-64">
-          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-accent-500 animate-spin" />
+          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-primary animate-spin" />
         </div>
       }
     >

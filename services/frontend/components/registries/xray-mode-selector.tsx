@@ -1,4 +1,4 @@
-import { Description, Label, Radio, RadioGroup } from '@heroui/react';
+import { Description, Label, Radio, RadioGroup } from '@/components/ui';
 
 import type { XrayMode } from '@/lib/api/types/registries';
 
@@ -8,7 +8,7 @@ interface XrayModeSelectorProps {
 }
 
 const radioCardClassName =
-  'group min-h-32 items-start rounded-xl border border-surface-border !bg-[var(--field-background)] p-4 shadow-[var(--field-shadow)] transition-colors duration-150 hover:bg-surface-hovered data-[selected=true]:border-accent data-[selected=true]:bg-accent/10';
+  'group min-h-32 items-start rounded-xl border border-border !bg-[var(--field-background)] p-4 shadow-[var(--field-shadow)] transition-colors duration-150 hover:bg-secondary data-[selected=true]:border-accent data-[selected=true]:bg-accent/10';
 
 export function XrayModeSelector({ value, onChange }: XrayModeSelectorProps) {
   return (

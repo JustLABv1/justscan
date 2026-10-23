@@ -1,4 +1,4 @@
-import { Breadcrumbs, Typography } from '@heroui/react';
+import { Breadcrumbs, Typography } from '@/components/ui';
 import type { ReactNode } from 'react';
 
 import { SurfaceIcon } from '@/components/ui/surface-icon';
@@ -10,7 +10,7 @@ export type BreadcrumbItem = {
 
 export interface PageTitleProps {
   title: string;
-  /** A compact status element, for example a HeroUI Chip. */
+  /** A compact status element, for example a status Chip. */
   status?: ReactNode;
   icon?: ReactNode;
   description?: string;

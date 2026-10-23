@@ -3,7 +3,7 @@ import { AuthCard } from '@/components/auth-card';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { getOIDCAvailability, register } from '@/lib/api';
-import { Button, Form } from '@heroui/react';
+import { Button, Form } from '@/components/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -98,7 +98,7 @@ export default function RegisterPage() {
               value={password}
             />
             <Button className="auth-card-submit" fullWidth isPending={loading} type="submit">
-              {({ isPending }) => (isPending ? 'Creating Account…' : 'Create Account')}
+              {loading ? 'Creating Account…' : 'Create Account'}
             </Button>
           </Form>
         </>

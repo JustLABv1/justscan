@@ -1,5 +1,5 @@
 import type { Org, OrgPolicy } from '@/lib/api';
-import { Button, Card } from '@heroui/react';
+import { Button, Card } from '@/components/ui';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon } from 'hugeicons-react';
 
 import { RulePill } from './shared';

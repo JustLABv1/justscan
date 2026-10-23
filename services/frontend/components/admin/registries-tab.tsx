@@ -14,7 +14,7 @@ import {
 } from '@/lib/api/admin';
 import type { Registry, RegistryWithHealth, ScanProvider, XrayMode } from '@/lib/api/types/registries';
 import { deferEffect } from '@/lib/defer-effect';
-import { Button, Card, Chip, Input, ListBox, Modal, SearchField, Select, Table, useOverlayState } from '@heroui/react';
+import { Button, Card, Chip, Input, ListBox, Modal, SearchField, Select, Table, useOverlayState } from '@/components/ui';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 

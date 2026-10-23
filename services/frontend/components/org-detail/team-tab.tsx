@@ -9,7 +9,7 @@ import {
   Select,
   Table,
   type SortDescriptor,
-} from '@heroui/react';
+} from '@/components/ui';
 import { Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useMemo, useState } from 'react';
 
@@ -155,7 +155,7 @@ export function OrgTeamTab({
         <div>
           {membersLoading ? (
             <div className="flex justify-center py-8">
-              <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+              <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
             </div>
           ) : members.length === 0 && invites.length === 0 ? (
             <div className="px-6 py-8 text-sm text-zinc-500 text-center">
@@ -258,7 +258,7 @@ export function OrgTeamTab({
                                     </Select.Popover>
                                   </Select>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-accent-500/10 text-accent border-accent-500/20">
+                                  <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-primary/10 text-accent border-primary/20">
                                     {member.role}
                                   </span>
                                 )}

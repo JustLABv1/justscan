@@ -1,5 +1,5 @@
 'use client';
-import { Button, Card, Chip } from '@heroui/react';
+import { Button, Card, Chip } from '@/components/ui';
 import React from 'react';
 
 import { SurfaceIcon } from '@/components/ui/surface-icon';

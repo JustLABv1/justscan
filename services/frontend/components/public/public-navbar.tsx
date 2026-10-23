@@ -1,7 +1,7 @@
 'use client';
 
 import { Logo } from '@/components/logo';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 import { Moon02Icon, PackageIcon, Sun01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { ReactNode } from 'react';

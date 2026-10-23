@@ -5,7 +5,7 @@ import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { StatCard } from '@/components/ui/stat-card';
 import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import {
   adminCreateAIProvider,
   adminDeleteAIProvider,
@@ -20,11 +20,11 @@ import {
   type AISupportedProvider,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Button, Card, Chip, Label, ListBox, Modal, SearchField, Select, Switch, Table, useOverlayState } from '@heroui/react';
+import { Button, Card, Chip, Label, ListBox, Modal, SearchField, Select, Switch, Table, useOverlayState } from '@/components/ui';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Rocket01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 const PAGE_SIZE = 10;
 
 type ProviderFormState = {

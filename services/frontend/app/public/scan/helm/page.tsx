@@ -38,7 +38,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   type Key,
-} from '@heroui/react';
+} from '@/components/ui';
 import { ArrowRight01Icon, IrisScanIcon, LinkSquare02Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
@@ -682,7 +682,7 @@ export default function PublicHelmScanPage() {
                           </Checkbox.Content>
                         </Checkbox>
                       </Table.Column>
-                      <Table.Column className="w-[62%] min-w-[440px]">Image Reference</Table.Column>
+                      <Table.Column isRowHeader className="w-[62%] min-w-[440px]">Image Reference</Table.Column>
                       <Table.Column className="w-[38%] min-w-[320px]">Parsed / Source</Table.Column>
                     </Table.Header>
                     <Table.Body>

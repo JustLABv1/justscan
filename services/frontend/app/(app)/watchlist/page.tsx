@@ -7,7 +7,7 @@ import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { StatusAlert } from '@/components/ui/form-alert';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import {
   filterDisclosureBodyClassName,
   FilterDisclosureTrigger,
@@ -67,7 +67,7 @@ import {
   Table,
   TextArea,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   BiometricAccessIcon,
   Clock01Icon,
@@ -82,7 +82,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 const TIMEZONE_OPTIONS =
   typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : ['UTC'];
 
@@ -1488,7 +1488,7 @@ export default function WatchlistPage() {
                       default to latest.
                     </p>
                   </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-surface-border bg-surface-secondary px-3 py-3">
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-surface-secondary px-3 py-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">Import a file</p>
                       <p className="truncate text-xs text-muted">
@@ -1640,7 +1640,7 @@ export default function WatchlistPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

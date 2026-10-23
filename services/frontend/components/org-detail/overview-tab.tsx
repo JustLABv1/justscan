@@ -1,5 +1,5 @@
 import { OrgRiskScore, TrendPoint } from '@/lib/api';
-import { Card, Chip, Link } from '@heroui/react';
+import { Card, Chip, Link } from '@/components/ui';
 
 import { StatCard } from '@/components/ui/stat-card';
 

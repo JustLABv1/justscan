@@ -54,7 +54,7 @@ import {
   WatchlistItem,
 } from '@/lib/api';
 import { getWatchlistPolicyAttentionItems } from '@/lib/watchlist-posture';
-import { Button, Card, Chip, ProgressBar, Separator, useOverlayState } from '@heroui/react';
+import { Button, Card, Chip, ProgressBar, Separator, useOverlayState } from '@/components/ui';
 import {
   ArrowRight01Icon,
   ChartIcon,

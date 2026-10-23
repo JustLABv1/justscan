@@ -1,7 +1,7 @@
 'use client';
 
 import { Logo } from '@/components/logo';
-import { Link } from '@heroui/react';
+import { Link } from '@/components/ui';
 import { motion } from 'motion/react';
 
 export function MaintenancePageClient({ message }: { message: string }) {

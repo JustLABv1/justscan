@@ -1,6 +1,6 @@
 'use client';
 
-import { Accordion } from '@heroui/react';
+import { Accordion } from '@/components/ui';
 import { ArrowDown01Icon } from 'hugeicons-react';
 
 const FAQ_ITEMS = [

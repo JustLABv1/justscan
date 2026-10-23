@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { useWorkScope } from '@/hooks/use-work-scope';
-import type { Key } from '@heroui/react';
+import type { Key } from '@/components/ui';
 import {
   createHelmScans,
   createShare,
@@ -54,7 +54,7 @@ import {
   Table,
   TextField,
   type SortDescriptor,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowLeft01Icon,
   CopyLinkIcon,

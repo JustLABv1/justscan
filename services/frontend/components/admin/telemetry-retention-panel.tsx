@@ -6,7 +6,7 @@ import {
   updateAPILogRetention,
   updateXRayLogRetention,
 } from '@/lib/api/admin';
-import { Button, Card, Input } from '@heroui/react';
+import { Button, Card, Input } from '@/components/ui';
 import { useEffect, useState } from 'react';
 
 function RetentionRow({

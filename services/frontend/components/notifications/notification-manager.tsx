@@ -3,7 +3,7 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { heroSelectTriggerClassName, heroTextAreaClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName, fieldTextAreaClassName } from '@/components/ui/form-styles';
 import {
   conditionFieldLabels,
   conditionFieldOptions,
@@ -58,7 +58,7 @@ import {
   Table,
   TextArea,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Add01Icon,
   Delete01Icon,
@@ -956,7 +956,7 @@ export function NotificationManager({
                       }
                       variant="secondary"
                     >
-                      <Select.Trigger className={heroSelectTriggerClassName}>
+                      <Select.Trigger className={fieldSelectTriggerClassName}>
                         <Select.Value />
                         <Select.Indicator />
                       </Select.Trigger>
@@ -1006,7 +1006,7 @@ export function NotificationManager({
                       />
                       <TextArea
                         aria-label="Headers"
-                        className={heroTextAreaClassName}
+                        className={fieldTextAreaClassName}
                         rows={4}
                         variant="secondary"
                         value={channelForm.headers}
@@ -1215,7 +1215,7 @@ export function NotificationManager({
                       }
                       variant="secondary"
                     >
-                      <Select.Trigger className={heroSelectTriggerClassName}>
+                      <Select.Trigger className={fieldSelectTriggerClassName}>
                         <span
                           className={
                             ruleForm.channel_ids.length > 0 ? 'truncate' : 'truncate text-zinc-500'
@@ -1256,7 +1256,7 @@ export function NotificationManager({
                       }
                       variant="secondary"
                     >
-                      <Select.Trigger className={heroSelectTriggerClassName}>
+                      <Select.Trigger className={fieldSelectTriggerClassName}>
                         <span
                           className={
                             ruleForm.event_types.length > 0 ? 'truncate' : 'truncate text-zinc-500'
@@ -1296,7 +1296,7 @@ export function NotificationManager({
                       }
                       variant="secondary"
                     >
-                      <Select.Trigger className={heroSelectTriggerClassName}>
+                      <Select.Trigger className={fieldSelectTriggerClassName}>
                         <span className="truncate">
                           {deliveryModeLabels[ruleForm.delivery_mode]}
                         </span>
@@ -1339,7 +1339,7 @@ export function NotificationManager({
                     }
                     variant="secondary"
                   >
-                    <Select.Trigger className={heroSelectTriggerClassName}>
+                    <Select.Trigger className={fieldSelectTriggerClassName}>
                       <span className="truncate">{groupOpLabels[ruleForm.op]}</span>
                       <Select.Indicator />
                     </Select.Trigger>
@@ -1394,7 +1394,7 @@ export function NotificationManager({
                             }
                             variant="primary"
                           >
-                            <Select.Trigger className={heroSelectTriggerClassName}>
+                            <Select.Trigger className={fieldSelectTriggerClassName}>
                               <span className="truncate">
                                 {(conditionFieldNames[condition.field] ?? condition.field) ||
                                   'Select field'}
@@ -1435,7 +1435,7 @@ export function NotificationManager({
                             }
                             variant="primary"
                           >
-                            <Select.Trigger className={heroSelectTriggerClassName}>
+                            <Select.Trigger className={fieldSelectTriggerClassName}>
                               <span className="truncate">
                                 {(operatorNames[condition.operator] ?? condition.operator) ||
                                   'Select operator'}

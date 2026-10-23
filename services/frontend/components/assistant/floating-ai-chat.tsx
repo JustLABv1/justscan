@@ -3,7 +3,7 @@
 import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
 import { AssistantExperience } from '@/components/assistant/assistant-experience';
 import { getAISettings } from '@/lib/api/ai';
-import { Button, Modal, Tooltip, useOverlayState } from '@heroui/react';
+import { Button, Modal, Tooltip, useOverlayState } from '@/components/ui';
 import { Cancel01Icon } from 'hugeicons-react';
 import { useEffect, useState } from 'react';
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { PublicShell } from '@/components/public/public-shell';
-import { Button, Card, Chip } from '@heroui/react';
+import { Button, Card, Chip } from '@/components/ui';
 import Link from 'next/link';
 
 export function MaintenanceView({ message }: { message: string }) {

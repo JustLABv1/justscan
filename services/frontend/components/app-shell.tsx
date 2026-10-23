@@ -30,7 +30,7 @@ import {
   Separator,
   Surface,
   Tooltip,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   AiContentGenerator01Icon,
   Activity01Icon,

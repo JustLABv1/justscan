@@ -1,5 +1,5 @@
 import { getScanFailurePresentation } from '@/lib/scan-failure';
-import { Alert, Disclosure } from '@heroui/react';
+import { Alert, Disclosure } from '@/components/ui';
 
 type ScanFailureAlertProps = {
   errorMessage?: string;

@@ -3,7 +3,7 @@
 import { LandingButtonLink } from '@/components/landing/landing-controls';
 import { LandingFaq } from '@/components/landing/landing-faq';
 import { LandingReveal } from '@/components/landing/landing-motion';
-import { Card, Chip, Separator, Surface } from '@heroui/react';
+import { Card, Chip, Separator, Surface } from '@/components/ui';
 import {
   ArrowRight01Icon,
   CheckmarkCircle02Icon,

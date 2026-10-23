@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/badges';
 import { FormAlert, StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
 import { PageTitle } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
@@ -95,7 +95,7 @@ import {
   Alert,
   buttonVariants,
   Button,
-  Calendar,
+  DatePickerCalendar,
   Card,
   Chip,
   DateField,
@@ -114,7 +114,7 @@ import {
   TextArea,
   Tooltip,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import type { CalendarDate } from '@internationalized/date';
 import { parseDate } from '@internationalized/date';
 import {
@@ -148,7 +148,7 @@ import { ScanningAnimation, ScanStepTimeline } from '../../../../components/scan
 import { isAbortError } from '@/lib/utils';
 
 const inputCls = nativeFieldClassName;
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 
 type ScanTab = 'vulns' | 'sbom' | 'details' | 'timeline' | 'compliance';
 type ActiveVulnerabilitySeverityFilter = VulnerabilityViewSettings['severity'] | 'CRITICAL,HIGH';
@@ -2205,7 +2205,7 @@ function ScanDetailContent() {
         variant="primary"
       >
         {reScanning ? (
-          <span className="size-3.5 border-2 border-accent-400/30 border-t-accent-400 rounded-full animate-spin" />
+          <span className="size-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
         ) : (
           <Refresh01Icon size={15} />
         )}
@@ -3470,39 +3470,7 @@ function ScanDetailContent() {
                                                         </DateField.Suffix>
                                                       </DateField.Group>
                                                       <DatePicker.Popover>
-                                                        <Calendar aria-label="Expiry date">
-                                                          <Calendar.Header>
-                                                            <Calendar.YearPickerTrigger>
-                                                              <Calendar.YearPickerTriggerHeading />
-                                                              <Calendar.YearPickerTriggerIndicator />
-                                                            </Calendar.YearPickerTrigger>
-                                                            <Calendar.NavButton slot="previous" />
-                                                            <Calendar.NavButton slot="next" />
-                                                          </Calendar.Header>
-                                                          <Calendar.Grid>
-                                                            <Calendar.GridHeader>
-                                                              {(day: any) => (
-                                                                <Calendar.HeaderCell>
-                                                                  {day}
-                                                                </Calendar.HeaderCell>
-                                                              )}
-                                                            </Calendar.GridHeader>
-                                                            <Calendar.GridBody>
-                                                              {(date: any) => (
-                                                                <Calendar.Cell date={date} />
-                                                              )}
-                                                            </Calendar.GridBody>
-                                                          </Calendar.Grid>
-                                                          <Calendar.YearPickerGrid>
-                                                            <Calendar.YearPickerGridBody>
-                                                              {({ year }: any) => (
-                                                                <Calendar.YearPickerCell
-                                                                  year={year}
-                                                                />
-                                                              )}
-                                                            </Calendar.YearPickerGridBody>
-                                                          </Calendar.YearPickerGrid>
-                                                        </Calendar>
+                                                        <DatePickerCalendar aria-label="Expiry date" />
                                                       </DatePicker.Popover>
                                                     </DatePicker>
                                                     <Button
@@ -4340,7 +4308,7 @@ function ScanDetailContent() {
                   </div>
                   {scanOrgGrantsLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
                     </div>
                   ) : scanOrgGrants.length === 0 ? (
                     <p className="text-sm text-zinc-500">No organization grants yet.</p>

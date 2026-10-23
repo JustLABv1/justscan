@@ -45,7 +45,7 @@ import {
   Select,
   Skeleton,
   Spinner,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowLeft01Icon,
   CheckmarkCircle02Icon,

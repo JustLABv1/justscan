@@ -4,7 +4,7 @@ import { OwnershipBadge } from '@/components/ui/badges';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { FormAlert } from '@/components/ui/form-alert';
 import type { ResourceShare, Suppression } from '@/lib/api';
-import { Button, Card, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { Button, Card, ListBox, Modal, Select, useOverlayState } from '@/components/ui';
 import { Delete01Icon } from 'hugeicons-react';
 
 type OrgOption = {
@@ -95,7 +95,7 @@ export function ManageSuppressionAccessModal({
                 </div>
                 {loading ? (
                   <div className="flex justify-center py-6">
-                    <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                    <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
                   </div>
                 ) : shares.length === 0 ? (
                   <p className="text-sm text-zinc-500">No organization grants yet.</p>

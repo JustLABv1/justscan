@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import type { ImageOverview } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Chip, Table } from '@heroui/react';
+import { Chip, Table } from '@/components/ui';
 import { ArrowRight01Icon, Delete01Icon, Shield01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';

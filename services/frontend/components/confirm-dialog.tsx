@@ -1,5 +1,5 @@
 'use client';
-import { Button, Modal, useOverlayState } from '@heroui/react';
+import { Button, Modal, useOverlayState } from '@/components/ui';
 import { AlertCircleIcon } from 'hugeicons-react';
 import { useRef, useState } from 'react';
 
@@ -64,7 +64,9 @@ function ConfirmDialogUI({
                   <AlertCircleIcon size={22} color={iconColor} />
                 </div>
                 <div className="space-y-1.5">
-                  <h3 className="text-base font-semibold text-zinc-900 dark:text-white">{title}</h3>
+                  <Modal.Heading className="text-base font-semibold text-zinc-900 dark:text-white">
+                    {title}
+                  </Modal.Heading>
                   <p className="text-sm text-zinc-500 leading-relaxed">{message}</p>
                 </div>
               </div>

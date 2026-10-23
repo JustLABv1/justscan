@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 
-import { Button, Card, Chip, Label, ProgressBar, Typography } from '@heroui/react';
+import { Button, Card, Chip, Label, ProgressBar, Typography } from '@/components/ui';
 import {
   AiContentGenerator01Icon,
   Building04Icon,

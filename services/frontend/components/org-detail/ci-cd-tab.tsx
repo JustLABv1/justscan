@@ -10,7 +10,7 @@ import {
 } from '@/lib/api';
 import { getApiBase } from '@/lib/api/base';
 import { deferEffect } from '@/lib/defer-effect';
-import { Alert, Button, ButtonGroup, Card, Chip, Label, ListBox, Select } from '@heroui/react';
+import { Alert, Button, ButtonGroup, Card, Chip, Label, ListBox, Select } from '@/components/ui';
 import { Copy01Icon, Download01Icon, Key01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -170,8 +170,8 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
         <Card.Header>
           <Card.Title>Set up the JustScan CLI</Card.Title>
           <Card.Description>
-            Sign in with your JustScan account for local work, or create a least-privilege token
-            for CI/CD. JustScan does the scanning; the CLI only talks to this instance.
+            Sign in with your JustScan account for local work, or create a least-privilege token for
+            CI/CD. JustScan does the scanning; the CLI only talks to this instance.
           </Card.Description>
         </Card.Header>
         <Card.Content className="space-y-8">
@@ -189,32 +189,20 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
               </div>
             </div>
             <ButtonGroup size="sm">
-              <Button
-                variant="primary"
-                render={(props: any) => (
-                  <a
-                    {...props}
-                    href="https://github.com/JustLABv1/justscan/releases/latest"
-                    target="_blank"
-                    rel="noreferrer"
-                  />
-                )}
-              >
-                <Download01Icon size={15} />
-                Download CLI
+              <Button variant="primary" asChild>
+                <a
+                  href="https://github.com/JustLABv1/justscan/releases/latest"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Download01Icon size={15} />
+                  Download CLI
+                </a>
               </Button>
-              <Button
-                variant="secondary"
-                render={(props: any) => (
-                  <a
-                    {...props}
-                    href="/docs/integrations/cli"
-                    target="_blank"
-                    rel="noreferrer"
-                  />
-                )}
-              >
-                CLI guide
+              <Button variant="secondary" asChild>
+                <a href="/docs/integrations/cli" target="_blank" rel="noreferrer">
+                  CLI guide
+                </a>
               </Button>
             </ButtonGroup>
           </section>
@@ -319,7 +307,9 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                   ) : null}
                 </div>
 
-                {tokenError ? <FormAlert description={tokenError} title="Token creation failed" /> : null}
+                {tokenError ? (
+                  <FormAlert description={tokenError} title="Token creation failed" />
+                ) : null}
                 {token ? (
                   <>
                     <Alert status="warning" className="border-warning/40 bg-warning/15">
@@ -327,8 +317,8 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                       <Alert.Content>
                         <Alert.Title>Copy this token now</Alert.Title>
                         <Alert.Description>
-                          It is shown only once. Store it in a secret manager or CI secret, never
-                          in a profile or source file.
+                          It is shown only once. Store it in a secret manager or CI secret, never in
+                          a profile or source file.
                         </Alert.Description>
                       </Alert.Content>
                     </Alert>

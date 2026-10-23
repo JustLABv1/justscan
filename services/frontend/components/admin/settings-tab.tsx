@@ -9,7 +9,7 @@ import {
   updateRateLimit,
   updateRegisterRateLimit,
 } from '@/lib/api/admin';
-import { Button, Card, Input, Link, Modal, Switch, TextArea, useOverlayState } from '@heroui/react';
+import { Button, Card, Input, Link, Modal, Switch, TextArea, useOverlayState } from '@/components/ui';
 import { useEffect, useState } from 'react';
 
 const DEFAULT_MAINTENANCE_MESSAGE =

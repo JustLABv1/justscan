@@ -1,7 +1,7 @@
 'use client';
 
 import type { Tag } from '@/lib/api';
-import { Chip } from '@heroui/react';
+import { Chip } from '@/components/ui';
 
 export function ScanTagBadgeList({
   emptyLabel = 'No labels',

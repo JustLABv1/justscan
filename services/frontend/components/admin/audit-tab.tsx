@@ -12,7 +12,7 @@ import {
   Pagination,
   SearchField,
   Table,
-} from '@heroui/react';
+} from '@/components/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const PAGE_SIZE = 20;

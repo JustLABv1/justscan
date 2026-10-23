@@ -13,7 +13,7 @@ import {
   setToken,
   setUser,
 } from '@/lib/api';
-import { Button, Checkbox, Form } from '@heroui/react';
+import { Button, Checkbox, Form } from '@/components/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -137,7 +137,7 @@ export default function LoginPage() {
             </Checkbox.Content>
           </Checkbox>
           <Button className="auth-card-submit" fullWidth isPending={loading} type="submit">
-            {({ isPending }) => (isPending ? 'Signing In…' : 'Sign In')}
+            {loading ? 'Signing In…' : 'Sign In'}
           </Button>
         </Form>
       ) : null}

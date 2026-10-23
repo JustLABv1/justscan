@@ -7,7 +7,7 @@ import { getScannerHealth } from '@/lib/api/dashboard';
 import type { ScannerHealth } from '@/lib/api/types/dashboard';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate } from '@/lib/time';
-import { Button, Card, Chip } from '@heroui/react';
+import { Button, Card, Chip } from '@/components/ui';
 import { useCallback, useEffect, useState } from 'react';
 
 function formatDbAge(hours?: number | null): string {

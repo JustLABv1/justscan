@@ -1,7 +1,7 @@
 'use client';
 
 import type { ScanIntelligencePolicyImpactResponse } from '@/lib/api';
-import { Accordion, Alert, Button, Chip, Link as HeroLink } from '@heroui/react';
+import { Accordion, Alert, Button, Chip, Link as UiLink } from '@/components/ui';
 import { Refresh01Icon, ShieldKeyIcon } from 'hugeicons-react';
 
 interface IntelligencePolicyImpactBannerProps {
@@ -172,13 +172,13 @@ export function IntelligencePolicyImpactBanner({
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                     <span>Changed CVEs:</span>
                     {cves.map((cve) => (
-                      <HeroLink
+                      <UiLink
                         key={cve}
                         className="font-mono text-accent underline-offset-2"
                         href={`/vulnkb/${encodeURIComponent(cve)}`}
                       >
                         {cve}
-                      </HeroLink>
+                      </UiLink>
                     ))}
                   </div>
                 ) : null}

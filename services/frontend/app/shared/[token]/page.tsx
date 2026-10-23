@@ -22,7 +22,7 @@ import {
   subscribeToAuth,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Button, Card, ListBox, Select, useOverlayState } from '@heroui/react';
+import { Button, Card, ListBox, Select, useOverlayState } from '@/components/ui';
 import { CpuIcon, FileExportIcon, GitCompareIcon, Refresh01Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -594,7 +594,7 @@ export default function SharedScanPage() {
                   variant="primary"
                 >
                   {reScanning ? (
-                    <span className="size-3.5 border-2 border-accent-400/30 border-t-accent-400 rounded-full animate-spin" />
+                    <span className="size-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                   ) : (
                     <Refresh01Icon size={15} />
                   )}

@@ -1,7 +1,7 @@
 'use client';
 import { listHelmScanRuns } from '@/lib/api';
 import { PageHeader } from '@/components/ui/page-header';
-import { Card, Spinner, buttonVariants } from '@heroui/react';
+import { Card, Spinner, buttonVariants } from '@/components/ui';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';

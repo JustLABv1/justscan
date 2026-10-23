@@ -3,7 +3,7 @@
 import { FormAlert } from '@/components/ui/form-alert';
 import { PageHeader } from '@/components/ui/page-header';
 import { acceptOrgInviteByToken } from '@/lib/api';
-import { Button, Card, buttonVariants } from '@heroui/react';
+import { Button, Card, buttonVariants } from '@/components/ui';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';

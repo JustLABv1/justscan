@@ -4,7 +4,7 @@ import { Logo } from '@/components/logo';
 import { LandingButtonLink, LandingThemeToggle } from '@/components/landing/landing-controls';
 import { LandingGlitchHero } from '@/components/landing/landing-glitch-hero';
 import { LandingHeroIntro, LandingReveal } from '@/components/landing/landing-motion';
-import { Chip, Link, Separator } from '@heroui/react';
+import { Chip, Link, Separator } from '@/components/ui';
 import { ArrowUpRight01Icon } from 'hugeicons-react';
 import NextLink from 'next/link';
 import { getToken } from '@/lib/api';

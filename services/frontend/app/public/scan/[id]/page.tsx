@@ -2,7 +2,7 @@
 import { PublicNavbar } from '@/components/public/public-navbar';
 import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
 import { FormField } from '@/components/ui/form-field';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
@@ -27,7 +27,7 @@ import {
   Select,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowLeft01Icon,
   Bug02Icon,
@@ -419,7 +419,7 @@ export default function PublicScanResultPage() {
     }
   }
 
-  const selectTriggerCls = heroSelectTriggerClassName;
+  const selectTriggerCls = fieldSelectTriggerClassName;
 
   function openVulnerabilityDetails(vulnerability: Vulnerability) {
     setSelectedVulnerability(vulnerability);
@@ -596,7 +596,7 @@ export default function PublicScanResultPage() {
                         variant="primary"
                       >
                         {reScanning ? (
-                          <span className="size-3.5 rounded-full border-2 border-accent-400/30 border-t-accent-400 animate-spin" />
+                          <span className="size-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
                         ) : (
                           <Refresh01Icon size={15} />
                         )}
@@ -1026,7 +1026,7 @@ export default function PublicScanResultPage() {
                                   >
                                     <div className="flex justify-center">
                                       <div
-                                        className="size-6 rounded-full border-2 border-t-accent-500 animate-spin"
+                                        className="size-6 rounded-full border-2 border-t-primary animate-spin"
                                         style={{
                                           borderColor: 'var(--border-subtle)',
                                           borderTopColor: 'var(--accent)',

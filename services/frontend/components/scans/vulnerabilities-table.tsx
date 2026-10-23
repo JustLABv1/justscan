@@ -1,7 +1,7 @@
 'use client';
 
 import type { Vulnerability } from '@/lib/api';
-import { Pagination, Table } from '@heroui/react';
+import { Pagination, Table } from '@/components/ui';
 import type { ReactNode } from 'react';
 
 type VulnerabilitySortKey =

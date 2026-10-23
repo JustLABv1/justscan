@@ -1,6 +1,6 @@
 'use client';
 
-import { Chip } from '@heroui/react';
+import { Chip } from '@/components/ui';
 
 import { useWorkScope } from '@/hooks/use-work-scope';
 import type { OwnerType } from '@/lib/api';

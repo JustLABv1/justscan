@@ -458,15 +458,16 @@ export function BackgroundProcessCenter() {
               ? `Background processes, ${activeCount} active`
               : 'Background processes, no active jobs'
           }
-          className="justify-center rounded-full text-zinc-700 dark:text-zinc-200"
-          isIconOnly
+          className="size-8 justify-center rounded-lg px-0 text-muted-foreground md:w-auto md:gap-2 md:px-2.5"
+          size="sm"
           onPress={() => {
             setIsOpen(true);
             void loadJobs();
           }}
-          variant="tertiary"
+          variant="ghost"
         >
           <Activity01Icon aria-hidden size={17} />
+          <span className="hidden md:inline">Background processes</span>
         </Button>
         {activeCount > 0 ? (
           <Badge color="accent" size="sm">

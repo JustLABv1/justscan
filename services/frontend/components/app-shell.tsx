@@ -43,7 +43,7 @@ import {
   EyeIcon,
   FileExportIcon,
   GridTableIcon,
-	GitBranchIcon,
+  GitBranchIcon,
   Key01Icon,
   LinkSquare02Icon,
   Logout02Icon,
@@ -61,11 +61,14 @@ import {
   Tag01Icon,
 } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
+import { Home, MoreHorizontal, Plus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   type ComponentType,
   type CSSProperties,
+  type ReactNode,
   lazy,
   Suspense,
   useEffect,
@@ -239,28 +242,20 @@ function SidebarNavLink({
   const iconOnly = mode === 'collapsed';
   const isMobile = mode === 'mobile';
   const showCollapsedInviteBadge = href === '/orgs' && iconOnly && inviteCount > 0;
-  const variant = active ? 'secondary' : 'ghost';
 
   return (
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
       aria-label={iconOnly ? itemLabel : undefined}
-      className={buttonVariants({
-        variant,
-        size: 'md',
-        className: iconOnly
-          ? 'group relative h-10 w-full justify-center rounded-xl px-0'
-          : `group relative w-full justify-start gap-3 rounded-xl ${
-              isMobile ? 'h-11 px-3' : 'h-10 overflow-hidden px-3 whitespace-nowrap'
-            }`,
-      })}
+      className={cn(
+        'shell-nav-link group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        iconOnly ? 'justify-center px-0' : 'justify-start',
+        isMobile && 'min-h-11'
+      )}
       onClick={onNavigate}
     >
-      <Icon
-        size={18}
-        className="shrink-0"
-      />
+      <Icon size={18} className="shrink-0" />
       {showCollapsedInviteBadge ? (
         <Badge className="pointer-events-none right-1" color="warning" size="sm" />
       ) : null}
@@ -271,6 +266,23 @@ function SidebarNavLink({
         <InviteCountChip count={inviteCount} className="ml-auto" />
       ) : null}
     </Link>
+  );
+}
+
+function ShellTooltip({
+  label,
+  enabled = true,
+  children,
+}: {
+  label: string;
+  enabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip isDisabled={!enabled} delay={250}>
+      <Tooltip.Trigger className="block min-w-0">{children}</Tooltip.Trigger>
+      <Tooltip.Content placement="right">{label}</Tooltip.Content>
+    </Tooltip>
   );
 }
 
@@ -565,20 +577,36 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     workScope.kind === 'org' ? (workScope.orgName ?? 'Organization') : 'Personal workspace';
   const workspaceTitle = `Workspace: ${scopeLabel}`;
   const workspaceInitial = scopeLabel.trim().charAt(0).toUpperCase() || 'W';
-  const activeWorkspaceColor = workspaceColorFor(
-    workScope.kind,
-    workScope.kind === 'org' ? (workScope.orgName ?? workScope.orgId) : 'personal'
-  );
+  const workspaceAvatarClasses: Record<WorkspaceAvatarColor, string> = {
+    default: 'bg-secondary text-foreground',
+    accent: 'bg-primary/15 text-primary',
+    success: 'bg-success/15 text-success-foreground',
+    warning: 'bg-warning/15 text-warning-foreground',
+    danger: 'bg-destructive/15 text-destructive',
+  };
+  const workspaceAvatarClassName =
+    workspaceAvatarClasses[workspaceColorFor(workScope.kind, scopeLabel)];
   const desktopCollapsed = collapsed;
   const navigationGroups = isAdminRoute
     ? adminNavigationGroups
     : [
         ...navGroups,
         ...(user?.role === 'admin'
-          ? [{ label: 'Admin', items: [{ href: '/admin', label: 'Administration', Icon: Settings01Icon }] }]
+          ? [
+              {
+                label: 'Admin',
+                items: [{ href: '/admin', label: 'Administration', Icon: Settings01Icon }],
+              },
+            ]
           : []),
       ];
-  const contentRailClass = 'px-4 md:px-6';
+  const contentRailClass = 'px-4 md:px-5';
+  const currentSection =
+    navigationGroups
+      .flatMap((group) => group.items.map(({ href, label }) => ({ href, label })))
+      .filter((item) => isActiveRoute(pathname, item.href))
+      .sort((a, b) => b.href.length - a.href.length)[0]?.label ??
+    (isAssistantRoute ? 'Assistant' : pathname.startsWith('/profile') ? 'Profile' : 'Workspace');
 
   function renderWorkspaceMenu() {
     return (
@@ -664,61 +692,68 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
             <LazySearchModal onClose={() => setSearchOpen(false)} />
           </Suspense>
         ) : null}
-          <div id="tour-main-shell" className="flex h-dvh app-bg overflow-hidden">
-            <Surface
-              className={`relative hidden border-r border-border md:flex shrink-0 flex-col overflow-hidden transition-[width] duration-200 ease-out ${
-                desktopCollapsed ? 'w-20' : 'w-72'
-              }`}
-              variant="default"
+        <div
+          id="tour-main-shell"
+          data-collapsed={desktopCollapsed}
+          className="app-shell relative flex h-dvh overflow-hidden"
+        >
+          <Surface
+            aria-label={isAdminRoute ? 'Administration sidebar' : 'Workspace sidebar'}
+            className={cn(
+              'shell-sidebar relative hidden shrink-0 flex-col md:flex',
+              desktopCollapsed ? 'w-16' : 'w-64'
+            )}
+          >
+            <div
+              className={cn(
+                'shell-sidebar-header flex shrink-0 px-4 pt-4 pb-4',
+                desktopCollapsed ? 'flex-col items-center gap-3' : 'items-center gap-2'
+              )}
             >
-              <div
-                className={`flex shrink-0 items-center py-3 ${
-                  desktopCollapsed ? 'justify-center gap-1 px-2' : 'gap-3 px-3'
-                }`}
+              <ShellTooltip
+                label={isAdminRoute ? 'Administration home' : 'Dashboard'}
+                enabled={desktopCollapsed}
               >
                 <Link
                   href={isAdminRoute ? '/admin' : '/dashboard'}
                   aria-label={isAdminRoute ? 'JustScan administration' : 'JustScan dashboard'}
-                  className={`flex min-w-0 items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                    desktopCollapsed ? 'shrink-0' : 'flex-1'
-                  }`}
+                  className="flex min-w-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <Logo size={desktopCollapsed ? 28 : 36} className="shrink-0" />
-                  {!desktopCollapsed ? (
-                    <span className="truncate text-base font-semibold tracking-tight">
+                  <Logo size={32} className="shrink-0" />
+                  {!desktopCollapsed && (
+                    <span className="truncate text-sm font-semibold tracking-tight">
                       {isAdminRoute ? 'Administration' : 'JustScan'}
                     </span>
-                  ) : null}
+                  )}
                 </Link>
-                <Tooltip>
-                  <Tooltip.Trigger>
-                    <Button
-                      isIconOnly
-                      size={desktopCollapsed ? 'sm' : 'md'}
-                      onPress={toggleCollapsed}
-                      variant="tertiary"
-                      aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                    >
-                      {desktopCollapsed ? (
-                        <SidebarRight01Icon size={18} />
-                      ) : (
-                        <SidebarLeft01Icon size={18} />
-                      )}
-                    </Button>
-                  </Tooltip.Trigger>
-                  <Tooltip.Content placement="right">
-                    {desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                  </Tooltip.Content>
-                </Tooltip>
+              </ShellTooltip>
+              <div className={desktopCollapsed ? '' : 'ml-auto'}>
+                <ShellTooltip label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="ghost"
+                    onPress={toggleCollapsed}
+                    aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                    className="size-8 rounded-lg text-muted-foreground"
+                  >
+                    {desktopCollapsed ? (
+                      <SidebarRight01Icon size={17} />
+                    ) : (
+                      <SidebarLeft01Icon size={17} />
+                    )}
+                  </Button>
+                </ShellTooltip>
               </div>
-
-              {isAdminRoute ? (
+            </div>
+            {isAdminRoute && (
+              <ShellTooltip label="System scope: Platform control plane" enabled={desktopCollapsed}>
                 <div
-                  className={`mx-3 mb-3 rounded-xl bg-surface-secondary ${
+                  className={cn(
+                    'mx-3 mb-2 rounded-lg bg-surface-secondary',
                     desktopCollapsed ? 'flex justify-center p-2' : 'px-3 py-2.5'
-                  }`}
+                  )}
                   aria-label="System scope: Platform control plane"
-                  title={desktopCollapsed ? 'System scope: Platform control plane' : undefined}
                 >
                   {desktopCollapsed ? (
                     <Shield01Icon size={18} aria-hidden />
@@ -731,39 +766,66 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </>
                   )}
                 </div>
-              ) : (
-                <div id="tour-workspace-section" className={`shrink-0 ${desktopCollapsed ? 'px-2' : 'px-3 pb-2'}`}>
-                  <Dropdown>
-                  <Dropdown.Trigger
-                    id="tour-workspace-switcher"
-                    aria-label={`${workspaceTitle}${pendingInviteCount > 0 ? `, ${pendingInviteCount} pending organization invite${pendingInviteCount === 1 ? '' : 's'}` : ''}`}
-                    className={`flex w-full items-center rounded-xl bg-surface-secondary p-2 outline-none transition-colors hover:bg-surface-tertiary focus-visible:ring-2 focus-visible:ring-accent ${
-                      desktopCollapsed ? 'justify-center' : 'gap-2.5'
-                    }`}
-                  >
-                    <Badge.Anchor>
-                      <Avatar className="size-7 shrink-0 rounded-lg" color={activeWorkspaceColor} variant="soft">
-                        <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
-                      </Avatar>
-                      {pendingInviteCount > 0 ? <Badge color="warning" size="sm" /> : null}
-                    </Badge.Anchor>
-                    {!desktopCollapsed ? (
-                      <div className="min-w-0 flex-1 text-left">
-                        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">Workspace</p>
-                        <p className="truncate text-sm font-medium">{scopeLabel}</p>
-                      </div>
-                    ) : null}
-                    {!desktopCollapsed ? <ArrowDown01Icon aria-hidden size={14} className="shrink-0 text-muted" /> : null}
-                  </Dropdown.Trigger>
-                  <Dropdown.Popover className="min-w-[240px]" placement="right top">
-                    {renderWorkspaceMenu()}
-                  </Dropdown.Popover>
-                  </Dropdown>
+              </ShellTooltip>
+            )}
+            <div
+              className={cn(
+                'flex shrink-0 gap-2 pb-4',
+                desktopCollapsed ? 'flex-col px-3' : 'items-center px-4'
+              )}
+            >
+              {!isAdminRoute && (
+                <div id="tour-workspace-section" className="shrink-0">
+                  <ShellTooltip label={workspaceTitle}>
+                    <Dropdown>
+                      <Dropdown.Trigger
+                        id="tour-workspace-switcher"
+                        aria-label={`${workspaceTitle}${pendingInviteCount > 0 ? `, ${pendingInviteCount} pending organization invite${pendingInviteCount === 1 ? '' : 's'}` : ''}`}
+                        className="flex size-10 items-center justify-center rounded-full outline-none transition-shadow hover:ring-2 hover:ring-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      >
+                        <Badge.Anchor>
+                          <Avatar className={cn('size-10 rounded-full', workspaceAvatarClassName)}>
+                            <Avatar.Fallback className="text-sm font-semibold">
+                              {workspaceInitial}
+                            </Avatar.Fallback>
+                          </Avatar>
+                          {pendingInviteCount > 0 && <Badge color="warning" size="sm" />}
+                        </Badge.Anchor>
+                      </Dropdown.Trigger>
+                      <Dropdown.Popover className="min-w-[240px]" placement="bottom start">
+                        {renderWorkspaceMenu()}
+                      </Dropdown.Popover>
+                    </Dropdown>
+                  </ShellTooltip>
                 </div>
               )}
-
-              {!isAdminRoute ? (
-                <div className={`shrink-0 ${desktopCollapsed ? 'px-2 pb-2' : 'px-3 pb-3'}`}>
+              <div className="min-w-0 flex-1">
+                <ShellTooltip label="Search · ⌘K" enabled={desktopCollapsed}>
+                  <Button
+                    aria-label="Open command palette"
+                    onPress={() => setSearchOpen(true)}
+                    variant="ghost"
+                    className={cn(
+                      'shell-search h-10 w-full rounded-lg border border-border text-muted-foreground',
+                      desktopCollapsed ? 'px-0' : 'justify-start px-2.5'
+                    )}
+                  >
+                    <Search01Icon aria-hidden size={16} />
+                    {!desktopCollapsed && (
+                      <>
+                        <span className="min-w-0 flex-1 truncate text-left text-sm">Search...</span>
+                        <Kbd className="border-0 bg-transparent p-0 text-xs text-muted-foreground">
+                          <Kbd.Abbr keyValue="command" />
+                          <Kbd.Content>K</Kbd.Content>
+                        </Kbd>
+                      </>
+                    )}
+                  </Button>
+                </ShellTooltip>
+              </div>
+            </div>
+            {!isAdminRoute ? (
+              <div className={`shrink-0 ${desktopCollapsed ? 'px-3 pb-2' : 'px-4 pb-1'}`}>
                 <Tooltip isDisabled={!desktopCollapsed}>
                   <Tooltip.Trigger className="block w-full">
                     <Link
@@ -772,10 +834,12 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       className={buttonVariants({
                         variant: 'primary',
                         size: 'md',
-                        className: desktopCollapsed ? 'size-10 w-full rounded-xl px-0' : 'w-full justify-center rounded-xl',
+                        className: desktopCollapsed
+                          ? 'size-10 w-full rounded-lg px-0'
+                          : 'w-full justify-center rounded-lg px-3 shadow-sm',
                       })}
                     >
-                      <Shield01Icon aria-hidden size={17} />
+                      <Plus aria-hidden className="size-4" />
                       {!desktopCollapsed ? <span>New scan</span> : null}
                     </Link>
                   </Tooltip.Trigger>
@@ -798,103 +862,118 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </Tooltip>
                   </div>
                 ) : null}
-                </div>
-              ) : null}
+              </div>
+            ) : null}
 
-              <nav
-                id="tour-primary-navigation"
-                className={`flex-1 overflow-y-auto overflow-x-hidden pb-3 pt-2 ${desktopCollapsed ? 'px-2' : 'px-3'}`}
-              >
-                {navigationGroups.map(({ label, items }) => (
-                  <div
-                    key={label}
-                    className="mb-2 pb-1 last:mb-0"
-                  >
-                    <div
-                      className="nav-section-label px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-[0.1em] leading-none transition-all duration-200 overflow-hidden text-muted"
-                      style={{
-                        maxHeight: desktopCollapsed ? 0 : 22,
-                        opacity: desktopCollapsed ? 0 : 1,
-                        paddingTop: desktopCollapsed ? 0 : undefined,
-                        paddingBottom: desktopCollapsed ? 0 : undefined,
-                      }}
-                    >
+            <nav
+              id="tour-primary-navigation"
+              aria-label="Primary navigation"
+              className={`flex-1 overflow-y-auto overflow-x-hidden pb-3 pt-2 ${desktopCollapsed ? 'px-3' : 'px-4'}`}
+            >
+              {navigationGroups.map(({ label, items }) => (
+                <div key={label} className={desktopCollapsed ? 'mb-2 last:mb-0' : 'mb-4 last:mb-0'}>
+                  {!desktopCollapsed && (
+                    <div className="px-2.5 pb-2 pt-2 text-xs font-medium text-muted-foreground">
                       {label}
                     </div>
-                    <div className="space-y-0.5">
-                      {items.map(({ href, label: itemLabel, Icon }) => {
-                        const active = isActiveRoute(pathname, href);
+                  )}
+                  <div className="space-y-0.5">
+                    {items.map(({ href, label: itemLabel, Icon }) => {
+                      const active = isActiveRoute(pathname, href);
 
-                        if (desktopCollapsed) {
-                          return (
-                            <div key={href}>
-                              <Tooltip delay={0}>
-                                <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
-                                  <SidebarNavLink
-                                    href={href}
-                                    itemLabel={itemLabel}
-                                    Icon={Icon}
-                                    mode="collapsed"
-                                    active={active}
-                                    inviteCount={pendingInviteCount}
-                                  />
-                                </Tooltip.Trigger>
-                                <Tooltip.Content placement="right">{itemLabel}</Tooltip.Content>
-                              </Tooltip>
-                            </div>
-                          );
-                        }
-
+                      if (desktopCollapsed) {
                         return (
-                          <SidebarNavLink
-                            key={href}
-                            href={href}
-                            itemLabel={itemLabel}
-                            Icon={Icon}
-                            mode="desktop"
-                            active={active}
-                            inviteCount={pendingInviteCount}
-                          />
+                          <div key={href}>
+                            <Tooltip delay={0}>
+                              <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
+                                <SidebarNavLink
+                                  href={href}
+                                  itemLabel={itemLabel}
+                                  Icon={Icon}
+                                  mode="collapsed"
+                                  active={active}
+                                  inviteCount={pendingInviteCount}
+                                />
+                              </Tooltip.Trigger>
+                              <Tooltip.Content placement="right">{itemLabel}</Tooltip.Content>
+                            </Tooltip>
+                          </div>
                         );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </nav>
+                      }
 
-              {isAdminRoute ? (
-                <div className="shrink-0 px-3 pb-3">
+                      return (
+                        <SidebarNavLink
+                          key={href}
+                          href={href}
+                          itemLabel={itemLabel}
+                          Icon={Icon}
+                          mode="desktop"
+                          active={active}
+                          inviteCount={pendingInviteCount}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+
+            {isAdminRoute ? (
+              <div className="shrink-0 px-3 pb-3">
+                <ShellTooltip label="Exit administration" enabled={desktopCollapsed}>
                   <SidebarNavLink
-                  href="/dashboard"
-                  itemLabel="Exit administration"
-                  Icon={DashboardSquare01Icon}
-                  mode={desktopCollapsed ? 'collapsed' : 'desktop'}
+                    href="/dashboard"
+                    itemLabel="Exit administration"
+                    Icon={DashboardSquare01Icon}
+                    mode={desktopCollapsed ? 'collapsed' : 'desktop'}
                     active={false}
                     inviteCount={0}
                   />
-                </div>
-              ) : null}
+                </ShellTooltip>
+              </div>
+            ) : null}
 
-              <div className={`flex shrink-0 items-center gap-2 border-t border-border p-3 ${desktopCollapsed ? 'flex-col' : ''}`}>
+            <div
+              className={cn(
+                'shrink-0 border-t border-border pt-2 pb-3',
+                desktopCollapsed ? 'px-3' : 'px-4'
+              )}
+            >
+              <ShellTooltip
+                label={`Account: ${user?.username ?? user?.email ?? 'User'}`}
+                enabled={desktopCollapsed}
+              >
                 <Dropdown>
                   <Dropdown.Trigger
                     aria-label="Open user menu"
-                    className={`flex min-w-0 flex-1 items-center rounded-xl p-2 outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-accent ${desktopCollapsed ? 'justify-center' : 'gap-2.5'}`}
+                    className={`flex w-full min-w-0 items-center rounded-lg p-2 outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-accent ${desktopCollapsed ? 'justify-center' : 'gap-2.5'}`}
                   >
                     <Avatar variant="soft" color="accent" className="size-7 shrink-0">
                       <Avatar.Fallback>{initials}</Avatar.Fallback>
                     </Avatar>
                     {!desktopCollapsed ? (
-                      <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">
-                        {user?.username ?? user?.email ?? 'User'}
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="block text-[10px] font-medium text-muted-foreground">
+                          Account
+                        </span>
+                        <span className="block truncate text-sm font-medium">
+                          {user?.username ?? user?.email ?? 'User'}
+                        </span>
                       </span>
                     ) : null}
+                    {!desktopCollapsed && (
+                      <MoreHorizontal
+                        aria-hidden
+                        className="size-4 shrink-0 text-muted-foreground"
+                      />
+                    )}
                   </Dropdown.Trigger>
                   <Dropdown.Popover className="min-w-[220px]" placement="right bottom">
                     <Dropdown.Menu
                       onAction={(key) => {
                         if (key === 'settings') router.push('/profile');
-                        if (key === 'documentation') window.open('/docs', '_blank', 'noopener,noreferrer');
+                        if (key === 'documentation')
+                          window.open('/docs', '_blank', 'noopener,noreferrer');
                         if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
                         if (key === 'retake-tour') handleRetakeWorkspaceTour();
                         if (key === 'signout') handleLogout();
@@ -908,7 +987,15 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       </Dropdown.Item>
                       <Dropdown.Item id="theme" textValue={themeToggleTitle}>
                         <div className="flex items-center gap-2">
-                          {mounted ? (isDark ? <Sun01Icon size={14} className="text-muted" /> : <Moon02Icon size={14} className="text-muted" />) : <span aria-hidden className="block size-[14px]" />}
+                          {mounted ? (
+                            isDark ? (
+                              <Sun01Icon size={14} className="text-muted" />
+                            ) : (
+                              <Moon02Icon size={14} className="text-muted" />
+                            )
+                          ) : (
+                            <span aria-hidden className="block size-[14px]" />
+                          )}
                           <Label>{themeToggleTitle}</Label>
                         </div>
                       </Dropdown.Item>
@@ -936,55 +1023,54 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     </Dropdown.Menu>
                   </Dropdown.Popover>
                 </Dropdown>
-              </div>
-            </Surface>
+              </ShellTooltip>
+            </div>
+          </Surface>
 
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <div
-                className={`bg-surface rounded-br-3xl flex min-h-11 items-center gap-2.5 py-1.5 ${contentRailClass}`}
-              >
-                <>
-                  <Button
-                    aria-label="Open navigation menu"
-                    className="rounded-lg md:hidden"
-                    isIconOnly
-                    onPress={() => setMobileNavOpen(true)}
-                    variant="secondary"
-                  >
-                    <Menu01Icon size={16} />
-                  </Button>
-                  <Drawer.Backdrop
-                    className="md:hidden"
-                    isOpen={mobileNavOpen}
-                    onOpenChange={setMobileNavOpen}
-                    variant="blur"
-                  >
-                    <Drawer.Content className="md:hidden" placement="left">
-                      <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col surface-sidebar">
-                        <Drawer.Header
-                          className="flex items-center justify-between p-4"
-                          style={{ borderBottom: '1px solid var(--border-subtle)' }}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Logo size={36} className="shrink-0" />
-                            <div>
-                              <Drawer.Heading
-                                className="text-sm font-semibold"
-                                style={{ color: 'var(--text-primary)' }}
-                              >
-                                {isAdminRoute ? 'Administration' : 'JustScan'}
-                              </Drawer.Heading>
-                              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                                {isAdminRoute ? 'Platform control plane' : 'Scan, watch, and manage'}
-                              </p>
-                            </div>
+          <div className="shell-content flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:my-2 md:mr-2 md:rounded-2xl">
+            <div className={`flex h-14 shrink-0 items-center gap-2.5 ${contentRailClass}`}>
+              <>
+                <Button
+                  aria-label="Open navigation menu"
+                  className="rounded-lg md:hidden"
+                  isIconOnly
+                  onPress={() => setMobileNavOpen(true)}
+                  variant="secondary"
+                >
+                  <Menu01Icon size={16} />
+                </Button>
+                <Drawer.Backdrop
+                  className="md:hidden"
+                  isOpen={mobileNavOpen}
+                  onOpenChange={setMobileNavOpen}
+                  variant="blur"
+                >
+                  <Drawer.Content className="md:hidden" placement="left">
+                    <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col surface-sidebar">
+                      <Drawer.Header
+                        className="flex items-center justify-between p-4"
+                        style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Logo size={36} className="shrink-0" />
+                          <div>
+                            <Drawer.Heading
+                              className="text-sm font-semibold"
+                              style={{ color: 'var(--text-primary)' }}
+                            >
+                              {isAdminRoute ? 'Administration' : 'JustScan'}
+                            </Drawer.Heading>
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                              {isAdminRoute ? 'Platform control plane' : 'Scan, watch, and manage'}
+                            </p>
                           </div>
-                          <Drawer.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
-                        </Drawer.Header>
-                        <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
-                          <div className="space-y-4">
-                            {!isAdminRoute ? (
-                              <Dropdown>
+                        </div>
+                        <Drawer.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                      </Drawer.Header>
+                      <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
+                        <div className="space-y-4">
+                          {!isAdminRoute ? (
+                            <Dropdown>
                               <Dropdown.Trigger
                                 className="w-full flex items-center justify-between rounded-xl p-3 text-sm transition-all duration-150 outline-none text-left"
                                 style={{
@@ -994,14 +1080,12 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                               >
                                 <div className="flex min-w-0 flex-1 items-center gap-2.5">
                                   <Badge.Anchor className="shrink-0">
-                                    <Avatar
-                                      className="size-8 rounded-xl"
-                                      color={activeWorkspaceColor}
-                                      variant="soft"
-                                    >
-                                      <Avatar.Fallback>{workspaceInitial}</Avatar.Fallback>
-                                    </Avatar>
-                                    {pendingInviteCount > 0 ? <Badge color="warning" size="sm" /> : null}
+                                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface-secondary">
+                                      <Building04Icon aria-hidden size={18} />
+                                    </span>
+                                    {pendingInviteCount > 0 ? (
+                                      <Badge color="warning" size="sm" />
+                                    ) : null}
                                   </Badge.Anchor>
                                   <div className="flex flex-col min-w-0 flex-1">
                                     <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
@@ -1020,18 +1104,18 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                               <Dropdown.Popover className="w-[min(80vw,300px)]">
                                 {renderWorkspaceMenu()}
                               </Dropdown.Popover>
-                              </Dropdown>
-                            ) : (
-                              <div className="rounded-xl bg-surface-secondary px-3 py-2.5">
-                                <p className="text-[11px] uppercase tracking-[0.18em] text-muted">
-                                  System scope
-                                </p>
-                                <p className="mt-1 text-sm font-medium">Platform control plane</p>
-                              </div>
-                            )}
+                            </Dropdown>
+                          ) : (
+                            <div className="rounded-xl bg-surface-secondary px-3 py-2.5">
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-muted">
+                                System scope
+                              </p>
+                              <p className="mt-1 text-sm font-medium">Platform control plane</p>
+                            </div>
+                          )}
 
-                            {!isAdminRoute ? (
-                              <Link
+                          {!isAdminRoute ? (
+                            <Link
                               href="/scans/new"
                               className={buttonVariants({
                                 variant: 'primary',
@@ -1040,231 +1124,234 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                               })}
                               onClick={() => setMobileNavOpen(false)}
                             >
-                              <Shield01Icon aria-hidden size={17} />
+                              <Plus aria-hidden className="size-4" />
                               New scan
-                              </Link>
-                            ) : null}
+                            </Link>
+                          ) : null}
 
-                            {!isAdminRoute && aiEnabled ? (
-                              <SidebarNavLink
-                                href="/assistant"
-                                itemLabel="Assistant"
-                                Icon={AiContentGenerator01Icon}
-                                mode="mobile"
-                                active={isActiveRoute(pathname, '/assistant')}
-                                inviteCount={pendingInviteCount}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
-                            ) : null}
+                          {!isAdminRoute && aiEnabled ? (
+                            <SidebarNavLink
+                              href="/assistant"
+                              itemLabel="Assistant"
+                              Icon={AiContentGenerator01Icon}
+                              mode="mobile"
+                              active={isActiveRoute(pathname, '/assistant')}
+                              inviteCount={pendingInviteCount}
+                              onNavigate={() => setMobileNavOpen(false)}
+                            />
+                          ) : null}
 
-                            {!isAdminRoute && pendingInviteCount > 0 && (
-                              <Link
-                                href="/orgs"
-                                className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
-                                onClick={() => setMobileNavOpen(false)}
-                                style={{
-                                  background:
-                                    'color-mix(in oklab, var(--warning) 10%, transparent)',
-                                  border:
-                                    '1px solid color-mix(in oklab, var(--warning) 24%, transparent)',
-                                }}
-                              >
-                                <div>
-                                  <p>Pending invites</p>
-                                  <p className="text-xs font-normal text-zinc-500">
-                                    Review organization access requests
-                                  </p>
-                                </div>
-                                <InviteCountChip count={pendingInviteCount} />
-                              </Link>
-                            )}
-
-                            {navigationGroups.map(({ label, items }) => (
-                              <div key={label} className="space-y-1.5">
-                                <p className="px-2 text-[11px] uppercase tracking-[0.18em] text-muted">
-                                  {label}
-                                </p>
-                                <div className="space-y-1">
-                                  {items.map(({ href, label: itemLabel, Icon }) => {
-                                    return (
-                                      <SidebarNavLink
-                                        key={href}
-                                        href={href}
-                                        itemLabel={itemLabel}
-                                        Icon={Icon}
-                                        mode="mobile"
-                                        active={isActiveRoute(pathname, href)}
-                                        inviteCount={pendingInviteCount}
-                                        onNavigate={() => setMobileNavOpen(false)}
-                                      />
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ))}
-
-                            {isAdminRoute ? (
-                              <SidebarNavLink
-                                href="/dashboard"
-                                itemLabel="Exit administration"
-                                Icon={DashboardSquare01Icon}
-                                mode="mobile"
-                                active={false}
-                                inviteCount={0}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
-                            ) : null}
-                          </div>
-                        </Drawer.Body>
-                        <Drawer.Footer
-                          className="flex flex-col gap-2 p-3"
-                          style={{ borderTop: '1px solid var(--border-subtle)' }}
-                        >
-                          <Dropdown>
-                            <Dropdown.Trigger
-                              className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left"
-                              style={{ background: 'var(--row-hover)' }}
+                          {!isAdminRoute && pendingInviteCount > 0 && (
+                            <Link
+                              href="/orgs"
+                              className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
+                              onClick={() => setMobileNavOpen(false)}
+                              style={{
+                                background: 'color-mix(in oklab, var(--warning) 10%, transparent)',
+                                border:
+                                  '1px solid color-mix(in oklab, var(--warning) 24%, transparent)',
+                              }}
                             >
-                              <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <div
-                                  className="size-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
-                                  style={{
-                                    background:
-                                      'color-mix(in oklab, var(--accent) 12%, transparent)',
-                                    color: 'var(--accent-soft-foreground)',
-                                    border:
-                                      '1px solid color-mix(in oklab, var(--accent) 18%, transparent)',
-                                  }}
-                                >
-                                  {initials}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                                    {user?.username ?? user?.email ?? 'User'}
-                                  </p>
-                                  <p className="truncate text-[11px] text-zinc-500">
-                                    {user?.role ?? 'user'}
-                                  </p>
-                                </div>
+                              <div>
+                                <p>Pending invites</p>
+                                <p className="text-xs font-normal text-zinc-500">
+                                  Review organization access requests
+                                </p>
                               </div>
-                              <Settings01Icon size={16} className="text-zinc-400 shrink-0" />
-                            </Dropdown.Trigger>
-                            <Dropdown.Popover className="w-[min(80vw,300px)]" placement="top end">
-                              <Dropdown.Menu
-                                onAction={(key) => {
-                                  if (key === 'settings') {
-                                    router.push('/profile');
-                                    setMobileNavOpen(false);
-                                  }
-                                  if (key === 'documentation') {
-                                    window.open('/docs', '_blank', 'noopener,noreferrer');
-                                    setMobileNavOpen(false);
-                                  }
-                                  if (key === 'theme') {
-                                    setTheme(isDark ? 'light' : 'dark');
-                                  }
-                                  if (key === 'retake-tour') {
-                                    handleRetakeWorkspaceTour();
-                                    setMobileNavOpen(false);
-                                  }
-                                  if (key === 'signout') {
-                                    handleLogout();
-                                    setMobileNavOpen(false);
-                                  }
+                              <InviteCountChip count={pendingInviteCount} />
+                            </Link>
+                          )}
+
+                          {navigationGroups.map(({ label, items }) => (
+                            <div key={label} className="space-y-1.5">
+                              <p className="px-2 text-[11px] uppercase tracking-[0.18em] text-muted">
+                                {label}
+                              </p>
+                              <div className="space-y-1">
+                                {items.map(({ href, label: itemLabel, Icon }) => {
+                                  return (
+                                    <SidebarNavLink
+                                      key={href}
+                                      href={href}
+                                      itemLabel={itemLabel}
+                                      Icon={Icon}
+                                      mode="mobile"
+                                      active={isActiveRoute(pathname, href)}
+                                      inviteCount={pendingInviteCount}
+                                      onNavigate={() => setMobileNavOpen(false)}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+
+                          {isAdminRoute ? (
+                            <SidebarNavLink
+                              href="/dashboard"
+                              itemLabel="Exit administration"
+                              Icon={DashboardSquare01Icon}
+                              mode="mobile"
+                              active={false}
+                              inviteCount={0}
+                              onNavigate={() => setMobileNavOpen(false)}
+                            />
+                          ) : null}
+                        </div>
+                      </Drawer.Body>
+                      <Drawer.Footer
+                        className="flex flex-col gap-2 p-3"
+                        style={{ borderTop: '1px solid var(--border-subtle)' }}
+                      >
+                        <Dropdown>
+                          <Dropdown.Trigger
+                            className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left"
+                            style={{ background: 'var(--row-hover)' }}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div
+                                className="size-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
+                                style={{
+                                  background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
+                                  color: 'var(--accent-soft-foreground)',
+                                  border:
+                                    '1px solid color-mix(in oklab, var(--accent) 18%, transparent)',
                                 }}
                               >
-                                <Dropdown.Item key="settings" id="settings" textValue="Settings">
+                                {initials}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                                  {user?.username ?? user?.email ?? 'User'}
+                                </p>
+                                <p className="truncate text-[11px] text-zinc-500">
+                                  {user?.role ?? 'user'}
+                                </p>
+                              </div>
+                            </div>
+                            <Settings01Icon size={16} className="text-zinc-400 shrink-0" />
+                          </Dropdown.Trigger>
+                          <Dropdown.Popover className="w-[min(80vw,300px)]" placement="top end">
+                            <Dropdown.Menu
+                              onAction={(key) => {
+                                if (key === 'settings') {
+                                  router.push('/profile');
+                                  setMobileNavOpen(false);
+                                }
+                                if (key === 'documentation') {
+                                  window.open('/docs', '_blank', 'noopener,noreferrer');
+                                  setMobileNavOpen(false);
+                                }
+                                if (key === 'theme') {
+                                  setTheme(isDark ? 'light' : 'dark');
+                                }
+                                if (key === 'retake-tour') {
+                                  handleRetakeWorkspaceTour();
+                                  setMobileNavOpen(false);
+                                }
+                                if (key === 'signout') {
+                                  handleLogout();
+                                  setMobileNavOpen(false);
+                                }
+                              }}
+                            >
+                              <Dropdown.Item key="settings" id="settings" textValue="Settings">
+                                <div className="flex items-center gap-2">
+                                  <Settings01Icon size={14} className="text-zinc-500" />
+                                  <Label>Profile</Label>
+                                </div>
+                              </Dropdown.Item>
+                              <Dropdown.Item key="theme" id="theme" textValue="Theme">
+                                <div className="flex items-center justify-between w-full">
                                   <div className="flex items-center gap-2">
-                                    <Settings01Icon size={14} className="text-zinc-500" />
-                                    <Label>Profile</Label>
-                                  </div>
-                                </Dropdown.Item>
-                                <Dropdown.Item key="theme" id="theme" textValue="Theme">
-                                  <div className="flex items-center justify-between w-full">
-                                    <div className="flex items-center gap-2">
-                                      {mounted ? (
-                                        isDark ? (
-                                          <Sun01Icon size={14} className="text-zinc-500" />
-                                        ) : (
-                                          <Moon02Icon size={14} className="text-zinc-500" />
-                                        )
+                                    {mounted ? (
+                                      isDark ? (
+                                        <Sun01Icon size={14} className="text-zinc-500" />
                                       ) : (
-                                        <span aria-hidden className="block size-[14px]" />
-                                      )}
-                                      <Label>Theme</Label>
-                                    </div>
+                                        <Moon02Icon size={14} className="text-zinc-500" />
+                                      )
+                                    ) : (
+                                      <span aria-hidden className="block size-[14px]" />
+                                    )}
+                                    <Label>Theme</Label>
                                   </div>
-                                </Dropdown.Item>
-                                <Dropdown.Item key="documentation" id="documentation" textValue="Documentation">
-                                  <div className="flex items-center gap-2">
-                                    <FileExportIcon size={14} className="text-zinc-500" />
-                                    <Label>Documentation</Label>
-                                  </div>
-                                </Dropdown.Item>
+                                </div>
+                              </Dropdown.Item>
+                              <Dropdown.Item
+                                key="documentation"
+                                id="documentation"
+                                textValue="Documentation"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <FileExportIcon size={14} className="text-zinc-500" />
+                                  <Label>Documentation</Label>
+                                </div>
+                              </Dropdown.Item>
+                              <Dropdown.Item
+                                key="retake-tour"
+                                id="retake-tour"
+                                textValue="Retake Tour"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <AiContentGenerator01Icon size={14} className="text-zinc-500" />
+                                  <Label>Retake Tour</Label>
+                                </div>
+                              </Dropdown.Item>
+                              <Dropdown.Section>
+                                <Separator className="my-1" />
                                 <Dropdown.Item
-                                  key="retake-tour"
-                                  id="retake-tour"
-                                  textValue="Retake Tour"
+                                  key="signout"
+                                  id="signout"
+                                  textValue="Sign Out"
+                                  className="text-danger"
                                 >
                                   <div className="flex items-center gap-2">
-                                    <AiContentGenerator01Icon size={14} className="text-zinc-500" />
-                                    <Label>Retake Tour</Label>
+                                    <Logout02Icon size={14} />
+                                    <Label className="text-danger">Sign Out</Label>
                                   </div>
                                 </Dropdown.Item>
-                                <Dropdown.Section>
-                                  <Separator className="my-1" />
-                                  <Dropdown.Item
-                                    key="signout"
-                                    id="signout"
-                                    textValue="Sign Out"
-                                    className="text-danger"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <Logout02Icon size={14} />
-                                      <Label className="text-danger">Sign Out</Label>
-                                    </div>
-                                  </Dropdown.Item>
-                                </Dropdown.Section>
-                              </Dropdown.Menu>
-                            </Dropdown.Popover>
-                          </Dropdown>
-                        </Drawer.Footer>
-                      </Drawer.Dialog>
-                    </Drawer.Content>
-                  </Drawer.Backdrop>
-                </>
-                <div
-                  id="tour-topbar-actions"
-                  className="ml-auto flex shrink-0 items-center gap-1.5"
+                              </Dropdown.Section>
+                            </Dropdown.Menu>
+                          </Dropdown.Popover>
+                        </Dropdown>
+                      </Drawer.Footer>
+                    </Drawer.Dialog>
+                  </Drawer.Content>
+                </Drawer.Backdrop>
+              </>
+              <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
+                <Link
+                  href="/dashboard"
+                  aria-label="Dashboard home"
+                  className="flex shrink-0 items-center gap-1.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <Button
-                    aria-label="Open command palette"
-                    className="rounded-full text-zinc-700 dark:text-zinc-200 md:hidden"
-                    isIconOnly
-                    onPress={() => setSearchOpen(true)}
-                    variant="secondary"
-                  >
-                    <Search01Icon size={14} className="text-current" />
-                  </Button>
-
-                  <Button
-                    onPress={() => setSearchOpen(true)}
-                    variant="tertiary"
-                    className="hidden md:flex md:w-[250px] lg:w-[280px] justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Search01Icon size={14} />
-                      <Label className="inline-flex">Go to or search...</Label>
-                    </div>
-                    <Kbd>
-                      <Kbd.Abbr keyValue="command" />
-                      <Kbd.Content>K</Kbd.Content>
-                    </Kbd>
-                  </Button>
-
-                  <BackgroundProcessCenter />
-
-                  <div className="md:hidden">
+                  <Home aria-hidden className="size-4" />
+                  <span className="hidden sm:inline">Home</span>
+                </Link>
+                <span aria-hidden className="text-muted-foreground">
+                  —
+                </span>
+                <span aria-current="page" className="truncate font-medium">
+                  {currentSection === 'Dashboard' ? 'Overview' : currentSection}
+                </span>
+              </nav>
+              <div id="tour-topbar-actions" className="ml-auto flex shrink-0 items-center gap-1.5">
+                <Button
+                  aria-label="Open command palette"
+                  className="size-8 rounded-lg md:hidden"
+                  isIconOnly
+                  onPress={() => setSearchOpen(true)}
+                  variant="ghost"
+                >
+                  <Search01Icon size={16} />
+                </Button>
+                <Tooltip delay={250}>
+                  <Tooltip.Trigger className="block">
+                    <BackgroundProcessCenter />
+                  </Tooltip.Trigger>
+                  <Tooltip.Content placement="bottom">Background processes</Tooltip.Content>
+                </Tooltip>
+                <div className="md:hidden">
                   <Dropdown>
                     <Dropdown.Trigger id="tour-user-menu" aria-label="Open user menu">
                       <Avatar variant="soft" color="accent" className="size-9">
@@ -1276,7 +1363,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       <Dropdown.Menu
                         onAction={(key) => {
                           if (key === 'settings') router.push('/profile');
-                          if (key === 'documentation') window.open('/docs', '_blank', 'noopener,noreferrer');
+                          if (key === 'documentation')
+                            window.open('/docs', '_blank', 'noopener,noreferrer');
                           if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
                           if (key === 'retake-tour') handleRetakeWorkspaceTour();
                           if (key === 'signout') handleLogout();
@@ -1302,7 +1390,11 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                             <Label>{themeToggleTitle}</Label>
                           </div>
                         </Dropdown.Item>
-                        <Dropdown.Item key="documentation" id="documentation" textValue="Documentation">
+                        <Dropdown.Item
+                          key="documentation"
+                          id="documentation"
+                          textValue="Documentation"
+                        >
                           <div className="flex items-center gap-2">
                             <FileExportIcon size={14} className="text-zinc-500" />
                             <Label>Documentation</Label>
@@ -1328,26 +1420,26 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       </Dropdown.Menu>
                     </Dropdown.Popover>
                   </Dropdown>
-                  </div>
                 </div>
               </div>
-
-              <main
-                className={`min-h-0 flex-1 overflow-x-hidden ${
-                  isAssistantRoute ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
-                }`}
-              >
-                <div className={isAssistantRoute ? 'min-h-0 flex-1 overflow-hidden' : ''}>
-                  {children}
-                </div>
-              </main>
             </div>
+
+            <main
+              className={`min-h-0 flex-1 overflow-x-hidden ${
+                isAssistantRoute ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
+              }`}
+            >
+              <div className={isAssistantRoute ? 'min-h-0 flex-1 overflow-hidden' : ''}>
+                {children}
+              </div>
+            </main>
           </div>
-          {!isAssistantRoute && !isAdminRoute && aiEnabled === true ? (
-            <Suspense fallback={null}>
-              <LazyFloatingAIChat />
-            </Suspense>
-          ) : null}
+        </div>
+        {!isAssistantRoute && !isAdminRoute && aiEnabled === true ? (
+          <Suspense fallback={null}>
+            <LazyFloatingAIChat />
+          </Suspense>
+        ) : null}
       </ToastProvider>
     </DeferredWorkspaceTourProvider>
   );

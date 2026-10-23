@@ -17,13 +17,13 @@ export function MaintenancePageClient({ message }: { message: string }) {
         className="relative z-10 mx-auto flex max-w-2xl flex-col items-center text-center"
       >
         <div className="relative mb-10">
-          <div className="absolute inset-0 rounded-[2rem] bg-foreground/20 blur-2xl" />
-          <div className="relative grid h-20 w-20 place-items-center rounded-[1.75rem] border border-divider/60 bg-content1/90 shadow-2xl shadow-foreground/10">
+          <div className="absolute inset-0 rounded-xl bg-foreground/20 blur-2xl" />
+          <div className="relative grid h-20 w-20 place-items-center rounded-xl border border-divider/60 bg-content1/90 shadow-2xl shadow-foreground/10">
             <Logo size={44} />
           </div>
         </div>
 
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-divider/70 bg-content1/45 px-4 py-2 text-sm text-foreground/60 backdrop-blur-xl">
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-divider/70 bg-content1/45 px-4 py-2 text-sm text-muted-foreground backdrop-blur-xl">
           <span className="h-2 w-2 rounded-full bg-foreground shadow-[0_0_18px_rgba(255,255,255,0.75)] dark:shadow-[0_0_18px_rgba(255,255,255,0.75)]" />
           Maintenance
         </div>

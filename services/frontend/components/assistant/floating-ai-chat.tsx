@@ -51,13 +51,13 @@ export function FloatingAIChat() {
           <Tooltip.Trigger aria-label="Open AI Assistant" className="pointer-events-auto block">
             <Button
               aria-label="Open AI Assistant"
-              className="border-2 border-white/20 text-white"
+              className="border-2 border-white/20 "
               size="lg"
               isIconOnly
               onPress={state.open}
               variant="primary"
             >
-              <span aria-hidden className="text-[11px] font-bold tracking-[0.12em]">
+              <span aria-hidden className="text-xs font-bold tracking-[0.12em]">
                 AI
               </span>
             </Button>
@@ -68,7 +68,7 @@ export function FloatingAIChat() {
 
       <Modal.Backdrop isOpen={state.isOpen} onOpenChange={state.setOpen} variant="blur">
         <Modal.Container placement="auto" size="full">
-          <Modal.Dialog className="relative h-[min(92dvh,980px)] w-[min(96vw,1320px)] max-w-none overflow-hidden rounded-2xl p-0">
+          <Modal.Dialog className="relative h-[min(92dvh,980px)] w-[min(96vw,1320px)] max-w-none overflow-hidden p-0">
             <Button
               aria-label="Close AI chat"
               className="absolute right-3 top-3 z-[10]"

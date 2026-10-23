@@ -672,12 +672,12 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                         <p className="text-sm font-semibold">
                           {extracted.chart_name}
                           {extracted.chart_version && (
-                            <span className="ml-2 text-xs font-normal text-muted">
+                            <span className="ml-2 text-xs font-normal text-muted-foreground">
                               v{extracted.chart_version}
                             </span>
                           )}
                         </p>
-                        <p className="text-xs text-muted mt-0.5">
+                        <p className="text-xs text-muted-foreground mt-0.5">
                           Found {extracted.images.length} image
                           {extracted.images.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
                           <span className="font-medium">{selected.size} selected</span>
@@ -818,7 +818,7 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                             </Select.Popover>
                           </Select>
                           {selectedTagIds.size > 0 && (
-                            <p className="text-xs text-muted">
+                            <p className="text-xs text-muted-foreground">
                               {selectedTagIds.size} tag{selectedTagIds.size === 1 ? '' : 's'}{' '}
                               selected
                             </p>
@@ -923,15 +923,15 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                                       placeholder="registry.example.com/org/image:tag"
                                       className="w-full font-mono"
                                     />
-                                    <p className="truncate text-xs text-muted">
+                                    <p className="truncate text-xs text-muted-foreground">
                                       {parsed.name || 'Enter an image reference'}
                                     </p>
                                   </div>
                                 </Table.Cell>
-                                <Table.Cell className="font-mono text-xs text-muted">
+                                <Table.Cell className="font-mono text-xs text-muted-foreground">
                                   {parsed.tag || '-'}
                                 </Table.Cell>
-                                <Table.Cell className="text-xs text-muted">
+                                <Table.Cell className="text-xs text-muted-foreground">
                                   <span title={getHelmImageSourceLabel(img)}>
                                     {img.source_file}
                                   </span>
@@ -944,7 +944,7 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                     </Table.ScrollContainer>
                   </Table>
 
-                  <p className="text-xs text-muted">
+                  <p className="text-xs text-muted-foreground">
                     Override any extracted image reference before queueing. The selected rows will
                     use the edited values.
                   </p>
@@ -1157,7 +1157,7 @@ function HelmRunHistory({
   if (loading && runs.length === 0) {
     return (
       <Card>
-        <Card.Content className="px-5 py-8 text-center text-sm text-muted">
+        <Card.Content className="px-5 py-8 text-center text-sm text-muted-foreground">
           Loading Helm runs...
         </Card.Content>
       </Card>
@@ -1322,7 +1322,7 @@ function HelmRunHistory({
                 {sortedRuns.length === 0 ? (
                   <Table.Row id="empty">
                     <Table.Cell colSpan={columnCount}>
-                      <div className="px-4 py-10 text-center text-sm text-muted">
+                      <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                         {runs.length === 0
                           ? 'No Helm runs yet. Queue one above to start tracking chart history by run ID.'
                           : 'No Helm runs match your search or filter.'}
@@ -1343,7 +1343,7 @@ function HelmRunHistory({
                             >
                               {getRunChartLabel(run)}
                             </Link>
-                            <p className="truncate text-xs text-muted" title={run.chart_url}>
+                            <p className="truncate text-xs text-muted-foreground" title={run.chart_url}>
                               {run.chart_url.replace(/^oci:\/\//, '')}
                             </p>
                             {run.chart_version ? (
@@ -1358,7 +1358,7 @@ function HelmRunHistory({
                             {status}
                           </Chip>
                         </Table.Cell>
-                        <Table.Cell className="text-right font-mono text-xs text-muted">
+                        <Table.Cell className="text-right font-mono text-xs text-muted-foreground">
                           {run.total_images}
                         </Table.Cell>
                         <Table.Cell className="text-right">
@@ -1397,11 +1397,11 @@ function HelmRunHistory({
                             {run.critical_count}
                           </Chip>
                         </Table.Cell>
-                        <Table.Cell className="text-xs text-muted">
+                        <Table.Cell className="text-xs text-muted-foreground">
                           {timeAgo(run.created_at)}
                         </Table.Cell>
                         {isAdmin ? (
-                          <Table.Cell className="hidden text-xs text-muted lg:table-cell">
+                          <Table.Cell className="hidden text-xs text-muted-foreground lg:table-cell">
                             {run.owner_username || '-'}
                           </Table.Cell>
                         ) : null}
@@ -1469,7 +1469,7 @@ function HelmRunHistory({
             </Table.Content>
           </Table.ScrollContainer>
           <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-            <span className="text-xs text-muted whitespace-nowrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               Showing {visibleStart}-{visibleEnd} of {sortedRuns.length}
             </span>
             <Pagination size="sm" className="justify-self-center">
@@ -1507,7 +1507,7 @@ function HelmRunHistory({
                 </Pagination.Item>
               </Pagination.Content>
             </Pagination>
-            <span className="justify-self-end text-xs text-muted whitespace-nowrap">
+            <span className="justify-self-end text-xs text-muted-foreground whitespace-nowrap">
               {runs.length} total
             </span>
           </Table.Footer>

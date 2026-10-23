@@ -42,9 +42,9 @@ export function OrgAutomationTab({
       </Card.Header>
       <Card.Content>
         {policies.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-divider p-8 text-center">
+          <div className="rounded-xl border border-dashed border-divider p-8 text-center">
             <p className="text-sm font-medium">No compliance policies yet</p>
-            <p className="mt-1 text-sm text-muted">Create a policy to evaluate scans in scope.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Create a policy to evaluate scans in scope.</p>
           </div>
         ) : (
           <div className="space-y-3">

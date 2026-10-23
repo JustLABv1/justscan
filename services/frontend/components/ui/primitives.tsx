@@ -19,6 +19,16 @@ export { Button, buttonVariants };
 export type { Key, SortDescriptor } from 'react-aria-components';
 export { useFilter, parseColor } from 'react-aria-components';
 
+import {
+  Card as NovaCard,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from './card';
+import { NOVA_INPUT, NOVA_TEXTAREA } from './nova-styles';
+
 type BoxProps = React.ComponentProps<'div'> & { variant?: string; orientation?: string };
 function Box({ variant: _variant, orientation: _orientation, ...props }: BoxProps) {
   return <div {...props} />;
@@ -29,35 +39,32 @@ function part(tag: 'div' | 'span' | 'h3' | 'p', classes = '') {
   };
 }
 export const Card = Object.assign(
-  function Card({ className, variant: _variant, ...props }: BoxProps) {
-    return (
-      <div
-        data-slot="card"
-        className={cn(
-          'rounded-xl border border-border bg-card text-card-foreground shadow-sm',
-          className
-        )}
-        {...props}
-      />
-    );
+  function Card({
+    variant: _variant,
+    ...props
+  }: React.ComponentProps<typeof NovaCard> & { variant?: string }) {
+    return <NovaCard {...props} />;
   },
   {
-    Header: part('div', 'flex flex-col gap-1.5 p-6'),
-    Title: part('h3', 'font-semibold leading-none'),
-    Description: part('p', 'text-sm text-muted-foreground'),
-    Content: part('div', 'p-6 pt-0'),
-    Footer: part('div', 'flex items-center gap-2 p-6 pt-0'),
+    Header: CardHeader,
+    Title: CardTitle,
+    Description: CardDescription,
+    Content: CardContent,
+    Footer: CardFooter,
   }
 );
 export const Surface = Box;
 export const Typography = {
   Paragraph: ({
     size: _size,
-    color: _color,
+    color,
     className,
     ...props
   }: React.ComponentProps<'p'> & { size?: string; color?: string }) => (
-    <p className={cn('leading-relaxed', className)} {...props} />
+    <p
+      className={cn('leading-normal', color === 'muted' && 'text-muted-foreground', className)}
+      {...props}
+    />
   ),
 };
 export const Header = Aria.Header;
@@ -154,7 +161,7 @@ export const Badge = Object.assign(
       <span
         className={cn(
           'absolute -right-1 -top-1 inline-flex items-center justify-center rounded-full ring-2 ring-background',
-          value == null ? 'size-2' : 'h-4 min-w-4 px-1 text-[10px] font-medium',
+          value == null ? 'size-2' : 'h-4 min-w-4 px-1 text-xs font-medium',
           tones[color] ?? tones.accent,
           className
         )}
@@ -303,13 +310,7 @@ export const Input = ({
   variant: _variant,
   ...props
 }: React.ComponentProps<typeof Aria.Input> & { variant?: string }) => (
-  <Aria.Input
-    className={cn(
-      'flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
-      typeof className === 'string' && className
-    )}
-    {...props}
-  />
+  <Aria.Input className={cn(NOVA_INPUT, typeof className === 'string' && className)} {...props} />
 );
 export const TextArea = ({
   className,
@@ -318,10 +319,7 @@ export const TextArea = ({
   ...props
 }: React.ComponentProps<typeof Aria.TextArea> & { variant?: string; fullWidth?: boolean }) => (
   <Aria.TextArea
-    className={cn(
-      'flex min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
-      typeof className === 'string' && className
-    )}
+    className={cn(NOVA_TEXTAREA, typeof className === 'string' && className)}
     {...props}
   />
 );
@@ -346,7 +344,7 @@ export const SearchField = Object.assign(
     Group: ({ className, ...props }: React.ComponentProps<typeof Aria.Group>) => (
       <Aria.Group
         className={cn(
-          'flex items-center gap-2 rounded-md border border-input bg-background px-3 focus-within:ring-2 focus-within:ring-ring',
+          'flex h-8 items-center gap-1.5 rounded-lg border border-input bg-transparent px-2.5 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30',
           typeof className === 'string' && className
         )}
         {...props}
@@ -355,7 +353,7 @@ export const SearchField = Object.assign(
     Input: ({ className, ...props }: React.ComponentProps<typeof Aria.Input>) => (
       <Aria.Input
         className={cn(
-          'min-w-0 flex-1 bg-transparent py-2 text-sm outline-none',
+          'min-w-0 flex-1 bg-transparent py-1 text-base outline-none md:text-sm',
           typeof className === 'string' && className
         )}
         {...props}
@@ -399,7 +397,7 @@ export const Checkbox = Object.assign(
     Control: ({ children, className, ...props }: React.ComponentProps<'span'>) => (
       <span
         className={cn(
-          'flex size-4 shrink-0 items-center justify-center rounded border border-input group-data-[selected]:border-primary group-data-[selected]:bg-primary group-data-[selected]:text-primary-foreground group-data-[indeterminate]:bg-primary group-data-[focus-visible]:ring-2 group-data-[focus-visible]:ring-ring',
+          'flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input dark:bg-input/30 group-data-[selected]:border-primary group-data-[selected]:bg-primary group-data-[selected]:text-primary-foreground group-data-[indeterminate]:bg-primary group-data-[focus-visible]:ring-3 group-data-[focus-visible]:ring-ring/50',
           className
         )}
         {...props}
@@ -433,7 +431,7 @@ export const Switch = Object.assign(
     Control: ({ children, className, ...props }: React.ComponentProps<'span'>) => (
       <span
         className={cn(
-          'inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent bg-input transition-colors group-data-[selected]:bg-primary group-data-[focus-visible]:ring-2 group-data-[focus-visible]:ring-ring',
+          'inline-flex h-[18.4px] w-8 shrink-0 items-center rounded-full border border-transparent bg-input transition-colors group-data-[selected]:bg-primary group-data-[focus-visible]:ring-3 group-data-[focus-visible]:ring-ring/50',
           className
         )}
         {...props}
@@ -444,7 +442,7 @@ export const Switch = Object.assign(
     Thumb: ({ className }: { className?: string }) => (
       <span
         className={cn(
-          'size-4 rounded-full bg-background shadow-sm transition-transform group-data-[selected]:translate-x-4',
+          'size-4 translate-x-0 rounded-full bg-background shadow-sm transition-transform group-data-[selected]:translate-x-3.5',
           className
         )}
       />
@@ -472,7 +470,7 @@ export const Radio = Object.assign(
     Control: ({ children, className, ...props }: React.ComponentProps<'span'>) => (
       <span
         className={cn(
-          'flex size-4 items-center justify-center rounded-full border border-input group-data-[selected]:border-primary',
+          'flex size-4 items-center justify-center rounded-full border border-input dark:bg-input/30 group-data-[selected]:border-primary group-data-[selected]:bg-primary group-data-[selected]:text-primary-foreground',
           className
         )}
         {...props}
@@ -483,7 +481,7 @@ export const Radio = Object.assign(
     Indicator: ({ className }: { className?: string }) => (
       <span
         className={cn(
-          'size-2 rounded-full bg-primary opacity-0 group-data-[selected]:opacity-100',
+          'size-2 rounded-full bg-current opacity-0 group-data-[selected]:opacity-100',
           className
         )}
       />

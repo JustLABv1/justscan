@@ -298,7 +298,7 @@ function VulnKBPageContent() {
         onPageChange={goToPage}
       />
 
-      <p className="flex items-center gap-1.5 text-xs text-zinc-400">
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <InformationCircleIcon size={13} />
         Select a CVE to view its source timeline, references, and authorized scan exposure.
       </p>

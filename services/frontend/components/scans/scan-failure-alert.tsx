@@ -28,7 +28,7 @@ export function ScanFailureAlert({ errorMessage, imageReference }: ScanFailureAl
             </Disclosure.Heading>
             <Disclosure.Content>
               <Disclosure.Body className="pt-2">
-                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-xl bg-surface-secondary p-3 text-xs leading-relaxed text-muted">
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-xl bg-surface-secondary p-3 text-xs leading-relaxed text-muted-foreground">
                   {errorMessage}
                 </pre>
               </Disclosure.Body>

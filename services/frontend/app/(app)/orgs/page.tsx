@@ -228,10 +228,10 @@ export default function OrgsPage() {
               <UserAdd01Icon size={20} color="#f59e0b" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+              <h2 className="text-sm font-semibold text-foreground">
                 Pending Invites
               </h2>
-              <p className="text-sm text-zinc-500">
+              <p className="text-sm text-muted-foreground">
                 Review organization invitations tied to your account email.
               </p>
             </div>
@@ -245,27 +245,27 @@ export default function OrgsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold text-zinc-900 dark:text-white truncate">
+                        <p className="text-sm font-semibold text-foreground truncate">
                           {invite.org_name || 'Organization'}
                         </p>
                         <span
-                          className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+                          className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
                           style={{
-                            background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-                            border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
-                            color: 'color-mix(in srgb, var(--accent) 78%, white)',
+                            background: 'color-mix(in srgb, var(--primary) 12%, transparent)',
+                            border: '1px solid color-mix(in srgb, var(--primary) 22%, transparent)',
+                            color: 'color-mix(in srgb, var(--primary) 78%, white)',
                           }}
                         >
                           {invite.role}
                         </span>
                       </div>
-                      <p className="text-xs text-zinc-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Invited by{' '}
                         {invite.invited_by_username || invite.invited_by_email || 'a teammate'}
                       </p>
                     </div>
                     <span
-                      className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium text-zinc-500"
+                      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground"
                       style={{ background: 'var(--row-divider)' }}
                     >
                       Expires {formatDateOnly(invite.expires_at)}
@@ -273,7 +273,7 @@ export default function OrgsPage() {
                   </div>
 
                   {invite.org_description && (
-                    <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                    <p className="text-sm text-muted-foreground dark:text-foreground">
                       {invite.org_description}
                     </p>
                   )}
@@ -294,7 +294,7 @@ export default function OrgsPage() {
                     </Button>
                     <Button
                       variant="secondary"
-                      className="border border-zinc-300 dark:border-zinc-700"
+                      className="border border-border dark:border-border"
                       isDisabled={busy}
                       onPress={() => {
                         void handleDeclineInvite(invite);
@@ -314,17 +314,17 @@ export default function OrgsPage() {
         emptyState={
           <Card className="py-20 flex flex-col items-center gap-3">
             <div
-              className="size-14 rounded-2xl flex items-center justify-center"
+              className="size-14 rounded-xl flex items-center justify-center"
               style={{
-                background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                background: 'color-mix(in srgb, var(--primary) 12%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)',
               }}
             >
               <Avatar color="accent" size="lg" variant="soft">
                 <Avatar.Fallback>O</Avatar.Fallback>
               </Avatar>
             </div>
-            <p className="text-sm text-zinc-500 text-center max-w-xs">
+            <p className="text-sm text-muted-foreground text-center max-w-xs">
               No organizations yet. Create one to start managing compliance policies.
             </p>
             <Button onPress={modal.open} variant="secondary">
@@ -338,7 +338,7 @@ export default function OrgsPage() {
         loading={loading}
         loadingFallback={
           <div className="flex justify-center items-center h-48" role="status">
-            <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-primary animate-spin" />
+            <div className="size-7 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
             <span className="sr-only">Loading organizations</span>
           </div>
         }
@@ -473,7 +473,7 @@ export default function OrgsPage() {
                     {sortedOrgs.length === 0 ? (
                       <Table.Row id="empty">
                         <Table.Cell colSpan={5}>
-                          <div className="px-4 py-10 text-center text-sm text-zinc-500">
+                          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                             No organizations match this search.
                           </div>
                         </Table.Cell>
@@ -499,15 +499,15 @@ export default function OrgsPage() {
                               </Avatar>
                               <div className="min-w-0">
                                 <Link
-                                  className="truncate font-medium text-zinc-900 hover:text-accent dark:text-white dark:hover:text-accent"
+                                  className="truncate font-medium text-foreground hover:text-primary dark:text-foreground dark:hover:text-primary"
                                   href={`/orgs/${org.id}`}
                                 >
                                   {org.name}
                                 </Link>
-                                <p className="truncate text-xs text-zinc-500">
+                                <p className="truncate text-xs text-muted-foreground">
                                   {org.description || 'No description'}
                                 </p>
-                                <div className="mt-1 flex flex-wrap gap-x-2 text-xs text-zinc-500 md:hidden">
+                                <div className="mt-1 flex flex-wrap gap-x-2 text-xs text-muted-foreground md:hidden">
                                   <span>
                                     {org.member_count ?? 0}{' '}
                                     {(org.member_count ?? 0) === 1 ? 'member' : 'members'}
@@ -533,7 +533,7 @@ export default function OrgsPage() {
                               {org.policy_count === 1 ? 'policy' : 'policies'}
                             </Chip>
                           </Table.Cell>
-                          <Table.Cell className="hidden text-xs text-zinc-500 md:table-cell">
+                          <Table.Cell className="hidden text-xs text-muted-foreground md:table-cell">
                             {formatDateOnly(org.updated_at)}
                           </Table.Cell>
                           <Table.Cell>
@@ -556,7 +556,7 @@ export default function OrgsPage() {
                                   ]}
                                 />
                               ) : (
-                                <span className="text-xs text-zinc-500">—</span>
+                                <span className="text-xs text-muted-foreground">—</span>
                               )}
                             </div>
                           </Table.Cell>

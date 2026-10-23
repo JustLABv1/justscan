@@ -791,7 +791,7 @@ export function IdentityTab() {
               </Table.Header>
               <Table.Body
                 renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-zinc-500">
+                  <div className="py-10 text-center text-sm text-muted-foreground">
                     {loading ? 'Loading providers...' : 'No providers found.'}
                   </div>
                 )}
@@ -817,7 +817,7 @@ export function IdentityTab() {
                     </Table.Cell>
                     <Table.Cell>
                       <Button
-                        className="h-auto min-h-0 min-w-0 justify-start px-1 py-1.5 text-left"
+                        className="h-auto min-w-0 justify-start text-left"
                         onPress={() => setSelectedProvider(provider)}
                         variant="tertiary"
                       >
@@ -825,13 +825,13 @@ export function IdentityTab() {
                           <span className="font-medium underline-offset-4 hover:underline">
                             {provider.display_name}
                           </span>
-                          <span className="max-w-full truncate font-mono text-xs text-zinc-500">
+                          <span className="max-w-full truncate font-mono text-xs text-muted-foreground">
                             ID: {provider.name}
                           </span>
                         </div>
                       </Button>
                     </Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500 font-mono">
+                    <Table.Cell className="text-xs text-muted-foreground font-mono">
                       {provider.issuer_url}
                     </Table.Cell>
                     <Table.Cell>
@@ -843,10 +843,10 @@ export function IdentityTab() {
                         {provider.enabled ? 'Enabled' : 'Disabled'}
                       </Chip>
                     </Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">
+                    <Table.Cell className="text-xs text-muted-foreground">
                       {provider.name === selectedProvider?.name ? mappings.length : '-'}
                     </Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">
+                    <Table.Cell className="text-xs text-muted-foreground">
                       {provider.name === selectedProvider?.name ? roleOverrides.length : '-'}
                     </Table.Cell>
                     <Table.Cell>
@@ -892,7 +892,7 @@ export function IdentityTab() {
       {!selectedProvider && (
         <Card className="border border-divider/60 bg-content2/30">
           <Card.Content>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               Select a provider row above to configure claim mappings, role overrides, and claim
               sync preview.
             </p>
@@ -919,7 +919,7 @@ export function IdentityTab() {
                 </Table.Header>
                 <Table.Body
                   renderEmptyState={() => (
-                    <div className="py-6 text-center text-sm text-zinc-500">
+                    <div className="py-6 text-center text-sm text-muted-foreground">
                       No mappings configured.
                     </div>
                   )}
@@ -928,14 +928,14 @@ export function IdentityTab() {
                     <Table.Row key={mapping.id} id={mapping.id}>
                       <Table.Cell>
                         <p className="font-mono text-xs">{mapping.match_value}</p>
-                        <p className="text-xs text-zinc-500">
+                        <p className="text-xs text-muted-foreground">
                           {mapping.claim_type} · {mapping.match_type} · {mapping.effect}
                         </p>
                       </Table.Cell>
-                      <Table.Cell className="text-xs text-zinc-500">
+                      <Table.Cell className="text-xs text-muted-foreground">
                         {mapping.org_name ?? mapping.org_id ?? 'Derived'}
                       </Table.Cell>
-                      <Table.Cell className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+                      <Table.Cell className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                         {mapping.effect === 'exclude' ? '—' : mapping.role}
                       </Table.Cell>
                       <Table.Cell>
@@ -986,7 +986,7 @@ export function IdentityTab() {
                 </Table.Header>
                 <Table.Body
                   renderEmptyState={() => (
-                    <div className="py-6 text-center text-sm text-zinc-500">
+                    <div className="py-6 text-center text-sm text-muted-foreground">
                       No overrides configured.
                     </div>
                   )}
@@ -995,14 +995,14 @@ export function IdentityTab() {
                     <Table.Row key={override.id} id={override.id}>
                       <Table.Cell>
                         <p className="font-mono text-xs">{override.match_value}</p>
-                        <p className="text-xs text-zinc-500">
+                        <p className="text-xs text-muted-foreground">
                           {override.claim_type} · {override.match_type}
                         </p>
                       </Table.Cell>
-                      <Table.Cell className="text-xs text-zinc-500">
+                      <Table.Cell className="text-xs text-muted-foreground">
                         {override.org_name ?? override.org_id ?? override.org_name_template}
                       </Table.Cell>
-                      <Table.Cell className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+                      <Table.Cell className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                         {override.role}
                       </Table.Cell>
                       <Table.Cell>
@@ -1043,7 +1043,7 @@ export function IdentityTab() {
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
             <div className="space-y-1">
               <h3 className="text-base font-semibold">Live OIDC Diagnostics</h3>
-              <p className="max-w-3xl text-sm text-zinc-500">
+              <p className="max-w-3xl text-sm text-muted-foreground">
                 Sign in through {selectedProvider.display_name} to inspect the verified ID token and
                 UserInfo claims. This does not provision a user, change roles, sync organizations,
                 or create a JustScan session.
@@ -1060,7 +1060,7 @@ export function IdentityTab() {
           </div>
 
           {!selectedProvider.enabled && (
-            <p className="text-sm text-warning">
+            <p className="text-sm text-warning-foreground">
               Enable this provider before starting a diagnostic login.
             </p>
           )}
@@ -1083,7 +1083,7 @@ export function IdentityTab() {
                         </Chip>
                       ))
                     ) : (
-                      <span className="text-sm text-zinc-500">No groups resolved</span>
+                      <span className="text-sm text-muted-foreground">No groups resolved</span>
                     )}
                   </Card.Content>
                 </Card>
@@ -1102,7 +1102,7 @@ export function IdentityTab() {
                         </Chip>
                       ))
                     ) : (
-                      <span className="text-sm text-zinc-500">No roles resolved</span>
+                      <span className="text-sm text-muted-foreground">No roles resolved</span>
                     )}
                   </Card.Content>
                 </Card>
@@ -1113,11 +1113,11 @@ export function IdentityTab() {
                   </Card.Header>
                   <Card.Content className="space-y-2 text-xs">
                     <p>
-                      <span className="text-zinc-500">Realm:</span> <code>realm_access.roles</code>{' '}
+                      <span className="text-muted-foreground">Realm:</span> <code>realm_access.roles</code>{' '}
                       ({(debugReport.realm_roles ?? []).length})
                     </p>
                     <p>
-                      <span className="text-zinc-500">Client:</span>{' '}
+                      <span className="text-muted-foreground">Client:</span>{' '}
                       <code>{debugReport.client_roles_path}</code> (
                       {(debugReport.client_roles ?? []).length})
                     </p>
@@ -1135,7 +1135,7 @@ export function IdentityTab() {
               </div>
 
               {debugReport.userinfo_error && (
-                <p className="text-sm text-warning">
+                <p className="text-sm text-warning-foreground">
                   UserInfo could not be read: {debugReport.userinfo_error}
                 </p>
               )}
@@ -1172,7 +1172,7 @@ export function IdentityTab() {
                   </Disclosure.Content>
                 </Disclosure>
               </div>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-muted-foreground">
                 OAuth tokens, authorization codes, and client credentials are never included. This
                 result expires shortly.
               </p>
@@ -1218,7 +1218,7 @@ export function IdentityTab() {
                 </Table.Header>
                 <Table.Body
                   renderEmptyState={() => (
-                    <div className="py-6 text-center text-sm text-zinc-500">No memberships.</div>
+                    <div className="py-6 text-center text-sm text-muted-foreground">No memberships.</div>
                   )}
                 >
                   {preview.final_memberships.map((membership) => (
@@ -1227,13 +1227,13 @@ export function IdentityTab() {
                       id={`${membership.mapping_id}-${membership.org_name}-${membership.claim}-${membership.final_role}`}
                     >
                       <Table.Cell>{membership.org_name}</Table.Cell>
-                      <Table.Cell className="font-mono text-xs text-zinc-500">
+                      <Table.Cell className="font-mono text-xs text-muted-foreground">
                         {membership.claim}
                       </Table.Cell>
-                      <Table.Cell className="text-xs text-zinc-500">
+                      <Table.Cell className="text-xs text-muted-foreground">
                         {membership.base_role} → {membership.final_role}
                       </Table.Cell>
-                      <Table.Cell className="text-xs text-zinc-500">
+                      <Table.Cell className="text-xs text-muted-foreground">
                         {membership.provisioning_mode === 'create_org'
                           ? 'Create org'
                           : 'Existing org'}
@@ -1258,7 +1258,7 @@ export function IdentityTab() {
               </Modal.Header>
               <Modal.Body className="min-h-0 max-h-[80vh] overflow-y-auto py-5">
                 <div className="space-y-5">
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-sm text-muted-foreground">
                     Configure identity provider details in three steps.{' '}
                     {editingProvider
                       ? 'Update connection details and policy controls.'
@@ -1287,7 +1287,7 @@ export function IdentityTab() {
                   <Card className="border border-divider/60 bg-content2/30">
                     <Card.Content>
                       <p className="text-sm font-semibold">{providerStepTitle(providerStep)}</p>
-                      <p className="mt-1 text-sm text-zinc-500">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {providerStepDescription(providerStep)}
                       </p>
                     </Card.Content>
@@ -1309,7 +1309,7 @@ export function IdentityTab() {
                             <p className="text-sm font-semibold">Provider Identity</p>
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">
+                                <p className="text-sm text-muted-foreground">
                                   {requiredLabel('Provider Name')}
                                 </p>
                                 <Input
@@ -1322,7 +1322,7 @@ export function IdentityTab() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">
+                                <p className="text-sm text-muted-foreground">
                                   {requiredLabel('Display Name')}
                                 </p>
                                 <Input
@@ -1342,7 +1342,7 @@ export function IdentityTab() {
                             <p className="text-sm font-semibold">OIDC Handshake</p>
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-1.5 md:col-span-2">
-                                <p className="text-sm text-zinc-500">
+                                <p className="text-sm text-muted-foreground">
                                   {requiredLabel('Issuer URL')}
                                 </p>
                                 <Input
@@ -1355,7 +1355,7 @@ export function IdentityTab() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">
+                                <p className="text-sm text-muted-foreground">
                                   {requiredLabel('Client ID')}
                                 </p>
                                 <Input
@@ -1368,7 +1368,7 @@ export function IdentityTab() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">
+                                <p className="text-sm text-muted-foreground">
                                   {editingProvider
                                     ? 'Client Secret'
                                     : requiredLabel('Client Secret')}
@@ -1391,7 +1391,7 @@ export function IdentityTab() {
                           </Card.Content>
                         </Card>
                         <div className="space-y-1">
-                          <p className="text-sm text-zinc-500">{requiredLabel('Redirect URI')}</p>
+                          <p className="text-sm text-muted-foreground">{requiredLabel('Redirect URI')}</p>
                           <Input
                             className="w-full"
                             variant="secondary"
@@ -1406,11 +1406,11 @@ export function IdentityTab() {
                             }}
                             required
                           />
-                          <p className="text-sm text-zinc-500">
+                          <p className="text-sm text-muted-foreground">
                             Recommended: {suggestedRedirectUri || 'Enter a provider name first.'}
                           </p>
                           {redirectUriMismatch && (
-                            <p className="text-sm text-amber-600 dark:text-amber-400">
+                            <p className="text-sm text-warning-foreground dark:text-warning-foreground">
                               This URI differs from the recommended provider callback path.
                             </p>
                           )}
@@ -1425,7 +1425,7 @@ export function IdentityTab() {
                             <p className="text-sm font-semibold">Scope and Admin Signals</p>
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-1.5 md:col-span-2">
-                                <p className="text-sm text-zinc-500">{requiredLabel('Scopes')}</p>
+                                <p className="text-sm text-muted-foreground">{requiredLabel('Scopes')}</p>
                                 <Input
                                   className="w-full"
                                   variant="secondary"
@@ -1434,12 +1434,12 @@ export function IdentityTab() {
                                   onChange={(event) => setScopesInput(event.target.value)}
                                   required
                                 />
-                                <p className="text-sm text-zinc-500">
+                                <p className="text-sm text-muted-foreground">
                                   Comma-separated scopes requested during sign-in.
                                 </p>
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">Admin Groups</p>
+                                <p className="text-sm text-muted-foreground">Admin Groups</p>
                                 <Input
                                   className="w-full"
                                   variant="secondary"
@@ -1449,7 +1449,7 @@ export function IdentityTab() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">Admin Roles</p>
+                                <p className="text-sm text-muted-foreground">Admin Roles</p>
                                 <Input
                                   className="w-full"
                                   variant="secondary"
@@ -1466,7 +1466,7 @@ export function IdentityTab() {
                             <p className="text-sm font-semibold">Provider Filters</p>
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">Included Groups</p>
+                                <p className="text-sm text-muted-foreground">Included Groups</p>
                                 <Input
                                   className="w-full"
                                   variant="secondary"
@@ -1476,7 +1476,7 @@ export function IdentityTab() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">Excluded Groups</p>
+                                <p className="text-sm text-muted-foreground">Excluded Groups</p>
                                 <Input
                                   className="w-full"
                                   variant="secondary"
@@ -1486,7 +1486,7 @@ export function IdentityTab() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">Included Org Names</p>
+                                <p className="text-sm text-muted-foreground">Included Org Names</p>
                                 <Input
                                   className="w-full"
                                   variant="secondary"
@@ -1496,7 +1496,7 @@ export function IdentityTab() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">Excluded Org Names</p>
+                                <p className="text-sm text-muted-foreground">Excluded Org Names</p>
                                 <Input
                                   className="w-full"
                                   variant="secondary"
@@ -1518,7 +1518,7 @@ export function IdentityTab() {
                             <p className="text-sm font-semibold">Claim Extraction</p>
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">Groups Claim</p>
+                                <p className="text-sm text-muted-foreground">Groups Claim</p>
                                 <Input
                                   className="w-full"
                                   variant="secondary"
@@ -1528,7 +1528,7 @@ export function IdentityTab() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">Roles Claim</p>
+                                <p className="text-sm text-muted-foreground">Roles Claim</p>
                                 <Input
                                   className="w-full"
                                   variant="secondary"
@@ -1545,7 +1545,7 @@ export function IdentityTab() {
                             <p className="text-sm font-semibold">Presentation and Ordering</p>
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">Button Color</p>
+                                <p className="text-sm text-muted-foreground">Button Color</p>
                                 <Input
                                   className="w-full"
                                   variant="secondary"
@@ -1555,7 +1555,7 @@ export function IdentityTab() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-sm text-zinc-500">Sort Order</p>
+                                <p className="text-sm text-muted-foreground">Sort Order</p>
                                 <Input
                                   className="w-full"
                                   type="number"
@@ -1575,7 +1575,7 @@ export function IdentityTab() {
                                   Provider enabled
                                 </Switch.Content>
                               </Switch>
-                              <p className="mt-2 text-sm text-zinc-500">
+                              <p className="mt-2 text-sm text-muted-foreground">
                                 Disabled providers stay configured but are hidden from the login
                                 screen.
                               </p>
@@ -1641,10 +1641,10 @@ export function IdentityTab() {
                   {mappingFormError && <p className="text-sm text-danger">{mappingFormError}</p>}
                   <Card className="border border-divider/60 bg-content2/30">
                     <Card.Content className="space-y-1.5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Template Variables
                       </p>
-                      <p className="text-sm text-zinc-500">
+                      <p className="text-sm text-muted-foreground">
                         Use {'{claim}'} for the full claim, {'{suffix}'} for prefix leftovers or the
                         first regex capture group, and {'{provider}'} for the identity provider
                         name.
@@ -1755,7 +1755,7 @@ export function IdentityTab() {
                           </Select.Popover>
                         </Select>
                       </div>
-                      <p className="text-sm text-zinc-500">
+                      <p className="text-sm text-muted-foreground">
                         Create org uses the template to provision orgs from claim values. Recreate
                         missing org re-creates previously deleted orgs when a matching claim
                         returns.
@@ -1788,18 +1788,18 @@ export function IdentityTab() {
                         value={mappingOrgNameTemplate}
                         onChange={(event) => setMappingOrgNameTemplate(event.target.value)}
                       />
-                      <p className="text-sm text-zinc-500">
+                      <p className="text-sm text-muted-foreground">
                         For prefix matches, {'{suffix}'} is the leftover value. For regex matches,
                         it is the first capture group.
                       </p>
                       {(mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg) && (
                         <Card className="border border-divider/60 bg-content2/30">
                           <Card.Content className="space-y-1.5">
-                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">
+                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                               Live Preview
                             </p>
                             <label
-                              className="text-sm text-zinc-500"
+                              className="text-sm text-muted-foreground"
                               htmlFor="mapping-preview-claim"
                             >
                               Preview claim <span className="text-xs">(not saved)</span>
@@ -1812,15 +1812,15 @@ export function IdentityTab() {
                               value={mappingPreviewClaim}
                               onChange={(event) => setMappingPreviewClaim(event.target.value)}
                             />
-                            <p className="text-sm text-zinc-500">
+                            <p className="text-sm text-muted-foreground">
                               Claim:{' '}
                               <span className="font-mono">{mappingTemplatePreview.claim}</span>
                             </p>
                             <p
                               className={
                                 mappingTemplatePreview.matches
-                                  ? 'text-sm text-success'
-                                  : 'text-sm text-warning'
+                                  ? 'text-sm text-success-foreground'
+                                  : 'text-sm text-warning-foreground'
                               }
                             >
                               {mappingTemplatePreview.error ||
@@ -1828,13 +1828,13 @@ export function IdentityTab() {
                                   ? 'Preview claim matches'
                                   : 'Preview claim does not match')}
                             </p>
-                            <p className="text-sm text-zinc-500">
+                            <p className="text-sm text-muted-foreground">
                               Suffix:{' '}
                               <span className="font-mono">
                                 {mappingTemplatePreview.suffix || '(empty)'}
                               </span>
                             </p>
-                            <p className="text-sm text-zinc-500">
+                            <p className="text-sm text-muted-foreground">
                               Resolved org name:{' '}
                               <span className="font-mono">{mappingTemplatePreview.preview}</span>
                             </p>
@@ -1855,7 +1855,7 @@ export function IdentityTab() {
                             </Switch.Content>
                           </Switch>
                         ) : (
-                          <p className="text-sm text-zinc-500">
+                          <p className="text-sm text-muted-foreground">
                             Create org mappings already create missing orgs automatically from the
                             rendered template.
                           </p>

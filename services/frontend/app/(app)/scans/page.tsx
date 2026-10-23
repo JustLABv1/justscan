@@ -376,14 +376,14 @@ function ScansPageContent() {
                         Deleting {pendingDelete?.scan_count ?? 0} scan{' '}
                         {(pendingDelete?.scan_count ?? 0) === 1 ? 'run' : 'runs'}…
                       </p>
-                      <p className="text-sm leading-6 text-muted">
+                      <p className="text-sm leading-6 text-muted-foreground">
                         Large histories can take a little while. Keep this window open until the
                         deletion finishes.
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm leading-6 text-muted">
+                  <p className="text-sm leading-6 text-muted-foreground">
                     This removes <strong>{pendingDelete?.image_name}</strong>, including all{' '}
                     {pendingDelete?.tag_count ?? 0} tags and {pendingDelete?.scan_count ?? 0} scan
                     runs in this workspace. This cannot be undone.
@@ -697,7 +697,7 @@ function ScansPageContent() {
       </Card>
       {total > 0 ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted-foreground">
             Showing {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, total)} of {total}{' '}
             images
           </p>

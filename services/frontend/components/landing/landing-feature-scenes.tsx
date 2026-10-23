@@ -41,7 +41,7 @@ function SectionIntro({
         {title}
       </h2>
       <p
-        className={`mt-5 text-base leading-7 text-muted sm:text-lg sm:leading-8 ${
+        className={`mt-5 text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8 ${
           centered ? 'mx-auto max-w-2xl' : ''
         }`}
       >
@@ -63,7 +63,7 @@ function StageFrame({
   return (
     <Surface
       aria-label={label}
-      className={`landing-stage landing-technical-grid relative isolate overflow-hidden rounded-2xl border border-divider/80 ${className}`}
+      className={`landing-stage landing-technical-grid relative isolate overflow-hidden rounded-xl border border-divider/80 ${className}`}
       variant="secondary"
     >
       <div aria-hidden className="landing-stage-glow pointer-events-none absolute inset-0 -z-10" />
@@ -94,9 +94,9 @@ function ScanPipelineScene() {
         </div>
       </div>
 
-      <div className="absolute bottom-5 left-5 right-5 flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.18em] text-muted">
+      <div className="absolute bottom-5 left-5 right-5 flex items-center justify-between text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
         <span>Pull</span>
-        <span className="text-accent">Prioritize</span>
+        <span className="text-primary">Prioritize</span>
         <span>Decide</span>
       </div>
     </div>
@@ -113,7 +113,7 @@ function RemediationScene() {
   return (
     <div className="relative min-h-64 p-5 sm:min-h-72 sm:p-7">
       <div className="mb-5 flex items-center justify-between">
-        <span className="text-xs font-medium text-muted">Fixable findings</span>
+        <span className="text-xs font-medium text-muted-foreground">Fixable findings</span>
         <span className="landing-live-badge">
           <span aria-hidden />
           live
@@ -128,7 +128,7 @@ function RemediationScene() {
           >
             <div className="min-w-0">
               <p className="truncate font-mono text-xs font-medium text-foreground">{cve}</p>
-              <p className="mt-1 text-[11px] text-muted">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {index === 0
                   ? 'golang.org/x/crypto'
                   : index === 1
@@ -138,11 +138,11 @@ function RemediationScene() {
             </div>
             <div className="text-right">
               <p
-                className={severity === 'critical' ? 'text-xs text-danger' : 'text-xs text-warning'}
+                className={severity === 'critical' ? 'text-xs text-danger' : 'text-xs text-warning-foreground'}
               >
                 {severity}
               </p>
-              <p className="mt-1 flex items-center gap-1 text-[11px] text-success">
+              <p className="mt-1 flex items-center gap-1 text-xs text-success-foreground">
                 <CheckmarkCircle02Icon aria-hidden size={12} />
                 {fixed}
               </p>
@@ -177,12 +177,12 @@ function CoverageScene() {
         />
         <Shield01Icon
           aria-hidden
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-accent"
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-primary"
           size={24}
         />
       </div>
       <div className="absolute bottom-5 left-5 rounded-lg border border-divider/70 bg-surface/90 px-3 py-2 shadow-sm">
-        <p className="text-[10px] uppercase tracking-[0.16em] text-muted">Watchlist</p>
+        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Watchlist</p>
         <p className="mt-1 font-mono text-xs text-foreground">payments:release</p>
       </div>
       <Chip className="absolute right-5 top-5" color="success" size="sm" variant="soft">
@@ -213,7 +213,7 @@ export function LandingFeatureOverviewSection() {
             >
               <ScanPipelineScene />
               <Card.Footer className="block border-t border-divider/70 p-6 sm:p-7">
-                <div className="flex items-center gap-2 text-accent">
+                <div className="flex items-center gap-2 text-primary">
                   <WorkflowSquare06Icon aria-hidden size={18} />
                   <span className="text-xs font-semibold uppercase tracking-[0.16em]">
                     One flow
@@ -222,7 +222,7 @@ export function LandingFeatureOverviewSection() {
                 <h3 className="mt-3 text-xl font-semibold text-foreground">
                   Scan the sources your release actually uses.
                 </h3>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
                   Container images, Helm charts, registries, archives, Trivy, and Xray enter the
                   same governed review path.
                 </p>
@@ -238,7 +238,7 @@ export function LandingFeatureOverviewSection() {
               <RemediationScene />
               <Card.Footer className="block border-t border-divider/70 p-6 sm:p-7">
                 <h3 className="text-xl font-semibold text-foreground">Move fixable risk first.</h3>
-                <p className="mt-2 text-sm leading-6 text-muted">
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Severity, package, fixed version, and policy context stay in one decision surface.
                 </p>
               </Card.Footer>
@@ -255,7 +255,7 @@ export function LandingFeatureOverviewSection() {
                 <h3 className="text-xl font-semibold text-foreground">
                   Keep important images watched.
                 </h3>
-                <p className="mt-2 text-sm leading-6 text-muted">
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Scheduled rescans surface newly disclosed CVEs without losing ownership context.
                 </p>
               </Card.Footer>
@@ -268,7 +268,7 @@ export function LandingFeatureOverviewSection() {
               variant="default"
             >
               <Card.Header>
-                <div className="flex size-11 items-center justify-center rounded-xl border border-divider/70 bg-surface-secondary text-accent">
+                <div className="flex size-11 items-center justify-center rounded-xl border border-divider/70 bg-surface-secondary text-primary">
                   <Shield01Icon aria-hidden size={21} />
                 </div>
               </Card.Header>
@@ -302,15 +302,15 @@ function CliScene() {
           <span className="size-2.5 rounded-full bg-warning/70" />
           <span className="size-2.5 rounded-full bg-success/70" />
         </div>
-        <div className="flex items-center gap-2 rounded-md border border-divider/70 bg-surface/70 px-3 py-1 text-[10px] text-muted">
+        <div className="flex items-center gap-2 rounded-md border border-divider/70 bg-surface/70 px-3 py-1 text-xs text-muted-foreground">
           <CommandLineIcon aria-hidden size={12} />
           justscan · pipeline
         </div>
         <span className="w-12" />
       </div>
       <div className="p-5 font-mono text-xs leading-6 sm:p-8 sm:text-sm">
-        <p className="text-muted">
-          <span className="text-accent">$</span> justscan scan ghcr.io/acme/api:release
+        <p className="text-muted-foreground">
+          <span className="text-primary">$</span> justscan scan ghcr.io/acme/api:release
         </p>
         <div className="mt-6 space-y-3">
           {[
@@ -324,12 +324,12 @@ function CliScene() {
               className="landing-cli-line grid grid-cols-[24px_1fr_auto] items-center gap-3"
               style={{ animationDelay: `${index * 0.65}s` }}
             >
-              <span className="text-muted">{number}</span>
-              <span className={state === 'pending' ? 'text-muted' : 'text-foreground'}>
+              <span className="text-muted-foreground">{number}</span>
+              <span className={state === 'pending' ? 'text-muted-foreground' : 'text-foreground'}>
                 {label}
               </span>
               {state === 'complete' ? (
-                <CheckmarkCircle02Icon aria-hidden className="text-success" size={15} />
+                <CheckmarkCircle02Icon aria-hidden className="text-success-foreground" size={15} />
               ) : state === 'active' ? (
                 <span className="landing-cli-spinner" />
               ) : (
@@ -341,18 +341,18 @@ function CliScene() {
         <div className="mt-7 h-1 overflow-hidden rounded-full bg-divider/70">
           <span
             aria-hidden
-            className="landing-cli-progress block h-full w-3/4 rounded-full bg-accent"
+            className="landing-cli-progress block h-full w-3/4 rounded-full bg-primary"
           />
         </div>
         <div className="landing-cli-verdict mt-8 rounded-xl border border-success/30 bg-success/10 p-4">
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-2 font-sans text-sm font-semibold text-foreground">
-              <CheckmarkCircle02Icon aria-hidden className="text-success" size={17} />
+              <CheckmarkCircle02Icon aria-hidden className="text-success-foreground" size={17} />
               Policy passed
             </span>
-            <span className="font-sans text-xs text-muted">exit 0</span>
+            <span className="font-sans text-xs text-muted-foreground">exit 0</span>
           </div>
-          <p className="mt-2 text-xs text-muted">9 fixable findings · result saved to Platform</p>
+          <p className="mt-2 text-xs text-muted-foreground">9 fixable findings · result saved to Platform</p>
         </div>
       </div>
     </StageFrame>
@@ -381,10 +381,10 @@ export function LandingCliSection() {
               <div key={title} className="flex gap-3">
                 <CheckmarkCircle02Icon
                   aria-hidden
-                  className="mt-0.5 shrink-0 text-accent"
+                  className="mt-0.5 shrink-0 text-primary"
                   size={18}
                 />
-                <p className="text-sm leading-6 text-muted">
+                <p className="text-sm leading-6 text-muted-foreground">
                   <span className="font-medium text-foreground">{title}.</span> {description}
                 </p>
               </div>
@@ -416,12 +416,12 @@ function GitOpsScene() {
     <StageFrame className="min-h-[470px] p-5 sm:p-7 lg:p-9" label="Animated GitOps discovery flow">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-xl border border-divider/80 bg-surface text-accent">
+          <div className="flex size-10 items-center justify-center rounded-xl border border-divider/80 bg-surface text-primary">
             <GitBranchIcon aria-hidden size={19} />
           </div>
           <div>
             <p className="text-sm font-semibold text-foreground">platform/production</p>
-            <p className="mt-0.5 font-mono text-[10px] text-muted">main · synced just now</p>
+            <p className="mt-0.5 font-mono text-xs text-muted-foreground">main · synced just now</p>
           </div>
         </div>
         <Chip color="success" size="sm" variant="soft">
@@ -441,7 +441,7 @@ function GitOpsScene() {
               className="landing-manifest-row rounded-xl border border-divider/70 bg-surface/80 p-3"
               style={{ animationDelay: `${index * 0.7}s` }}
             >
-              <p className="flex items-center gap-2 truncate font-mono text-[10px] text-muted">
+              <p className="flex items-center gap-2 truncate font-mono text-xs text-muted-foreground">
                 <CodeFolderIcon aria-hidden className="shrink-0" size={13} />
                 {file}
               </p>
@@ -457,9 +457,9 @@ function GitOpsScene() {
           <span className="landing-gitops-packet top-[78%]" style={{ animationDelay: '2.2s' }} />
         </div>
 
-        <div className="relative rounded-2xl border border-divider/80 bg-surface/85 p-4">
+        <div className="relative rounded-xl border border-divider/80 bg-surface/85 p-4">
           <div className="flex items-center gap-2 border-b border-divider/70 pb-3">
-            <FileSearchIcon aria-hidden className="text-accent" size={17} />
+            <FileSearchIcon aria-hidden className="text-primary" size={17} />
             <p className="text-xs font-semibold text-foreground">Discovered workloads</p>
           </div>
           <div className="mt-3 space-y-3">
@@ -470,16 +470,16 @@ function GitOpsScene() {
             ].map(([name, status, tone]) => (
               <div key={name} className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2 text-xs text-foreground">
-                  <PackageIcon aria-hidden className="text-muted" size={14} />
+                  <PackageIcon aria-hidden className="text-muted-foreground" size={14} />
                   {name}
                 </span>
                 <span
                   className={
                     tone === 'danger'
-                      ? 'text-[10px] text-danger'
+                      ? 'text-xs text-danger'
                       : tone === 'success'
-                        ? 'text-[10px] text-success'
-                        : 'text-[10px] text-accent'
+                        ? 'text-xs text-success-foreground'
+                        : 'text-xs text-primary'
                   }
                 >
                   {status}
@@ -488,7 +488,7 @@ function GitOpsScene() {
             ))}
           </div>
           <Separator className="my-4" variant="tertiary" />
-          <div className="flex items-center justify-between text-[10px] text-muted">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <GitCompareIcon aria-hidden size={12} /> 3 manifests
             </span>
@@ -497,7 +497,7 @@ function GitOpsScene() {
         </div>
       </div>
 
-      <div className="mt-7 flex flex-wrap items-center gap-2 text-[10px] text-muted">
+      <div className="mt-7 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span className="rounded-md border border-divider/70 bg-surface/65 px-2.5 py-1.5">
           Discover
         </span>
@@ -506,7 +506,7 @@ function GitOpsScene() {
           Scan
         </span>
         <ArrowRight01Icon aria-hidden size={13} />
-        <span className="rounded-md border border-accent/30 bg-accent/10 px-2.5 py-1.5 text-accent">
+        <span className="rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-primary">
           Enforce policy
         </span>
       </div>
@@ -530,7 +530,7 @@ export function LandingGitOpsSection() {
           <GitOpsScene />
         </LandingReveal>
         <LandingReveal className="mt-4" delay={0.08}>
-          <div className="grid overflow-hidden rounded-2xl border border-divider/70 bg-surface/60 md:grid-cols-3">
+          <div className="grid overflow-hidden rounded-xl border border-divider/70 bg-surface/60 md:grid-cols-3">
             {[
               [
                 '01',
@@ -554,9 +554,9 @@ export function LandingGitOpsSection() {
                   index > 0 ? 'border-t border-divider/70 md:border-l md:border-t-0' : ''
                 }`}
               >
-                <span className="font-mono text-xs text-accent">{number}</span>
+                <span className="font-mono text-xs text-primary">{number}</span>
                 <h3 className="mt-4 text-lg font-semibold text-foreground">{title}</h3>
-                <p className="mt-2 text-sm leading-6 text-muted">{description}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
               </div>
             ))}
           </div>
@@ -582,10 +582,10 @@ function CollectorScene() {
       <div className="absolute inset-0 flex items-center justify-center">
         <span aria-hidden className="landing-collector-orbit size-48 sm:size-64" />
         <span aria-hidden className="landing-collector-orbit size-72 sm:size-96" />
-        <div className="landing-collector-core relative z-10 flex size-28 flex-col items-center justify-center rounded-3xl border border-accent/35 bg-surface/95 text-center shadow-lg shadow-accent/10">
-          <CloudServerIcon aria-hidden className="text-accent" size={27} />
+        <div className="landing-collector-core relative z-10 flex size-28 flex-col items-center justify-center rounded-xl border border-primary/35 bg-surface/95 text-center shadow-lg shadow-accent/10">
+          <CloudServerIcon aria-hidden className="text-primary" size={27} />
           <span className="mt-2 text-xs font-semibold text-foreground">JustScan</span>
-          <span className="text-[9px] uppercase tracking-[0.16em] text-muted">control plane</span>
+          <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">control plane</span>
         </div>
       </div>
       {nodes.map(([label, position, delay]) => (
@@ -594,8 +594,8 @@ function CollectorScene() {
           className={`landing-collector-node absolute ${position} rounded-xl border border-divider/75 bg-surface/90 px-3 py-2 shadow-sm`}
           style={{ animationDelay: delay }}
         >
-          <span className="flex items-center gap-2 text-[10px] font-medium text-foreground sm:text-xs">
-            <span aria-hidden className="size-1.5 rounded-full bg-accent" />
+          <span className="flex items-center gap-2 text-xs font-medium text-foreground sm:text-xs">
+            <span aria-hidden className="size-1.5 rounded-full bg-primary" />
             {label}
           </span>
         </div>
@@ -618,7 +618,7 @@ function CollectorScene() {
 export function LandingCollectorsSection() {
   return (
     <section id="collectors" className="scroll-mt-24 px-5 py-20 sm:px-6 lg:py-28">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-3xl border border-divider/70 bg-surface/55 p-5 sm:p-8 lg:p-12">
+      <div className="mx-auto max-w-7xl overflow-hidden rounded-xl border border-divider/70 bg-surface/55 p-5 sm:p-8 lg:p-12">
         <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-14">
           <LandingReveal className="lg:col-span-5">
             <Chip color="accent" size="sm" variant="soft">
@@ -628,7 +628,7 @@ export function LandingCollectorsSection() {
             <h2 className="mt-5 text-4xl font-semibold leading-[1.04] tracking-[-0.045em] text-foreground sm:text-5xl">
               Collect closer to where workloads run.
             </h2>
-            <p className="mt-5 text-base leading-7 text-muted">
+            <p className="mt-5 text-base leading-7 text-muted-foreground">
               Collectors are the next step in extending JustScan into distributed and restricted
               environments while keeping policy and review centralized.
             </p>
@@ -639,7 +639,7 @@ export function LandingCollectorsSection() {
                 </Chip>
               ))}
             </div>
-            <p className="mt-6 text-xs leading-5 text-muted">
+            <p className="mt-6 text-xs leading-5 text-muted-foreground">
               This preview reflects the product direction currently being planned. Availability and
               final scope may change.
             </p>

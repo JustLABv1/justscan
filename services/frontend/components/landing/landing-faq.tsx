@@ -39,7 +39,7 @@ const FAQ_ITEMS = [
 export function LandingFaq() {
   return (
     <Accordion
-      className="w-full rounded-2xl border border-divider/70 bg-surface-secondary/55 px-2 sm:px-4"
+      className="w-full rounded-xl border border-divider/70 bg-surface-secondary/55 px-2 sm:px-4"
       defaultExpandedKeys={['faq-0']}
       variant="surface"
     >
@@ -47,17 +47,17 @@ export function LandingFaq() {
         <Accordion.Item key={`faq-${index}`} id={`faq-${index}`}>
           <Accordion.Heading>
             <Accordion.Trigger className="min-h-16 text-left text-base font-medium text-foreground sm:min-h-18">
-              <span className="mr-4 flex size-7 shrink-0 items-center justify-center rounded-lg border border-divider/70 bg-surface text-xs font-mono text-muted">
+              <span className="mr-4 flex size-7 shrink-0 items-center justify-center rounded-lg border border-divider/70 bg-surface text-xs font-mono text-muted-foreground">
                 {String(index + 1).padStart(2, '0')}
               </span>
               {item.question}
-              <Accordion.Indicator className="text-muted [&>svg]:size-4">
+              <Accordion.Indicator className="text-muted-foreground [&>svg]:size-4">
                 <ArrowDown01Icon aria-hidden />
               </Accordion.Indicator>
             </Accordion.Trigger>
           </Accordion.Heading>
           <Accordion.Panel>
-            <Accordion.Body className="pb-6 pl-11 text-sm leading-7 text-muted sm:pl-12">
+            <Accordion.Body className="pb-6 pl-11 text-sm leading-7 text-muted-foreground sm:pl-12">
               {item.answer}
             </Accordion.Body>
           </Accordion.Panel>

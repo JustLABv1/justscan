@@ -50,7 +50,7 @@ function PackageNode({ data }: NodeProps<Node<PackageNodeData>>) {
   const count = data.component.vulnerability_count ?? 0;
   return (
     <div
-      className="nodrag nopan min-w-48 cursor-pointer rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-zinc-950 shadow-sm transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+      className="nodrag nopan min-w-48 cursor-pointer rounded-xl border border-border bg-white px-3 py-2.5 text-foreground shadow-sm transition-colors hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:border-border dark:bg-muted dark:text-foreground dark:hover:bg-muted"
       role="button"
       tabIndex={0}
       aria-label={`Open ${packageLabel(data.component)} ${data.component.version}`}
@@ -77,7 +77,7 @@ function PackageNode({ data }: NodeProps<Node<PackageNodeData>>) {
           </Chip>
         ) : null}
       </div>
-      <p className="mt-1 truncate font-mono text-xs text-muted">
+      <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
         {data.component.version || 'No version'}
       </p>
       <Handle
@@ -459,7 +459,7 @@ export function SBOMWorkspace({
                     {loading ? (
                       <Table.Row id="loading">
                         <Table.Cell colSpan={6}>
-                          <div className="py-10 text-center text-sm text-muted">
+                          <div className="py-10 text-center text-sm text-muted-foreground">
                             Loading package evidence…
                           </div>
                         </Table.Cell>
@@ -467,7 +467,7 @@ export function SBOMWorkspace({
                     ) : inventoryRows.length === 0 ? (
                       <Table.Row id="empty">
                         <Table.Cell colSpan={6}>
-                          <div className="py-10 text-center text-sm text-muted">
+                          <div className="py-10 text-center text-sm text-muted-foreground">
                             No packages match these filters.
                           </div>
                         </Table.Cell>
@@ -478,7 +478,7 @@ export function SBOMWorkspace({
                           <Table.Cell className="max-w-0">
                             <Button
                               variant="ghost"
-                              className="-mx-2 h-auto w-full min-w-0 justify-start px-2 py-1 text-left"
+                              className="-mx-2 h-auto w-full min-w-0 justify-start text-left"
                               aria-label={`Open ${packageLabel(component)} ${component.version}`}
                               onPress={() => void openComponent(component)}
                             >
@@ -486,7 +486,7 @@ export function SBOMWorkspace({
                                 <span className="block truncate font-medium">
                                   {packageLabel(component)}
                                 </span>
-                                <span className="block truncate font-mono text-xs text-muted">
+                                <span className="block truncate font-mono text-xs text-muted-foreground">
                                   {component.package_url || component.bom_ref || 'No package URL'}
                                 </span>
                               </span>
@@ -533,13 +533,13 @@ export function SBOMWorkspace({
       {view === 'tree' ? (
         <Card className="surface-panel p-4">
           {graphLoading ? (
-            <p className="text-sm text-muted">Loading dependency relationships…</p>
+            <p className="text-sm text-muted-foreground">Loading dependency relationships…</p>
           ) : !graphAvailable ? (
             <div className="space-y-2">
               <p className="font-medium">
                 Dependency relationships are not available for this scan.
               </p>
-              <p className="text-sm text-muted">
+              <p className="text-sm text-muted-foreground">
                 This is a legacy package inventory created before JustScan retained CycloneDX
                 dependency data. Packages remain clickable below; re-scan the artifact to generate
                 its dependency tree.
@@ -562,7 +562,7 @@ export function SBOMWorkspace({
             </div>
           ) : (
             <>
-              <p className="mb-3 text-sm text-muted">
+              <p className="mb-3 text-sm text-muted-foreground">
                 Expand the dependency story from the scanned artifact. A package can occur under
                 more than one parent; cycles are marked instead of repeated.
               </p>
@@ -586,14 +586,14 @@ export function SBOMWorkspace({
       {view === 'graph' ? (
         <Card className="surface-panel overflow-hidden">
           {graphLoading ? (
-            <div className="flex h-[420px] items-center justify-center text-sm text-muted">
+            <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
               Loading dependency graph…
             </div>
           ) : !graphAvailable ? (
             <div className="flex min-h-[420px] flex-col items-center justify-center p-8 text-center">
-              <GitBranchIcon size={28} className="text-muted" />
+              <GitBranchIcon size={28} className="text-muted-foreground" />
               <p className="mt-4 font-medium">No dependency graph is available for this scan.</p>
-              <p className="mt-2 max-w-lg text-sm text-muted">
+              <p className="mt-2 max-w-lg text-sm text-muted-foreground">
                 The legacy inventory has package records but no declared relationships. Re-scan to
                 generate a CycloneDX dependency graph; package details are still available from
                 Inventory or Tree.
@@ -615,7 +615,7 @@ export function SBOMWorkspace({
                 </ReactFlow>
               </div>
               {graph.truncated ? (
-                <div className="border-t border-divider px-4 py-3 text-sm text-warning">
+                <div className="border-t border-divider px-4 py-3 text-sm text-warning-foreground">
                   Graph is capped for performance. Open a package from inventory to inspect its
                   immediate neighborhood.
                 </div>
@@ -632,7 +632,7 @@ export function SBOMWorkspace({
               <Drawer.Header>
                 <div className="min-w-0">
                   <Drawer.Heading>{packageLabel(selected.component)}</Drawer.Heading>
-                  <p className="mt-1 break-all font-mono text-xs text-muted">
+                  <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                     {selected.component.package_url ||
                       selected.component.bom_ref ||
                       'No package URL'}
@@ -662,14 +662,14 @@ export function SBOMWorkspace({
                   </dl>
                 </section>
                 {detailLoading ? (
-                  <p className="text-sm text-muted">
+                  <p className="text-sm text-muted-foreground">
                     Loading package relationships and vulnerabilities…
                   </p>
                 ) : (
                   <>
                     <section>
                       <h3 className="text-sm font-semibold">Dependency context</h3>
-                      <p className="mt-2 text-sm text-muted">
+                      <p className="mt-2 text-sm text-muted-foreground">
                         {selected.component.is_root
                           ? 'This is the scanned artifact root.'
                           : selected.component.dependency_depth != null
@@ -713,7 +713,7 @@ export function SBOMWorkspace({
                                   {vulnerability.severity}
                                 </Chip>
                               </div>
-                              <p className="mt-1 text-sm text-muted">
+                              <p className="mt-1 text-sm text-muted-foreground">
                                 {vulnerability.fixed_version
                                   ? `Fixed in ${vulnerability.fixed_version}`
                                   : 'No fix currently reported'}
@@ -722,7 +722,7 @@ export function SBOMWorkspace({
                           ))}
                         </div>
                       ) : (
-                        <p className="mt-2 text-sm text-muted">
+                        <p className="mt-2 text-sm text-muted-foreground">
                           No linked findings were reported for this package.
                         </p>
                       )}
@@ -741,7 +741,7 @@ export function SBOMWorkspace({
 function Detail({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded-xl border border-divider p-3">
-      <dt className="text-xs font-medium text-muted">{label}</dt>
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="mt-1 break-words">{value || '—'}</dd>
     </div>
   );
@@ -790,7 +790,7 @@ function TreeNode({
           className="min-w-0 justify-start"
         >
           <span className="truncate">{packageLabel(component)}</span>
-          <span className="font-mono text-xs text-muted">{component.version}</span>
+          <span className="font-mono text-xs text-muted-foreground">{component.version}</span>
         </Button>
         {(component.vulnerability_count ?? 0) > 0 ? (
           <Chip size="sm" variant="soft" color="danger">
@@ -801,7 +801,7 @@ function TreeNode({
       {expanded
         ? childNodes.map((child) =>
             nextAncestry.has(child.id) ? (
-              <div key={`${component.id}-${child.id}`} className="ml-8 py-1 text-xs text-muted">
+              <div key={`${component.id}-${child.id}`} className="ml-8 py-1 text-xs text-muted-foreground">
                 ↳ {packageLabel(child)} (cycle)
               </div>
             ) : (

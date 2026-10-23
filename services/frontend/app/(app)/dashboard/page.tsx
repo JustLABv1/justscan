@@ -356,7 +356,7 @@ function ScanOutcomeChart({
 
       <Card.Content className="p-0 pt-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted-foreground">
             <span className="font-semibold tabular-nums text-foreground">
               {error ? 'Unavailable' : totalScans.toLocaleString()}
             </span>{' '}
@@ -364,7 +364,7 @@ function ScanOutcomeChart({
           </p>
           <Link
             href={`/scans?range=${range}`}
-            className="text-xs font-medium text-accent hover:text-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="text-xs font-medium text-primary hover:text-primary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             View all scans →
           </Link>
@@ -385,11 +385,11 @@ function ScanOutcomeChart({
             }
           />
         ) : loading ? (
-          <div className="mt-5 flex h-[280px] items-center justify-center text-sm text-muted">
+          <div className="mt-5 flex h-[280px] items-center justify-center text-sm text-muted-foreground">
             Updating scan outcomes…
           </div>
         ) : totalScans === 0 ? (
-          <div className="mt-5 flex h-[280px] items-center justify-center rounded-xl bg-surface-secondary px-6 text-center text-sm text-muted">
+          <div className="mt-5 flex h-[280px] items-center justify-center rounded-xl bg-surface-secondary px-6 text-center text-sm text-muted-foreground">
             No scans were started in the {rangeLabel.toLowerCase()}.
           </div>
         ) : (
@@ -434,7 +434,7 @@ function ScanOutcomeChart({
             className="mt-3 flex flex-wrap items-center gap-1.5"
             aria-label="Open scans for a specific day"
           >
-            <span className="mr-1 text-xs text-muted">Open a day:</span>
+            <span className="mr-1 text-xs text-muted-foreground">Open a day:</span>
             {openDayButtons}
           </div>
         ) : null}
@@ -444,7 +444,7 @@ function ScanOutcomeChart({
             <Button
               key={series.key}
               aria-label={`View ${series.label.toLowerCase()} scans from the selected period`}
-              className="h-8 shrink-0 justify-between gap-2 px-2.5 text-left"
+              className=" shrink-0 justify-between gap-2 text-left"
               onPress={() =>
                 onStatusPress({
                   status: 'status' in series ? series.status : undefined,
@@ -462,13 +462,13 @@ function ScanOutcomeChart({
                 />
                 <span className="truncate">{series.label}</span>
               </span>
-              <span className="tabular-nums text-muted">
+              <span className="tabular-nums text-muted-foreground">
                 {error ? '—' : series.total.toLocaleString()}
               </span>
             </Button>
           ))}
         </div>
-        <p className="mt-3 text-xs text-muted">
+        <p className="mt-3 text-xs text-muted-foreground">
           Select an outcome to open the matching scans for this time range.
         </p>
       </Card.Content>
@@ -668,12 +668,12 @@ function VulnTrendChart({
   const ticks = niceTicks(peakAverage);
 
   return (
-    <Card className="relative z-10 rounded-2xl p-4">
+    <Card className="relative z-10 rounded-xl p-4">
       <div
         className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
         style={{
           background:
-            'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 20%, transparent), transparent)',
+            'linear-gradient(90deg, transparent, color-mix(in srgb, var(--primary) 20%, transparent), transparent)',
         }}
       />
 
@@ -682,11 +682,11 @@ function VulnTrendChart({
         <div className="flex min-w-0 items-start gap-3">
           <SurfaceIcon icon={<Shield01Icon size={17} />} variant="repository" />
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Risk trend</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
+            <h2 className="text-sm font-semibold text-foreground">Risk trend</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Historical average findings per finalized scan, by severity
             </p>
-            <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            <p className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>
               {error ? (
                 'Risk trend unavailable'
               ) : latestActivePoint ? (
@@ -743,7 +743,7 @@ function VulnTrendChart({
             }
           />
         ) : !hasData ? (
-          <div className="flex items-center justify-center text-sm text-zinc-500 py-10">
+          <div className="flex items-center justify-center text-sm text-muted-foreground py-10">
             No finalized scans in this period
           </div>
         ) : (
@@ -791,7 +791,7 @@ function VulnTrendChart({
       </div>
 
       {hasData && (
-        <p className="mt-3 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+        <p className="mt-3 text-xs" style={{ color: 'var(--text-faint)' }}>
           Peak daily average in this window:{' '}
           <span className="tabular-nums" style={{ color: 'var(--text-secondary)' }}>
             {peakAverage}
@@ -1301,33 +1301,33 @@ export default function DashboardPage() {
                     ? `${formatCompactNumber(criticalHighCount)} severe findings need context.`
                     : 'No severe findings are recorded in this workspace history.'}
                 </h2>
-                <p className="mt-4 max-w-2xl text-sm leading-6 text-muted">
+                <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground">
                   Review vulnerability exposure alongside the organizational policies that apply to
                   this workspace—such as configured severity or CVSS thresholds. Policy results
                   provide evidence; they do not decide release readiness.
                 </p>
               </div>
               <div className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-3 text-sm">
-                <span className="text-muted">
+                <span className="text-muted-foreground">
                   <strong className="font-semibold text-danger">
                     {(stats.severity_totals.critical ?? 0).toLocaleString()}
                   </strong>{' '}
                   critical
                 </span>
-                <span className="text-muted">
-                  <strong className="font-semibold text-warning">
+                <span className="text-muted-foreground">
+                  <strong className="font-semibold text-warning-foreground">
                     {(stats.severity_totals.high ?? 0).toLocaleString()}
                   </strong>{' '}
                   high
                 </span>
-                <span className="text-muted">
+                <span className="text-muted-foreground">
                   <strong className="font-semibold text-foreground">
                     {formatCompactNumber(totalVulns)}
                   </strong>{' '}
                   findings
                 </span>
                 <Link
-                  className="font-medium text-accent hover:text-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="font-medium text-primary hover:text-primary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   href="/scans?critical=yes&sort=risk_desc"
                 >
                   Explore findings →
@@ -1338,13 +1338,13 @@ export default function DashboardPage() {
             <div className="flex min-h-[230px] flex-col justify-between border-t border-divider bg-surface-secondary p-6 lg:border-t-0 lg:border-l">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     Severe finding trend
                   </p>
                   <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
                     {formatCompactNumber(criticalHighCount)}
                   </p>
-                  <p className="mt-1 text-xs text-muted">Critical and high in scan history</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Critical and high in scan history</p>
                 </div>
                 <div className="flex rounded-xl bg-surface p-1">
                   {[7, 14, 30].map((days) => (
@@ -1370,11 +1370,11 @@ export default function DashboardPage() {
                   />
                 </div>
               ) : (
-                <p className="py-8 text-sm text-muted">
+                <p className="py-8 text-sm text-muted-foreground">
                   No trend data is available for this period.
                 </p>
               )}
-              <p className="mt-3 text-xs text-muted">Historical average per finalized scan</p>
+              <p className="mt-3 text-xs text-muted-foreground">Historical average per finalized scan</p>
             </div>
           </Card.Content>
         </Card>
@@ -1394,7 +1394,7 @@ export default function DashboardPage() {
               >
                 Policy &amp; CVE signals
               </Chip>
-              <span className="text-xs tabular-nums text-muted">Today</span>
+              <span className="text-xs tabular-nums text-muted-foreground">Today</span>
             </div>
             <Card.Title className="mt-4">What merits review</Card.Title>
             <Card.Description>
@@ -1403,14 +1403,14 @@ export default function DashboardPage() {
           </Card.Header>
           <Card.Content className="flex flex-1 flex-col justify-center gap-5 p-0 py-6">
             <div className="flex items-start gap-3">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-warning/10 text-xs font-semibold text-warning">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-warning/10 text-xs font-semibold text-warning-foreground">
                 1
               </span>
               <div>
                 <p className="text-sm font-medium text-foreground">
                   {policyFailures.today.toLocaleString()} policy failures today
                 </p>
-                <p className="mt-1 text-xs leading-5 text-muted">
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   {policyFailures.last_7_days.toLocaleString()} recorded in the last 7 days across
                   the current workspace.
                 </p>
@@ -1425,7 +1425,7 @@ export default function DashboardPage() {
                 <p className="text-sm font-medium text-foreground">
                   {activePolicySignals.toLocaleString()} active policy signals
                 </p>
-                <p className="mt-1 text-xs leading-5 text-muted">
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   {operations.org_policy_fail_count.toLocaleString()} organization policy ·{' '}
                   {operations.xray_blocked_count.toLocaleString()} Xray policy ·{' '}
                   {operations.blocked_policy_count.toLocaleString()} blocked policy
@@ -1434,14 +1434,14 @@ export default function DashboardPage() {
             </div>
             <Separator variant="tertiary" />
             <div className="flex items-start gap-3">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-warning/10 text-xs font-semibold text-warning">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-warning/10 text-xs font-semibold text-warning-foreground">
                 3
               </span>
               <div>
                 <p className="text-sm font-medium text-foreground">
                   {intelligencePendingCount.toLocaleString()} scans await CVE confirmation
                 </p>
-                <p className="mt-1 text-xs leading-5 text-muted">
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   {operations.intelligence_changed_count.toLocaleString()} latest scans have
                   post-scan CVE changes. Pending results stay unchanged until a confirmation scan
                   runs.
@@ -1450,7 +1450,7 @@ export default function DashboardPage() {
             </div>
             <Separator variant="tertiary" />
             <div className="flex items-start gap-3">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-xs font-semibold text-accent">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-xs font-semibold text-primary">
                 4
               </span>
               <div>
@@ -1459,7 +1459,7 @@ export default function DashboardPage() {
                     ? 'Watchlist attention unavailable'
                     : `${watchlistAttentionCount.toLocaleString()} watchlist items need attention`}
                 </p>
-                <p className="mt-1 text-xs leading-5 text-muted">
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   {watchlistOverviewUnavailable
                     ? 'The dashboard could not load current watchlist coverage.'
                     : 'Scheduled scans with a policy outcome or scan issue stay visible here.'}
@@ -1481,13 +1481,13 @@ export default function DashboardPage() {
 
       <section aria-labelledby="posture-facts-heading">
         <div className="mb-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
             Evidence snapshot
           </p>
           <h2 id="posture-facts-heading" className="mt-1 text-lg font-semibold text-foreground">
             The facts behind the posture
           </h2>
-          <p className="mt-1 text-sm text-muted">
+          <p className="mt-1 text-sm text-muted-foreground">
             Scan outcomes and coverage evidence for the selected workspace.
           </p>
         </div>
@@ -1536,7 +1536,7 @@ export default function DashboardPage() {
                   }
                 />
               ) : watchlistOverviewLoading && watchlistOverviewItems.length === 0 ? (
-                <div className="rounded-xl bg-surface-secondary px-4 py-8 text-center text-sm text-muted">
+                <div className="rounded-xl bg-surface-secondary px-4 py-8 text-center text-sm text-muted-foreground">
                   Loading fresh coverage…
                 </div>
               ) : (
@@ -1546,19 +1546,19 @@ export default function DashboardPage() {
                       <p className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
                         {watchlistCoverage.coverage7d}%
                       </p>
-                      <p className="mt-1 text-[11px] text-muted">fresh in 7 days</p>
+                      <p className="mt-1 text-xs text-muted-foreground">fresh in 7 days</p>
                     </div>
                     <div>
-                      <p className="text-2xl font-semibold tabular-nums tracking-tight text-warning">
+                      <p className="text-2xl font-semibold tabular-nums tracking-tight text-warning-foreground">
                         {watchlistCoverage.staleItems.length}
                       </p>
-                      <p className="mt-1 text-[11px] text-muted">overdue</p>
+                      <p className="mt-1 text-xs text-muted-foreground">overdue</p>
                     </div>
                     <div>
-                      <p className="text-2xl font-semibold tabular-nums tracking-tight text-accent">
+                      <p className="text-2xl font-semibold tabular-nums tracking-tight text-primary">
                         {dashboardActivity.images_scanned_today}
                       </p>
-                      <p className="mt-1 text-[11px] text-muted">scanned today</p>
+                      <p className="mt-1 text-xs text-muted-foreground">scanned today</p>
                     </div>
                   </div>
                   <ProgressBar
@@ -1579,13 +1579,13 @@ export default function DashboardPage() {
                   <Separator variant="tertiary" />
                   <div className="space-y-3 text-sm">
                     <div className="flex items-center justify-between gap-4">
-                      <span className="flex items-center gap-2 text-muted">
+                      <span className="flex items-center gap-2 text-muted-foreground">
                         <GitBranchIcon size={16} /> Git repositories
                       </span>
                       <span
                         className={
                           gitRepositoryTone === 'success'
-                            ? 'text-success'
+                            ? 'text-success-foreground'
                             : gitRepositoryTone === 'danger'
                               ? 'text-danger'
                               : 'text-foreground'
@@ -1595,7 +1595,7 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-4">
-                      <span className="flex items-center gap-2 text-muted">
+                      <span className="flex items-center gap-2 text-muted-foreground">
                         <ChartIcon size={16} /> Active Xray scans
                       </span>
                       <span className="tabular-nums text-foreground">
@@ -1603,7 +1603,7 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-4">
-                      <span className="flex items-center gap-2 text-muted">
+                      <span className="flex items-center gap-2 text-muted-foreground">
                         <PackageIcon size={16} /> Scheduled items
                       </span>
                       <span className="tabular-nums text-foreground">
@@ -1616,7 +1616,7 @@ export default function DashboardPage() {
             </Card.Content>
             <Card.Footer className="px-0 pt-6">
               <Link
-                className="text-xs font-medium text-accent hover:text-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="text-xs font-medium text-primary hover:text-primary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 href="/watchlist"
               >
                 Manage coverage →

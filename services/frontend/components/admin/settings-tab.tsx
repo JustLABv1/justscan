@@ -30,7 +30,7 @@ function SettingRow({
     <div className="grid gap-3 rounded-xl border border-divider/60 bg-content2/30 p-3 lg:grid-cols-[1fr_auto_auto] lg:items-end">
       <div>
         <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs text-zinc-500">{description}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       <div className="lg:w-[190px]">{input}</div>
       <div>{action}</div>
@@ -175,14 +175,14 @@ export function SettingsTab() {
         <Card className="space-y-4">
           <div>
             <h2 className="text-base font-semibold">Access & Exposure</h2>
-            <p className="text-sm text-zinc-500">Public endpoints and throttling policies.</p>
+            <p className="text-sm text-muted-foreground">Public endpoints and throttling policies.</p>
           </div>
 
           <div className="rounded-xl border border-divider/60 bg-content2/30 p-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium">Public Scanning</p>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-muted-foreground">
                   Allow unauthenticated users to scan at{' '}
                   <Link href="/scan" target="_blank" rel="noreferrer">
                     /scan
@@ -191,12 +191,12 @@ export function SettingsTab() {
                 </p>
               </div>
               {publicScanEnabled === null ? (
-                <p className="text-xs text-zinc-500">Loading...</p>
+                <p className="text-xs text-muted-foreground">Loading...</p>
               ) : (
                 <div className="flex items-center gap-2">
                   <span
                     className={
-                      publicScanEnabled ? 'text-xs font-medium text-success' : 'text-xs font-medium text-danger'
+                      publicScanEnabled ? 'text-xs font-medium text-success-foreground' : 'text-xs font-medium text-danger'
                     }
                   >
                     {publicScanEnabled ? 'Enabled' : 'Disabled'}
@@ -218,7 +218,7 @@ export function SettingsTab() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium">Maintenance Mode</p>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-muted-foreground">
                   Route non-admin users to the maintenance page.
                 </p>
               </div>
@@ -314,7 +314,7 @@ export function SettingsTab() {
             <Modal.Dialog>
               <Modal.Header>
                 <Modal.Heading>Edit Maintenance Message</Modal.Heading>
-                <p className="text-sm text-zinc-500">
+                <p className="text-sm text-muted-foreground">
                   This plain-text message is shown on the public maintenance page.
                 </p>
               </Modal.Header>
@@ -329,7 +329,7 @@ export function SettingsTab() {
                   variant="secondary"
                   onChange={(event) => setMaintenanceDraft(event.target.value)}
                 />
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span>Plain text only.</span>
                   <span>{maintenanceDraft.length}/500</span>
                 </div>

@@ -28,7 +28,7 @@ function ImageName({ imageName }: { imageName: string }) {
         {repository}
       </p>
       {hasHost ? (
-        <p className="mt-0.5 break-words font-mono text-xs leading-4 text-muted">{host}</p>
+        <p className="mt-0.5 break-words font-mono text-xs leading-4 text-muted-foreground">{host}</p>
       ) : null}
     </div>
   );
@@ -128,7 +128,7 @@ export function ImageOverviewTable({
                             <IntelligenceSummaryChip compact summary={image.intelligence_summary} />
                           </div>
                           <p
-                            className="mt-1 truncate font-mono text-xs text-muted"
+                            className="mt-1 truncate font-mono text-xs text-muted-foreground"
                             title={`Tag: ${image.health_tag}`}
                           >
                             Tag: {image.health_tag}
@@ -154,7 +154,7 @@ export function ImageOverviewTable({
                           <p className="whitespace-nowrap text-sm font-medium">
                             {image.tag_count} tag{image.tag_count === 1 ? '' : 's'}
                           </p>
-                          <p className="mt-1 whitespace-nowrap text-xs text-muted">
+                          <p className="mt-1 whitespace-nowrap text-xs text-muted-foreground">
                             {image.scan_count} run{image.scan_count === 1 ? '' : 's'}
                           </p>
                         </Link>
@@ -167,7 +167,7 @@ export function ImageOverviewTable({
                         >
                           <p className="text-sm">{timeAgo(image.latest_scan_at)}</p>
                           <p
-                            className="mt-1 truncate font-mono text-xs text-muted"
+                            className="mt-1 truncate font-mono text-xs text-muted-foreground"
                             title={image.latest_tag}
                           >
                             {image.latest_tag}

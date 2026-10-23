@@ -212,7 +212,7 @@ function InviteCountChip({ count, className = '' }: { count: number; className?:
 
   return (
     <Chip
-      className={`relative z-10 min-w-6 justify-center px-2 text-[11px] font-semibold ${className}`}
+      className={`relative z-10 min-w-6 justify-center px-2 text-xs font-semibold ${className}`}
       color="warning"
       size="sm"
       variant="soft"
@@ -735,7 +735,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     variant="ghost"
                     onPress={toggleCollapsed}
                     aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                    className="size-8 rounded-lg text-muted-foreground"
+                    className=" "
                   >
                     {desktopCollapsed ? (
                       <SidebarRight01Icon size={17} />
@@ -759,7 +759,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     <Shield01Icon size={18} aria-hidden />
                   ) : (
                     <>
-                      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
+                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                         System scope
                       </p>
                       <p className="mt-0.5 text-sm font-medium">Platform control plane</p>
@@ -806,8 +806,8 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     onPress={() => setSearchOpen(true)}
                     variant="ghost"
                     className={cn(
-                      'shell-search h-10 w-full rounded-lg border border-border text-muted-foreground',
-                      desktopCollapsed ? 'px-0' : 'justify-start px-2.5'
+                      'shell-search w-full border border-border ',
+                      desktopCollapsed ? '' : 'justify-start '
                     )}
                   >
                     <Search01Icon aria-hidden size={16} />
@@ -946,14 +946,14 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                 <Dropdown>
                   <Dropdown.Trigger
                     aria-label="Open user menu"
-                    className={`flex w-full min-w-0 items-center rounded-lg p-2 outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-accent ${desktopCollapsed ? 'justify-center' : 'gap-2.5'}`}
+                    className={`flex w-full min-w-0 items-center rounded-lg p-2 outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-primary ${desktopCollapsed ? 'justify-center' : 'gap-2.5'}`}
                   >
                     <Avatar variant="soft" color="accent" className="size-7 shrink-0">
                       <Avatar.Fallback>{initials}</Avatar.Fallback>
                     </Avatar>
                     {!desktopCollapsed ? (
                       <span className="min-w-0 flex-1 text-left">
-                        <span className="block text-[10px] font-medium text-muted-foreground">
+                        <span className="block text-xs font-medium text-muted-foreground">
                           Account
                         </span>
                         <span className="block truncate text-sm font-medium">
@@ -981,7 +981,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                     >
                       <Dropdown.Item id="settings" textValue="Profile">
                         <div className="flex items-center gap-2">
-                          <Settings01Icon size={14} className="text-muted" />
+                          <Settings01Icon size={14} className="text-muted-foreground" />
                           <Label>Profile</Label>
                         </div>
                       </Dropdown.Item>
@@ -989,9 +989,9 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                         <div className="flex items-center gap-2">
                           {mounted ? (
                             isDark ? (
-                              <Sun01Icon size={14} className="text-muted" />
+                              <Sun01Icon size={14} className="text-muted-foreground" />
                             ) : (
-                              <Moon02Icon size={14} className="text-muted" />
+                              <Moon02Icon size={14} className="text-muted-foreground" />
                             )
                           ) : (
                             <span aria-hidden className="block size-[14px]" />
@@ -1001,13 +1001,13 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       </Dropdown.Item>
                       <Dropdown.Item id="documentation" textValue="Documentation">
                         <div className="flex items-center gap-2">
-                          <FileExportIcon size={14} className="text-muted" />
+                          <FileExportIcon size={14} className="text-muted-foreground" />
                           <Label>Documentation</Label>
                         </div>
                       </Dropdown.Item>
                       <Dropdown.Item id="retake-tour" textValue="Retake tour">
                         <div className="flex items-center gap-2">
-                          <AiContentGenerator01Icon size={14} className="text-muted" />
+                          <AiContentGenerator01Icon size={14} className="text-muted-foreground" />
                           <Label>Retake tour</Label>
                         </div>
                       </Dropdown.Item>
@@ -1027,12 +1027,12 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
             </div>
           </Surface>
 
-          <div className="shell-content flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:my-2 md:mr-2 md:rounded-2xl">
+          <div className="shell-content flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:my-2 md:mr-2 md:rounded-xl">
             <div className={`flex h-14 shrink-0 items-center gap-2.5 ${contentRailClass}`}>
               <>
                 <Button
                   aria-label="Open navigation menu"
-                  className="rounded-lg md:hidden"
+                  className=" md:hidden"
                   isIconOnly
                   onPress={() => setMobileNavOpen(true)}
                   variant="secondary"
@@ -1065,7 +1065,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                             </p>
                           </div>
                         </div>
-                        <Drawer.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                        <Drawer.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
                       </Drawer.Header>
                       <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
                         <div className="space-y-4">
@@ -1088,17 +1088,17 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                     ) : null}
                                   </Badge.Anchor>
                                   <div className="flex flex-col min-w-0 flex-1">
-                                    <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                                       Workspace
                                     </p>
-                                    <span className="mt-0.5 truncate text-[12px] font-medium text-zinc-700 dark:text-zinc-200">
+                                    <span className="mt-0.5 truncate text-xs font-medium text-foreground">
                                       {scopeLabel}
                                     </span>
                                   </div>
                                 </div>
                                 <ArrowDown01Icon
                                   size={16}
-                                  className="text-zinc-500 shrink-0 ml-2"
+                                  className="text-muted-foreground shrink-0 ml-2"
                                 />
                               </Dropdown.Trigger>
                               <Dropdown.Popover className="w-[min(80vw,300px)]">
@@ -1107,7 +1107,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                             </Dropdown>
                           ) : (
                             <div className="rounded-xl bg-surface-secondary px-3 py-2.5">
-                              <p className="text-[11px] uppercase tracking-[0.18em] text-muted">
+                              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                                 System scope
                               </p>
                               <p className="mt-1 text-sm font-medium">Platform control plane</p>
@@ -1144,7 +1144,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                           {!isAdminRoute && pendingInviteCount > 0 && (
                             <Link
                               href="/orgs"
-                              className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-zinc-700 dark:text-zinc-200"
+                              className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-foreground"
                               onClick={() => setMobileNavOpen(false)}
                               style={{
                                 background: 'color-mix(in oklab, var(--warning) 10%, transparent)',
@@ -1154,7 +1154,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                             >
                               <div>
                                 <p>Pending invites</p>
-                                <p className="text-xs font-normal text-zinc-500">
+                                <p className="text-xs font-normal text-muted-foreground">
                                   Review organization access requests
                                 </p>
                               </div>
@@ -1164,7 +1164,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
 
                           {navigationGroups.map(({ label, items }) => (
                             <div key={label} className="space-y-1.5">
-                              <p className="px-2 text-[11px] uppercase tracking-[0.18em] text-muted">
+                              <p className="px-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
                                 {label}
                               </p>
                               <div className="space-y-1">
@@ -1212,24 +1212,24 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                               <div
                                 className="size-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
                                 style={{
-                                  background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
+                                  background: 'color-mix(in oklab, var(--primary) 12%, transparent)',
                                   color: 'var(--accent-soft-foreground)',
                                   border:
-                                    '1px solid color-mix(in oklab, var(--accent) 18%, transparent)',
+                                    '1px solid color-mix(in oklab, var(--primary) 18%, transparent)',
                                 }}
                               >
                                 {initials}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                                <p className="truncate text-sm font-medium text-foreground">
                                   {user?.username ?? user?.email ?? 'User'}
                                 </p>
-                                <p className="truncate text-[11px] text-zinc-500">
+                                <p className="truncate text-xs text-muted-foreground">
                                   {user?.role ?? 'user'}
                                 </p>
                               </div>
                             </div>
-                            <Settings01Icon size={16} className="text-zinc-400 shrink-0" />
+                            <Settings01Icon size={16} className="text-muted-foreground shrink-0" />
                           </Dropdown.Trigger>
                           <Dropdown.Popover className="w-[min(80vw,300px)]" placement="top end">
                             <Dropdown.Menu
@@ -1257,7 +1257,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                             >
                               <Dropdown.Item key="settings" id="settings" textValue="Settings">
                                 <div className="flex items-center gap-2">
-                                  <Settings01Icon size={14} className="text-zinc-500" />
+                                  <Settings01Icon size={14} className="text-muted-foreground" />
                                   <Label>Profile</Label>
                                 </div>
                               </Dropdown.Item>
@@ -1266,9 +1266,9 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                   <div className="flex items-center gap-2">
                                     {mounted ? (
                                       isDark ? (
-                                        <Sun01Icon size={14} className="text-zinc-500" />
+                                        <Sun01Icon size={14} className="text-muted-foreground" />
                                       ) : (
-                                        <Moon02Icon size={14} className="text-zinc-500" />
+                                        <Moon02Icon size={14} className="text-muted-foreground" />
                                       )
                                     ) : (
                                       <span aria-hidden className="block size-[14px]" />
@@ -1283,7 +1283,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                 textValue="Documentation"
                               >
                                 <div className="flex items-center gap-2">
-                                  <FileExportIcon size={14} className="text-zinc-500" />
+                                  <FileExportIcon size={14} className="text-muted-foreground" />
                                   <Label>Documentation</Label>
                                 </div>
                               </Dropdown.Item>
@@ -1293,7 +1293,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                 textValue="Retake Tour"
                               >
                                 <div className="flex items-center gap-2">
-                                  <AiContentGenerator01Icon size={14} className="text-zinc-500" />
+                                  <AiContentGenerator01Icon size={14} className="text-muted-foreground" />
                                   <Label>Retake Tour</Label>
                                 </div>
                               </Dropdown.Item>
@@ -1338,7 +1338,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               <div id="tour-topbar-actions" className="ml-auto flex shrink-0 items-center gap-1.5">
                 <Button
                   aria-label="Open command palette"
-                  className="size-8 rounded-lg md:hidden"
+                  className=" md:hidden"
                   isIconOnly
                   onPress={() => setSearchOpen(true)}
                   variant="ghost"
@@ -1372,7 +1372,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       >
                         <Dropdown.Item key="settings" id="settings" textValue="Settings">
                           <div className="flex items-center gap-2">
-                            <Settings01Icon size={14} className="text-zinc-500" />
+                            <Settings01Icon size={14} className="text-muted-foreground" />
                             <Label>Profile</Label>
                           </div>
                         </Dropdown.Item>
@@ -1380,9 +1380,9 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                           <div className="flex items-center gap-2">
                             {mounted ? (
                               isDark ? (
-                                <Sun01Icon size={14} className="text-zinc-500" />
+                                <Sun01Icon size={14} className="text-muted-foreground" />
                               ) : (
-                                <Moon02Icon size={14} className="text-zinc-500" />
+                                <Moon02Icon size={14} className="text-muted-foreground" />
                               )
                             ) : (
                               <span aria-hidden className="block size-[14px]" />
@@ -1396,13 +1396,13 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                           textValue="Documentation"
                         >
                           <div className="flex items-center gap-2">
-                            <FileExportIcon size={14} className="text-zinc-500" />
+                            <FileExportIcon size={14} className="text-muted-foreground" />
                             <Label>Documentation</Label>
                           </div>
                         </Dropdown.Item>
                         <Dropdown.Item key="retake-tour" id="retake-tour" textValue="Retake Tour">
                           <div className="flex items-center gap-2">
-                            <AiContentGenerator01Icon size={14} className="text-zinc-500" />
+                            <AiContentGenerator01Icon size={14} className="text-muted-foreground" />
                             <Label>Retake Tour</Label>
                           </div>
                         </Dropdown.Item>
@@ -1410,7 +1410,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                           key="signout"
                           id="signout"
                           textValue="Sign Out"
-                          className="text-danger flex items-center gap-2 mt-1 border-t border-zinc-200 dark:border-zinc-800 pt-1"
+                          className="text-danger flex items-center gap-2 mt-1 border-t border-border dark:border-border pt-1"
                         >
                           <div className="flex items-center gap-2">
                             <Logout02Icon size={14} />

@@ -435,14 +435,14 @@ export default function ImageScansPage() {
                       <p className="text-sm font-medium text-foreground">
                         Deleting {pendingScanCount} scan {pendingScanCount === 1 ? 'run' : 'runs'}…
                       </p>
-                      <p className="text-sm leading-6 text-muted">
+                      <p className="text-sm leading-6 text-muted-foreground">
                         Large histories can take a little while. Keep this window open until the
                         deletion finishes.
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm leading-6 text-muted">
+                  <p className="text-sm leading-6 text-muted-foreground">
                     {pendingDelete?.kind === 'image' ? (
                       <>
                         This removes <strong>{imageName}</strong>, including every tag and scan run
@@ -690,13 +690,13 @@ export default function ImageScansPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-divider px-4 py-3">
           <div>
             <h2 className="text-sm font-semibold">Tags</h2>
-            <p className="mt-1 text-xs text-muted">
+            <p className="mt-1 text-xs text-muted-foreground">
               {total} tag{total === 1 ? '' : 's'} matching this view
             </p>
           </div>
           {selectedScans.size > 0 ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted">{selectedScans.size} selected</span>
+              <span className="text-xs text-muted-foreground">{selectedScans.size} selected</span>
               <Button
                 isDisabled={selectedScans.size !== 2}
                 onPress={() => {
@@ -740,7 +740,7 @@ export default function ImageScansPage() {
       </Card>
       {total > 0 ? (
         <Pagination size="sm" className="flex-wrap justify-between gap-3">
-          <Pagination.Summary className="text-xs text-muted">
+          <Pagination.Summary className="text-xs text-muted-foreground">
             Showing {(artifactPage - 1) * ARTIFACT_PAGE_SIZE + 1}-
             {Math.min(artifactPage * ARTIFACT_PAGE_SIZE, total)} of {total} tags
           </Pagination.Summary>

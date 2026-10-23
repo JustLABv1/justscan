@@ -21,7 +21,7 @@ export function StatusAlert({
   className,
 }: StatusAlertProps) {
   return (
-    <Alert className={cn('rounded-2xl', className)} status={status}>
+    <Alert className={cn('rounded-xl', className)} status={status}>
       <Alert.Indicator />
       <Alert.Content>
         {title ? <Alert.Title>{title}</Alert.Title> : null}

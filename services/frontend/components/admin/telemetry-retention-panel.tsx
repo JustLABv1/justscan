@@ -26,7 +26,7 @@ function RetentionRow({
     <div className="flex flex-col gap-3 rounded-xl border border-divider/60 bg-content2/30 p-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs text-zinc-500">Days to retain logs. Use 0 to keep them forever.</p>
+        <p className="text-xs text-muted-foreground">Days to retain logs. Use 0 to keep them forever.</p>
       </div>
       <div className="flex gap-2">
         <Input aria-label={`${title} days`} type="number" min={0} variant="secondary" value={value} onChange={(event) => onChange(event.target.value)} className="w-28" />

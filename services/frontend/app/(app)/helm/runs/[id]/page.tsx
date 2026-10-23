@@ -60,7 +60,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function SeverityCount({ count, color }: { count: number; color: ChipColor }) {
-  if (!count) return <span className="text-xs text-muted">-</span>;
+  if (!count) return <span className="text-xs text-muted-foreground">-</span>;
 
   return (
     <Chip color={color} size="sm" variant="soft">
@@ -81,7 +81,7 @@ function StatBox({
   return (
     <Card>
       <Card.Content className="flex flex-row items-center justify-between gap-3 px-4 py-3">
-        <span className="text-xs text-muted">{label}</span>
+        <span className="text-xs text-muted-foreground">{label}</span>
         <Chip color={color ?? 'default'} size="sm" variant={color ? 'soft' : 'secondary'}>
           {value}
         </Chip>
@@ -416,13 +416,13 @@ export default function HelmRunDetailPage() {
               >
                 {latestRun?.chart_name || displayUrl || 'Helm run'}
               </p>
-              <p className="mt-1 truncate font-mono text-xs text-muted" title={chartUrl}>
+              <p className="mt-1 truncate font-mono text-xs text-muted-foreground" title={chartUrl}>
                 {displayUrl}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted flex-wrap">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
             {latestRun?.chart_version && (
               <Chip size="sm" variant="secondary">
                 v{latestRun.chart_version}
@@ -462,7 +462,7 @@ export default function HelmRunDetailPage() {
       {loading && (
         <Card>
           <Card.Content className="px-6 py-10">
-            <div className="flex items-center justify-center gap-3 text-sm text-muted">
+            <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
               <Spinner size="sm" />
               Loading Helm run...
             </div>
@@ -472,7 +472,7 @@ export default function HelmRunDetailPage() {
 
       {!loading && items.length === 0 && (
         <Card>
-          <Card.Content className="px-6 py-10 text-center text-sm text-muted">
+          <Card.Content className="px-6 py-10 text-center text-sm text-muted-foreground">
             No scans found for this Helm run.
           </Card.Content>
         </Card>
@@ -509,15 +509,15 @@ export default function HelmRunDetailPage() {
                           {scan.image_name}
                         </Link>
                       </Table.Cell>
-                      <Table.Cell className="truncate font-mono text-xs text-muted">
+                      <Table.Cell className="truncate font-mono text-xs text-muted-foreground">
                         {scan.image_tag || 'latest'}
                       </Table.Cell>
-                      <Table.Cell className="truncate text-xs text-muted">
+                      <Table.Cell className="truncate text-xs text-muted-foreground">
                         <span title={scan.helm_source_path ?? ''}>
                           {scan.helm_source_path ? scan.helm_source_path.split(' › ')[0] : '-'}
                         </span>
                       </Table.Cell>
-                      <Table.Cell className="text-center font-mono text-xs text-muted">
+                      <Table.Cell className="text-center font-mono text-xs text-muted-foreground">
                         {item.attempt_count}
                       </Table.Cell>
                       <Table.Cell className="text-center">
@@ -586,10 +586,10 @@ export default function HelmRunDetailPage() {
                 );
                 return (
                   <div key={source} className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-muted w-72 truncate" title={source}>
+                    <span className="text-xs font-mono text-muted-foreground w-72 truncate" title={source}>
                       {source}
                     </span>
-                    <span className="text-xs text-muted">
+                    <span className="text-xs text-muted-foreground">
                       {sourceItems.length} image{sourceItems.length === 1 ? '' : 's'}
                     </span>
                     {(critical > 0 || high > 0) && (

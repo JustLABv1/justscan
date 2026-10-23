@@ -330,7 +330,7 @@ export default function GitRepositoriesPage() {
         loading={loading}
         loadingFallback={
           <Card>
-            <Card.Content className="py-12 text-sm text-foreground/60" role="status">
+            <Card.Content className="py-12 text-sm text-muted-foreground" role="status">
               Loading Git repositories…
             </Card.Content>
           </Card>
@@ -353,15 +353,15 @@ export default function GitRepositoriesPage() {
                     <Table.Cell>
                       <div className="space-y-1">
                         <Link
-                          className="font-medium text-foreground hover:text-accent"
+                          className="font-medium text-foreground hover:text-primary"
                           href={`/git-repositories/${repository.id}`}
                         >
                           {repository.name}
                         </Link>
-                        <p className="max-w-sm truncate text-xs text-foreground/60">
+                        <p className="max-w-sm truncate text-xs text-muted-foreground">
                           {repository.clone_url}
                         </p>
-                        <div className="flex flex-wrap gap-x-2 text-xs text-foreground/60 md:hidden">
+                        <div className="flex flex-wrap gap-x-2 text-xs text-muted-foreground md:hidden">
                           <span>{repository.ref}</span>
                           <span aria-hidden="true">·</span>
                           <span>{repository.enabled ? repository.schedule : 'Manual'}</span>
@@ -633,7 +633,7 @@ export default function GitRepositoriesPage() {
                       rows={3}
                       variant="secondary"
                     />
-                    <p className="text-xs text-foreground/60">
+                    <p className="text-xs text-muted-foreground">
                       {draft.discovery_mode === 'gitlab_ci'
                         ? 'Optional. Leave blank to inspect GitLab CI config files in the repository; otherwise use one relative path or glob per line.'
                         : 'One relative repository path per line.'}

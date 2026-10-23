@@ -79,9 +79,9 @@ const AUTH_TYPE_STYLE: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(59,130,246,0.2)',
   },
   token: {
-    color: 'color-mix(in srgb, var(--accent) 78%, white)',
-    background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
-    border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+    color: 'color-mix(in srgb, var(--primary) 78%, white)',
+    background: 'color-mix(in srgb, var(--primary) 10%, transparent)',
+    border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)',
   },
   aws_ecr: {
     color: '#fb923c',
@@ -530,7 +530,7 @@ export default function RegistriesPage() {
         retry={() => void load()}
         loadingFallback={
           <div className="flex min-h-48 items-center justify-center" role="status">
-            <div className="size-5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+            <div className="size-5 animate-spin rounded-full border-2 border-primary/30 border-t-accent" />
           </div>
         }
       >
@@ -616,7 +616,7 @@ export default function RegistriesPage() {
                       >
                         <Table.Cell>
                           <div className="space-y-1">
-                            <p className="font-medium text-zinc-700 dark:text-zinc-200">{r.name}</p>
+                            <p className="font-medium text-foreground">{r.name}</p>
                             {r.is_default ? (
                               <Chip size="sm" variant="soft" color="accent">
                                 Workspace default
@@ -632,7 +632,7 @@ export default function RegistriesPage() {
                               ownerOrgId={r.owner_org_id}
                               orgNamesById={orgNamesById}
                             />
-                            <p className="truncate text-xs text-muted md:hidden">{r.url}</p>
+                            <p className="truncate text-xs text-muted-foreground md:hidden">{r.url}</p>
                             <div className="md:hidden">
                               <HealthBadge
                                 status={r.health_status ?? 'unknown'}
@@ -643,7 +643,7 @@ export default function RegistriesPage() {
                         </Table.Cell>
                         <Table.Cell className="hidden md:table-cell">
                           <div className="space-y-1.5">
-                            <p className="font-mono text-xs text-muted">{r.url}</p>
+                            <p className="font-mono text-xs text-muted-foreground">{r.url}</p>
                             <div className="flex flex-wrap gap-1.5">
                               <span
                                 className="text-xs font-medium px-2 py-0.5 rounded-md"
@@ -658,7 +658,7 @@ export default function RegistriesPage() {
                                 {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
                               </span>
                               {r.username ? (
-                                <span className="text-xs text-muted">{r.username}</span>
+                                <span className="text-xs text-muted-foreground">{r.username}</span>
                               ) : null}
                             </div>
                           </div>
@@ -670,7 +670,7 @@ export default function RegistriesPage() {
                               message={r.health_message ?? ''}
                             />
                             {r.last_health_check_at && (
-                              <span className="text-[10px] text-zinc-500">
+                              <span className="text-xs text-muted-foreground">
                                 {timeAgo(r.last_health_check_at)}
                               </span>
                             )}
@@ -760,7 +760,7 @@ export default function RegistriesPage() {
                                 ]}
                               />
                             ) : (
-                              <span className="text-xs text-zinc-400">Read only</span>
+                              <span className="text-xs text-muted-foreground">Read only</span>
                             )}
                           </div>
                         </Table.Cell>
@@ -781,7 +781,7 @@ export default function RegistriesPage() {
               <Modal.Header className="border-b border-border px-5 py-4 sm:px-6">
                 <div className="min-w-0">
                   <Modal.Heading>{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
-                  <p className="mt-1 text-sm text-muted">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Configure connectivity, scan behavior, and credentials in one place.
                   </p>
                 </div>
@@ -795,7 +795,7 @@ export default function RegistriesPage() {
                   <section className="space-y-4 border-b border-border pb-5">
                     <div>
                       <h3 className="text-sm font-semibold">Registry connection</h3>
-                      <p className="mt-1 text-sm text-muted">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         The endpoint JustScan uses to resolve and pull images.
                       </p>
                     </div>
@@ -828,7 +828,7 @@ export default function RegistriesPage() {
                         >
                           <Select.Trigger className={selectTriggerCls}>
                             <div className="flex min-w-0 flex-1 items-center gap-2">
-                              <span className="shrink-0 text-zinc-400">
+                              <span className="shrink-0 text-muted-foreground">
                                 <ServerStack01Icon size={15} />
                               </span>
                               <Select.Value />
@@ -844,12 +844,12 @@ export default function RegistriesPage() {
                             </ListBox>
                           </Select.Popover>
                         </Select>
-                        <p className="text-xs text-muted">
+                        <p className="text-xs text-muted-foreground">
                           This is stored in JustScan and does not require editing
                           backend/config.yaml.
                         </p>
                         {!capabilities.enable_trivy && scanProvider === 'trivy' && editing && (
-                          <p className="text-xs text-warning">
+                          <p className="text-xs text-warning-foreground">
                             This registry must be switched to Artifactory Xray before saving
                             changes.
                           </p>
@@ -861,7 +861,7 @@ export default function RegistriesPage() {
                     <section className="space-y-4 border-b border-border pb-5">
                       <div>
                         <h3 className="text-sm font-semibold">Xray scan behavior</h3>
-                        <p className="mt-1 text-sm text-muted">
+                        <p className="mt-1 text-sm text-muted-foreground">
                           Map images to Artifactory and choose whether this credential can request a
                           scan request whose resulting provider status JustScan verifies as fresh.
                         </p>
@@ -910,7 +910,7 @@ export default function RegistriesPage() {
                   <section className="space-y-4">
                     <div>
                       <h3 className="text-sm font-semibold">Credentials</h3>
-                      <p className="mt-1 text-sm text-muted">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         Stored encrypted and reused for image pulls and Xray requests.
                       </p>
                     </div>
@@ -927,7 +927,7 @@ export default function RegistriesPage() {
                         >
                           <Select.Trigger className={selectTriggerCls}>
                             <div className="flex min-w-0 flex-1 items-center gap-2">
-                              <span className="shrink-0 text-zinc-400">
+                              <span className="shrink-0 text-muted-foreground">
                                 <Shield01Icon size={15} />
                               </span>
                               <Select.Value />
@@ -992,15 +992,15 @@ export default function RegistriesPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal overflow-hidden">
               <Modal.Header
                 className="px-6 py-4"
                 style={{ borderBottom: '1px solid var(--border-subtle)' }}
               >
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                <Modal.Heading className="text-foreground font-semibold">
                   Manage Registry Access
                 </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
               </Modal.Header>
               <Modal.Body className="px-6 py-5 space-y-4">
                 {shareError ? (
@@ -1014,7 +1014,7 @@ export default function RegistriesPage() {
                       border: '1px solid var(--surface-border)',
                     }}
                   >
-                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                    <p className="text-sm font-medium text-foreground">
                       {shareTarget.name}
                     </p>
                     <div className="mt-2">
@@ -1029,19 +1029,19 @@ export default function RegistriesPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                    <h3 className="text-sm font-semibold text-foreground">
                       Current access
                     </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Organizations listed here can use this registry.
                     </p>
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                    <p className="text-sm text-muted-foreground">No organization grants yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
@@ -1054,15 +1054,15 @@ export default function RegistriesPage() {
                           }}
                         >
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                            <p className="text-sm font-medium text-foreground">
                               {share.org_name}
                             </p>
-                            <p className="text-xs text-zinc-500 mt-0.5">
+                            <p className="text-xs text-muted-foreground mt-0.5">
                               {share.is_owner ? 'Owner workspace' : 'Shared access'}
                             </p>
                           </div>
                           {share.is_owner ? (
-                            <span className="text-xs font-medium text-zinc-500">Locked</span>
+                            <span className="text-xs font-medium text-muted-foreground">Locked</span>
                           ) : (
                             <Button
                               type="button"
@@ -1071,7 +1071,7 @@ export default function RegistriesPage() {
                               }}
                               isPending={shareSaving}
                               isDisabled={shareSaving}
-                              className="text-zinc-400 dark:text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
+                              className=" hover:text-destructive transition-colors disabled:opacity-50"
                               isIconOnly
                               variant="secondary"
                             >
@@ -1086,15 +1086,15 @@ export default function RegistriesPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                    <h3 className="text-sm font-semibold text-foreground">
                       Grant access
                     </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Share this registry with another organization you manage.
                     </p>
                   </div>
                   {availableShareTargets.length === 0 ? (
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm text-muted-foreground">
                       No additional organizations are available for sharing.
                     </p>
                   ) : (

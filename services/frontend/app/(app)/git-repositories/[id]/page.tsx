@@ -247,7 +247,7 @@ function RegistryResolutionSummary({
           <Chip className="shrink-0" color="accent" size="sm" variant="soft">
             Configured override
           </Chip>
-          {host ? <code className="truncate text-xs text-muted">{host}</code> : null}
+          {host ? <code className="truncate text-xs text-muted-foreground">{host}</code> : null}
         </div>
         <Description className="!block">
           {overrideRegistry
@@ -270,7 +270,7 @@ function RegistryResolutionSummary({
           >
             {inferredRegistry ? 'Configured match' : 'Configured match unavailable'}
           </Chip>
-          {host ? <code className="truncate text-xs text-muted">{host}</code> : null}
+          {host ? <code className="truncate text-xs text-muted-foreground">{host}</code> : null}
         </div>
         <Description className="!block">
           {inferredRegistry
@@ -288,7 +288,7 @@ function RegistryResolutionSummary({
           <Chip className="shrink-0" color="warning" size="sm" variant="soft">
             Custom / unconfigured host
           </Chip>
-          <code className="truncate text-xs text-muted">{host}</code>
+          <code className="truncate text-xs text-muted-foreground">{host}</code>
         </div>
         <Description className="!block">
           No JustScan registry entry matches this host. Automatic matching keeps the original host;
@@ -1045,7 +1045,7 @@ export default function GitRepositoryDetailPage() {
     return (
       <PageContainer>
         <Card>
-          <Card.Content className="flex items-center gap-2 py-12 text-sm text-foreground/60">
+          <Card.Content className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
             <Spinner size="sm" /> Loading repository…
           </Card.Content>
         </Card>
@@ -1198,7 +1198,7 @@ export default function GitRepositoryDetailPage() {
       <Card className="overflow-hidden">
         <Card.Header className="!flex-row items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted-foreground">
               <PackageIcon size={17} />
             </span>
             <div className="min-w-0">
@@ -1227,7 +1227,7 @@ export default function GitRepositoryDetailPage() {
               <Accordion.Panel>
                 <Accordion.Body className="space-y-3 px-5 pb-5">
                   {helmSources.length === 0 ? (
-                    <p className="text-sm text-muted">
+                    <p className="text-sm text-muted-foreground">
                       Add a source when a chart lives outside this repository or needs explicit Helm
                       values.
                     </p>
@@ -1254,13 +1254,13 @@ export default function GitRepositoryDetailPage() {
                                     : 'Direct Git URL'}
                               </Chip>
                             </div>
-                            <p className="text-xs text-muted">
+                            <p className="text-xs text-muted-foreground">
                               {source.values.length > 0
                                 ? `Values: ${source.values.join(', ')}`
                                 : 'Chart defaults only'}
                               {source.release_name ? ` · Release: ${source.release_name}` : ''}
                             </p>
-                            <div className="text-xs text-muted">
+                            <div className="text-xs text-muted-foreground">
                               <p>
                                 Dependency credentials:{' '}
                                 {credential?.name ??
@@ -1269,19 +1269,19 @@ export default function GitRepositoryDetailPage() {
                                     : 'Automatic matching')}
                               </p>
                               {credential ? (
-                                <p className="mt-0.5 break-all text-muted/80">
+                                <p className="mt-0.5 break-all text-muted-foreground/80">
                                   {credential.protocol.toUpperCase()} · {credential.url}
                                 </p>
                               ) : null}
                               {source.dependency_registry_id ? (
-                                <p className="mt-1 text-warning">
+                                <p className="mt-1 text-warning-foreground">
                                   Legacy registry link — edit and select a Helm credential to
                                   migrate it.
                                 </p>
                               ) : null}
                             </div>
                             {source.source_type === 'url' ? (
-                              <p className="truncate text-xs text-muted">
+                              <p className="truncate text-xs text-muted-foreground">
                                 {source.clone_url} · {source.ref}
                               </p>
                             ) : null}
@@ -1325,7 +1325,7 @@ export default function GitRepositoryDetailPage() {
           {candidates.length > 0 ? (
             <Card>
               <Card.Header className="!flex-row items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted-foreground">
                   <Search01Icon size={17} />
                 </span>
                 <div>
@@ -1358,7 +1358,7 @@ export default function GitRepositoryDetailPage() {
                     <Accordion.Panel>
                       <Accordion.Body className="space-y-2">
                         {pendingCandidates.length === 0 ? (
-                          <p className="text-sm text-foreground/60">Nothing needs a decision.</p>
+                          <p className="text-sm text-muted-foreground">Nothing needs a decision.</p>
                         ) : (
                           <>
                             <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
@@ -1433,7 +1433,7 @@ export default function GitRepositoryDetailPage() {
           <Card className="overflow-hidden">
             <Card.Header className="!flex-row items-start justify-between gap-4">
               <div className="flex min-w-0 items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted-foreground">
                   <PackageIcon size={17} />
                 </span>
                 <div className="min-w-0">
@@ -1460,7 +1460,7 @@ export default function GitRepositoryDetailPage() {
               <div className="m-4 space-y-3 rounded-xl border border-divider/70 bg-surface-secondary p-4">
                 <div>
                   <p className="text-sm font-medium">Registry override patterns</p>
-                  <p className="mt-1 text-xs text-muted">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Changing a discovered image creates a pattern for its repository across tags.
                     Add broader RE2-compatible patterns here. Exact image overrides take precedence;
                     when patterns overlap, the most recently updated pattern wins.
@@ -1482,7 +1482,7 @@ export default function GitRepositoryDetailPage() {
                             <code className="block break-all text-xs text-foreground">
                               {rule.pattern}
                             </code>
-                            <p className="mt-1 text-xs text-muted">
+                            <p className="mt-1 text-xs text-muted-foreground">
                               {ruleRegistry?.name ?? 'Registry unavailable'} · matches {matchCount}{' '}
                               {matchCount === 1 ? 'discovered image' : 'discovered images'}
                             </p>
@@ -1666,14 +1666,14 @@ export default function GitRepositoryDetailPage() {
                           <Accordion.Heading>
                             <Accordion.Trigger className="min-w-0 py-0">
                               <span className="flex min-w-0 flex-1 items-start gap-3 text-left">
-                                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-tertiary text-muted">
+                                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-tertiary text-muted-foreground">
                                   <PackageIcon size={16} />
                                 </span>
                                 <span className="min-w-0 flex-1 space-y-1.5">
                                   <code className="block truncate text-xs font-medium text-foreground">
                                     {image.full_ref}
                                   </code>
-                                  <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                                  <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                                     <span>
                                       {locations.length} deployment{' '}
                                       {locations.length === 1 ? 'location' : 'locations'}
@@ -1743,7 +1743,7 @@ export default function GitRepositoryDetailPage() {
                                   />
                                 </div>
                               </div>
-                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted">
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                                 Deployment locations
                               </p>
                               <div className="grid gap-2 sm:grid-cols-2">
@@ -1757,8 +1757,8 @@ export default function GitRepositoryDetailPage() {
                                         ? `Rendered from ${location.target}`
                                         : location.file}
                                     </p>
-                                    <p className="mt-1 truncate text-muted">{location.path}</p>
-                                    <p className="mt-1.5 text-muted">
+                                    <p className="mt-1 truncate text-muted-foreground">{location.path}</p>
+                                    <p className="mt-1.5 text-muted-foreground">
                                       {location.kind ?? 'Manifest'}
                                       {location.name ? `/${location.name}` : ''}
                                       {location.namespace ? ` · ${location.namespace}` : ''}
@@ -1807,7 +1807,7 @@ export default function GitRepositoryDetailPage() {
                   );
                 })}
                 {filteredPreviewImages.length === 0 ? (
-                  <p className="px-4 py-8 text-center text-sm text-muted">
+                  <p className="px-4 py-8 text-center text-sm text-muted-foreground">
                     No discovered images match “{imageSearch}”.
                   </p>
                 ) : null}
@@ -1820,14 +1820,14 @@ export default function GitRepositoryDetailPage() {
                 <Accordion.Heading>
                   <Accordion.Trigger>
                     <span className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted-foreground">
                         <Folder01Icon size={17} />
                       </span>
                       <span className="min-w-0">
                         <span className="block text-sm font-semibold text-foreground">
                           Repository tree
                         </span>
-                        <span className="mt-0.5 block truncate text-xs text-muted">
+                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                           {repository.discovery_mode === 'manifests'
                             ? 'Source manifests and their detected image references'
                             : repository.discovery_mode === 'registry'
@@ -1898,7 +1898,7 @@ export default function GitRepositoryDetailPage() {
 
       <Card>
         <Card.Header className="!flex-row items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted-foreground">
             <Clock01Icon size={17} />
           </span>
           <div>
@@ -1937,7 +1937,7 @@ export default function GitRepositoryDetailPage() {
                   {run.image_count} images · {run.scan_count} scans
                 </span>
               </div>
-              <span className="text-foreground/60">{timeAgo(run.created_at)}</span>
+              <span className="text-muted-foreground">{timeAgo(run.created_at)}</span>
             </div>
           ))}
         </Card.Content>
@@ -2335,7 +2335,7 @@ function CandidateRow({
         ) : null}
         <div>
           <p className="font-mono text-xs">{candidate.path}</p>
-          <p className="mt-1 text-xs text-foreground/60">
+          <p className="mt-1 text-xs text-muted-foreground">
             {candidate.detected_type.replace('_', ' ')} · {candidate.confidence}
           </p>
         </div>

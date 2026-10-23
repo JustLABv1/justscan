@@ -111,7 +111,7 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
 
       <div className="flex flex-wrap gap-2">
         {SEVERITY_SERIES.map((severity) => (
-          <Chip key={severity.key} variant="soft" size="sm" className="text-xs text-foreground/70">
+          <Chip key={severity.key} variant="soft" size="sm" className="text-xs text-muted-foreground">
             <span
               className="mr-1.5 inline-block size-2 rounded-full"
               style={{ background: severity.color }}
@@ -435,14 +435,14 @@ export function OverviewTab() {
           value={dashboard.queues.needs_attention.toLocaleString()}
           hint={`${failedScans} failed · ${dashboard.queues.blocked_policies} blocked`}
           hintClassName={
-            dashboard.queues.needs_attention > 0 ? 'text-warning' : 'text-muted-foreground'
+            dashboard.queues.needs_attention > 0 ? 'text-warning-foreground' : 'text-muted-foreground'
           }
         />
         <SummaryTile
           label="API Requests 24h"
           value={formatCompact(dashboard.insights.api_requests_24h)}
           hint={`${telemetryErrorRate}% error rate`}
-          hintClassName={telemetryErrorRate > 0 ? 'text-warning' : 'text-muted-foreground'}
+          hintClassName={telemetryErrorRate > 0 ? 'text-warning-foreground' : 'text-muted-foreground'}
         />
       </div>
 

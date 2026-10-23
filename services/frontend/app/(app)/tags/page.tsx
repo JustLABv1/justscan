@@ -423,7 +423,7 @@ export default function TagsPage() {
                 <SearchField.ClearButton />
               </SearchField.Group>
             </SearchField>
-            <div className="surface-panel rounded-2xl overflow-hidden">
+            <div className="surface-panel rounded-xl overflow-hidden">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={i}
@@ -486,7 +486,7 @@ export default function TagsPage() {
                 <Table.Body
                   items={pagedTags}
                   renderEmptyState={() => (
-                    <div className="py-10 text-center text-sm text-zinc-500">
+                    <div className="py-10 text-center text-sm text-muted-foreground">
                       No tags match your filter.
                     </div>
                   )}
@@ -501,7 +501,7 @@ export default function TagsPage() {
                             aria-hidden="true"
                           />
                           <span className="truncate text-sm font-medium">{tag.name}</span>
-                          <span className="font-mono text-xs text-muted">{tag.color}</span>
+                          <span className="font-mono text-xs text-muted-foreground">{tag.color}</span>
                         </div>
                       </Table.Cell>
                       <Table.Cell>
@@ -551,7 +551,7 @@ export default function TagsPage() {
                               ]}
                             />
                           ) : (
-                            <span className="text-xs text-zinc-500">Read only</span>
+                            <span className="text-xs text-muted-foreground">Read only</span>
                           )}
                         </div>
                       </Table.Cell>
@@ -561,7 +561,7 @@ export default function TagsPage() {
               </Table.Content>
             </Table.ScrollContainer>
             <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-              <span className="text-xs text-zinc-500 whitespace-nowrap">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
                 Showing {visibleTags.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
                 {Math.min(effectivePage * PAGE_SIZE, visibleTags.length)} of {visibleTags.length}
               </span>
@@ -629,7 +629,7 @@ export default function TagsPage() {
                     className="bg-surface-secondary"
                   />
                   <div className="space-y-2.5 flex flex-col">
-                    <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                    <Label className="text-sm font-medium text-muted-foreground dark:text-foreground">
                       Color
                     </Label>
                     <ColorPicker
@@ -639,7 +639,7 @@ export default function TagsPage() {
                       <ColorPicker.Trigger className="flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5">
                         <div className="flex items-center gap-2.5">
                           <ColorSwatch size="md" />
-                          <span className="text-xs font-mono text-zinc-500">{color}</span>
+                          <span className="text-xs font-mono text-muted-foreground">{color}</span>
                         </div>
                         <span
                           className="text-xs px-2 py-0.5 rounded-full font-medium"
@@ -725,7 +725,7 @@ export default function TagsPage() {
                             boxShadow: `0 0 8px ${shareTarget.color}88`,
                           }}
                         />
-                        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                        <p className="text-sm font-medium text-foreground">
                           {shareTarget.name}
                         </p>
                       </div>
@@ -740,19 +740,19 @@ export default function TagsPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                    <h3 className="text-sm font-semibold text-foreground">
                       Current access
                     </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Organizations listed here can apply this tag to scans they manage.
                     </p>
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                    <p className="text-sm text-muted-foreground">No organization grants yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
@@ -762,15 +762,15 @@ export default function TagsPage() {
                         >
                           <div className="flex flex-wrap items-center justify-between w-full">
                             <div className="flex flex-col">
-                              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                              <p className="text-sm font-medium text-foreground">
                                 {share.org_name}
                               </p>
-                              <p className="text-xs text-zinc-500 mt-0.5">
+                              <p className="text-xs text-muted-foreground mt-0.5">
                                 {share.is_owner ? 'Owner workspace' : 'Shared access'}
                               </p>
                             </div>
                             {share.is_owner ? (
-                              <span className="text-xs font-medium text-zinc-500">Locked</span>
+                              <span className="text-xs font-medium text-muted-foreground">Locked</span>
                             ) : (
                               <Button
                                 onPress={() => {
@@ -793,15 +793,15 @@ export default function TagsPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                    <h3 className="text-sm font-semibold text-foreground">
                       Grant access
                     </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Share this tag with another organization you manage.
                     </p>
                   </div>
                   {availableShareTargets.length === 0 ? (
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm text-muted-foreground">
                       No additional organizations are available for sharing.
                     </p>
                   ) : (
@@ -814,7 +814,7 @@ export default function TagsPage() {
                         }
                         className="flex-1"
                       >
-                        <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                        <Select.Trigger className={selectTriggerCls + ' '}>
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>

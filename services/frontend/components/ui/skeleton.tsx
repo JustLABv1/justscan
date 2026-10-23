@@ -9,7 +9,7 @@ export function Skeleton({ className = '', style }: { className?: string; style?
 export function DashboardFocusCardSkeleton() {
   return (
     <div
-      className="rounded-3xl p-6"
+      className="rounded-xl p-6"
       style={{
         background: 'var(--surface-bg)',
         border: '1px solid var(--surface-border)',
@@ -36,7 +36,7 @@ export function DashboardFocusCardSkeleton() {
 export function DashboardBriefingMetricSkeleton() {
   return (
     <div
-      className="rounded-3xl px-5 py-4"
+      className="rounded-xl px-5 py-4"
       style={{
         background: 'var(--surface-bg)',
         border: '1px solid var(--surface-border)',
@@ -63,18 +63,12 @@ export function DashboardBriefingMetricSkeleton() {
 
 export function StatCardSkeleton() {
   return (
-    <div className="relative flex flex-col rounded-xl px-4 pt-3 pb-2 gap-3"
-      style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', boxShadow: 'var(--surface-shadow)' }}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <Skeleton className="size-9 rounded-xl" />
-          <div className="space-y-1.5">
-            <Skeleton className="h-6 w-12 rounded" />
-            <Skeleton className="h-3 w-20 rounded" />
-          </div>
-        </div>
+    <div aria-hidden className="flex h-full min-w-0 flex-col rounded-xl border border-border bg-secondary/40 p-1">
+      <div className="flex min-h-8 items-center px-2 py-1"><Skeleton className="h-4 w-28 rounded" /></div>
+      <div className="flex min-h-17 flex-1 flex-col justify-center rounded-lg border border-border bg-card px-3 py-2">
+        <Skeleton className="h-7 w-20 rounded" />
+        <Skeleton className="mt-1 h-3 w-36 max-w-full rounded" />
       </div>
-      <Skeleton className="h-12 w-full rounded" />
     </div>
   );
 }
@@ -98,7 +92,7 @@ export function RecentScanRowSkeleton() {
 
 export function ChartSkeleton() {
   return (
-    <div className="rounded-2xl p-5"
+    <div className="rounded-xl p-5"
       style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', boxShadow: 'var(--surface-shadow)' }}>
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -136,7 +130,7 @@ export function DashboardLoadingSkeleton() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.55fr)]">
         <ChartSkeleton />
         <div
-          className="flex min-h-[240px] flex-col rounded-2xl p-5"
+          className="flex min-h-[240px] flex-col rounded-xl p-5"
           style={{
             background: 'var(--surface-bg)',
             border: '1px solid var(--surface-border)',

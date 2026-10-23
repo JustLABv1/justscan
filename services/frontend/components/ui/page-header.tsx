@@ -56,7 +56,10 @@ export function PageTitle({
         </div>
         {meta ? <div className="mt-2">{meta}</div> : null}
         {description ? (
-          <Typography.Paragraph className="mt-1 max-w-3xl text-sm leading-6" color="muted">
+          <Typography.Paragraph
+            className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground"
+            color="muted"
+          >
             {description}
           </Typography.Paragraph>
         ) : null}
@@ -75,9 +78,7 @@ export function PageContainer({
   children: ReactNode;
   className?: string;
 }) {
-  return (
-    <div className={`w-full space-y-5 px-4 py-6 md:px-6 xl:py-7 ${className}`}>{children}</div>
-  );
+  return <div className={`w-full space-y-4 p-4 md:p-5 ${className}`}>{children}</div>;
 }
 
 /** @deprecated Use PageTitle. Kept temporarily so route migrations stay source-compatible. */

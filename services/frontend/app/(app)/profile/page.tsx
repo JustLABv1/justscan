@@ -41,8 +41,8 @@ function InlineAlert({ message, type }: { message: string; type: 'success' | 'er
 function FieldDisplay({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">{value || '-'}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm text-foreground">{value || '-'}</p>
     </div>
   );
 }
@@ -62,16 +62,16 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h3>
+      <h3 className="text-base font-semibold text-foreground">{title}</h3>
       {editing ? (
-        <Button variant="tertiary" className="h-8 rounded-full px-3 text-xs" onPress={onCancel}>
+        <Button variant="tertiary" className=" " onPress={onCancel}>
           Cancel
         </Button>
       ) : (
         <Button
           variant="tertiary"
           isDisabled={disabled}
-          className="h-8 rounded-full px-3 text-xs"
+          className=" "
           onPress={onEdit}
         >
           <PencilEdit02Icon size={13} />
@@ -176,9 +176,9 @@ export default function ProfilePage() {
   if (!user) {
     return (
       <div className="space-y-4">
-        <div className="skeleton h-28 rounded-2xl" />
-        <div className="skeleton h-64 rounded-2xl" />
-        <div className="skeleton h-48 rounded-2xl" />
+        <div className="skeleton h-28 rounded-xl" />
+        <div className="skeleton h-64 rounded-xl" />
+        <div className="skeleton h-48 rounded-xl" />
       </div>
     );
   }
@@ -195,17 +195,17 @@ export default function ProfilePage() {
                 </Avatar.Fallback>
               </Avatar>
               <div>
-                <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                <p className="text-base font-semibold text-foreground">
                   {username || email || 'Account user'}
                 </p>
-                <p className="text-sm text-zinc-500">{roleLabel}</p>
-                <p className="text-xs text-zinc-500">Personal workspace</p>
+                <p className="text-sm text-muted-foreground">{roleLabel}</p>
+                <p className="text-xs text-muted-foreground">Personal workspace</p>
               </div>
             </div>
             <Button
               type="button"
               variant="tertiary"
-              className="h-9 rounded-full px-3 text-xs"
+              className=" "
               onPress={() => setProfileEditing(true)}
             >
               <PencilEdit02Icon size={13} />
@@ -264,7 +264,7 @@ export default function ProfilePage() {
         </Card.Content>
       </Card>
 
-      <Card className="rounded-2xl border border-zinc-200 shadow-none dark:border-zinc-800">
+      <Card className="rounded-xl border border-border shadow-none dark:border-border">
         <Card.Content className="space-y-4 p-4 sm:p-5">
           <SectionHeader
             title="Security"
@@ -282,7 +282,7 @@ export default function ProfilePage() {
           {pwMsg ? <InlineAlert message={pwMsg.text} type={pwMsg.type} /> : null}
 
           {isOIDCUser ? (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               This account uses single sign-on (OIDC). Password updates are managed in your identity
               provider.
             </p>
@@ -323,7 +323,7 @@ export default function ProfilePage() {
               </div>
             </form>
           ) : (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               Update your password when needed to keep account access secure.
             </p>
           )}

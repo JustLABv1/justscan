@@ -1,19 +1,19 @@
 import type { ChartConfig } from '@/components/evilcharts/ui/chart';
 
 export const CHART_TONES = {
-  accent: { light: '#006FEE', dark: '#338EF7' },
-  success: { light: '#17C964', dark: '#45D483' },
-  danger: { light: '#F31260', dark: '#F54180' },
-  warning: { light: '#F5A524', dark: '#F5A524' },
-  primary: { light: '#006FEE', dark: '#338EF7' },
-  neutral: { light: '#71717A', dark: '#A1A1AA' },
+  accent: { light: 'var(--chart-1)', dark: 'var(--chart-1)' },
+  success: { light: 'var(--success)', dark: 'var(--success)' },
+  danger: { light: 'var(--destructive)', dark: 'var(--destructive)' },
+  warning: { light: 'var(--warning)', dark: 'var(--warning)' },
+  primary: { light: 'var(--chart-1)', dark: 'var(--chart-1)' },
+  neutral: { light: 'var(--muted-foreground)', dark: 'var(--muted-foreground)' },
 } as const;
 
 export const SEVERITY_SERIES = [
   { key: 'critical', label: 'Critical', color: CHART_TONES.danger.dark },
-  { key: 'high', label: 'High', color: '#F07E1D' },
+  { key: 'high', label: 'High', color: 'var(--color-orange-500)' },
   { key: 'medium', label: 'Medium', color: CHART_TONES.warning.dark },
-  { key: 'low', label: 'Low', color: CHART_TONES.primary.dark },
+  { key: 'low', label: 'Low', color: 'var(--color-blue-500)' },
   { key: 'unknown', label: 'Unknown', color: CHART_TONES.neutral.dark },
 ] as const;
 
@@ -59,6 +59,8 @@ export function singleSeriesConfig<K extends string>(
 export function formatChartDate(value: string, withYear = false): string {
   return new Date(`${value}T12:00:00Z`).toLocaleDateString(
     'en',
-    withYear ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' }
+    withYear
+      ? { month: 'short', day: 'numeric', year: 'numeric' }
+      : { month: 'short', day: 'numeric' }
   );
 }

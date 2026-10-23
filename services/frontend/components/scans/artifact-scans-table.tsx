@@ -89,25 +89,25 @@ function ArtifactReference({
 
   return (
     <div className="min-w-0 max-w-[32rem]" title={reference}>
-      <p className="break-all font-mono text-sm font-medium leading-5 text-zinc-800 dark:text-zinc-100">
+      <p className="break-all font-mono text-sm font-medium leading-5 text-foreground">
         {hideImageName ? (
           <span>{imageTag}</span>
         ) : (
           <>
             {repositoryPath}
-            <span className="text-accent">:{imageTag}</span>
+            <span className="text-primary">:{imageTag}</span>
           </>
         )}
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
         {!hideImageName && registryHost ? (
-          <span className="break-all font-mono text-[11px] text-zinc-500">{registryHost}</span>
+          <span className="break-all font-mono text-xs text-muted-foreground">{registryHost}</span>
         ) : null}
-        <Chip className="text-[10px] font-semibold" color="accent" size="sm" variant="soft">
+        <Chip className="text-xs font-semibold" color="accent" size="sm" variant="soft">
           {scanCount} run{scanCount === 1 ? '' : 's'}
         </Chip>
         {deletionQueued ? (
-          <Chip className="text-[10px] font-semibold" color="warning" size="sm" variant="soft">
+          <Chip className="text-xs font-semibold" color="warning" size="sm" variant="soft">
             Deletion queued
           </Chip>
         ) : null}
@@ -275,7 +275,7 @@ function ArtifactHistoryRows({
               textValue={`${row.kind} scan history`}
             >
               <Table.Cell colSpan={8}>
-                <div className="px-4 py-3 text-xs text-zinc-500">
+                <div className="px-4 py-3 text-xs text-muted-foreground">
                   {row.kind === 'loading' ? 'Loading scan history…' : 'No scan history found.'}
                 </div>
               </Table.Cell>
@@ -350,7 +350,7 @@ function ArtifactHistoryRows({
             <Table.Cell />
             <Table.Cell>
               <Link
-                className="font-mono text-xs text-zinc-500 hover:text-accent"
+                className="font-mono text-xs text-muted-foreground hover:text-primary"
                 href={`/scans/details/${scan.id}`}
                 onClick={(event) => event.stopPropagation()}
               >
@@ -366,7 +366,7 @@ function ArtifactHistoryRows({
                 />
                 {scan.status === 'pending' && scan.queue_position != null && (
                   <span
-                    className="text-xs text-muted"
+                    className="text-xs text-muted-foreground"
                     title="Approximate position among visible queued scans for this provider in this workspace"
                   >
                     Queue ~#{scan.queue_position}
@@ -375,7 +375,7 @@ function ArtifactHistoryRows({
                 <PolicyFailureChip summary={scan.compliance_summary} />
                 <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
               </div>
-              <p className="mt-1 text-xs text-zinc-500" title={fullDate(scan.created_at)}>
+              <p className="mt-1 text-xs text-muted-foreground" title={fullDate(scan.created_at)}>
                 {timeAgo(scan.created_at)}
               </p>
             </Table.Cell>
@@ -682,7 +682,7 @@ export function ArtifactScansTable({
                               variant="ghost"
                             >
                               {isExpanded ? (
-                                <ArrowDown01Icon size={14} className="text-accent" />
+                                <ArrowDown01Icon size={14} className="text-primary" />
                               ) : (
                                 <ArrowRight01Icon size={14} />
                               )}
@@ -721,7 +721,7 @@ export function ArtifactScansTable({
                               summary={artifact.intelligence_summary}
                             />
                           </div>
-                          <p className="mt-1 font-mono text-xs text-zinc-500">
+                          <p className="mt-1 font-mono text-xs text-muted-foreground">
                             {artifact.latest_scan_id.slice(0, 8)}…{' '}
                             <span className="font-sans" title={fullDate(artifact.latest_scan_at)}>
                               · {timeAgo(artifact.latest_scan_at)}

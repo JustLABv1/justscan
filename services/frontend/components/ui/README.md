@@ -4,7 +4,26 @@ The frontend owns its component source. `components.json` configures shadcn/ui
 with the `radix-nova` style and the public `@reui` registry. HeroUI is no longer a
 dependency.
 
-- `button.tsx` and `dialog.tsx` provide shadcn-style Radix primitives. Prefer
+The visual baseline is ReUI’s default preview: **Inter, neutral colors, and Nova**.
+Inter is self-hosted through `@fontsource-variable/inter`. `app/ui-theme.css` owns
+the light/dark palette, sidebar tokens, chart tokens, and semantic status colors.
+The base radius is 0.625rem; standard body copy is 14px. Inputs retain 16px text
+on mobile to avoid browser input zoom.
+
+`card.tsx` and the classes in `nova-styles.ts` come from the official
+`https://ui.shadcn.com/r/styles/radix-nova/` registry; the button variants follow
+the same source. State selectors are adapted for React Aria where necessary.
+Compatibility aliases such as `Button`’s `primary`/`tertiary` and `md` map onto
+Nova’s default/secondary variants and default size.
+
+Use `muted` and `accent` for backgrounds and their `*-foreground` tokens for text.
+Use `primary` for emphasis and primary actions. Avoid fixed neutral colors,
+sub-12px UI copy, and page-level overrides of shared control sizes/radii. Domain
+severity colors, user-defined tag colors, print-document layouts, and decorative
+marketing artwork are content rather than additional component themes.
+Compact stat cards retain their established 110px layout and use these tokens.
+
+- `button.tsx`, `card.tsx`, and `dialog.tsx` provide Nova-styled primitives. Prefer
   `asChild` when a button renders a link, so the result has one interactive element.
 - `badge.tsx` comes from ReUI's public Radix registry. `Chip` maps the app's status
   tones to its variants.

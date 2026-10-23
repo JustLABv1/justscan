@@ -45,7 +45,7 @@ export function DialogContent({
         data-slot="dialog-content"
         aria-describedby={undefined}
         className={cn(
-          'relative z-50 flex max-h-[90dvh] w-full flex-col rounded-xl border border-border bg-background text-foreground shadow-lg outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+          'relative z-50 flex max-h-[90dvh] w-full flex-col rounded-xl bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
           className
         )}
         {...props}
@@ -60,7 +60,7 @@ export function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg font-semibold leading-none', className)}
+      className={cn('cn-font-heading text-base font-medium leading-none', className)}
       {...props}
     />
   );

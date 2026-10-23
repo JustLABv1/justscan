@@ -7,12 +7,18 @@ import { cn } from '@/lib/utils';
 import { Indicator, Input } from './primitives';
 import { useOverlayPortal } from './overlay-portal';
 
+import {
+  NOVA_SELECTTRIGGER,
+  NOVA_DROPDOWNMENUITEM,
+  NOVA_TABLEHEAD,
+  NOVA_TABLECELL,
+  NOVA_TABSTRIGGER,
+} from './nova-styles';
+
 const popupClass =
   'z-50 min-w-[var(--trigger-width)] overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none entering:animate-in entering:fade-in exiting:animate-out exiting:fade-out';
-const triggerClass =
-  'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-ring disabled:opacity-50';
-const itemClass =
-  'relative flex cursor-default items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[focused]:bg-secondary data-[selected]:font-medium data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
+const triggerClass = NOVA_SELECTTRIGGER;
+const itemClass = NOVA_DROPDOWNMENUITEM + ' justify-between data-[selected]:font-medium';
 function collectionText(node: React.ReactNode): string {
   return React.Children.toArray(node)
     .map((child) => {
@@ -297,7 +303,8 @@ export const Table = Object.assign(
       return (
         <Aria.Column
           className={cn(
-            'h-10 px-4 text-left align-middle font-medium text-muted-foreground outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-ring',
+            NOVA_TABLEHEAD +
+              ' outline-none data-[focus-visible]:ring-3 data-[focus-visible]:ring-ring/50',
             typeof className === 'string' && className
           )}
           {...props}
@@ -313,7 +320,7 @@ export const Table = Object.assign(
       return (
         <Aria.Row
           className={cn(
-            'border-b border-border transition-colors last:border-0 hover:bg-secondary/50 data-[selected]:bg-secondary data-[focus-visible]:outline-2 data-[focus-visible]:outline-ring',
+            'border-b border-border transition-colors last:border-0 hover:bg-muted/50 data-[selected]:bg-muted data-[focus-visible]:outline-2 data-[focus-visible]:outline-ring',
             typeof className === 'string' && className
           )}
           {...props}
@@ -323,7 +330,8 @@ export const Table = Object.assign(
     Cell: ({ className, ...props }: Aria.CellProps) => (
       <Aria.Cell
         className={cn(
-          'p-4 align-middle outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-ring',
+          NOVA_TABLECELL +
+            ' outline-none data-[focus-visible]:ring-3 data-[focus-visible]:ring-ring/50',
           typeof className === 'string' && className
         )}
         {...props}
@@ -379,7 +387,7 @@ export const Tabs = Object.assign(
       return (
         <Aria.TabList
           className={cn(
-            'inline-flex items-center gap-1 rounded-lg bg-secondary p-1 text-muted-foreground',
+            'inline-flex h-8 w-fit items-center justify-center rounded-lg bg-muted p-[3px] text-muted-foreground',
             typeof className === 'string' && className
           )}
           {...props}
@@ -389,7 +397,8 @@ export const Tabs = Object.assign(
     Tab: ({ className, ...props }: Aria.TabProps) => (
       <Aria.Tab
         className={cn(
-          'inline-flex cursor-pointer items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium outline-none data-[selected]:bg-background data-[selected]:text-foreground data-[selected]:shadow-sm data-[focus-visible]:ring-2 data-[focus-visible]:ring-ring',
+          NOVA_TABSTRIGGER +
+            ' cursor-pointer data-[selected]:bg-background data-[selected]:text-foreground',
           typeof className === 'string' && className
         )}
         {...props}

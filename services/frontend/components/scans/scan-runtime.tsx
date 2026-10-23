@@ -531,15 +531,15 @@ export function ScannerDatabaseCard({
   return (
     <Card className="p-4">
       <Card.Content className="p-0">
-        <p className="mb-1 text-xs text-zinc-500">{label}</p>
+        <p className="mb-1 text-xs text-muted-foreground">{label}</p>
         <p
-          className="text-sm font-medium text-zinc-900 dark:text-white"
+          className="text-sm font-medium text-foreground"
           title={updatedAt ? fullDate(updatedAt) : ''}
         >
           {updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}
         </p>
         <p
-          className="mt-1 text-xs text-zinc-500"
+          className="mt-1 text-xs text-muted-foreground"
           title={downloadedAt ? fullDate(downloadedAt) : ''}
         >
           Downloaded {downloadedAt ? timeAgo(downloadedAt) : 'unknown'}
@@ -582,20 +582,20 @@ function stepStateTone(state: ProgressStepState): {
     return {
       color: 'success',
       label: 'Done',
-      rowClassName: 'bg-success/5 text-success',
+      rowClassName: 'bg-success/5 text-success-foreground',
     };
   }
   if (state === 'active') {
     return {
       color: 'accent',
       label: 'Running',
-      rowClassName: 'bg-accent/5 text-accent',
+      rowClassName: 'bg-primary/5 text-primary',
     };
   }
   return {
     color: 'default',
     label: 'Waiting',
-    rowClassName: 'bg-default/40 text-muted',
+    rowClassName: 'bg-default/40 text-muted-foreground',
   };
 }
 
@@ -626,7 +626,7 @@ function StepStatusIcon({ state, title }: { state: ProgressStepState; title: str
     return (
       <span
         aria-label={`${title} running`}
-        className="flex size-5 items-center justify-center rounded-full border-2 border-accent/25 border-t-accent motion-safe:animate-spin"
+        className="flex size-5 items-center justify-center rounded-full border-2 border-primary/25 border-t-accent motion-safe:animate-spin"
       />
     );
   }
@@ -644,7 +644,7 @@ function StepStatusIcon({ state, title }: { state: ProgressStepState; title: str
 function StepIdentityIcon({ state, stepKey }: { state: ProgressStepState; stepKey: string }) {
   const Icon = STEP_IDENTITY_ICONS[stepKey] ?? FileSearchIcon;
   const iconClassName =
-    state === 'pending' ? 'text-muted' : state === 'active' ? 'text-accent' : 'text-success';
+    state === 'pending' ? 'text-muted-foreground' : state === 'active' ? 'text-primary' : 'text-success-foreground';
 
   return <Icon aria-hidden className={iconClassName} size={20} />;
 }
@@ -812,7 +812,7 @@ function PipelineStepOverview({ steps }: { steps: PipelineStepRuntime[] }) {
   }, [activeStepId]);
 
   return (
-    <div className="rounded-3xl mt-4">
+    <div className="rounded-xl mt-4">
       <ScrollShadow
         className="-mx-1 px-1 pb-2"
         orientation="horizontal"
@@ -827,28 +827,28 @@ function PipelineStepOverview({ steps }: { steps: PipelineStepRuntime[] }) {
               <li
                 key={`${step.key}-${index}`}
                 ref={step.runtimeId === activeStepId ? activeStepRef : undefined}
-                className={`relative min-w-[17rem] shrink-0 overflow-hidden rounded-2xl border p-px sm:min-w-[19rem] ${
+                className={`relative min-w-[17rem] shrink-0 overflow-hidden rounded-xl border p-px sm:min-w-[19rem] ${
                   isActive
-                    ? 'border-accent/20 bg-accent/15 shadow-[0_0_20px_color-mix(in_srgb,var(--accent)_8%,transparent)]'
+                    ? 'border-primary/20 bg-primary/15 shadow-[0_0_20px_color-mix(in_srgb,var(--primary)_8%,transparent)]'
                     : 'border-divider bg-surface-secondary'
                 }`}
               >
                 {isActive ? (
                   <span
                     aria-hidden
-                    className="pointer-events-none absolute -inset-24 bg-[conic-gradient(from_90deg,transparent_0_68%,color-mix(in_srgb,var(--accent)_20%,transparent)_74%,var(--accent)_80%,color-mix(in_srgb,var(--accent)_20%,transparent)_86%,transparent_92%)] opacity-80 motion-safe:animate-spin motion-reduce:hidden"
+                    className="pointer-events-none absolute -inset-24 bg-[conic-gradient(from_90deg,transparent_0_68%,color-mix(in_srgb,var(--primary)_20%,transparent)_74%,var(--primary)_80%,color-mix(in_srgb,var(--primary)_20%,transparent)_86%,transparent_92%)] opacity-80 motion-safe:animate-spin motion-reduce:hidden"
                   />
                 ) : null}
                 <div className="relative flex items-start gap-3 rounded-[calc(1rem-1px)] bg-surface-secondary px-4 py-3">
                   <Badge.Anchor className="shrink-0">
-                    <span className="flex size-10 items-center justify-center rounded-2xl bg-surface">
+                    <span className="flex size-10 items-center justify-center rounded-xl bg-surface">
                       <StepIdentityIcon state={step.state} stepKey={step.key} />
                     </span>
                     <StepStatusBadge state={step.state} title={step.title} />
                   </Badge.Anchor>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-foreground">{step.title}</p>
-                    <p className="mt-1 font-mono text-xs text-muted">{step.durationLabel}</p>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">{step.durationLabel}</p>
                   </div>
                 </div>
               </li>
@@ -870,21 +870,21 @@ function PipelineDurationList({
   onStepSelect?: (stepId: string) => void;
 }) {
   return (
-    <div className="rounded-3xl bg-surface-secondary p-3 sm:p-4">
+    <div className="rounded-xl bg-surface-secondary p-3 sm:p-4">
       <ol className="space-y-1.5">
         {steps.map((step, index) => {
           const tone = stepStateTone(step.state);
           const isSelected = selectedStepId === step.runtimeId;
-          const rowClassName = `flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left ${
-            step.state === 'active' ? 'bg-accent/5' : ''
-          } ${isSelected ? 'ring-1 ring-accent/25' : ''}`;
+          const rowClassName = `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${
+            step.state === 'active' ? 'bg-primary/5' : ''
+          } ${isSelected ? 'ring-1 ring-primary/25' : ''}`;
           const rowContent = (
             <>
               <StepStatusIcon state={step.state} title={step.title} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{step.title}</p>
                 {step.startedAt ? (
-                  <p className="mt-0.5 text-xs text-muted">Started {timeAgo(step.startedAt)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Started {timeAgo(step.startedAt)}</p>
                 ) : null}
               </div>
               <span className={`rounded-full px-2.5 py-1 font-mono text-xs ${tone.rowClassName}`}>
@@ -931,8 +931,8 @@ function PipelineLiveLogs({
         ];
 
   return (
-    <div className="rounded-3xl bg-surface-secondary p-4 shadow-surface sm:p-5">
-      <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-2xl font-mono text-xs text-foreground">
+    <div className="rounded-xl bg-surface-secondary p-4 shadow-surface sm:p-5">
+      <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-xl font-mono text-xs text-foreground">
         {visibleLogs
           .map((line) => (line.startsWith('$') ? line : `-> ${line.replace(/^->\s?/, '')}`))
           .join('\n')}
@@ -1023,7 +1023,7 @@ function ScanPipelineCard({
       </Card.Content>
 
       <Card.Footer className="flex-row flex-wrap items-center justify-between gap-3 px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
-        <p className="font-mono text-sm text-muted">
+        <p className="font-mono text-sm text-muted-foreground">
           {formatElapsed(elapsed)} elapsed ·{' '}
           {status === 'pending' || status === 'running'
             ? progress.eyebrow
@@ -1040,7 +1040,7 @@ function ScanPipelineCard({
 function QueuePositionNote({ status, position }: { status: string; position?: number }) {
   if (status !== 'pending' || position == null) return null;
   return (
-    <p className="text-xs text-muted">
+    <p className="text-xs text-muted-foreground">
       Approximate position among visible queued scans for this provider in the selected workspace.
       Start order can change.
     </p>
@@ -1317,7 +1317,7 @@ export function ScanStepTimeline({
           <Modal.Container size="full" placement="center">
             <Modal.Dialog className="max-h-[85vh] overflow-hidden">
               <Modal.Header>
-                <Modal.Heading className="text-base font-semibold text-zinc-900 dark:text-white">
+                <Modal.Heading className="text-base font-semibold text-foreground">
                   Xray request timeline debug
                 </Modal.Heading>
                 <Modal.CloseTrigger />
@@ -1329,7 +1329,7 @@ export function ScanStepTimeline({
                     style={{ borderColor: 'var(--separator-secondary)' }}
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                         Requests ({xrayLogs.length})
                       </p>
                       <Button
@@ -1344,7 +1344,7 @@ export function ScanStepTimeline({
                       </Button>
                     </div>
                     {xrayLogsError && (
-                      <p className="mb-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-2 text-xs text-red-500">
+                      <p className="mb-2 rounded-lg border border-destructive/20 bg-destructive/10 px-2.5 py-2 text-xs text-destructive">
                         {xrayLogsError}
                       </p>
                     )}
@@ -1366,13 +1366,13 @@ export function ScanStepTimeline({
                             }}
                             onClick={() => setSelectedXrayLogID(entry.id)}
                           >
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                               #{index + 1} - {entry.method}
                             </p>
-                            <p className="mt-0.5 line-clamp-2 text-xs font-medium text-zinc-900 dark:text-white">
+                            <p className="mt-0.5 line-clamp-2 text-xs font-medium text-foreground">
                               {entry.endpoint}
                             </p>
-                            <p className="mt-1 text-[11px] text-zinc-500">
+                            <p className="mt-1 text-xs text-muted-foreground">
                               {entry.status_code} - {entry.duration_ms}ms -{' '}
                               {timeAgo(entry.created_at)}
                             </p>
@@ -1381,7 +1381,7 @@ export function ScanStepTimeline({
                       })}
                       {!xrayLogsLoading && xrayLogs.length === 0 && (
                         <p
-                          className="rounded-lg border px-3 py-2 text-xs text-zinc-500"
+                          className="rounded-lg border px-3 py-2 text-xs text-muted-foreground"
                           style={{ borderColor: 'var(--surface-border)' }}
                         >
                           No Xray requests were logged for this scan yet.
@@ -1394,16 +1394,16 @@ export function ScanStepTimeline({
                     {selectedXrayLog ? (
                       <div className="space-y-3">
                         <Card variant="secondary">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Request
                           </p>
-                          <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                          <p className="text-sm font-semibold text-foreground">
                             {selectedXrayLog.method} {selectedXrayLog.endpoint}
                           </p>
-                          <p className="text-xs text-zinc-500">
+                          <p className="text-xs text-muted-foreground">
                             URL: {selectedXrayLog.request_url || selectedXrayLog.endpoint}
                           </p>
-                          <p className="text-xs text-zinc-500">
+                          <p className="text-xs text-muted-foreground">
                             {fullDate(selectedXrayLog.created_at)} - {selectedXrayLog.duration_ms}ms
                             - Status {selectedXrayLog.status_code}
                           </p>
@@ -1419,7 +1419,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Request headers
                           </p>
                           <pre
@@ -1431,7 +1431,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Request body
                           </p>
                           <pre
@@ -1443,7 +1443,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Response headers
                           </p>
                           <pre
@@ -1455,7 +1455,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Response body
                           </p>
                           <pre
@@ -1467,7 +1467,7 @@ export function ScanStepTimeline({
                         </Card>
                       </div>
                     ) : (
-                      <p className="text-sm text-zinc-500">
+                      <p className="text-sm text-muted-foreground">
                         Select a request to inspect full debug details.
                       </p>
                     )}

@@ -126,7 +126,7 @@ export function OrgTeamTab({
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold">Members</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               {currentOrgRole
                 ? `Your role: ${currentOrgRole}`
                 : isSystemAdmin
@@ -149,16 +149,16 @@ export function OrgTeamTab({
           )}
         </div>
         {featureDisabledReason && (
-          <p className="text-xs text-warning mt-1">{featureDisabledReason}</p>
+          <p className="text-xs text-warning-foreground mt-1">{featureDisabledReason}</p>
         )}
 
         <div>
           {membersLoading ? (
             <div className="flex justify-center py-8">
-              <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
+              <div className="size-6 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
             </div>
           ) : members.length === 0 && invites.length === 0 ? (
-            <div className="px-6 py-8 text-sm text-zinc-500 text-center">
+            <div className="px-6 py-8 text-sm text-muted-foreground text-center">
               No members or pending invites.
             </div>
           ) : (
@@ -200,7 +200,7 @@ export function OrgTeamTab({
                       {sortedMembers.length === 0 && filteredInvites.length === 0 ? (
                         <Table.Row id="empty">
                           <Table.Cell colSpan={5}>
-                            <div className="px-4 py-8 text-center text-sm text-zinc-500">
+                            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                               No members match this search.
                             </div>
                           </Table.Cell>
@@ -219,11 +219,11 @@ export function OrgTeamTab({
                                     <Avatar.Fallback>{memberInitials(member)}</Avatar.Fallback>
                                   </Avatar>
                                   <div>
-                                    <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                                    <p className="font-medium text-foreground">
                                       {member.username || member.email || member.user_id}
                                     </p>
                                     {member.email && (
-                                      <p className="text-xs text-zinc-500 mt-0.5">{member.email}</p>
+                                      <p className="text-xs text-muted-foreground mt-0.5">{member.email}</p>
                                     )}
                                   </div>
                                 </div>
@@ -244,7 +244,7 @@ export function OrgTeamTab({
                                     }
                                   >
                                     <Select.Trigger
-                                      className={`${inputClassName} max-w-[140px] py-2 text-sm`}
+                                      className={`${inputClassName} max-w-[140px] text-sm`}
                                     >
                                       <Select.Value />
                                       <Select.Indicator />
@@ -258,16 +258,16 @@ export function OrgTeamTab({
                                     </Select.Popover>
                                   </Select>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-primary/10 text-accent border-primary/20">
+                                  <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-primary/10 text-primary border-primary/20">
                                     {member.role}
                                   </span>
                                 )}
                               </Table.Cell>
-                              <Table.Cell className="text-xs text-zinc-500">
+                              <Table.Cell className="text-xs text-muted-foreground">
                                 {timeAgo(member.joined_at)}
                               </Table.Cell>
                               <Table.Cell>
-                                <span className="text-xs text-success">Active</span>
+                                <span className="text-xs text-success-foreground">Active</span>
                               </Table.Cell>
                               <Table.Cell>
                                 <div className="flex items-center justify-end gap-2">
@@ -313,21 +313,21 @@ export function OrgTeamTab({
                                     </Avatar.Fallback>
                                   </Avatar>
                                   <div>
-                                    <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                                    <p className="font-medium text-foreground">
                                       {invite.email}
                                     </p>
-                                    <p className="mt-0.5 text-xs text-muted">Invitation pending</p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">Invitation pending</p>
                                   </div>
                                 </div>
                               </Table.Cell>
                               <Table.Cell>
-                                <span className="inline-flex rounded-full border border-warning/20 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+                                <span className="inline-flex rounded-full border border-warning/20 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning-foreground">
                                   {invite.role}
                                 </span>
                               </Table.Cell>
-                              <Table.Cell className="text-xs text-muted">—</Table.Cell>
+                              <Table.Cell className="text-xs text-muted-foreground">—</Table.Cell>
                               <Table.Cell>
-                                <span className="text-xs text-warning">
+                                <span className="text-xs text-warning-foreground">
                                   Expires {timeUntil(invite.expires_at)}
                                 </span>
                               </Table.Cell>

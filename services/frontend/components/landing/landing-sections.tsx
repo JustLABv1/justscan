@@ -26,29 +26,29 @@ export function LandingHeader({ initialIsLoggedIn = false }: { initialIsLoggedIn
 
   return (
     <header className="pointer-events-none fixed inset-x-0 top-4 z-50 px-4 sm:px-6">
-      <div className="pointer-events-auto mx-auto flex h-12 max-w-5xl items-center justify-between gap-3 rounded-2xl border border-foreground/10 bg-background/78 px-3 shadow-lg shadow-foreground/5 backdrop-blur-xl sm:rounded-full sm:px-4">
+      <div className="pointer-events-auto mx-auto flex h-12 max-w-5xl items-center justify-between gap-3 rounded-xl border border-foreground/10 bg-background/78 px-3 shadow-lg shadow-foreground/5 backdrop-blur-xl sm:rounded-full sm:px-4">
         <NextLink aria-label="JustScan home" className="flex shrink-0 items-center gap-2" href="/">
           <Logo size={24} />
           <span className="text-sm font-semibold text-foreground">JustScan</span>
         </NextLink>
 
         <nav aria-label="Primary navigation" className="hidden items-center gap-5 md:flex">
-          <Link className="text-sm text-muted" href="#features">
+          <Link className="text-sm text-muted-foreground" href="#features">
             Features
           </Link>
-          <Link className="text-sm text-muted" href="#intelligence">
+          <Link className="text-sm text-muted-foreground" href="#intelligence">
             Intelligence
           </Link>
-          <Link className="text-sm text-muted" href="#cli">
+          <Link className="text-sm text-muted-foreground" href="#cli">
             CLI
           </Link>
-          <Link className="text-sm text-muted" href="#gitops">
+          <Link className="text-sm text-muted-foreground" href="#gitops">
             GitOps
           </Link>
-          <Link className="text-sm text-muted" href="#faq">
+          <Link className="text-sm text-muted-foreground" href="#faq">
             FAQ
           </Link>
-          <Link className="text-sm text-muted" href="/docs">
+          <Link className="text-sm text-muted-foreground" href="/docs">
             Docs
           </Link>
         </nav>
@@ -88,7 +88,7 @@ export function LandingHeroSection() {
           <h1 className="text-5xl font-semibold leading-[1.01] tracking-[-0.055em] text-foreground sm:text-6xl lg:text-7xl">
             Find what matters. Fix it before it ships.
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-muted sm:text-lg sm:leading-8">
+          <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
             Scan images and Helm charts, prioritize what is fixable, and keep evidence and team
             context in one security workflow you control.
           </p>
@@ -109,7 +109,7 @@ export function LandingHeroSection() {
             variant="secondary"
           />
         </div>
-        <p className="flex items-center gap-2 text-sm text-muted">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <span aria-hidden className="size-1.5 rounded-full bg-success" />
           No account required for your first public image scan.
         </p>
@@ -126,7 +126,7 @@ export function LandingProofStrip() {
     >
       <LandingReveal className="mx-auto max-w-5xl text-center">
         <p className="text-sm font-medium text-foreground">A scanner that fits the way you ship.</p>
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-3 text-sm text-muted">
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-3 text-sm text-muted-foreground">
           {[
             ['Trivy + Xray', 'Flexible scan engines'],
             ['Self-hosted by design', 'Your environment and data'],
@@ -134,9 +134,9 @@ export function LandingProofStrip() {
             ['Built for CI/CD', 'Release workflow automation'],
           ].map(([title, description], index) => (
             <div key={title} className="flex items-center gap-2">
-              {index > 0 ? <span aria-hidden className="size-1 rounded-full bg-accent" /> : null}
+              {index > 0 ? <span aria-hidden className="size-1 rounded-full bg-primary" /> : null}
               <span className="font-medium text-foreground">{title}</span>
-              <span className="hidden text-muted sm:inline">{description}</span>
+              <span className="hidden text-muted-foreground sm:inline">{description}</span>
             </div>
           ))}
         </div>
@@ -156,7 +156,7 @@ export function LandingFinalCta() {
         <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-[-0.035em] text-foreground sm:text-4xl lg:text-5xl">
           Start with one image. Build the workflow when you’re ready.
         </h2>
-        <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-muted">
+        <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-muted-foreground">
           Run a public scan without an account, then keep the result when it becomes part of your
           team’s release process.
         </p>
@@ -189,40 +189,40 @@ export function LandingFooter() {
           <Logo size={26} />
           <div>
             <p className="text-sm font-semibold text-foreground">JustScan</p>
-            <p className="mt-1 text-xs text-muted">Container security, kept actionable.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Container security, kept actionable.</p>
           </div>
         </div>
 
         <nav aria-label="Footer navigation" className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <Link className="text-sm text-muted" href="#features">
+          <Link className="text-sm text-muted-foreground" href="#features">
             Features
           </Link>
-          <Link className="text-sm text-muted" href="#intelligence">
+          <Link className="text-sm text-muted-foreground" href="#intelligence">
             Intelligence
           </Link>
-          <Link className="text-sm text-muted" href="#cli">
+          <Link className="text-sm text-muted-foreground" href="#cli">
             CLI
           </Link>
-          <Link className="text-sm text-muted" href="#gitops">
+          <Link className="text-sm text-muted-foreground" href="#gitops">
             GitOps
           </Link>
-          <Link className="text-sm text-muted" href="#faq">
+          <Link className="text-sm text-muted-foreground" href="#faq">
             FAQ
           </Link>
-          <Link className="text-sm text-muted" href="/docs">
+          <Link className="text-sm text-muted-foreground" href="/docs">
             Docs
           </Link>
-          <Link className="text-sm text-muted" href="/public/scan/image">
+          <Link className="text-sm text-muted-foreground" href="/public/scan/image">
             Image scan
           </Link>
-          <Link className="text-sm text-muted" href="/public/scan/helm">
+          <Link className="text-sm text-muted-foreground" href="/public/scan/helm">
             Helm scan
           </Link>
-          <Link className="text-sm text-muted" href="/login">
+          <Link className="text-sm text-muted-foreground" href="/login">
             Sign in
           </Link>
           <Link
-            className="text-sm text-muted"
+            className="text-sm text-muted-foreground"
             href="https://github.com/JustLABv1/justscan"
             rel="noreferrer"
             target="_blank"

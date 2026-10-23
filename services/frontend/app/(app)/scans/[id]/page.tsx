@@ -451,7 +451,7 @@ function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
       </span>
     );
   }
-  return <span className="text-xs text-zinc-500">{timeAgo(firstSeenAt)}</span>;
+  return <span className="text-xs text-muted-foreground">{timeAgo(firstSeenAt)}</span>;
 }
 
 const LIMIT = 10;
@@ -2183,13 +2183,13 @@ function ScanDetailContent() {
       </Button>
       {isScanInProgress && (
         <Button
-          className="bg-warning-soft-hover text-warning"
+          className="bg-warning-soft-hover text-warning-foreground"
           isDisabled={cancelling || !canMutateCurrentScan}
           onPress={handleCancel}
           variant="primary"
         >
           {cancelling ? (
-            <span className="size-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
+            <span className="size-3.5 border-2 border-warning/30 border-t-amber-400 rounded-full animate-spin" />
           ) : (
             <Cancel01Icon size={15} />
           )}
@@ -2223,8 +2223,8 @@ function ScanDetailContent() {
             style={
               shareModal.isOpen
                 ? {
-                    color: 'color-mix(in srgb, var(--accent) 78%, white)',
-                    borderColor: 'color-mix(in srgb, var(--accent) 25%, transparent)',
+                    color: 'color-mix(in srgb, var(--primary) 78%, white)',
+                    borderColor: 'color-mix(in srgb, var(--primary) 25%, transparent)',
                   }
                 : undefined
             }
@@ -2342,21 +2342,21 @@ function ScanDetailContent() {
         }
         title={scan.image_tag}
         meta={
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
             <span className="inline-flex items-center gap-1.5" title={fullDate(scanTimestamp)}>
               <Clock01Icon size={15} aria-hidden />
               {scanTimestampLabel} {fullDate(scanTimestamp)}
-              <span className="text-muted/80">({timeAgo(scanTimestamp)})</span>
+              <span className="text-muted-foreground/80">({timeAgo(scanTimestamp)})</span>
             </span>
             {scan.image_digest ? (
               <Button
                 aria-label="Copy image digest"
-                className="h-7 max-w-full gap-1.5 px-2 text-xs"
+                className=" max-w-full gap-1.5 "
                 onPress={() => void handleCopyDigest()}
                 size="sm"
                 variant="tertiary"
               >
-                <span className="text-muted">Digest</span>
+                <span className="text-muted-foreground">Digest</span>
                 <code className="max-w-[15rem] truncate font-mono text-foreground">
                   {abbreviatedDigest}
                 </code>
@@ -2379,18 +2379,18 @@ function ScanDetailContent() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="sm" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal overflow-hidden">
               <Modal.Header>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                <Modal.Heading className="text-foreground font-semibold">
                   Share scan
                 </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
               </Modal.Header>
               <Modal.Body className="py-5 space-y-4">
                 {scan.share_token ? (
                   <>
                     <div>
-                      <p className="mb-1.5 text-xs text-zinc-500">
+                      <p className="mb-1.5 text-xs text-muted-foreground">
                         Share link
                         <span
                           className="ml-1.5 rounded px-1.5 py-0.5 text-xs font-medium"
@@ -2398,19 +2398,19 @@ function ScanDetailContent() {
                             background:
                               scan.share_visibility === 'public'
                                 ? 'rgba(34,197,94,0.1)'
-                                : 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                                : 'color-mix(in srgb, var(--primary) 10%, transparent)',
                             color:
                               scan.share_visibility === 'public'
                                 ? '#4ade80'
-                                : 'color-mix(in srgb, var(--accent) 78%, white)',
-                            border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'color-mix(in srgb, var(--accent) 20%, transparent)'}`,
+                                : 'color-mix(in srgb, var(--primary) 78%, white)',
+                            border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'color-mix(in srgb, var(--primary) 20%, transparent)'}`,
                           }}
                         >
                           {scan.share_visibility}
                         </span>
                       </p>
                       <div className="flex items-center gap-2">
-                        <code className="flex-1 truncate rounded-lg bg-zinc-100 px-2 py-1.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                        <code className="flex-1 truncate rounded-lg bg-muted px-2 py-1.5 text-xs text-muted-foreground dark:bg-muted dark:text-foreground">
                           {typeof window !== 'undefined'
                             ? `${window.location.origin}/shared/${scan.share_token}`
                             : ''}
@@ -2432,7 +2432,7 @@ function ScanDetailContent() {
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <p className="text-xs text-zinc-500">Change visibility</p>
+                      <p className="text-xs text-muted-foreground">Change visibility</p>
                       <SegmentedControl
                         ariaLabel="Share visibility"
                         className="w-full"
@@ -2473,7 +2473,7 @@ function ScanDetailContent() {
                 ) : (
                   <>
                     <div className="space-y-1.5">
-                      <p className="text-xs text-zinc-500">Visibility</p>
+                      <p className="text-xs text-muted-foreground">Visibility</p>
                       <SegmentedControl
                         ariaLabel="Share visibility"
                         className="w-full"
@@ -2489,7 +2489,7 @@ function ScanDetailContent() {
                         }}
                         size="sm"
                       />
-                      <p className="text-xs leading-relaxed text-zinc-400">
+                      <p className="text-xs leading-relaxed text-muted-foreground">
                         {shareVisibility === 'public'
                           ? 'Anyone with the link can view this scan.'
                           : 'Only signed-in users can view this scan.'}
@@ -2514,9 +2514,9 @@ function ScanDetailContent() {
 
       {scan.status !== 'pending' && scan.status !== 'running' && (
         <div className="space-y-2">
-          <p className="text-sm leading-6 text-muted">{focusLead}</p>
+          <p className="text-sm leading-6 text-muted-foreground">{focusLead}</p>
           {scan.external_status === 'blocked_by_xray_policy' && blockedPolicyDetails ? (
-            <p className="text-xs leading-5 text-warning">{blockedPolicyDetails.summary}</p>
+            <p className="text-xs leading-5 text-warning-foreground">{blockedPolicyDetails.summary}</p>
           ) : null}
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             <ScanOverviewMetric
@@ -2608,7 +2608,7 @@ function ScanDetailContent() {
                 <Tabs.Tab key={tab.id} className="whitespace-nowrap" id={tab.id}>
                   {tab.label}
                   {tab.count !== null ? (
-                    <span className="ml-1 text-xs tabular-nums text-muted">{tab.count}</span>
+                    <span className="ml-1 text-xs tabular-nums text-muted-foreground">{tab.count}</span>
                   ) : null}
                   <Tabs.Indicator />
                 </Tabs.Tab>
@@ -2652,11 +2652,11 @@ function ScanDetailContent() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <h2 className="text-base font-semibold text-foreground">Vulnerability triage</h2>
-                  <span className="text-sm text-muted">
+                  <span className="text-sm text-muted-foreground">
                     {vulnTotal.toLocaleString()} {vulnTotal === 1 ? 'finding' : 'findings'}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-muted">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Prioritize material risk, then open a finding for evidence, remediation, and
                   notes.
                 </p>
@@ -2766,7 +2766,7 @@ function ScanDetailContent() {
                     ].map((option) => (
                       <Tabs.Tab key={option.id} className="whitespace-nowrap" id={option.id}>
                         {option.label}
-                        <span className="ml-1 text-xs tabular-nums text-muted">{option.count}</span>
+                        <span className="ml-1 text-xs tabular-nums text-muted-foreground">{option.count}</span>
                         <Tabs.Indicator />
                       </Tabs.Tab>
                     ))}
@@ -2801,7 +2801,7 @@ function ScanDetailContent() {
                       className={
                         advancedVulnerabilityFilterCount > 0
                           ? undefined
-                          : 'border border-divider bg-surface-tertiary font-medium text-foreground shadow-sm hover:bg-surface'
+                          : 'border border-divider '
                       }
                       size="sm"
                       variant={advancedVulnerabilityFilterCount > 0 ? 'primary' : 'secondary'}
@@ -2820,7 +2820,7 @@ function ScanDetailContent() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-foreground">Filter & sort</p>
-                          <p className="mt-1 text-xs text-muted">
+                          <p className="mt-1 text-xs text-muted-foreground">
                             Narrow the finding list without losing your place.
                           </p>
                         </div>
@@ -2857,7 +2857,7 @@ function ScanDetailContent() {
                             setPage(1);
                           }}
                         >
-                          <Select.Trigger className="h-11">
+                          <Select.Trigger className="">
                             <Select.Value />
                             <Select.Indicator />
                           </Select.Trigger>
@@ -2886,7 +2886,7 @@ function ScanDetailContent() {
                             setPage(1);
                           }}
                         >
-                          <Select.Trigger className="h-11">
+                          <Select.Trigger className="">
                             <Select.Value />
                             <Select.Indicator />
                           </Select.Trigger>
@@ -2911,7 +2911,7 @@ function ScanDetailContent() {
                             setPage(1);
                           }}
                         >
-                          <Select.Trigger className="h-11">
+                          <Select.Trigger className="">
                             <Select.Value />
                             <Select.Indicator />
                           </Select.Trigger>
@@ -3065,11 +3065,11 @@ function ScanDetailContent() {
                         {vulnLoading ? (
                           <div className="py-12 text-center">
                             <div className="flex justify-center">
-                              <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent animate-spin" />
+                              <div className="size-6 rounded-full border-2 border-border dark:border-border border-t-accent animate-spin" />
                             </div>
                           </div>
                         ) : (
-                          <div className="py-12 text-center text-zinc-500 text-sm">
+                          <div className="py-12 text-center text-muted-foreground text-sm">
                             {scan.external_status === 'blocked_by_xray_policy'
                               ? 'No imported vulnerabilities are available because Xray blocked this artifact before the normal scan summary was produced. See the Policy Violations tab for the matched issues, watches, and policies.'
                               : 'No vulnerabilities found.'}
@@ -3098,7 +3098,7 @@ function ScanDetailContent() {
                                   <button
                                     type="button"
                                     onClick={() => openVulnerabilityDetails(v)}
-                                    className="font-mono text-xs font-medium text-accent hover:text-accent/80 hover:underline"
+                                    className="font-mono text-xs font-medium text-primary hover:text-primary/80 hover:underline"
                                   >
                                     {v.vuln_id}
                                   </button>
@@ -3118,13 +3118,13 @@ function ScanDetailContent() {
                                   )}
                                 </div>
                               ) : (
-                                <span className="text-zinc-400 dark:text-zinc-600">-</span>
+                                <span className="text-muted-foreground">-</span>
                               )}
                             </Table.Cell>
                             <Table.Cell>
                               <Button
                                 aria-label={`Open ${v.pkg_name} in the SBOM`}
-                                className="-m-2 h-auto min-w-[180px] flex-col items-start gap-0 px-2 py-1 text-left"
+                                className="-m-2 h-auto min-w-[180px] flex-col items-start gap-0 text-left"
                                 onPress={() => openPackageInSBOM(v)}
                                 variant="ghost"
                               >
@@ -3135,7 +3135,7 @@ function ScanDetailContent() {
                                   {v.pkg_name}
                                 </p>
                                 <p
-                                  className="mt-1 truncate font-mono text-[11px] text-muted"
+                                  className="mt-1 truncate font-mono text-xs text-muted-foreground"
                                   title={v.installed_version}
                                 >
                                   {v.installed_version}
@@ -3145,7 +3145,7 @@ function ScanDetailContent() {
                             <Table.Cell>
                               <div className="flex items-center gap-2">
                                 <SeverityBadge severity={v.severity} />
-                                <span className="text-xs tabular-nums text-muted">
+                                <span className="text-xs tabular-nums text-muted-foreground">
                                   {v.cvss_score ? `CVSS ${v.cvss_score.toFixed(1)}` : 'No CVSS'}
                                 </span>
                               </div>
@@ -3153,15 +3153,15 @@ function ScanDetailContent() {
                             <Table.Cell className="hidden md:table-cell">
                               {v.fixed_version ? (
                                 <div>
-                                  <p className="text-xs font-medium text-success">
+                                  <p className="text-xs font-medium text-success-foreground">
                                     Update available
                                   </p>
-                                  <p className="mt-1 font-mono text-[11px] text-muted">
+                                  <p className="mt-1 font-mono text-xs text-muted-foreground">
                                     {v.fixed_version}
                                   </p>
                                 </div>
                               ) : (
-                                <span className="text-xs text-muted">No fix reported</span>
+                                <span className="text-xs text-muted-foreground">No fix reported</span>
                               )}
                             </Table.Cell>
                             <Table.Cell className="align-top">
@@ -3180,7 +3180,7 @@ function ScanDetailContent() {
                                         <div className="max-w-xs space-y-2 p-0.5">
                                           {failedPolicies.map((policy) => (
                                             <div key={policy.name} className="space-y-1">
-                                              <p className="text-xs font-semibold text-zinc-100">
+                                              <p className="text-xs font-semibold text-foreground">
                                                 {policy.name}
                                               </p>
                                               {policy.ruleSummaries.length > 0 ? (
@@ -3188,7 +3188,7 @@ function ScanDetailContent() {
                                                   {policy.ruleSummaries.map((rule) => (
                                                     <p
                                                       key={`${policy.name}-${rule}`}
-                                                      className="text-[11px] text-zinc-300"
+                                                      className="text-xs text-foreground"
                                                     >
                                                       {rule}
                                                     </p>
@@ -3246,14 +3246,14 @@ function ScanDetailContent() {
                                       <Accordion.Heading>
                                         <Accordion.Trigger className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-tertiary">
                                           <ShieldKeyIcon
-                                            className="shrink-0 text-muted"
+                                            className="shrink-0 text-muted-foreground"
                                             size={16}
                                           />
                                           <span className="min-w-0 flex-1">
                                             <span className="block text-sm font-medium text-foreground">
                                               Risk decision
                                             </span>
-                                            <span className="mt-0.5 block truncate text-xs text-muted">
+                                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                                               {v.suppression
                                                 ? 'An exception is recorded for this finding.'
                                                 : 'No exception recorded.'}
@@ -3268,7 +3268,7 @@ function ScanDetailContent() {
                                               ? v.suppression.status.replace(/_/g, ' ')
                                               : 'None'}
                                           </Chip>
-                                          <Accordion.Indicator className="shrink-0 text-muted" />
+                                          <Accordion.Indicator className="shrink-0 text-muted-foreground" />
                                         </Accordion.Trigger>
                                       </Accordion.Heading>
                                       <Accordion.Panel>
@@ -3276,7 +3276,7 @@ function ScanDetailContent() {
                                           {v.suppression ? (
                                             <Card variant="default">
                                               <Card.Content className="space-y-3 p-3">
-                                                <p className="text-sm text-zinc-300">
+                                                <p className="text-sm text-foreground">
                                                   {v.suppression.justification ||
                                                     'No justification provided.'}
                                                 </p>
@@ -3313,7 +3313,7 @@ function ScanDetailContent() {
                                                     </Button>
                                                   )}
                                                 </div>
-                                                <div className="grid gap-1 text-xs text-zinc-500 sm:grid-cols-2">
+                                                <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
                                                   {v.suppression.expires_at && (
                                                     <p>
                                                       Expires:{' '}
@@ -3340,7 +3340,7 @@ function ScanDetailContent() {
                                               </Card.Content>
                                             </Card>
                                           ) : (
-                                            <p className="text-sm text-zinc-500">
+                                            <p className="text-sm text-muted-foreground">
                                               No suppression exists for this vulnerability yet.
                                             </p>
                                           )}
@@ -3440,7 +3440,7 @@ function ScanDetailContent() {
                                                   disabled={!canMutateCurrentScan}
                                                 />
                                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                                  <span className="text-xs text-zinc-500">
+                                                  <span className="text-xs text-muted-foreground">
                                                     {suppressScope === 'global'
                                                       ? 'Visible in all workspaces.'
                                                       : suppressScope === 'workspace'
@@ -3485,7 +3485,7 @@ function ScanDetailContent() {
                                                       variant="danger-soft"
                                                     >
                                                       {suppressSaving && (
-                                                        <span className="size-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                                                        <span className="size-3 border-2 border-destructive/30 border-t-red-400 rounded-full animate-spin" />
                                                       )}
                                                       {v.suppression ? 'Update' : 'Suppress'}
                                                     </Button>
@@ -3505,7 +3505,7 @@ function ScanDetailContent() {
                                                   </div>
                                                 </div>
                                                 {suppressError && (
-                                                  <p className="text-xs text-red-400">
+                                                  <p className="text-xs text-destructive">
                                                     {suppressError}
                                                   </p>
                                                 )}
@@ -3514,7 +3514,7 @@ function ScanDetailContent() {
                                           ) : (
                                             <Card variant="default">
                                               <Card.Content className="p-3">
-                                                <p className="text-xs text-zinc-500">
+                                                <p className="text-xs text-muted-foreground">
                                                   {canMutateCurrentScan
                                                     ? v.suppression?.owner_type === 'system'
                                                       ? 'This is a global suppression. Only platform admins can edit it here.'
@@ -3532,12 +3532,12 @@ function ScanDetailContent() {
                                   <Accordion.Item id={`notes-${v.id}`}>
                                     <Accordion.Heading>
                                       <Accordion.Trigger className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-tertiary">
-                                        <Comment01Icon className="shrink-0 text-muted" size={16} />
+                                        <Comment01Icon className="shrink-0 text-muted-foreground" size={16} />
                                         <span className="min-w-0 flex-1">
                                           <span className="block text-sm font-medium text-foreground">
                                             Notes
                                           </span>
-                                          <span className="mt-0.5 block truncate text-xs text-muted">
+                                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                                             {(v.comments?.length ?? 0) > 0
                                               ? `${v.comments?.length} team note${(v.comments?.length ?? 0) === 1 ? '' : 's'}`
                                               : 'Capture context for your team.'}
@@ -3546,7 +3546,7 @@ function ScanDetailContent() {
                                         <Chip size="sm" variant="soft">
                                           {v.comments?.length ?? 0}
                                         </Chip>
-                                        <Accordion.Indicator className="shrink-0 text-muted" />
+                                        <Accordion.Indicator className="shrink-0 text-muted-foreground" />
                                       </Accordion.Trigger>
                                     </Accordion.Heading>
                                     <Accordion.Panel>
@@ -3559,17 +3559,17 @@ function ScanDetailContent() {
                                                   <div className="flex items-start justify-between gap-3">
                                                     <div className="min-w-0 flex-1">
                                                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                        <span className="text-xs font-semibold text-zinc-300">
+                                                        <span className="text-xs font-semibold text-foreground">
                                                           {c.username || 'You'}
                                                         </span>
                                                         <span
-                                                          className="text-xs text-zinc-500"
+                                                          className="text-xs text-muted-foreground"
                                                           title={fullDate(c.created_at)}
                                                         >
                                                           {timeAgo(c.created_at)}
                                                         </span>
                                                       </div>
-                                                      <p className="mt-1 text-sm text-zinc-400">
+                                                      <p className="mt-1 text-sm text-muted-foreground">
                                                         {c.content}
                                                       </p>
                                                     </div>
@@ -3591,7 +3591,7 @@ function ScanDetailContent() {
                                         ) : (
                                           <Card variant="default">
                                             <Card.Content className="p-3">
-                                              <p className="text-sm text-zinc-500">
+                                              <p className="text-sm text-muted-foreground">
                                                 No notes yet. Add context for teammates here.
                                               </p>
                                             </Card.Content>
@@ -3633,7 +3633,7 @@ function ScanDetailContent() {
             </Table.ScrollContainer>
           </Table>
           <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3">
-            <span className="text-xs text-zinc-500 whitespace-nowrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               Showing {vulnTotal === 0 ? 0 : (page - 1) * LIMIT + 1}-
               {Math.min(page * LIMIT, vulnTotal)} of {vulnTotal}
             </span>
@@ -3698,13 +3698,13 @@ function ScanDetailContent() {
                 />
               ) : null}
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                <p className="text-sm font-medium text-foreground">
                   Non-compliant findings
                 </p>
                 <Button
                   onPress={handleReEvaluate}
                   isDisabled={complianceLoading || !canMutateCurrentScan}
-                  className="text-xs text-zinc-500 hover:text-accent transition-colors disabled:opacity-40"
+                  className=" hover:text-primary transition-colors disabled:opacity-40"
                   variant="secondary"
                 >
                   {complianceLoading ? '…' : 'Re-evaluate'}
@@ -3738,7 +3738,7 @@ function ScanDetailContent() {
                   className="flex-1"
                   isDisabled={!canMutateCurrentScan}
                 >
-                  <Select.Trigger className="bg-surface-secondary">
+                  <Select.Trigger className="">
                     <Select.Value />
                     <Select.Indicator />
                   </Select.Trigger>
@@ -3773,7 +3773,7 @@ function ScanDetailContent() {
                   {complianceByOrg.map(({ org_id, org_name }) => (
                     <Button
                       key={org_id}
-                      className="text-xs"
+                      className=""
                       variant="secondary"
                       isDisabled={!canMutateCurrentScan}
                       onPress={() => void handleRemoveOrg(org_id)}
@@ -3808,7 +3808,7 @@ function ScanDetailContent() {
                     {complianceViolationRows.length === 0 ? (
                       <Table.Row id="compliance-empty">
                         <Table.Cell colSpan={12}>
-                          <div className="py-10 text-center text-sm text-zinc-500">
+                          <div className="py-10 text-center text-sm text-muted-foreground">
                             No non-compliant violations.
                           </div>
                         </Table.Cell>
@@ -3816,17 +3816,17 @@ function ScanDetailContent() {
                     ) : (
                       complianceViolationRows.map((row) => (
                         <Table.Row key={row.id} id={row.id}>
-                          <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                          <Table.Cell className="text-xs text-foreground">
                             {row.orgName}
                           </Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                          <Table.Cell className="text-xs text-foreground">
                             {row.policyName}
                           </Table.Cell>
                           <Table.Cell className="text-xs">
                             {row.vulnId ? (
                               <button
                                 type="button"
-                                className="text-accent hover:text-accent/80 hover:underline"
+                                className="text-primary hover:text-primary/80 hover:underline"
                                 onClick={() => {
                                   if (row.primaryMatch) {
                                     openVulnerabilityDetails(row.primaryMatch);
@@ -3838,29 +3838,29 @@ function ScanDetailContent() {
                                   : row.vulnId}
                               </button>
                             ) : (
-                              <span className="text-zinc-400">-</span>
+                              <span className="text-muted-foreground">-</span>
                             )}
                           </Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                          <Table.Cell className="text-xs text-foreground">
                             {row.packageName || '-'}
                           </Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-500">
+                          <Table.Cell className="text-xs text-muted-foreground">
                             {row.installedVersion || '-'}
                           </Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-500">
+                          <Table.Cell className="text-xs text-muted-foreground">
                             {row.fixedVersion || '-'}
                           </Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-500">
+                          <Table.Cell className="text-xs text-muted-foreground">
                             {row.hasFix ? 'Yes' : 'No'}
                           </Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-500">
+                          <Table.Cell className="text-xs text-muted-foreground">
                             {row.ruleType || '-'}
                           </Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-500">
+                          <Table.Cell className="text-xs text-muted-foreground">
                             {row.severity || '-'}
                           </Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-500">{row.message}</Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-500">
+                          <Table.Cell className="text-xs text-muted-foreground">{row.message}</Table.Cell>
+                          <Table.Cell className="text-xs text-muted-foreground">
                             {timeAgo(row.evaluatedAt)}
                           </Table.Cell>
                           <Table.Cell>
@@ -3868,13 +3868,13 @@ function ScanDetailContent() {
                               <Button
                                 size="sm"
                                 variant="secondary"
-                                className="text-xs"
+                                className=""
                                 onPress={() => openVulnerabilityDetails(row.primaryMatch!)}
                               >
                                 Open details
                               </Button>
                             ) : (
-                              <span className="text-xs text-zinc-400">-</span>
+                              <span className="text-xs text-muted-foreground">-</span>
                             )}
                           </Table.Cell>
                         </Table.Row>
@@ -3898,7 +3898,7 @@ function ScanDetailContent() {
             <Card.Content>
               <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
                 <div>
-                  <dt className="text-xs text-muted">Ownership</dt>
+                  <dt className="text-xs text-muted-foreground">Ownership</dt>
                   <dd className="mt-1.5">
                     <OwnershipBadge
                       ownerType={scan.owner_type}
@@ -3908,7 +3908,7 @@ function ScanDetailContent() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted">Platform</dt>
+                  <dt className="text-xs text-muted-foreground">Platform</dt>
                   <dd className="mt-1 text-sm text-foreground">
                     {scan.architecture
                       ? `${scan.architecture} · ${scan.os_family} ${scan.os_name}`
@@ -3916,7 +3916,7 @@ function ScanDetailContent() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted">Workspace</dt>
+                  <dt className="text-xs text-muted-foreground">Workspace</dt>
                   <dd className="mt-1 text-sm text-foreground">
                     {scan.owner_type === 'org' && scan.owner_org_id
                       ? (orgNamesById[scan.owner_org_id] ?? 'Org workspace')
@@ -3924,7 +3924,7 @@ function ScanDetailContent() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted">Source</dt>
+                  <dt className="text-xs text-muted-foreground">Source</dt>
                   <dd
                     className="mt-1 break-words text-sm text-foreground"
                     style={{ overflowWrap: 'anywhere' }}
@@ -3941,7 +3941,7 @@ function ScanDetailContent() {
                 </div>
                 {scan.pipeline_initiator ? (
                   <div>
-                    <dt className="text-xs text-muted">Initiated by</dt>
+                    <dt className="text-xs text-muted-foreground">Initiated by</dt>
                     <dd className="mt-1 text-sm text-foreground">
                       {scan.pipeline_initiator.token_description || 'Organization pipeline token'}
                     </dd>
@@ -3963,12 +3963,12 @@ function ScanDetailContent() {
               <Card.Content>
                 <dl className="grid gap-x-8 gap-y-5 lg:grid-cols-3">
                   <div>
-                    <dt className="text-xs text-muted">Engine</dt>
+                    <dt className="text-xs text-muted-foreground">Engine</dt>
                     <dd className="mt-1 text-sm font-medium text-foreground">
                       Trivy {scan.trivy_version || 'unknown'}
                       {scan.grype_version ? ` · Grype ${scan.grype_version}` : ''}
                     </dd>
-                    <dd className="mt-1 text-xs text-muted">
+                    <dd className="mt-1 text-xs text-muted-foreground">
                       {scan.completed_at
                         ? `Snapshot captured ${timeAgo(scan.completed_at)}`
                         : 'Snapshot captured when the scan completed'}
@@ -3987,7 +3987,7 @@ function ScanDetailContent() {
                     },
                   ].map((database) => (
                     <div key={database.label}>
-                      <dt className="text-xs text-muted">{database.label}</dt>
+                      <dt className="text-xs text-muted-foreground">{database.label}</dt>
                       <dd
                         className="mt-1 text-sm font-medium text-foreground"
                         title={database.updatedAt ? fullDate(database.updatedAt) : ''}
@@ -3995,7 +3995,7 @@ function ScanDetailContent() {
                         {database.updatedAt ? timeAgo(database.updatedAt) : 'Unknown'}
                       </dd>
                       <dd
-                        className="mt-1 text-xs text-muted"
+                        className="mt-1 text-xs text-muted-foreground"
                         title={database.downloadedAt ? fullDate(database.downloadedAt) : ''}
                       >
                         Downloaded{' '}
@@ -4052,7 +4052,7 @@ function ScanDetailContent() {
                       { label: 'Labels', value: `${imageLabelEntries.length} captured` },
                     ].map((item) => (
                       <div key={item.label} className="min-w-0">
-                        <dt className="text-xs text-muted">{item.label}</dt>
+                        <dt className="text-xs text-muted-foreground">{item.label}</dt>
                         <dd className="mt-1 break-words text-sm text-foreground">{item.value}</dd>
                       </div>
                     ))}
@@ -4066,10 +4066,10 @@ function ScanDetailContent() {
                     <Accordion.Heading>
                       <Accordion.Trigger className="rounded-lg px-3 py-2 text-left">
                         <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground dark:text-foreground">
                             Environment
                           </span>
-                          <span className="text-[11px] text-zinc-500">
+                          <span className="text-xs text-muted-foreground">
                             {imageEnv.length} entries
                           </span>
                         </div>
@@ -4079,7 +4079,7 @@ function ScanDetailContent() {
                       <Accordion.Body className="pt-0">
                         {imageEnv.length > 0 ? (
                           <pre
-                            className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300"
+                            className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-foreground"
                             style={{
                               background: 'var(--row-hover)',
                               border: '1px solid var(--surface-border)',
@@ -4089,7 +4089,7 @@ function ScanDetailContent() {
                           </pre>
                         ) : (
                           <div
-                            className="rounded-xl px-3 py-2 text-xs text-zinc-500"
+                            className="rounded-xl px-3 py-2 text-xs text-muted-foreground"
                             style={{
                               background: 'var(--row-hover)',
                               border: '1px solid var(--surface-border)',
@@ -4106,10 +4106,10 @@ function ScanDetailContent() {
                     <Accordion.Heading>
                       <Accordion.Trigger className="rounded-lg px-3 py-2 text-left">
                         <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground dark:text-foreground">
                             Labels
                           </span>
-                          <span className="text-[11px] text-zinc-500">
+                          <span className="text-xs text-muted-foreground">
                             {imageLabelEntries.length} entries
                           </span>
                         </div>
@@ -4128,10 +4128,10 @@ function ScanDetailContent() {
                                   border: '1px solid var(--surface-border)',
                                 }}
                               >
-                                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                   {key}
                                 </p>
-                                <p className="mt-2 break-all  text-xs text-zinc-700 dark:text-zinc-300">
+                                <p className="mt-2 break-all  text-xs text-foreground">
                                   {value || '-'}
                                 </p>
                               </div>
@@ -4139,7 +4139,7 @@ function ScanDetailContent() {
                           </div>
                         ) : (
                           <div
-                            className="rounded-xl px-3 py-2 text-xs text-zinc-500"
+                            className="rounded-xl px-3 py-2 text-xs text-muted-foreground"
                             style={{
                               background: 'var(--row-hover)',
                               border: '1px solid var(--surface-border)',
@@ -4156,17 +4156,17 @@ function ScanDetailContent() {
                     <Accordion.Heading>
                       <Accordion.Trigger className="rounded-lg px-3 py-2 text-left">
                         <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground dark:text-foreground">
                             Raw image config
                           </span>
-                          <span className="text-[11px] text-zinc-500">JSON</span>
+                          <span className="text-xs text-muted-foreground">JSON</span>
                         </div>
                       </Accordion.Trigger>
                     </Accordion.Heading>
                     <Accordion.Panel>
                       <Accordion.Body className="pt-0">
                         <pre
-                          className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-zinc-700 dark:text-zinc-300"
+                          className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-foreground"
                           style={{
                             background: 'var(--row-hover)',
                             border: '1px solid var(--surface-border)',
@@ -4200,7 +4200,7 @@ function ScanDetailContent() {
                     className="flex-1"
                     isDisabled={!canMutateCurrentScan}
                   >
-                    <Select.Trigger className="bg-surface-secondary">
+                    <Select.Trigger className="">
                       <Select.Value />
                       <Select.Indicator />
                     </Select.Trigger>
@@ -4233,12 +4233,12 @@ function ScanDetailContent() {
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {(scan.tags ?? []).length === 0 ? (
-                    <span className="text-xs text-zinc-500">No tags assigned.</span>
+                    <span className="text-xs text-muted-foreground">No tags assigned.</span>
                   ) : (
                     (scan.tags ?? []).map((tag) => (
                       <Button
                         key={tag.id}
-                        className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium"
+                        className="inline-flex items-center gap-1.5 border "
                         variant="secondary"
                         isDisabled={tagLoading === tag.id || !canMutateCurrentScan}
                         onPress={() => void toggleTag(tag)}
@@ -4250,7 +4250,7 @@ function ScanDetailContent() {
                       >
                         <span>{tag.name}</span>
                         <span
-                          className="inline-flex size-4 items-center justify-center rounded-full text-[11px]"
+                          className="inline-flex size-4 items-center justify-center rounded-full text-xs"
                           style={{ background: tag.color + '33' }}
                           aria-hidden
                         >
@@ -4269,12 +4269,12 @@ function ScanDetailContent() {
       <Modal state={scanAccessModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal overflow-hidden">
               <Modal.Header>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                <Modal.Heading className="text-foreground font-semibold">
                   Manage Scan Access
                 </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
               </Modal.Header>
               <Modal.Body className="py-5 space-y-4">
                 {scanOrgGrantsError ? (
@@ -4282,7 +4282,7 @@ function ScanDetailContent() {
                 ) : null}
                 <Card variant="secondary">
                   <div className="flex gap-2">
-                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                    <p className="text-sm font-medium text-foreground">
                       {scan.image_name}:{scan.image_tag}
                     </p>
                     <OwnershipBadge
@@ -4291,43 +4291,43 @@ function ScanDetailContent() {
                       orgNamesById={orgNamesById}
                     />
                   </div>
-                  <p className="text-xs text-zinc-500" title={scan.image_digest}>
+                  <p className="text-xs text-muted-foreground" title={scan.image_digest}>
                     {scan.image_digest}
                   </p>
                 </Card>
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                    <h3 className="text-sm font-semibold text-foreground">
                       Current access
                     </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Organizations listed here can open this scan directly. Public or authenticated
                       share links remain configured separately.
                     </p>
                   </div>
                   {scanOrgGrantsLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
                     </div>
                   ) : scanOrgGrants.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                    <p className="text-sm text-muted-foreground">No organization grants yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {scanOrgGrants.map((share) => (
                         <Card key={share.org_id} className="py-3" variant="secondary">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                              <p className="text-sm font-medium text-foreground">
                                 {share.org_name}
                               </p>
-                              <p className="text-xs text-zinc-500 mt-0.5">
+                              <p className="text-xs text-muted-foreground mt-0.5">
                                 {share.is_owner ? 'Owner workspace' : 'Shared access'}
                               </p>
                             </div>
                             <div>
                               {share.is_owner ? (
-                                <span className="text-xs font-medium text-zinc-500">Locked</span>
+                                <span className="text-xs font-medium text-muted-foreground">Locked</span>
                               ) : (
                                 <Button
                                   onPress={() => {
@@ -4350,15 +4350,15 @@ function ScanDetailContent() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                    <h3 className="text-sm font-semibold text-foreground">
                       Grant access
                     </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Share this scan with another organization you manage.
                     </p>
                   </div>
                   {availableScanGrantTargets.length === 0 ? (
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm text-muted-foreground">
                       No additional organizations are available for sharing.
                     </p>
                   ) : (
@@ -4370,7 +4370,7 @@ function ScanDetailContent() {
                         }
                         className="flex-1"
                       >
-                        <Select.Trigger className="bg-surface-secondary">
+                        <Select.Trigger className="">
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -4461,17 +4461,17 @@ function ScanDetailContent() {
       <Modal state={xrayPolicyDetailsModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="surface-modal overflow-hidden rounded-[24px] w-[min(900px,calc(100vw-1.5rem))] max-w-none">
+            <Modal.Dialog className="surface-modal overflow-hidden w-[min(900px,calc(100vw-1.5rem))] max-w-none">
               <Modal.Header>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Xray policy details
                   </p>
-                  <Modal.Heading className="font-mono text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">
+                  <Modal.Heading className="font-mono text-base font-semibold text-foreground sm:text-lg">
                     {selectedXrayVulnerability?.vuln_id || 'Unnamed finding'}
                   </Modal.Heading>
                 </div>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
               </Modal.Header>
               <Modal.Body className="space-y-4">
                 {(() => {
@@ -4488,9 +4488,9 @@ function ScanDetailContent() {
                   return (
                     <>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-zinc-500">Current block state:</span>
+                        <span className="text-xs text-muted-foreground">Current block state:</span>
                         <Chip
-                          className="border text-[11px] font-semibold"
+                          className="border text-xs font-semibold"
                           style={
                             hasActiveBlocking
                               ? {
@@ -4511,7 +4511,7 @@ function ScanDetailContent() {
 
                       {watchNames.length > 0 && (
                         <div className="space-y-1.5">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             Watches
                           </p>
                           <div className="flex flex-wrap gap-2">
@@ -4525,7 +4525,7 @@ function ScanDetailContent() {
                       )}
 
                       {policyMatches.length > 0 ? (
-                        <Card className="surface-panel rounded-2xl overflow-hidden">
+                        <Card className="surface-panel rounded-xl overflow-hidden">
                           <Table variant="secondary">
                             <Table.ScrollContainer>
                               <Table.Content
@@ -4544,25 +4544,25 @@ function ScanDetailContent() {
                                       key={`${match.watchName}-${match.policy}-${match.rule}-${index}`}
                                       id={`${match.watchName}-${match.policy}-${match.rule}-${index}`}
                                     >
-                                      <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                                      <Table.Cell className="text-xs text-foreground">
                                         <div className="flex flex-col">
                                           <span>{match.watchName || '-'}</span>
                                           {match.watchID && (
-                                            <span className="text-[11px] text-zinc-500">
+                                            <span className="text-xs text-muted-foreground">
                                               {match.watchID}
                                             </span>
                                           )}
                                         </div>
                                       </Table.Cell>
-                                      <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                                      <Table.Cell className="text-xs text-foreground">
                                         {match.policy || '-'}
                                       </Table.Cell>
-                                      <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">
+                                      <Table.Cell className="text-xs text-foreground">
                                         {match.rule || '-'}
                                       </Table.Cell>
                                       <Table.Cell className="text-right">
                                         <span
-                                          className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                                          className="rounded-full border px-2.5 py-1 text-xs font-semibold"
                                           style={
                                             isActiveXrayPolicyMatch(match)
                                               ? {

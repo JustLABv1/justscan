@@ -39,7 +39,8 @@ When working in this repository, prefer small, local changes that fit the existi
 - Keep new UI consistent with the existing App Router structure and shared shell components in `services/frontend/components/`.
 - `button.tsx` and `dialog.tsx` use Radix primitives; `badge.tsx` is sourced from ReUI. React Aria supplies accessible collections, date/color controls, and form behavior through the local composition layer.
 - For controlled local single-selects, use `value` and `onChange`. The ReUI registry is configured in `services/frontend/components.json`; check the existing file before installing registry components.
-- Theme tokens live in `services/frontend/app/ui-theme.css`; maintain light and dark tokens together. Toasts use Sonner through `components/toast.tsx`.
+- The frontend baseline is ReUI Nova with self-hosted Inter and the neutral palette. Theme tokens live in `services/frontend/app/ui-theme.css`; maintain light and dark tokens together. Use semantic colors and standard Tailwind text sizes rather than hard-coded neutral palettes or arbitrary small UI fonts.
+- Prefer Nova’s shared control dimensions and radii; keep layout-specific sizing separate from component skins. `muted`/`accent` are backgrounds; their foreground tokens are for text. Toasts use Sonner through `components/toast.tsx`.
 - Prefer server-safe, typed data flow and minimal client boundaries; add `'use client'` only when React interactivity requires it.
 
 ## Backend Rules

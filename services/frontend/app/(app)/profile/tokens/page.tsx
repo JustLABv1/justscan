@@ -50,18 +50,18 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <Card className="rounded-[28px] p-6 md:p-7 space-y-5">
+    <Card className="rounded-xl p-6 md:p-7 space-y-5">
       <Card.Header className="block p-0">
         <p
-          className="text-[11px] font-semibold uppercase tracking-[0.22em]"
+          className="text-xs font-semibold uppercase tracking-[0.22em]"
           style={{ color: 'var(--text-faint)' }}
         >
           {eyebrow}
         </p>
-        <Card.Title className="mt-2 text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">
+        <Card.Title className="mt-2 text-xl font-semibold tracking-tight text-foreground">
           {title}
         </Card.Title>
-        <Card.Description className="mt-1.5 text-sm leading-6 text-zinc-500">
+        <Card.Description className="mt-1.5 text-sm leading-6 text-muted-foreground">
           {description}
         </Card.Description>
       </Card.Header>
@@ -95,12 +95,12 @@ function DetailRow({
 }) {
   return (
     <div
-      className="flex items-start justify-between gap-4 rounded-2xl px-4 py-3"
+      className="flex items-start justify-between gap-4 rounded-xl px-4 py-3"
       style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
     >
-      <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">{label}</span>
+      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
       <span
-        className={`text-right text-sm text-zinc-800 dark:text-zinc-100 ${mono ? 'font-mono break-all' : ''}`.trim()}
+        className={`text-right text-sm text-foreground ${mono ? 'font-mono break-all' : ''}`.trim()}
       >
         {value}
       </span>
@@ -112,11 +112,11 @@ function TokensLoadingState() {
   return (
     <div className="space-y-6">
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_360px]">
-        <div className="skeleton h-[320px] rounded-[28px]" />
-        <div className="skeleton h-[320px] rounded-[28px]" />
+        <div className="skeleton h-[320px] rounded-xl" />
+        <div className="skeleton h-[320px] rounded-xl" />
       </div>
-      <div className="skeleton h-[340px] rounded-[28px]" />
-      <div className="skeleton h-44 rounded-[28px]" />
+      <div className="skeleton h-[340px] rounded-xl" />
+      <div className="skeleton h-44 rounded-xl" />
     </div>
   );
 }
@@ -172,9 +172,9 @@ function TokenExpiry({ token }: { token: PersonalToken }) {
   const expiresAt = new Date(token.expires_at);
   const now = new Date();
   const isNoExpiry = expiresAt.getFullYear() - now.getFullYear() >= 4;
-  if (isNoExpiry) return <span className="text-zinc-500 text-sm">Never</span>;
+  if (isNoExpiry) return <span className="text-muted-foreground text-sm">Never</span>;
   return (
-    <span className="text-sm text-zinc-500" title={fullDate(token.expires_at)}>
+    <span className="text-sm text-muted-foreground" title={fullDate(token.expires_at)}>
       {expiresAt < now ? (
         <>Expired {timeAgo(token.expires_at)}</>
       ) : (
@@ -208,14 +208,14 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
           <Modal.Dialog className="overflow-hidden">
             <Modal.Header>
               <div className="flex min-w-0 items-center gap-3">
-                <Modal.Icon className="bg-accent/10 text-accent">
+                <Modal.Icon className="bg-primary/10 text-primary">
                   <Key01Icon size={18} />
                 </Modal.Icon>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                <Modal.Heading className="text-foreground font-semibold">
                   Token Created
                 </Modal.Heading>
               </div>
-              <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+              <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
             </Modal.Header>
             <Modal.Body className="px-6 py-5 space-y-4">
               <Alert status="warning">
@@ -449,7 +449,7 @@ export default function TokensPage() {
               hint="All tokens ever issued for this account."
               icon={<Key01Icon size={16} />}
               iconTone="accent"
-              valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
+              valueClassName="text-lg font-semibold text-foreground"
             />
             <StatCard
               label="Active now"
@@ -457,7 +457,7 @@ export default function TokensPage() {
               hint="Usable tokens that are not revoked or expired."
               icon={<Key01Icon size={16} />}
               iconTone="success"
-              valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
+              valueClassName="text-lg font-semibold text-foreground"
             />
             <StatCard
               label="Expiring soon"
@@ -465,7 +465,7 @@ export default function TokensPage() {
               hint="Tokens that expire within the next 30 days."
               icon={<Clock01Icon size={16} />}
               iconTone="warning"
-              valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
+              valueClassName="text-lg font-semibold text-foreground"
             />
             <StatCard
               label="Revoked"
@@ -473,7 +473,7 @@ export default function TokensPage() {
               hint="Disabled tokens retained for audit visibility."
               icon={<Delete01Icon size={16} />}
               iconTone="danger"
-              valueClassName="text-lg font-semibold text-zinc-900 dark:text-white"
+              valueClassName="text-lg font-semibold text-foreground"
             />
           </div>
 
@@ -513,8 +513,8 @@ export default function TokensPage() {
                   <Table.Body
                     renderEmptyState={() => (
                       <EmptyState className="flex h-full w-full flex-col items-center justify-center gap-4 text-center">
-                        <FolderLibraryIcon className="size-6 text-muted" />
-                        <span className="text-sm text-muted">No results found</span>
+                        <FolderLibraryIcon className="size-6 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">No results found</span>
                       </EmptyState>
                     )}
                   >
@@ -526,10 +526,10 @@ export default function TokensPage() {
                       >
                         <Table.Cell>
                           <div className="min-w-0">
-                            <p className="font-medium text-zinc-900 dark:text-white break-words">
+                            <p className="font-medium text-foreground break-words">
                               {token.description}
                             </p>
-                            <p className="mt-1 text-xs text-zinc-500 md:hidden">
+                            <p className="mt-1 text-xs text-muted-foreground md:hidden">
                               Created {timeAgo(token.created_at)}
                             </p>
                           </div>
@@ -544,12 +544,12 @@ export default function TokensPage() {
                           </Chip>
                         </Table.Cell>
                         <Table.Cell>
-                          <span className="text-sm text-zinc-500 hidden md:inline">
+                          <span className="text-sm text-muted-foreground hidden md:inline">
                             {timeAgo(token.created_at)}
                           </span>
                         </Table.Cell>
                         <Table.Cell>
-                          <div className="text-sm text-zinc-500">
+                          <div className="text-sm text-muted-foreground">
                             <TokenExpiry token={token} />
                           </div>
                         </Table.Cell>
@@ -593,7 +593,7 @@ export default function TokensPage() {
             </Card.Header>
             <Card.Content className="gap-3">
               <InlineAlert message="A newly created token is shown only once. Copy it immediately and move it into a secret manager before closing the reveal dialog." />
-              <pre className="text-xs font-mono p-4 rounded-[24px] bg-surface-secondary overflow-x-auto">
+              <pre className="text-xs font-mono p-4 rounded-xl bg-surface-secondary overflow-x-auto">
                 {`curl -X POST https://justscan.example.com/api/v1/scans \\
   -H "Authorization: Bearer <your-token>" \\
   -H "Content-Type: application/json" \\

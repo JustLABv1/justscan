@@ -201,7 +201,7 @@ export function AutoTagsTab() {
               </Table.Header>
               <Table.Body
                 renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-zinc-500">
+                  <div className="py-10 text-center text-sm text-muted-foreground">
                     {loading ? 'Loading auto-tag rules...' : 'No auto-tag rules match your filter.'}
                   </div>
                 )}
@@ -224,10 +224,10 @@ export function AutoTagsTab() {
                             {tag.name}
                           </span>
                         ) : (
-                          <span className="text-xs text-zinc-400 font-mono">{rule.tag_id}</span>
+                          <span className="text-xs text-muted-foreground font-mono">{rule.tag_id}</span>
                         )}
                       </Table.Cell>
-                      <Table.Cell className="text-xs text-zinc-500">
+                      <Table.Cell className="text-xs text-muted-foreground">
                         <span title={fullDate(rule.created_at)}>{timeAgo(rule.created_at)}</span>
                       </Table.Cell>
                       <Table.Cell>
@@ -264,7 +264,7 @@ export function AutoTagsTab() {
             </Table.Content>
           </Table.ScrollContainer>
           <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-            <span className="text-xs text-zinc-500 whitespace-nowrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               Showing {filteredRules.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
               {Math.min(effectivePage * PAGE_SIZE, filteredRules.length)} of {filteredRules.length}
             </span>
@@ -333,7 +333,7 @@ export function AutoTagsTab() {
                     required
                   />
                   {tags.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No tags available. Create tags first.</p>
+                    <p className="text-sm text-muted-foreground">No tags available. Create tags first.</p>
                   ) : (
                     <Select
                       aria-label="Tag applied by this auto-tag rule"
@@ -344,7 +344,7 @@ export function AutoTagsTab() {
                     >
                       <Select.Trigger>
                         <div className="flex min-w-0 flex-1 items-center gap-2">
-                          <span className="shrink-0 text-zinc-400">
+                          <span className="shrink-0 text-muted-foreground">
                             <Tag01Icon size={15} />
                           </span>
                           <Select.Value />

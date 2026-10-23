@@ -32,13 +32,13 @@ export function OwnershipTransfer({
     <section className="space-y-2 border-t border-border pt-4">
       <div>
         <h3 className="text-sm font-semibold">Transfer ownership</h3>
-        <p className="mt-0.5 text-xs text-muted">
+        <p className="mt-0.5 text-xs text-muted-foreground">
           The previous owner will keep shared access. Existing organization grants are unchanged.
         </p>
-        {warning ? <p className="mt-1 text-xs text-warning">{warning}</p> : null}
+        {warning ? <p className="mt-1 text-xs text-warning-foreground">{warning}</p> : null}
       </div>
       {organizations.length === 0 ? (
-        <p className="text-sm text-muted">No other organization is available for transfer.</p>
+        <p className="text-sm text-muted-foreground">No other organization is available for transfer.</p>
       ) : (
         <div className="flex items-center gap-2">
           <Select

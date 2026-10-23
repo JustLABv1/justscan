@@ -35,7 +35,7 @@ export function ScanDetailHeader({
             </h1>
             {subtitle ? (
               <div
-                className="mt-1.5 break-words font-mono text-xs text-muted"
+                className="mt-1.5 break-words font-mono text-xs text-muted-foreground"
                 style={{ overflowWrap: 'anywhere' }}
               >
                 {subtitle}

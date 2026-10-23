@@ -162,7 +162,7 @@ export function MCPAdminTab() {
     <div className="space-y-4">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted-foreground">
             Tool-level telemetry for HTTP and stdio MCP clients. Payloads and credentials are never
             stored.
           </p>
@@ -257,7 +257,7 @@ export function MCPAdminTab() {
                   </ListBox>
                 </Select.Popover>
               </Select>
-              <p className="text-xs leading-5 text-muted">{modeDescription(draftMode)}</p>
+              <p className="text-xs leading-5 text-muted-foreground">{modeDescription(draftMode)}</p>
               <div className="flex flex-wrap gap-2">
                 <Chip size="sm" variant="soft" color={overview.settings.config_enabled ? 'success' : 'warning'}>
                   {overview.settings.config_enabled ? 'MCP configured' : 'MCP not enabled in config'}
@@ -267,7 +267,7 @@ export function MCPAdminTab() {
                 </Chip>
               </div>
               {overview.settings.http_enabled && overview.settings.endpoint && (
-                <p className="font-mono text-xs text-muted">{overview.settings.endpoint}</p>
+                <p className="font-mono text-xs text-muted-foreground">{overview.settings.endpoint}</p>
               )}
               <div className="flex justify-end">
                 <Button variant="secondary" onPress={() => void saveMode()} isDisabled={savingMode || draftMode === overview.settings.mode}>
@@ -295,7 +295,7 @@ export function MCPAdminTab() {
                     </Table.Header>
                     <Table.Body
                       renderEmptyState={() => (
-                        <div className="py-8 text-center text-sm text-muted">
+                        <div className="py-8 text-center text-sm text-muted-foreground">
                           {overviewLoading ? 'Loading MCP tool stats...' : 'No MCP calls in this window.'}
                         </div>
                       )}
@@ -310,7 +310,7 @@ export function MCPAdminTab() {
                             </Chip>
                           </Table.Cell>
                           <Table.Cell>{tool.actions.toLocaleString()}</Table.Cell>
-                          <Table.Cell className="text-xs text-muted">{tool.avg_duration_ms.toFixed(0)} ms</Table.Cell>
+                          <Table.Cell className="text-xs text-muted-foreground">{tool.avg_duration_ms.toFixed(0)} ms</Table.Cell>
                         </Table.Row>
                       ))}
                     </Table.Body>
@@ -318,7 +318,7 @@ export function MCPAdminTab() {
                 </Table.ScrollContainer>
               </Table>
               <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-divider/60 pt-3">
-                <span className="text-xs font-semibold uppercase tracking-widest text-muted">
+                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   Transport mix
                 </span>
                 {transportMetrics.map((transport) => (
@@ -327,7 +327,7 @@ export function MCPAdminTab() {
                   </Chip>
                 ))}
                 {transportMetrics.length === 0 && (
-                  <span className="text-xs text-muted">No calls yet</span>
+                  <span className="text-xs text-muted-foreground">No calls yet</span>
                 )}
               </div>
             </Card.Content>
@@ -440,17 +440,17 @@ export function MCPAdminTab() {
                 </Table.Header>
                 <Table.Body
                   renderEmptyState={() => (
-                    <div className="py-10 text-center text-sm text-muted">
+                    <div className="py-10 text-center text-sm text-muted-foreground">
                       {activityLoading ? 'Loading MCP activity...' : 'No MCP activity found.'}
                     </div>
                   )}
                 >
                   {activity.map((entry) => (
                     <Table.Row key={entry.id} id={entry.id} className="hover:bg-[var(--row-hover)]">
-                      <Table.Cell className="text-xs text-muted">
+                      <Table.Cell className="text-xs text-muted-foreground">
                         <span title={fullDate(entry.created_at)}>{timeAgo(entry.created_at)}</span>
                       </Table.Cell>
-                      <Table.Cell className="text-xs text-muted">
+                      <Table.Cell className="text-xs text-muted-foreground">
                         {entry.username || entry.email || entry.user_id?.slice(0, 8) || 'unknown'}
                       </Table.Cell>
                       <Table.Cell>
@@ -464,10 +464,10 @@ export function MCPAdminTab() {
                           {entry.status}
                         </Chip>
                       </Table.Cell>
-                      <Table.Cell className="text-xs text-muted">{entry.duration_ms} ms</Table.Cell>
+                      <Table.Cell className="text-xs text-muted-foreground">{entry.duration_ms} ms</Table.Cell>
                       <Table.Cell className="text-xs">
                         {entry.action ? (
-                          <span className="inline-flex items-center gap-1 text-warning">
+                          <span className="inline-flex items-center gap-1 text-warning-foreground">
                             <CodeIcon size={14} />
                             {entry.replayed ? 'replay' : 'action'}
                           </span>
@@ -481,7 +481,7 @@ export function MCPAdminTab() {
               </Table.Content>
             </Table.ScrollContainer>
             <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3">
-              <span className="text-xs text-muted">
+              <span className="text-xs text-muted-foreground">
                 Showing {activityTotal === 0 ? 0 : (activityPage - 1) * PAGE_SIZE + 1}-
                 {Math.min(activityPage * PAGE_SIZE, activityTotal)} of {activityTotal}
               </span>
@@ -529,7 +529,7 @@ export function MCPAdminTab() {
         </Card.Content>
       </Card>
 
-      <div className="flex items-center gap-2 text-xs text-muted">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Clock03Icon size={14} />
         Analytics are retained with the MCP interaction table and contain metadata only.
       </div>

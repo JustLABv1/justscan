@@ -407,7 +407,7 @@ export function AITab() {
               </Table.Header>
               <Table.Body
                 renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-zinc-500">
+                  <div className="py-10 text-center text-sm text-muted-foreground">
                     {loading ? 'Loading AI providers...' : 'No providers found.'}
                   </div>
                 )}
@@ -416,15 +416,15 @@ export function AITab() {
                   <Table.Row key={provider.providerKey} id={provider.providerKey}>
                     <Table.Cell>
                       <p className="font-medium">{provider.label}</p>
-                      <p className="font-mono text-xs text-zinc-500">{provider.providerKey}</p>
+                      <p className="font-mono text-xs text-muted-foreground">{provider.providerKey}</p>
                     </Table.Cell>
                     <Table.Cell>
                       <p className="text-sm">{provider.providerType}</p>
-                      <p className="text-xs text-zinc-500">{provider.chatModel || 'No chat model set'}</p>
+                      <p className="text-xs text-muted-foreground">{provider.chatModel || 'No chat model set'}</p>
                     </Table.Cell>
                     <Table.Cell>
-                      <p className="font-mono text-xs text-zinc-500 break-all">{provider.baseUrl || 'No base URL set'}</p>
-                      <p className="text-xs text-zinc-500">{provider.apiPath || provider.apiVersion || 'Default API route'}</p>
+                      <p className="font-mono text-xs text-muted-foreground break-all">{provider.baseUrl || 'No base URL set'}</p>
+                      <p className="text-xs text-muted-foreground">{provider.apiPath || provider.apiVersion || 'Default API route'}</p>
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex flex-wrap gap-2">
@@ -473,14 +473,14 @@ export function AITab() {
         </Table>
 
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted-foreground">
             Showing {filteredProviders.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, filteredProviders.length)} of {filteredProviders.length}
           </p>
           <div className="flex items-center gap-2">
             <Button variant="secondary" isDisabled={currentPage <= 1} onPress={() => setPage((current) => Math.max(1, current - 1))}>
               Previous
             </Button>
-            <span className="text-sm text-zinc-500">Page {currentPage} of {totalPages}</span>
+            <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
             <Button variant="secondary" isDisabled={currentPage >= totalPages} onPress={() => setPage((current) => Math.min(totalPages, current + 1))}>
               Next
             </Button>
@@ -511,7 +511,7 @@ export function AITab() {
               </Modal.Header>
               <Modal.Body>
                 <div className="space-y-4">
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-sm text-muted-foreground">
                     Configure provider identity, endpoint, and runtime behavior in three steps.
                   </p>
                   <div className="grid grid-cols-3 gap-2">

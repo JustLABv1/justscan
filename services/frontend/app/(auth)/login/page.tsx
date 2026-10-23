@@ -74,7 +74,7 @@ export default function LoginPage() {
   if (!availabilityLoaded) {
     return (
       <div className="flex items-center justify-center h-32">
-        <div className="size-6 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+        <div className="size-6 rounded-full border-2 border-primary/30 border-t-accent animate-spin" />
       </div>
     );
   }
@@ -92,7 +92,7 @@ export default function LoginPage() {
             No account?{' '}
             <Link
               href="/register"
-              className="font-medium text-accent transition-colors hover:opacity-80"
+              className="font-medium text-primary transition-colors hover:opacity-80"
             >
               Register
             </Link>

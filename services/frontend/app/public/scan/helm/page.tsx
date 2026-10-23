@@ -97,12 +97,12 @@ function HelmHistoryDisclosure({
 }) {
   return (
     <Card className="border border-divider/60 bg-surface/40 p-2 shadow-sm backdrop-blur">
-      <Disclosure className="rounded-[1.5rem]">
+      <Disclosure className="rounded-xl">
         <Disclosure.Heading>
-          <Disclosure.Trigger className="flex w-full items-center justify-between gap-4 rounded-[1.25rem] px-4 py-3 text-left transition-colors hover:bg-background/45">
+          <Disclosure.Trigger className="flex w-full items-center justify-between gap-4 rounded-xl px-4 py-3 text-left transition-colors hover:bg-background/45">
             <div>
               <p className="text-sm font-semibold text-foreground">Recent Helm runs on this device</p>
-              <p className="mt-1 text-xs text-muted">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {history.length} saved locally. Reopen a run without crowding the main flow.
               </p>
             </div>
@@ -119,7 +119,7 @@ function HelmHistoryDisclosure({
                 return (
                   <Card
                     key={run.id}
-                    className="border border-divider/50 bg-background/55 transition-colors hover:border-accent/30 hover:bg-background/75"
+                    className="border border-divider/50 bg-background/55 transition-colors hover:border-primary/30 hover:bg-background/75"
                   >
                     <button
                       type="button"
@@ -141,7 +141,7 @@ function HelmHistoryDisclosure({
                           ) : null}
                         </div>
 
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <span>
                             {run.completed_images + run.failed_images}/{run.total_images} scanned
                           </span>
@@ -167,7 +167,7 @@ function HelmHistoryDisclosure({
                         </div>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-2 text-xs text-muted">
+                      <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                         <span>{timeAgo(run.created_at)}</span>
                         <ArrowRight01Icon aria-hidden size={14} className="hidden sm:block" />
                       </div>
@@ -384,7 +384,7 @@ export default function PublicHelmScanPage() {
         className="pointer-events-none absolute inset-0 opacity-[0.55] dark:opacity-[0.42]"
         style={{
           backgroundImage:
-            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 34%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px)',
+            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--primary) 34%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px)',
           backgroundPosition: 'center top, center top, center top',
           backgroundSize: '24px 24px, 24px 24px, 24px 24px',
         }}
@@ -393,8 +393,8 @@ export default function PublicHelmScanPage() {
         className="pointer-events-none absolute inset-0"
         style={{
           background: isDark
-            ? 'radial-gradient(circle at 50% 10%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 26%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 24%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 22%)'
-            : 'radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 22%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 18%)',
+            ? 'radial-gradient(circle at 50% 10%, color-mix(in srgb, var(--primary) 11%, transparent), transparent 26%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 24%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 22%)'
+            : 'radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 22%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 18%)',
         }}
       />
       <section className="relative z-10 overflow-hidden">
@@ -410,7 +410,7 @@ export default function PublicHelmScanPage() {
           className="pointer-events-none absolute inset-0 opacity-45"
           style={{
             background:
-              'radial-gradient(circle at 64% 48%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 28%)',
+              'radial-gradient(circle at 64% 48%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 28%)',
           }}
         />
 
@@ -445,12 +445,12 @@ export default function PublicHelmScanPage() {
               <h1 className="text-4xl font-semibold leading-tight tracking-normal text-foreground sm:text-5xl">
                 Scan Helm chart images instantly.
               </h1>
-              <p className="mx-auto max-w-xl text-sm leading-7 text-muted sm:text-base">
+              <p className="mx-auto max-w-xl text-sm leading-7 text-muted-foreground sm:text-base">
                 Extract image references from a public chart, review what will be scanned, and run
                 the check without needing an account first.
               </p>
             </div>
-            <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-muted">
+            <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
               <span>{settings?.rate_limit_per_hour ?? 5} free scans per hour</span>
               <span>Review extracted images first</span>
               <span>Local recent runs</span>
@@ -458,29 +458,29 @@ export default function PublicHelmScanPage() {
           </div>
 
           {(step === 'form' || step === 'extracting') && isDisabled && (
-            <Card className="rounded-[2rem] border border-divider/60 bg-surface/50 px-5 py-5 text-center shadow-sm backdrop-blur sm:px-6 sm:py-6">
+            <Card className="rounded-xl border border-divider/60 bg-surface/50 px-5 py-5 text-center shadow-sm backdrop-blur sm:px-6 sm:py-6">
               <div
-                className="rounded-[1.25rem] px-6 py-5"
+                className="rounded-xl px-6 py-5"
                 style={{
                   background: 'rgba(239,68,68,0.08)',
                   border: '1px solid rgba(239,68,68,0.2)',
                 }}
               >
-                <p className="font-medium text-red-500 dark:text-red-400">
+                <p className="font-medium text-destructive dark:text-destructive">
                   Public Helm scanning is temporarily disabled
                 </p>
-                <p className="mt-1 text-sm text-muted">{disabledMessage}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{disabledMessage}</p>
               </div>
             </Card>
           )}
 
           {(step === 'form' || step === 'extracting') && !isDisabled && (
-            <Card className="rounded-[2rem] border border-divider/60 bg-surface/50 px-5 py-5 shadow-sm backdrop-blur sm:px-6 sm:py-6">
+            <Card className="rounded-xl border border-divider/60 bg-surface/50 px-5 py-5 shadow-sm backdrop-blur sm:px-6 sm:py-6">
               <form onSubmit={handleExtract} className="space-y-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-foreground">Extract chart images</p>
-                    <p className="mt-1 text-sm text-muted">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       Paste a public chart source, review the discovered images, then scan.
                     </p>
                   </div>
@@ -493,8 +493,8 @@ export default function PublicHelmScanPage() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="flex flex-col gap-3 rounded-[1.25rem] border border-divider/60 px-4 py-4">
-                    <div className="flex items-center gap-3 text-muted">
+                  <div className="flex flex-col gap-3 rounded-xl border border-divider/60 px-4 py-4">
+                    <div className="flex items-center gap-3 text-muted-foreground">
                       <LinkSquare02Icon size={18} />
                       <span className="text-xs font-medium uppercase tracking-[0.18em]">
                         Chart URL
@@ -514,8 +514,8 @@ export default function PublicHelmScanPage() {
                   {!isOCI && (
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
-                        <p className="mb-1.5 text-xs font-medium text-muted">
-                          Chart name <span className="text-red-400">*</span>
+                        <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                          Chart name <span className="text-destructive">*</span>
                         </p>
                         <Input
                           value={chartName}
@@ -528,7 +528,7 @@ export default function PublicHelmScanPage() {
                         />
                       </div>
                       <div>
-                        <p className="mb-1.5 text-xs font-medium text-muted">
+                        <p className="mb-1.5 text-xs font-medium text-muted-foreground">
                           Version <span className="text-[var(--text-faint)]">(optional)</span>
                         </p>
                         <Input
@@ -546,7 +546,7 @@ export default function PublicHelmScanPage() {
 
                   {isOCI ? (
                     <div>
-                      <p className="mb-1.5 text-xs font-medium text-muted">
+                      <p className="mb-1.5 text-xs font-medium text-muted-foreground">
                         Version / tag{' '}
                         <span className="text-[var(--text-faint)]">
                           (optional - overrides tag in URL)
@@ -565,7 +565,7 @@ export default function PublicHelmScanPage() {
                   ) : null}
 
                   {extractError && (
-                    <p className="text-sm text-red-500 dark:text-red-400">{extractError}</p>
+                    <p className="text-sm text-destructive dark:text-destructive">{extractError}</p>
                   )}
 
                   <Button
@@ -581,7 +581,7 @@ export default function PublicHelmScanPage() {
                   </Button>
 
                   <div className="flex flex-col gap-3 border-t border-divider/50 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-muted">
+                    <p className="text-sm text-muted-foreground">
                       Public charts only. Sign in later for saved history and shared workflows.
                     </p>
                     <Link href="/login">
@@ -601,7 +601,7 @@ export default function PublicHelmScanPage() {
 
           {/* Step 2 - Review images */}
           {(step === 'review' || step === 'scanning') && (
-            <Card className="rounded-[2rem] border border-divider/60 bg-surface/50 px-5 py-5 shadow-sm backdrop-blur sm:px-6 sm:py-6">
+            <Card className="rounded-xl border border-divider/60 bg-surface/50 px-5 py-5 shadow-sm backdrop-blur sm:px-6 sm:py-6">
               <div className="space-y-4">
               {/* Chart info */}
               <div className="flex items-center justify-between">
@@ -612,9 +612,9 @@ export default function PublicHelmScanPage() {
                       <span
                         className="ml-2 text-xs px-2 py-0.5 rounded-full font-mono"
                         style={{
-                          background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
-                          color: 'var(--accent)',
-                          border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                          background: 'color-mix(in srgb, var(--primary) 10%, transparent)',
+                          color: 'var(--primary)',
+                          border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)',
                         }}
                       >
                         v{chartInfo.version}
@@ -647,7 +647,7 @@ export default function PublicHelmScanPage() {
               </p>
 
               {/* Image list */}
-              <Table className="rounded-2xl overflow-hidden">
+              <Table className="rounded-xl overflow-hidden">
                 <Table.ScrollContainer>
                   <Table.Content
                     aria-label="Extracted Helm images"
@@ -753,10 +753,10 @@ export default function PublicHelmScanPage() {
               {/* Platform & scan button */}
               <div className="space-y-3 border-t border-divider/50 pt-4">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted">
+                  <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                     Platform
                   </span>
-                  <span className="text-xs text-muted">Optional</span>
+                  <span className="text-xs text-muted-foreground">Optional</span>
                 </div>
                 <ToggleButtonGroup
                   selectionMode="single"
@@ -824,7 +824,7 @@ export default function PublicHelmScanPage() {
       </main>
 
         <footer className="relative z-10 px-6 pb-10">
-          <div className="mx-auto flex max-w-5xl flex-col gap-3 rounded-[2rem] border border-divider/50 bg-surface/35 px-6 py-5 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+          <div className="mx-auto flex max-w-5xl flex-col gap-3 rounded-xl border border-divider/50 bg-surface/35 px-6 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <p>JustScan keeps the public path fast, then grows with you when scans need to be shared.</p>
             <Link href={isLoggedIn ? '/scans' : '/login'}>
               <Button variant="secondary">

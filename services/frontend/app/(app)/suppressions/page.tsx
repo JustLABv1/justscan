@@ -370,7 +370,7 @@ export default function SuppressionsPage() {
               className="w-full sm:w-44"
               variant="secondary"
             >
-              <Select.Trigger className="h-10">
+              <Select.Trigger className="">
                 <Select.Value />
                 <Select.Indicator />
               </Select.Trigger>
@@ -390,14 +390,14 @@ export default function SuppressionsPage() {
           emptyState={
             <Card className="overflow-hidden">
               <div className="flex flex-col items-center gap-3 py-16 text-center">
-                <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
-                <p className="text-sm text-zinc-500">
+                <SecurityLockIcon size={32} className="text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
                   {searchQuery || statusFilter
                     ? 'No suppressions match your filters.'
                     : 'No suppressions found.'}
                 </p>
                 {!searchQuery && !statusFilter && (
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-xs text-muted-foreground">
                     Suppressions allow you to acknowledge known vulnerabilities in a scan.
                   </p>
                 )}
@@ -411,7 +411,7 @@ export default function SuppressionsPage() {
           loadingFallback={
             <Card className="overflow-hidden">
               <div className="flex justify-center py-16" role="status">
-                <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
+                <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
                 <span className="sr-only">Loading suppressions</span>
               </div>
             </Card>
@@ -438,12 +438,12 @@ export default function SuppressionsPage() {
                               href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="font-mono text-xs text-accent hover:underline"
+                              className="font-mono text-xs text-primary hover:underline"
                               onClick={(e) => e.stopPropagation()}
                             >
                               {s.vuln_id}
                             </a>
-                            <p className="font-mono text-xs text-muted" title={s.image_digest}>
+                            <p className="font-mono text-xs text-muted-foreground" title={s.image_digest}>
                               {s.image_digest.length > 28
                                 ? `${s.image_digest.slice(0, 28)}…`
                                 : s.image_digest}
@@ -465,10 +465,10 @@ export default function SuppressionsPage() {
                           </div>
                         </Table.Cell>
                         <Table.Cell>
-                          <div className="text-xs text-zinc-500 max-w-xs">
+                          <div className="text-xs text-muted-foreground max-w-xs">
                             <span className="line-clamp-2">{s.justification || '—'}</span>
                             {(s.xray_policy_name || s.xray_watch_name) && (
-                              <p className="mt-1 text-[11px] text-zinc-400">
+                              <p className="mt-1 text-xs text-muted-foreground">
                                 {[s.xray_policy_name, s.xray_watch_name]
                                   .filter(Boolean)
                                   .join(' · ')}
@@ -478,28 +478,28 @@ export default function SuppressionsPage() {
                         </Table.Cell>
                         <Table.Cell>
                           <div className="space-y-1">
-                            <p className="text-xs text-zinc-500">{s.username || '—'}</p>
+                            <p className="text-xs text-muted-foreground">{s.username || '—'}</p>
                             <OwnershipBadge
                               ownerType={s.owner_type}
                               ownerOrgId={s.owner_org_id}
                               orgNamesById={orgNamesById}
                             />
-                            <p className="text-xs text-muted" title={fullDate(s.created_at)}>
+                            <p className="text-xs text-muted-foreground" title={fullDate(s.created_at)}>
                               Created {timeAgo(s.created_at)}
                             </p>
                             {s.expires_at ? (
                               <span
                                 className={
                                   now !== null && new Date(s.expires_at) < now
-                                    ? 'text-red-400'
-                                    : 'text-zinc-500'
+                                    ? 'text-destructive'
+                                    : 'text-muted-foreground'
                                 }
                                 title={fullDate(s.expires_at)}
                               >
                                 {formatDateOnly(s.expires_at)}
                               </span>
                             ) : (
-                              <span className="text-xs text-muted">Never expires</span>
+                              <span className="text-xs text-muted-foreground">Never expires</span>
                             )}
                           </div>
                         </Table.Cell>
@@ -538,7 +538,7 @@ export default function SuppressionsPage() {
                               />
                             </div>
                           ) : (
-                            <span className="text-[11px] text-zinc-400">Read only</span>
+                            <span className="text-xs text-muted-foreground">Read only</span>
                           )}
                         </Table.Cell>
                       </Table.Row>
@@ -548,7 +548,7 @@ export default function SuppressionsPage() {
               </Table.ScrollContainer>
               {totalPages > 1 ? (
                 <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-                  <span className="text-xs text-zinc-500 whitespace-nowrap">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
                     Showing {total === 0 ? 0 : (page - 1) * LIMIT + 1}-
                     {Math.min(page * LIMIT, total)} of {total}
                   </span>
@@ -621,12 +621,12 @@ export default function SuppressionsPage() {
       <Modal state={imagesModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal overflow-hidden">
               <Modal.Header>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                <Modal.Heading className="text-foreground font-semibold">
                   Applies to Images
                 </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
               </Modal.Header>
               <Modal.Body className="py-5 space-y-4">
                 {imagesError ? (
@@ -634,24 +634,24 @@ export default function SuppressionsPage() {
                 ) : null}
                 <div className="flex flex-col gap-2">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                       Suppression
                     </p>
                   </div>
                   {imagesTarget ? (
                     <Card variant="secondary" className="py-3">
-                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                      <p className="text-sm font-medium text-foreground">
                         {imagesTarget.vuln_id}
                       </p>
                       <p
-                        className="font-mono text-xs text-zinc-500"
+                        className="font-mono text-xs text-muted-foreground"
                         title={imagesTarget.image_digest}
                       >
                         {imagesTarget.image_digest.length > 64
                           ? `${imagesTarget.image_digest.slice(0, 64)}…`
                           : imagesTarget.image_digest}
                       </p>
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-xs text-muted-foreground">
                         {imagesTotal.toLocaleString()} matching image
                         {imagesTotal === 1 ? '' : 's'} in current workspace
                       </p>
@@ -663,21 +663,21 @@ export default function SuppressionsPage() {
 
                 <div className="flex flex-col gap-2">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                       Matching Images
                     </p>
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-xs text-muted-foreground">
                       Images currently visible in this workspace for the suppression digest.
                     </p>
                   </div>
 
                   {imagesLoading ? (
                     <div className="flex justify-center py-8">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
                     </div>
                   ) : imagesError ? (
                     <div className="flex flex-col items-center gap-3 py-8 text-center">
-                      <p className="text-sm text-zinc-500">Could not load matching images.</p>
+                      <p className="text-sm text-muted-foreground">Could not load matching images.</p>
                       <Button
                         variant="secondary"
                         isPending={imagesLoading}
@@ -689,7 +689,7 @@ export default function SuppressionsPage() {
                       </Button>
                     </div>
                   ) : appliedImages.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No matching images were found.</p>
+                    <p className="text-sm text-muted-foreground">No matching images were found.</p>
                   ) : (
                     <div className="max-h-[320px] overflow-y-auto flex flex-col gap-3">
                       {appliedImages.map((image) => (
@@ -699,11 +699,11 @@ export default function SuppressionsPage() {
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                              <p className="text-sm font-medium text-foreground">
                                 {image.image_name}:{image.image_tag}
                               </p>
                               <p
-                                className="font-mono text-xs text-zinc-500 truncate"
+                                className="font-mono text-xs text-muted-foreground truncate"
                                 title={image.image_digest}
                               >
                                 {image.image_digest.length > 64
@@ -711,7 +711,7 @@ export default function SuppressionsPage() {
                                   : image.image_digest}
                               </p>
                               <p
-                                className="text-[11px] text-zinc-400"
+                                className="text-xs text-muted-foreground"
                                 title={fullDate(image.latest_seen_at)}
                               >
                                 Last seen: {timeAgo(image.latest_seen_at)}

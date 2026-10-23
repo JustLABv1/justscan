@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/inter';
 @import './ui-theme.css';
 @import './app-shell.css';
 @import 'tw-animate-css';
@@ -30,7 +31,7 @@
 
   .react-flow__attribution {
     background: color-mix(in oklab, var(--surface) 88%, transparent) !important;
-    color: var(--muted) !important;
+    color: var(--muted-foreground) !important;
   }
 }
 
@@ -89,7 +90,7 @@
   .landing-final-glow {
     background: radial-gradient(
       circle at 50% 55%,
-      color-mix(in oklab, var(--accent) 13%, transparent),
+      color-mix(in oklab, var(--primary) 13%, transparent),
       transparent 46%
     );
   }
@@ -98,7 +99,7 @@
     background:
       radial-gradient(
         circle at 78% 24%,
-        color-mix(in oklab, var(--accent) 10%, transparent),
+        color-mix(in oklab, var(--primary) 10%, transparent),
         transparent 32%
       ),
       radial-gradient(
@@ -111,7 +112,7 @@
   .landing-intelligence-glow {
     background: linear-gradient(
       135deg,
-      color-mix(in oklab, var(--accent) 4%, transparent),
+      color-mix(in oklab, var(--primary) 4%, transparent),
       transparent 45%
     );
   }
@@ -120,8 +121,8 @@
     width: 0.4rem;
     height: 0.4rem;
     border-radius: 999px;
-    background: var(--accent);
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 38%, transparent);
+    background: var(--primary);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 38%, transparent);
     animation: landing-intelligence-pulse 2.4s ease-out infinite;
   }
 
@@ -137,7 +138,7 @@
     inset: 0;
     background: linear-gradient(
       135deg,
-      color-mix(in oklab, var(--accent) 7%, transparent),
+      color-mix(in oklab, var(--primary) 7%, transparent),
       transparent 34%
     );
     content: '';
@@ -156,7 +157,7 @@
   }
 
   .landing-intelligence-panel-eyebrow {
-    color: var(--muted);
+    color: var(--muted-foreground);
     font-size: 0.625rem;
     letter-spacing: 0.16em;
     text-transform: uppercase;
@@ -201,7 +202,7 @@
 
   .landing-intelligence-row:hover,
   .landing-intelligence-row[data-selected='true'] {
-    border-color: color-mix(in oklab, var(--accent) 27%, var(--divider));
+    border-color: color-mix(in oklab, var(--primary) 27%, var(--divider));
     background: color-mix(in oklab, var(--surface-secondary) 84%, transparent);
   }
 
@@ -216,8 +217,8 @@
     margin: auto;
     border: 2px solid var(--surface);
     border-radius: 999px;
-    background: var(--accent);
-    box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 48%, transparent);
+    background: var(--primary);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 48%, transparent);
   }
 
   .landing-intelligence-marker[data-tone='success'] {
@@ -245,7 +246,7 @@
     align-items: center;
     gap: 0.4rem;
     margin-top: 0.35rem;
-    color: var(--muted);
+    color: var(--muted-foreground);
     font-size: 0.6875rem;
   }
 
@@ -253,14 +254,14 @@
     position: relative;
     z-index: 1;
     margin: 0 1rem 1rem;
-    border: 1px solid color-mix(in oklab, var(--accent) 24%, var(--divider));
+    border: 1px solid color-mix(in oklab, var(--primary) 24%, var(--divider));
     border-radius: 0.875rem;
-    background: color-mix(in oklab, var(--accent) 7%, var(--surface-secondary));
+    background: color-mix(in oklab, var(--primary) 7%, var(--surface-secondary));
     padding: 0.9rem;
   }
 
   .landing-intelligence-detail p {
-    color: var(--muted);
+    color: var(--muted-foreground);
     font-size: 0.75rem;
     line-height: 1.55;
   }
@@ -275,7 +276,7 @@
     align-items: center;
     gap: 0.35rem;
     margin-top: 0.75rem;
-    color: var(--accent);
+    color: var(--primary);
     font-size: 0.75rem;
     font-weight: 600;
   }
@@ -289,7 +290,7 @@
     background: linear-gradient(
       90deg,
       transparent,
-      color-mix(in oklab, var(--accent) 20%, transparent),
+      color-mix(in oklab, var(--primary) 20%, transparent),
       transparent
     );
     animation: landing-intelligence-scan 3.6s cubic-bezier(0.23, 1, 0.32, 1) infinite;
@@ -357,7 +358,7 @@
     background:
       radial-gradient(
         circle at 72% 22%,
-        color-mix(in oklab, var(--accent) 14%, transparent),
+        color-mix(in oklab, var(--primary) 14%, transparent),
         transparent 34%
       ),
       linear-gradient(135deg, color-mix(in oklab, var(--surface) 45%, transparent), transparent 48%);
@@ -375,7 +376,7 @@
     border: 1px solid color-mix(in oklab, var(--divider) 85%, transparent);
     border-radius: 1rem;
     background: color-mix(in oklab, var(--surface) 92%, transparent);
-    color: var(--muted);
+    color: var(--muted-foreground);
     box-shadow: 0 12px 34px color-mix(in oklab, var(--foreground) 7%, transparent);
     font-size: 0.625rem;
     font-weight: 600;
@@ -387,8 +388,8 @@
     width: 6.25rem;
     height: 6.25rem;
     overflow: hidden;
-    border-color: color-mix(in oklab, var(--accent) 34%, var(--divider));
-    color: var(--accent);
+    border-color: color-mix(in oklab, var(--primary) 34%, var(--divider));
+    color: var(--primary);
   }
 
   .landing-scene-track {
@@ -405,8 +406,8 @@
     width: 0.45rem;
     height: 0.45rem;
     border-radius: 999px;
-    background: var(--accent);
-    box-shadow: 0 0 16px color-mix(in oklab, var(--accent) 75%, transparent);
+    background: var(--primary);
+    box-shadow: 0 0 16px color-mix(in oklab, var(--primary) 75%, transparent);
     animation: landing-packet-travel 3.4s linear infinite;
   }
 
@@ -418,7 +419,7 @@
     background: linear-gradient(
       90deg,
       transparent,
-      color-mix(in oklab, var(--accent) 18%, transparent),
+      color-mix(in oklab, var(--primary) 18%, transparent),
       transparent
     );
     animation: landing-scanner-sweep 2.8s cubic-bezier(0.77, 0, 0.175, 1) infinite;
@@ -459,16 +460,16 @@
     background: linear-gradient(
       90deg,
       transparent,
-      color-mix(in oklab, var(--accent) 80%, transparent),
+      color-mix(in oklab, var(--primary) 80%, transparent),
       transparent
     );
-    box-shadow: 0 0 18px color-mix(in oklab, var(--accent) 42%, transparent);
+    box-shadow: 0 0 18px color-mix(in oklab, var(--primary) 42%, transparent);
     animation: landing-findings-scan 4.8s cubic-bezier(0.77, 0, 0.175, 1) infinite;
   }
 
   .landing-radar {
     background:
-      radial-gradient(circle, color-mix(in oklab, var(--accent) 8%, transparent), transparent 62%),
+      radial-gradient(circle, color-mix(in oklab, var(--primary) 8%, transparent), transparent 62%),
       color-mix(in oklab, var(--surface) 72%, transparent);
   }
 
@@ -505,7 +506,7 @@
       from 0deg,
       transparent 0deg,
       transparent 290deg,
-      color-mix(in oklab, var(--accent) 28%, transparent) 338deg,
+      color-mix(in oklab, var(--primary) 28%, transparent) 338deg,
       transparent 360deg
     );
     animation: landing-radar-sweep 5.5s linear infinite;
@@ -516,8 +517,8 @@
     width: 0.4rem;
     height: 0.4rem;
     border-radius: 999px;
-    background: var(--accent);
-    box-shadow: 0 0 16px color-mix(in oklab, var(--accent) 65%, transparent);
+    background: var(--primary);
+    box-shadow: 0 0 16px color-mix(in oklab, var(--primary) 65%, transparent);
     animation: landing-radar-dot 3.6s ease-in-out infinite;
   }
 
@@ -530,8 +531,8 @@
   .landing-cli-spinner {
     width: 0.85rem;
     height: 0.85rem;
-    border: 1.5px solid color-mix(in oklab, var(--accent) 25%, transparent);
-    border-top-color: var(--accent);
+    border: 1.5px solid color-mix(in oklab, var(--primary) 25%, transparent);
+    border-top-color: var(--primary);
     border-radius: 999px;
     animation: landing-spin 0.8s linear infinite;
   }
@@ -558,14 +559,14 @@
     width: 0.45rem;
     height: 0.45rem;
     border-radius: 999px;
-    background: var(--accent);
-    box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 70%, transparent);
+    background: var(--primary);
+    box-shadow: 0 0 14px color-mix(in oklab, var(--primary) 70%, transparent);
     animation: landing-gitops-packet 3.2s cubic-bezier(0.77, 0, 0.175, 1) infinite;
   }
 
   .landing-collector-orbit {
     position: absolute;
-    border: 1px dashed color-mix(in oklab, var(--accent) 28%, var(--divider));
+    border: 1px dashed color-mix(in oklab, var(--primary) 28%, var(--divider));
     border-radius: 999px;
     animation: landing-orbit-turn 28s linear infinite;
   }
@@ -574,7 +575,7 @@
   .landing-collector-core::after {
     position: absolute;
     inset: -0.65rem;
-    border: 1px solid color-mix(in oklab, var(--accent) 32%, transparent);
+    border: 1px solid color-mix(in oklab, var(--primary) 32%, transparent);
     border-radius: 2rem;
     content: '';
     opacity: 0;
@@ -594,8 +595,8 @@
     width: 0.4rem;
     height: 0.4rem;
     border-radius: 999px;
-    background: var(--accent);
-    box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 75%, transparent);
+    background: var(--primary);
+    box-shadow: 0 0 14px color-mix(in oklab, var(--primary) 75%, transparent);
     animation: landing-signal-pulse 3.4s ease-in-out infinite;
   }
 
@@ -708,7 +709,7 @@
     }
     26%,
     44% {
-      border-color: color-mix(in oklab, var(--accent) 34%, var(--divider));
+      border-color: color-mix(in oklab, var(--primary) 34%, var(--divider));
       transform: translateX(3px);
     }
     54% {
@@ -811,7 +812,7 @@
     }
     27%,
     43% {
-      border-color: color-mix(in oklab, var(--accent) 36%, var(--divider));
+      border-color: color-mix(in oklab, var(--primary) 36%, var(--divider));
       transform: translateX(3px);
     }
   }

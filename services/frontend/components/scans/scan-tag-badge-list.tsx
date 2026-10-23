@@ -11,7 +11,7 @@ export function ScanTagBadgeList({
   tags?: Tag[];
 }) {
   if (!tags?.length) {
-    return <span className="text-xs text-muted">{emptyLabel}</span>;
+    return <span className="text-xs text-muted-foreground">{emptyLabel}</span>;
   }
 
   return (

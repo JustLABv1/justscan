@@ -218,7 +218,7 @@ export function TokensTab() {
               </Table.Header>
               <Table.Body
                 renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-zinc-500">
+                  <div className="py-10 text-center text-sm text-muted-foreground">
                     {loading ? 'Loading tokens...' : 'No tokens match your filters.'}
                   </div>
                 )}
@@ -229,10 +229,10 @@ export function TokensTab() {
                     <Table.Cell>
                       <Chip size="sm" variant="soft">{token.type}</Chip>
                     </Table.Cell>
-                    <Table.Cell className="font-mono text-xs text-zinc-500">
+                    <Table.Cell className="font-mono text-xs text-muted-foreground">
                       {token.key.slice(0, 6)}••••••••{token.key.slice(-4)}
                     </Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">
+                    <Table.Cell className="text-xs text-muted-foreground">
                       <span title={fullDate(token.expires_at)}>{timeAgo(token.expires_at)}</span>
                     </Table.Cell>
                     <Table.Cell>
@@ -278,7 +278,7 @@ export function TokensTab() {
             </Table.Content>
           </Table.ScrollContainer>
           <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-            <span className="text-xs text-zinc-500 whitespace-nowrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               Showing {filteredTokens.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
               {Math.min(effectivePage * PAGE_SIZE, filteredTokens.length)} of {filteredTokens.length}
             </span>

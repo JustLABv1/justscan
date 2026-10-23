@@ -150,16 +150,16 @@ function Dialog({
 function Header({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
-      className={cn('flex shrink-0 items-start justify-between gap-3 p-6 pb-4', className)}
+      className={cn('flex shrink-0 items-start justify-between gap-3 p-4 pb-3', className)}
       {...props}
     />
   );
 }
 function Body({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('min-h-0 overflow-y-auto px-6 py-2', className)} {...props} />;
+  return <div className={cn('min-h-0 overflow-y-auto px-4 py-1', className)} {...props} />;
 }
 function Footer({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('flex shrink-0 justify-end gap-2 p-6 pt-4', className)} {...props} />;
+  return <div className={cn('flex shrink-0 justify-end gap-2 p-4 pt-3', className)} {...props} />;
 }
 function Heading(props: React.ComponentProps<typeof DialogTitle>) {
   return <DialogTitle {...props} />;

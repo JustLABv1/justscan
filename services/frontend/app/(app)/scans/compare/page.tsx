@@ -33,7 +33,7 @@ function SevBadge({ sev }: { sev: string }) {
 
 function VulnTable({ vulns, emptyText }: { vulns: Vulnerability[]; emptyText: string }) {
   if (vulns.length === 0) {
-    return <p className="text-sm text-zinc-500 py-6 text-center">{emptyText}</p>;
+    return <p className="text-sm text-muted-foreground py-6 text-center">{emptyText}</p>;
   }
   return (
     <Table variant="secondary">
@@ -59,24 +59,24 @@ function VulnTable({ vulns, emptyText }: { vulns: Vulnerability[]; emptyText: st
                       href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-mono text-xs text-accent dark:text-accent hover:underline"
+                      className="font-mono text-xs text-primary dark:text-primary hover:underline"
                     >
                       {v.vuln_id}
                     </a>
                   ) : (
-                    <span className="text-zinc-400">-</span>
+                    <span className="text-muted-foreground">-</span>
                   )}
                 </Table.Cell>
-                <Table.Cell className="font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                <Table.Cell className="font-mono text-xs text-foreground">
                   {v.pkg_name}
                 </Table.Cell>
                 <Table.Cell>
                   <SevBadge sev={v.severity} />
                 </Table.Cell>
-                <Table.Cell className="font-mono text-xs text-zinc-500">
+                <Table.Cell className="font-mono text-xs text-muted-foreground">
                   {v.installed_version}
                 </Table.Cell>
-                <Table.Cell className="text-right font-mono text-xs text-zinc-500">
+                <Table.Cell className="text-right font-mono text-xs text-muted-foreground">
                   {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
                 </Table.Cell>
               </Table.Row>
@@ -101,7 +101,7 @@ function ScanSelector({
 }) {
   return (
     <div className="space-y-1.5 flex-1">
-      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">{label}</label>
+      <label className="text-sm font-medium text-muted-foreground dark:text-foreground">{label}</label>
       <Select
         value={value || '__none__'}
         onChange={(nextValue) =>
@@ -206,7 +206,7 @@ function ComparePageInner() {
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           {scansLoading ? (
             <div className="flex-1 flex items-center justify-center py-4">
-              <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-primary animate-spin" />
+              <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
             </div>
           ) : (
             <>
@@ -216,7 +216,7 @@ function ComparePageInner() {
                 onChange={setScanA}
                 scans={scans}
               />
-              <div className="flex items-center justify-center pb-2.5 text-zinc-400 font-bold select-none shrink-0">
+              <div className="flex items-center justify-center pb-2.5 text-muted-foreground font-bold select-none shrink-0">
                 vs
               </div>
               <ScanSelector
@@ -274,7 +274,7 @@ function ComparePageInner() {
           {/* Added */}
           <Card>
             <div className="flex items-center gap-3">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+              <h2 className="text-sm font-semibold text-foreground">
                 New Vulnerabilities
               </h2>
               <span
@@ -294,7 +294,7 @@ function ComparePageInner() {
           {/* Removed */}
           <Card>
             <div className="flex items-center gap-3">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+              <h2 className="text-sm font-semibold text-foreground">
                 Resolved Vulnerabilities
               </h2>
               <span
@@ -314,7 +314,7 @@ function ComparePageInner() {
           {/* Unchanged */}
           <Card>
             <div className="flex items-center gap-3">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Unchanged</h2>
+              <h2 className="text-sm font-semibold text-foreground">Unchanged</h2>
               <span
                 className="text-xs font-semibold px-2 py-0.5 rounded-full"
                 style={{
@@ -339,7 +339,7 @@ export default function ComparePage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center h-64">
-          <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-800 border-t-primary animate-spin" />
+          <div className="size-7 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
         </div>
       }
     >

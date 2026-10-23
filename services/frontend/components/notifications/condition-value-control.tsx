@@ -39,11 +39,11 @@ function optionText(option: ConditionOption) {
 function OptionContent({ option }: { option: ConditionOption }) {
   return (
     <div className="min-w-0">
-      <div className={option.legacy ? 'truncate text-warning' : 'truncate'}>
+      <div className={option.legacy ? 'truncate text-warning-foreground' : 'truncate'}>
         {optionText(option)}
       </div>
       {option.description ? (
-        <div className="truncate text-xs text-muted">{option.description}</div>
+        <div className="truncate text-xs text-muted-foreground">{option.description}</div>
       ) : null}
     </div>
   );
@@ -78,7 +78,7 @@ function StaticConditionValueControl({
     >
       <Select.Trigger className={fieldSelectTriggerClassName}>
         <span
-          className={selectedValues.length > 0 ? selectedLabelClassName : 'truncate text-muted'}
+          className={selectedValues.length > 0 ? selectedLabelClassName : 'truncate text-muted-foreground'}
         >
           {selectedValues.length > 0
             ? selectedValues.map((item) => conditionOptionLabel(field, item, options)).join(', ')
@@ -189,7 +189,7 @@ function DynamicSingleValueControl({
       <ComboBox.Popover>
         <ListBox
           renderEmptyState={() => (
-            <div className="px-3 py-2 text-sm text-muted">No matching values.</div>
+            <div className="px-3 py-2 text-sm text-muted-foreground">No matching values.</div>
           )}
         >
           {options.map((option) => (
@@ -264,7 +264,7 @@ function DynamicMultiValueControl({
         <TagGroup.List
           items={tagItems}
           renderEmptyState={() => (
-            <span className="text-xs text-muted">No values selected yet.</span>
+            <span className="text-xs text-muted-foreground">No values selected yet.</span>
           )}
           className="gap-1.5"
         >
@@ -316,7 +316,7 @@ function DynamicMultiValueControl({
         <ComboBox.Popover>
           <ListBox
             renderEmptyState={() => (
-              <div className="px-3 py-2 text-sm text-muted">No matching values.</div>
+              <div className="px-3 py-2 text-sm text-muted-foreground">No matching values.</div>
             )}
           >
             {availableOptions.map((option) => (

@@ -116,7 +116,7 @@ function ScanSourceCard({
 }) {
   return (
     <Radio
-      className="scan-source-card group relative min-h-40 w-full cursor-pointer flex-col items-start gap-0 rounded-2xl border border-border bg-surface px-5 py-5 text-left data-[focus-visible=true]:border-accent data-[selected=true]:border-accent/50 data-[selected=true]:bg-accent/10 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-60"
+      className="scan-source-card group relative min-h-40 w-full cursor-pointer flex-col items-start gap-0 rounded-xl border border-border bg-surface px-5 py-5 text-left data-[focus-visible=true]:border-primary data-[selected=true]:border-primary/50 data-[selected=true]:bg-primary/10 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-60"
       isDisabled={disabled}
       value={source}
     >
@@ -125,7 +125,7 @@ function ScanSourceCard({
       </Radio.Control>
       <Radio.Content className="flex min-w-0 flex-1 flex-col items-start gap-3 pr-8">
         <div className="flex items-center gap-3">
-          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted group-data-[selected=true]:text-accent">
+          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted-foreground group-data-[selected=true]:text-primary">
             {icon}
           </span>
           <Chip size="sm" variant="soft" color={disabled ? 'warning' : 'default'}>
@@ -134,11 +134,11 @@ function ScanSourceCard({
         </div>
         <div className="w-full space-y-1.5">
           <Label className="block w-full text-sm font-semibold text-foreground">{title}</Label>
-          <Description className="block w-full text-sm leading-6 text-muted">
+          <Description className="block w-full text-sm leading-6 text-muted-foreground">
             {description}
           </Description>
           {disabledReason ? (
-            <p className="text-xs font-medium text-warning">{disabledReason}</p>
+            <p className="text-xs font-medium text-warning-foreground">{disabledReason}</p>
           ) : null}
         </div>
       </Radio.Content>
@@ -156,12 +156,12 @@ function ScanSection({
   title: string;
 }) {
   return (
-    <Card className="surface-panel rounded-2xl p-5">
+    <Card className="surface-panel rounded-xl p-5">
       <div className="space-y-4">
         <div className="space-y-1.5">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">{title}</h2>
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
           {description ? (
-            <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">{description}</p>
+            <p className="text-sm leading-6 text-muted-foreground dark:text-foreground">{description}</p>
           ) : null}
         </div>
         {children}
@@ -183,14 +183,14 @@ function ScanWizardField({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+      <Label className="text-sm font-medium text-muted-foreground dark:text-foreground">
         {label}{' '}
         {optional ? (
-          <span className="font-normal text-zinc-400 dark:text-zinc-600">(optional)</span>
+          <span className="font-normal text-muted-foreground">(optional)</span>
         ) : null}
       </Label>
       {children}
-      {description ? <p className="text-xs text-zinc-500">{description}</p> : null}
+      {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
     </div>
   );
 }
@@ -691,7 +691,7 @@ export default function NewScanPage() {
           />
         ) : null}
 
-        <Card className="surface-panel rounded-2xl">
+        <Card className="surface-panel rounded-xl">
           <Card.Header>
             <Card.Title>Source</Card.Title>
             <Card.Description>
@@ -720,13 +720,13 @@ export default function NewScanPage() {
               ))}
             </RadioGroup>
             {availableScanSourceOptions.length === 0 ? (
-              <p className="text-sm text-muted">
+              <p className="text-sm text-muted-foreground">
                 No scan source is currently available in this deployment.
               </p>
             ) : null}
             {privateRegistries.length === 0 || xrayRegistries.length === 0 ? (
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-                <p className="text-sm text-muted">
+                <p className="text-sm text-muted-foreground">
                   Configure registries to enable private and Artifactory scan routes.
                 </p>
                 <Button onPress={() => router.push('/registries')} size="sm" variant="secondary">
@@ -749,16 +749,16 @@ export default function NewScanPage() {
             >
               {scanSource === 'local_archive' ? (
                 <ScanWizardField label="OCI/Docker archive">
-                  <div className="rounded-2xl border border-dashed border-border bg-surface-secondary px-4 py-4">
+                  <div className="rounded-xl border border-dashed border-border bg-surface-secondary px-4 py-4">
                     <input
                       aria-label="OCI or Docker archive"
                       accept=".tar,.tgz,.tar.gz,.oci"
-                      className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-xl file:border-0 file:bg-accent file:px-3 file:py-2 file:font-medium file:text-white hover:file:opacity-90 dark:text-zinc-300"
+                      className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-xl file:border-0 file:bg-primary file:px-3 file:py-2 file:font-medium file:text-primary-foreground hover:file:opacity-90 dark:text-foreground"
                       onChange={(e) => setUploadedArchiveFile(e.target.files?.[0] ?? null)}
                       type="file"
                     />
                     {uploadedArchiveFile ? (
-                      <p className="mt-3 text-xs text-zinc-500">
+                      <p className="mt-3 text-xs text-muted-foreground">
                         Selected: {uploadedArchiveFile.name}
                       </p>
                     ) : null}
@@ -799,10 +799,10 @@ export default function NewScanPage() {
               {hasRoutingSection ? (
                 <div className="space-y-4 border-t border-border pt-5">
                   <div className="space-y-1.5">
-                    <h3 className="text-base font-semibold text-zinc-900 dark:text-white">
+                    <h3 className="text-base font-semibold text-foreground">
                       Routing
                     </h3>
-                    <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                    <p className="text-sm leading-6 text-muted-foreground dark:text-foreground">
                       {scanSource === 'private_registry'
                         ? 'Choose the configured registry that should authenticate and pull this image.'
                         : 'Choose the Xray-backed registry first, then optionally add a repo override for mirrors or remotes.'}
@@ -925,7 +925,7 @@ export default function NewScanPage() {
                               </SearchField>
                               <ListBox
                                 renderEmptyState={() => (
-                                  <div className="px-3 py-2 text-sm text-zinc-500">
+                                  <div className="px-3 py-2 text-sm text-muted-foreground">
                                     No matching repositories
                                   </div>
                                 )}
@@ -952,7 +952,7 @@ export default function NewScanPage() {
                         </Autocomplete>
                         {selectedRegistry &&
                         artifactoryRepositoriesLoading === selectedRegistry.id ? (
-                          <p className="text-xs text-zinc-500">
+                          <p className="text-xs text-muted-foreground">
                             Loading available Artifactory repos…
                           </p>
                         ) : null}
@@ -998,7 +998,7 @@ export default function NewScanPage() {
         ) : null}
 
         {scanSource ? (
-          <Card className="surface-panel overflow-hidden rounded-2xl p-0">
+          <Card className="surface-panel overflow-hidden rounded-xl p-0">
             <Disclosure
               className="w-full"
               isExpanded={optionalSettingsExpanded}
@@ -1007,14 +1007,14 @@ export default function NewScanPage() {
               <Disclosure.Heading>
                 <Disclosure.Trigger className="flex w-full items-start justify-between gap-4 px-5 py-5 text-left transition-colors hover:bg-surface-secondary/60">
                   <div className="min-w-0 space-y-1.5">
-                    <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                    <h2 className="text-base font-semibold text-foreground">
                       Optional settings
                     </h2>
-                    <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                    <p className="text-sm leading-6 text-muted-foreground dark:text-foreground">
                       Add more image targets or pin a platform only when you need to.
                     </p>
                   </div>
-                  <Disclosure.Indicator className="mt-1 shrink-0 text-zinc-400">
+                  <Disclosure.Indicator className="mt-1 shrink-0 text-muted-foreground">
                     <ArrowDown01Icon size={16} />
                   </Disclosure.Indicator>
                 </Disclosure.Trigger>
@@ -1030,7 +1030,7 @@ export default function NewScanPage() {
                       >
                         <TextArea
                           aria-label="Additional image references"
-                          className={joinClassNames(inputCls, 'min-h-24 bg-surface resize-y')}
+                          className={joinClassNames(inputCls, ' resize-y')}
                           placeholder={
                             'ghcr.io/example/api:1.2.3\nregistry.example.com/team/worker:latest'
                           }
@@ -1053,18 +1053,18 @@ export default function NewScanPage() {
                         </div>
                         {additionalImageEntries.length > 0 ? (
                           <div
-                            className="rounded-2xl p-3"
+                            className="rounded-xl p-3"
                             style={{
                               background: 'rgba(255,255,255,0.03)',
                               border: '1px solid var(--surface-border)',
                             }}
                           >
                             <div className="flex items-center justify-between gap-3">
-                              <p className="text-xs font-medium text-zinc-500">
+                              <p className="text-xs font-medium text-muted-foreground">
                                 Queued image targets
                               </p>
                               <span
-                                className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-500"
+                                className="rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground"
                                 style={{
                                   background: 'rgba(255,255,255,0.05)',
                                   border: '1px solid var(--surface-border)',
@@ -1083,7 +1083,7 @@ export default function NewScanPage() {
                                     border: '1px solid var(--surface-border)',
                                   }}
                                 >
-                                  <span className="min-w-0 break-all font-mono text-xs text-zinc-600 dark:text-zinc-300">
+                                  <span className="min-w-0 break-all font-mono text-xs text-muted-foreground dark:text-foreground">
                                     {image}
                                   </span>
                                   <button
@@ -1138,27 +1138,27 @@ export default function NewScanPage() {
           </Card>
         ) : null}
 
-        <Card className="surface-panel rounded-2xl p-4">
+        <Card className="surface-panel rounded-xl p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             {scanSource ? (
               <dl className="grid min-w-0 flex-1 gap-3 sm:grid-cols-3">
                 <div>
-                  <dt className="text-[11px] uppercase tracking-[0.18em] text-muted">Source</dt>
+                  <dt className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Source</dt>
                   <dd className="text-sm font-semibold text-foreground">{scanSourceLabel}</dd>
                 </div>
                 <div>
-                  <dt className="text-[11px] uppercase tracking-[0.18em] text-muted">Target</dt>
+                  <dt className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Target</dt>
                   <dd className="truncate text-sm font-semibold text-foreground">
                     {targetSummary}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[11px] uppercase tracking-[0.18em] text-muted">Routing</dt>
+                  <dt className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Routing</dt>
                   <dd className="text-sm font-semibold text-foreground">{routingSummary}</dd>
                 </div>
               </dl>
             ) : (
-              <p className="text-sm text-muted">Choose a source to configure the scan.</p>
+              <p className="text-sm text-muted-foreground">Choose a source to configure the scan.</p>
             )}
             <Button
               type="submit"

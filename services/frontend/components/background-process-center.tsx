@@ -161,7 +161,7 @@ function BackgroundJobCard({
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-foreground">{job.title}</p>
             {job.description ? (
-              <p className="mt-1 text-xs leading-5 text-muted">{job.description}</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{job.description}</p>
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -198,7 +198,7 @@ function BackgroundJobCard({
                 <ProgressBar.Fill />
               </ProgressBar.Track>
             </ProgressBar>
-            <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>
                 {formatPhase(job.phase) || (active ? 'Working…' : jobStatusLabel(job.status))}
               </span>
@@ -209,7 +209,7 @@ function BackgroundJobCard({
             </div>
           </div>
         ) : active ? (
-          <div className="flex items-center gap-2 text-xs text-muted">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Spinner aria-hidden size="sm" />
             <span>{formatPhase(job.phase) || 'Working in the background…'}</span>
           </div>
@@ -221,7 +221,7 @@ function BackgroundJobCard({
           </p>
         ) : null}
         {!active ? (
-          <p className="text-[11px] text-muted">
+          <p className="text-xs text-muted-foreground">
             {job.finished_at
               ? `${jobStatusLabel(job.status)} ${timeAgo(job.finished_at)}`
               : 'Finished'}
@@ -458,7 +458,7 @@ export function BackgroundProcessCenter() {
               ? `Background processes, ${activeCount} active`
               : 'Background processes, no active jobs'
           }
-          className="size-8 justify-center rounded-lg px-0 text-muted-foreground md:w-auto md:gap-2 md:px-2.5"
+          className=" justify-center md:w-auto md:gap-2 "
           size="sm"
           onPress={() => {
             setIsOpen(true);
@@ -482,7 +482,7 @@ export function BackgroundProcessCenter() {
             <Drawer.Header className="flex items-start justify-between gap-4 border-b border-border p-5">
               <div className="min-w-0">
                 <Drawer.Heading>Background processes</Drawer.Heading>
-                <p className="mt-1 text-sm text-muted">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {activeCount > 0
                     ? `${activeCount} process${activeCount === 1 ? '' : 'es'} running or queued`
                     : 'No processes are running'}
@@ -495,7 +495,7 @@ export function BackgroundProcessCenter() {
                 {announcement}
               </div>
               {loading && scopedJobs.length === 0 ? (
-                <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted">
+                <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
                   <Spinner aria-label="Loading background processes" />
                   Loading processes…
                 </div>
@@ -505,7 +505,7 @@ export function BackgroundProcessCenter() {
                     <Alert02Icon aria-hidden className="mt-0.5 shrink-0 text-danger" size={18} />
                     <div>
                       <p className="text-sm font-medium">Couldn’t load processes</p>
-                      <p className="mt-1 text-xs leading-5 text-muted">{scopedError}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{scopedError}</p>
                     </div>
                   </div>
                   <Button onPress={() => void loadJobs()} size="sm" variant="secondary">
@@ -515,9 +515,9 @@ export function BackgroundProcessCenter() {
                 </div>
               ) : scopedJobs.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border px-4 py-12 text-center">
-                  <Activity01Icon aria-hidden className="mx-auto text-muted" size={26} />
+                  <Activity01Icon aria-hidden className="mx-auto text-muted-foreground" size={26} />
                   <p className="mt-3 text-sm font-medium">Nothing to track yet</p>
-                  <p className="mt-1 text-xs leading-5 text-muted">
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     Long-running scans and cleanup tasks will appear here while they work.
                   </p>
                 </div>

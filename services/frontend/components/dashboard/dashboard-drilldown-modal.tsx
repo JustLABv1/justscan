@@ -14,8 +14,8 @@ export type DashboardDrilldownKey = 'total' | 'completed' | 'watchlist' | 'watch
 
 const drilldownHeaderMeta = {
   total: { Icon: Shield01Icon, className: 'bg-default text-foreground' },
-  completed: { Icon: CheckmarkCircle02Icon, className: 'bg-success/10 text-success' },
-  watchlist: { Icon: Clock01Icon, className: 'bg-warning/10 text-warning' },
+  completed: { Icon: CheckmarkCircle02Icon, className: 'bg-success/10 text-success-foreground' },
+  watchlist: { Icon: Clock01Icon, className: 'bg-warning/10 text-warning-foreground' },
   watchlist_attention: { Icon: Clock01Icon, className: 'bg-danger/10 text-danger' },
 } satisfies Record<DashboardDrilldownKey, { Icon: typeof Shield01Icon; className: string }>;
 
@@ -47,28 +47,28 @@ function WatchlistModalRow({ item }: { item: WatchlistItem }) {
               <IntelligenceSummaryChip compact summary={item.intelligence_summary} />
             )}
           </div>
-          <p className="mt-1 text-[11px] text-muted">
+          <p className="mt-1 text-xs text-muted-foreground">
             {item.enabled ? `Scheduled ${item.schedule}` : 'Paused'} · {item.timezone}
           </p>
           {item.last_scan_id ? (
-            <p className="mt-1 text-[11px] text-muted">
+            <p className="mt-1 text-xs text-muted-foreground">
               Last scan {timeAgo(item.last_scanned_at ?? item.last_scan?.completed_at)}
             </p>
           ) : null}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Quick actions
           </p>
           <div className="flex items-center gap-2">
             <UiLink href="/watchlist" className="no-underline">
-              <Button size="sm" variant="secondary" className="h-8 px-3 text-xs font-medium">
+              <Button size="sm" variant="secondary" className=" ">
                 Open in watchlist
               </Button>
             </UiLink>
             {item.last_scan_id ? (
               <UiLink href={`/scans/details/${item.last_scan_id}`} className="no-underline">
-                <Button size="sm" variant="primary" className="h-8 px-3 text-xs font-medium">
+                <Button size="sm" variant="primary" className=" ">
                   Open last scan
                 </Button>
               </UiLink>
@@ -116,7 +116,7 @@ function WatchlistModalList({
   if (watchlistItems.length === 0) {
     return (
       <Card variant="secondary">
-        <Card.Content className="py-8 text-center text-sm text-muted">
+        <Card.Content className="py-8 text-center text-sm text-muted-foreground">
           {attentionOnly
             ? 'No watchlist items need attention in this scope.'
             : 'No watchlist items in this scope.'}
@@ -166,7 +166,7 @@ function WatchlistBody({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted">Prioritized by policy and scan health</p>
+        <p className="text-xs text-muted-foreground">Prioritized by policy and scan health</p>
         <Chip size="sm" variant="secondary">
           {watchlistItems.length} item{watchlistItems.length === 1 ? '' : 's'}
         </Chip>
@@ -205,11 +205,11 @@ function CompactScanRow({ scan, showActions = false }: { scan: Scan; showActions
             </p>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-[11px] text-muted">Started {timeAgo(eventTime)}</span>
+            <span className="text-xs text-muted-foreground">Started {timeAgo(eventTime)}</span>
             <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
             {scan.critical_count > 0 && (
               <span
-                className="rounded-md px-1.5 py-0.5 text-[10px] font-mono"
+                className="rounded-md px-1.5 py-0.5 text-xs font-mono"
                 style={{
                   color: '#f87171',
                   background: 'rgba(239,68,68,0.12)',
@@ -221,7 +221,7 @@ function CompactScanRow({ scan, showActions = false }: { scan: Scan; showActions
             )}
             {scan.high_count > 0 && (
               <span
-                className="rounded-md px-1.5 py-0.5 text-[10px] font-mono"
+                className="rounded-md px-1.5 py-0.5 text-xs font-mono"
                 style={{
                   color: '#fb923c',
                   background: 'rgba(249,115,22,0.12)',
@@ -233,7 +233,7 @@ function CompactScanRow({ scan, showActions = false }: { scan: Scan; showActions
             )}
             {scan.medium_count > 0 && (
               <span
-                className="rounded-md px-1.5 py-0.5 text-[10px] font-mono"
+                className="rounded-md px-1.5 py-0.5 text-xs font-mono"
                 style={{
                   color: '#fbbf24',
                   background: 'rgba(245,158,11,0.12)',
@@ -250,12 +250,12 @@ function CompactScanRow({ scan, showActions = false }: { scan: Scan; showActions
           {showActions ? (
             <div className="flex items-center gap-2">
               <UiLink href={`/scans/details/${scan.id}`} className="no-underline">
-                <Button size="sm" variant="primary" className="h-8 px-3 text-xs font-medium">
+                <Button size="sm" variant="primary" className=" ">
                   Open scan
                 </Button>
               </UiLink>
               <UiLink href="/scans" className="no-underline">
-                <Button size="sm" variant="secondary" className="h-8 px-3 text-xs font-medium">
+                <Button size="sm" variant="secondary" className=" ">
                   Open in scans
                 </Button>
               </UiLink>
@@ -358,7 +358,7 @@ export function DashboardDrilldownModal({
     <Modal state={state}>
       <Modal.Backdrop isDismissable>
         <Modal.Container size="lg" placement="center">
-          <Modal.Dialog className="surface-modal overflow-hidden rounded-[28px] w-[min(920px,calc(100vw-1.5rem))] max-w-none">
+          <Modal.Dialog className="surface-modal overflow-hidden w-[min(920px,calc(100vw-1.5rem))] max-w-none">
             <Modal.Header>
               <div className="flex min-w-0 items-start gap-3">
                 <Modal.Icon className={drilldownHeaderMeta[activeCard].className}>
@@ -371,7 +371,7 @@ export function DashboardDrilldownModal({
                   <Modal.Heading className="text-base font-semibold sm:text-lg">
                     {heading}
                   </Modal.Heading>
-                  <p className="mt-1 text-sm text-muted">{description}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{description}</p>
                 </div>
               </div>
               <Modal.CloseTrigger />
@@ -393,7 +393,7 @@ export function DashboardDrilldownModal({
                       onChange={onRecentActivityRangeChange}
                     />
 
-                    <span className="text-[11px] text-muted">
+                    <span className="text-xs text-muted-foreground">
                       {scans.length} item{scans.length === 1 ? '' : 's'} loaded
                     </span>
                   </div>
@@ -409,7 +409,7 @@ export function DashboardDrilldownModal({
                       ))}
                     </div>
                   ) : scans.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-muted">{emptyMessage}</p>
+                    <p className="py-8 text-center text-sm text-muted-foreground">{emptyMessage}</p>
                   ) : (
                     <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
                       {scans.map((scan) => (

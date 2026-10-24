@@ -1,5 +1,3 @@
-'use client';
-
 import { Logo } from '@/components/logo';
 import { Card } from '@/components/ui';
 import type { ReactNode } from 'react';
@@ -12,24 +10,17 @@ type AuthCardProps = {
   footer?: ReactNode;
 };
 
-export function AuthCard({
-  title,
-  subtitle,
-  eyebrow = 'Secure access',
-  children,
-  footer,
-}: AuthCardProps) {
+export function AuthCard({ title, subtitle, eyebrow, children, footer }: AuthCardProps) {
   return (
     <div className="auth-card-shell">
-      <Card className="auth-card surface-card">
-        <Card.Content className="auth-card-content">
+      <Card className="auth-card gap-0 py-0">
+        <Card.Content className="auth-card-content p-6 sm:p-8">
           <div className="auth-card-heading">
             <div className="auth-card-brand">
-              <Logo className="auth-card-brand-logo" size={32} />
-              <span className="auth-card-brand-name">JustScan</span>
+              <Logo className="auth-card-brand-logo" size={40} />
             </div>
             <div className="auth-card-copy">
-              <p className="auth-card-eyebrow">{eyebrow}</p>
+              {eyebrow ? <p className="auth-card-eyebrow">{eyebrow}</p> : null}
               <h1>{title}</h1>
               <p>{subtitle}</p>
             </div>

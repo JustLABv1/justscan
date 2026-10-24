@@ -43,9 +43,8 @@ export default function RegisterPage() {
 
   return (
     <AuthCard
-      eyebrow="Start scanning"
-      title="Make risk visible."
-      subtitle="Create a workspace for the images your team ships every day."
+      title="Create your account"
+      subtitle="Start securing the images your team ships."
       footer={
         <>
           Already have an account?{' '}
@@ -88,7 +87,7 @@ export default function RegisterPage() {
             />
             <FormField
               autoComplete="new-password"
-              description="Use at least 8 characters so the account is valid on first submission."
+              description="Use at least 8 characters."
               label="Password"
               minLength={8}
               onChange={(e) => setPassword(e.target.value)}

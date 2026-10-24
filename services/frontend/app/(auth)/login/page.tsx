@@ -83,18 +83,17 @@ export default function LoginPage() {
 
   return (
     <AuthCard
-      eyebrow="Secure access"
-      title="Welcome back."
-      subtitle="Sign in to see what changed across your images, clusters, and registries."
+      title="Welcome back"
+      subtitle="Sign in to continue to your workspace."
       footer={
         signInEnabled && localAuthEnabled && signUpEnabled ? (
           <>
-            No account?{' '}
+            Don’t have an account?{' '}
             <Link
               href="/register"
               className="font-medium text-primary transition-colors hover:opacity-80"
             >
-              Register
+              Create account
             </Link>
           </>
         ) : undefined
@@ -102,56 +101,9 @@ export default function LoginPage() {
     >
       {error ? <FormAlert description={error} title="Sign-in failed" /> : null}
 
-      {signInEnabled && localAuthEnabled ? (
-        <Form className="auth-card-form" onSubmit={handleSubmit}>
-          <FormField
-            autoComplete="username"
-            label="Email or Username"
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-            type="text"
-            value={email}
-          />
-          <FormField
-            autoComplete="current-password"
-            label="Password"
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-            type="password"
-            value={password}
-          />
-          <Checkbox
-            className="auth-card-remember"
-            isSelected={rememberMe}
-            name="remember_me"
-            onChange={setRememberMe}
-            variant="secondary"
-          >
-            <Checkbox.Content className="auth-card-remember-content">
-              <Checkbox.Control>
-                <Checkbox.Indicator />
-              </Checkbox.Control>
-              Remember me
-            </Checkbox.Content>
-          </Checkbox>
-          <Button className="auth-card-submit" fullWidth isPending={loading} type="submit">
-            {loading ? 'Signing In…' : 'Sign In'}
-          </Button>
-        </Form>
-      ) : null}
-
       {signInEnabled && hasOIDC ? (
         <>
-          {localAuthEnabled ? (
-            <div aria-hidden="true" className="auth-card-divider">
-              <span />
-              <em>or continue with</em>
-              <span />
-            </div>
-          ) : null}
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {oidcProviders.map((provider) => (
               <AuthProviderButton
                 key={provider.name}
@@ -173,7 +125,54 @@ export default function LoginPage() {
               />
             ))}
           </div>
+          {localAuthEnabled ? (
+            <div aria-hidden="true" className="auth-card-divider">
+              <span />
+              <em>Or sign in with email</em>
+              <span />
+            </div>
+          ) : null}
         </>
+      ) : null}
+
+      {signInEnabled && localAuthEnabled ? (
+        <Form className="auth-card-form" onSubmit={handleSubmit}>
+          <FormField
+            autoComplete="username"
+            label="Email or username"
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email or username"
+            required
+            type="text"
+            value={email}
+          />
+          <FormField
+            autoComplete="current-password"
+            label="Password"
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your password"
+            required
+            type="password"
+            value={password}
+          />
+          <Checkbox
+            className="auth-card-remember"
+            isSelected={rememberMe}
+            name="remember_me"
+            onChange={setRememberMe}
+            variant="secondary"
+          >
+            <Checkbox.Content className="auth-card-remember-content">
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              Remember me
+            </Checkbox.Content>
+          </Checkbox>
+          <Button className="auth-card-submit" fullWidth isPending={loading} type="submit">
+            {loading ? 'Signing In…' : 'Sign in'}
+          </Button>
+        </Form>
       ) : null}
 
       {!signInEnabled ? (

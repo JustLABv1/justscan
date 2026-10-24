@@ -1419,16 +1419,12 @@ export default function GitRepositoryDetailPage() {
                     </Accordion.Heading>
                     <Accordion.Panel>
                       <Accordion.Body>
-                        <div className="m-4 space-y-3 rounded-xl border border-border bg-muted/30 p-4">
-                          <div>
-                            <p className="text-sm font-medium">Registry override patterns</p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              Changing a discovered image creates a pattern for its repository
-                              across tags. Add broader RE2-compatible patterns here. Exact image
-                              overrides take precedence; when patterns overlap, the most recently
-                              updated pattern wins.
-                            </p>
-                          </div>
+                        <div className="space-y-4 px-4 pb-4">
+                          <p className="max-w-3xl text-sm text-muted-foreground">
+                            Route matching images to a registry using RE2 patterns. Exact image
+                            overrides take priority; otherwise, the most recently updated matching
+                            pattern wins.
+                          </p>
                           {imageRegistryOverrideRules.length > 0 ? (
                             <div className="space-y-2">
                               {imageRegistryOverrideRules.map((rule) => {
@@ -1439,7 +1435,7 @@ export default function GitRepositoryDetailPage() {
                                 return (
                                   <div
                                     key={rule.id}
-                                    className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2"
+                                    className="flex min-w-0 items-center gap-3 border-b border-border py-3 last:border-b-0"
                                   >
                                     <div className="min-w-0 flex-1">
                                       <code className="block break-all text-xs text-foreground">
@@ -1470,16 +1466,14 @@ export default function GitRepositoryDetailPage() {
                           ) : null}
                           <form
                             onSubmit={saveImageRegistryOverrideRule}
-                            className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto]"
+                            className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.65fr)_auto]"
                           >
                             <div className="space-y-2">
                               <FormField
-                                label="Image ref regex"
+                                label="Image reference pattern"
                                 placeholder="^ghcr\\.io/team/api(:.*)?$"
                                 value={registryRulePattern}
                                 onChange={(event) => setRegistryRulePattern(event.target.value)}
-                                className="bg-surface"
-                                description="Match against full discovered image refs. Example: ^ghcr\\.io/team/api(:.*)?$. Uses Go RE2 syntax."
                               />
                             </div>
                             <Select
@@ -1521,6 +1515,10 @@ export default function GitRepositoryDetailPage() {
                             >
                               Save pattern
                             </Button>
+                            <p className="text-xs text-muted-foreground md:col-span-3">
+                              Patterns match the full image reference, including its tag or digest.
+                              Changing an image’s registry below saves a pattern across its tags.
+                            </p>
                             {registryRuleError ? (
                               <p className="text-xs text-danger md:col-span-3">
                                 {registryRuleError}
@@ -1532,10 +1530,10 @@ export default function GitRepositoryDetailPage() {
                     </Accordion.Panel>
                   </Accordion.Item>
                 </Accordion>
-                <div className="m-4 mb-0">
+                <div className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <SearchField
                     aria-label="Search discovered images"
-                    className="w-full sm:max-w-md"
+                    className="min-w-0 flex-1 basis-64 sm:max-w-md"
                     value={imageSearch}
                     onChange={setImageSearch}
                     variant="secondary"
@@ -1546,9 +1544,9 @@ export default function GitRepositoryDetailPage() {
                       <SearchField.ClearButton />
                     </SearchField.Group>
                   </SearchField>
-                </div>
-                <div className="m-4 flex flex-wrap items-end gap-4 rounded-xl border border-border bg-muted/30 px-3 py-2.5">
                   <Checkbox
+                    aria-label="Select all visible scan-enabled images"
+                    className="sm:ml-auto"
                     isDisabled={filteredSelectableImages.length === 0}
                     isIndeterminate={
                       selectedFilteredImageCount > 0 &&
@@ -1565,39 +1563,43 @@ export default function GitRepositoryDetailPage() {
                       <Checkbox.Control>
                         <Checkbox.Indicator />
                       </Checkbox.Control>
-                      <div className="flex flex-col gap-0.5">
-                        <Label>Select all scan-enabled images</Label>
-                        <Description>
-                          {filteredSelectableImages.length}
-                          {normalizedImageSearch
-                            ? ` of ${selectableImages.length} matching`
-                            : ''}{' '}
-                          ready to add to a scan
-                        </Description>
-                      </div>
+                      <span className="text-sm">Select visible</span>
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        ({filteredSelectableImages.length})
+                      </span>
                     </Checkbox.Content>
                   </Checkbox>
-                  <div className="ml-auto flex shrink-0 flex-wrap gap-2">
-                    <Button
-                      isDisabled={selectedImageRefs.size === 0}
-                      isPending={startingScan}
-                      size="sm"
-                      variant="primary"
-                      onPress={() => void startScan([...selectedImageRefs])}
-                    >
-                      Scan selected
-                      {selectedImageRefs.size > 0 ? ` (${selectedImageRefs.size})` : ''}
-                    </Button>
-                    <Button
-                      isDisabled={selectedImageRefs.size === 0}
-                      isPending={updatingImageExclusions}
-                      size="sm"
-                      variant="tertiary"
-                      onPress={() => void excludeImages([...selectedImageRefs])}
-                    >
-                      Exclude selected
-                    </Button>
-                  </div>
+                  {selectedImageRefs.size > 0 ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        aria-label="Clear image selection"
+                        size="sm"
+                        variant="tertiary"
+                        onPress={() => setSelectedImageRefs(new Set())}
+                      >
+                        Clear
+                      </Button>
+                      <Button
+                        isDisabled={selectedImageRefs.size === 0}
+                        isPending={startingScan}
+                        size="sm"
+                        variant="primary"
+                        onPress={() => void startScan([...selectedImageRefs])}
+                      >
+                        Scan selected
+                        {selectedImageRefs.size > 0 ? ` (${selectedImageRefs.size})` : ''}
+                      </Button>
+                      <Button
+                        isDisabled={selectedImageRefs.size === 0}
+                        isPending={updatingImageExclusions}
+                        size="sm"
+                        variant="tertiary"
+                        onPress={() => void excludeImages([...selectedImageRefs])}
+                      >
+                        Exclude selected
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="border-t border-border">
                   {filteredPreviewImages.map((image) => {

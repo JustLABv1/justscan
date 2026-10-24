@@ -3,32 +3,9 @@
 import { getScanXrayRequestLogs } from '@/lib/api/scans';
 import type { ScanStepLog, XRayRequestLog } from '@/lib/api/types/scans';
 import { fullDate, timeAgo } from '@/lib/time';
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Chip,
-  Modal,
-  ProgressBar,
-  ScrollShadow,
-  useOverlayState,
-} from '@/components/ui';
-import {
-  Clock01Icon,
-  CloudUploadIcon,
-  DatabaseSyncIcon,
-  FileSearchIcon,
-  FileValidationIcon,
-  FileVerifiedIcon,
-  FolderFileStorageIcon,
-  PackageIcon,
-  Search01Icon,
-  ServerStack01Icon,
-  Shield01Icon,
-} from 'hugeicons-react';
-import type { ComponentType, ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { Alert, Button, Card, Chip, Modal, ProgressBar, useOverlayState } from '@/components/ui';
+import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 
 type ProgressStepState = 'pending' | 'active' | 'complete';
 
@@ -42,12 +19,6 @@ type StepDefinition = {
 type StepView = StepDefinition & {
   state: ProgressStepState;
 };
-
-type StepIconComponent = ComponentType<{
-  'aria-hidden'?: boolean;
-  className?: string;
-  size?: number;
-}>;
 
 type ProgressModel = {
   activeKey: string;
@@ -226,22 +197,6 @@ const STEP_DEFINITION_MAP = new Map<string, StepDefinition>(
   ])
 );
 
-const STEP_IDENTITY_ICONS: Record<string, StepIconComponent> = {
-  cancelled: Clock01Icon,
-  completed: FileVerifiedIcon,
-  failed: Shield01Icon,
-  finalizing_report: FileValidationIcon,
-  importing_results: DatabaseSyncIcon,
-  indexing_artifact: FolderFileStorageIcon,
-  preparing_image: PackageIcon,
-  processing_results: DatabaseSyncIcon,
-  queued: Clock01Icon,
-  queued_in_xray: ServerStack01Icon,
-  scanning_image: Search01Icon,
-  waiting_for_xray: Clock01Icon,
-  warming_cache: CloudUploadIcon,
-};
-
 function formatElapsed(elapsedSeconds: number): string {
   const mins = Math.floor(elapsedSeconds / 60);
   const secs = elapsedSeconds % 60;
@@ -308,16 +263,6 @@ function providerLabel(scanProvider?: string | null, stepLogs?: ScanStepLog[] | 
     return PROVIDER_LABELS.artifactory_xray;
   }
   return PROVIDER_LABELS.trivy;
-}
-
-function compactImageLabel(image?: string | null): string | null {
-  if (!image) {
-    return null;
-  }
-  if (image.length <= 64) {
-    return image;
-  }
-  return `${image.slice(0, 28)}...${image.slice(-24)}`;
 }
 
 function isBlockedXrayPolicy(
@@ -641,56 +586,6 @@ function StepStatusIcon({ state, title }: { state: ProgressStepState; title: str
   );
 }
 
-function StepIdentityIcon({ state, stepKey }: { state: ProgressStepState; stepKey: string }) {
-  const Icon = STEP_IDENTITY_ICONS[stepKey] ?? FileSearchIcon;
-  const iconClassName =
-    state === 'pending'
-      ? 'text-muted-foreground'
-      : state === 'active'
-        ? 'text-primary'
-        : 'text-success-foreground';
-
-  return <Icon aria-hidden className={iconClassName} size={20} />;
-}
-
-function StepStatusBadge({ state, title }: { state: ProgressStepState; title: string }) {
-  if (state === 'complete') {
-    return (
-      <Badge
-        aria-label={`${title} completed successfully`}
-        color="success"
-        placement="bottom-right"
-        size="sm"
-      >
-        <svg
-          aria-hidden
-          className="size-2.5"
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="3"
-          viewBox="0 0 24 24"
-        >
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      </Badge>
-    );
-  }
-
-  if (state === 'active') {
-    return (
-      <Badge aria-label={`${title} is running`} color="accent" placement="bottom-right" size="sm">
-        <span aria-hidden className="size-2 rounded-full bg-current motion-safe:animate-pulse" />
-      </Badge>
-    );
-  }
-
-  return (
-    <Badge aria-label={`${title} is waiting`} color="default" placement="bottom-right" size="sm" />
-  );
-}
-
 function resolvePipelineStepRuntime({
   progress,
   orderedLogs,
@@ -797,73 +692,6 @@ function resolveTimelinePipelineSteps({
       completedAt: resolvedEnd,
     };
   });
-}
-
-function PipelineStepOverview({ steps }: { steps: PipelineStepRuntime[] }) {
-  const activeStepId = steps.find((step) => step.state === 'active')?.runtimeId ?? null;
-  const activeStepRef = useRef<HTMLLIElement | null>(null);
-
-  useEffect(() => {
-    if (!activeStepId) {
-      return;
-    }
-
-    activeStepRef.current?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-      inline: 'center',
-    });
-  }, [activeStepId]);
-
-  return (
-    <div className="rounded-xl mt-4">
-      <ScrollShadow
-        className="-mx-1 px-1 pb-2"
-        orientation="horizontal"
-        size={32}
-        visibility="auto"
-      >
-        <ol className="flex min-w-full gap-3">
-          {steps.map((step, index) => {
-            const isActive = step.state === 'active';
-
-            return (
-              <li
-                key={`${step.key}-${index}`}
-                ref={step.runtimeId === activeStepId ? activeStepRef : undefined}
-                className={`relative min-w-[17rem] shrink-0 overflow-hidden rounded-xl border p-px sm:min-w-[19rem] ${
-                  isActive
-                    ? 'border-primary/20 bg-primary/15 shadow-[0_0_20px_color-mix(in_srgb,var(--primary)_8%,transparent)]'
-                    : 'border-divider bg-surface-secondary'
-                }`}
-              >
-                {isActive ? (
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute -inset-24 bg-[conic-gradient(from_90deg,transparent_0_68%,color-mix(in_srgb,var(--primary)_20%,transparent)_74%,var(--primary)_80%,color-mix(in_srgb,var(--primary)_20%,transparent)_86%,transparent_92%)] opacity-80 motion-safe:animate-spin motion-reduce:hidden"
-                  />
-                ) : null}
-                <div className="relative flex items-start gap-3 rounded-[calc(1rem-1px)] bg-surface-secondary px-4 py-3">
-                  <Badge.Anchor className="shrink-0">
-                    <span className="flex size-10 items-center justify-center rounded-xl bg-surface">
-                      <StepIdentityIcon state={step.state} stepKey={step.key} />
-                    </span>
-                    <StepStatusBadge state={step.state} title={step.title} />
-                  </Badge.Anchor>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">{step.title}</p>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">
-                      {step.durationLabel}
-                    </p>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      </ScrollShadow>
-    </div>
-  );
 }
 
 function PipelineDurationList({
@@ -1028,7 +856,6 @@ function PipelineHistoryCard({
 
 function ScanPipelineCard({
   status,
-  image,
   subtitle,
   providerName,
   progress,
@@ -1074,69 +901,49 @@ function ScanPipelineCard({
         }}
       />
     );
-  const compactImage = compactImageLabel(image);
-  const description = image || compactImage || subtitle || progress.note;
-
   return (
-    <Card className="overflow-hidden p-0">
-      <ProgressBar
-        aria-label="Running scan progress"
-        color={pipelineStatusColor(status)}
-        size="sm"
-        value={progressPercent}
-        isIndeterminate={status === 'pending' || status === 'running'}
-      >
-        <ProgressBar.Track className="rounded-none">
-          <ProgressBar.Fill className="rounded-none" />
-        </ProgressBar.Track>
-      </ProgressBar>
-
-      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3 px-5 pt-5 sm:px-6">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Card.Title className="text-sm font-medium">Scan pipeline</Card.Title>
-            <Chip size="sm" variant="secondary">
-              {providerName}
-            </Chip>
-          </div>
-          <Card.Description
-            className="mt-2 max-w-2xl font-mono text-xs"
-            title={image || compactImage || undefined}
-          >
-            {description}
+    <Card className="gap-0 overflow-hidden py-0">
+      <Card.Header className="flex flex-row flex-wrap items-center justify-between gap-3 border-b p-4">
+        <div className="space-y-1">
+          <Card.Title>{status === 'pending' ? 'Waiting to scan' : 'Scan in progress'}</Card.Title>
+          <Card.Description>
+            {providerName} · {formatElapsed(elapsed)} elapsed
           </Card.Description>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Chip color={pipelineStatusColor(status)} size="sm" variant="soft">
-            {status === 'pending'
-              ? progress.title
-              : `${scanStatusLabel(status)} · ${progress.title}`}
-          </Chip>
-          {actions}
-        </div>
+        {actions}
       </Card.Header>
-
-      <Card.Content className="space-y-4 px-4 pb-4">
-        <PipelineStepOverview steps={runtimeSteps} />
+      <Card.Content className="space-y-4 p-4">
+        <div
+          className="flex items-center justify-between gap-3 text-xs text-muted-foreground"
+          role="status"
+        >
+          <span>{progress.title}</span>
+          <span className="shrink-0">{progress.eyebrow}</span>
+        </div>
+        <ProgressBar
+          aria-label="Scan activity"
+          size="sm"
+          value={progressPercent}
+          isIndeterminate={status === 'pending' || status === 'running'}
+        >
+          <ProgressBar.Track>
+            <ProgressBar.Fill />
+          </ProgressBar.Track>
+        </ProgressBar>
         <PipelineDurationList
           onStepSelect={onStepSelect}
           selectedStepId={selectedStepId}
           steps={runtimeSteps}
         />
-        <PipelineLiveLogs activeStep={activeStep} detailMessage={detailMessage} />
       </Card.Content>
-
-      <Card.Footer className="flex-row flex-wrap items-center justify-between gap-3 px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
-        <p className="font-mono text-sm text-muted-foreground">
-          {formatElapsed(elapsed)} elapsed ·{' '}
-          {status === 'pending' || status === 'running'
-            ? progress.eyebrow
-            : scanStatusLabel(status)}
-        </p>
-        <Chip color={pipelineStatusColor(status)} size="sm" variant="soft">
-          {activeStep ? `${activeStep.title}...` : progress.eyebrow}
-        </Chip>
-      </Card.Footer>
+      <details className="border-t">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium marker:text-muted-foreground">
+          Scanner output
+        </summary>
+        <div className="px-4 pb-4">
+          <PipelineLiveLogs activeStep={activeStep} detailMessage={detailMessage} />
+        </div>
+      </details>
     </Card>
   );
 }

@@ -17,6 +17,7 @@ type PublicNavbarProps = {
     hideOnMobile?: boolean;
   };
   leadingActions?: ReactNode;
+  title?: string;
   homeHref?: string;
 };
 
@@ -26,24 +27,31 @@ export function PublicNavbar({
   onToggleTheme,
   alternateAction,
   leadingActions,
+  title,
   homeHref = '/',
 }: PublicNavbarProps) {
   return (
-    <header
-      className="relative z-20 flex items-center justify-between px-6 py-4"
-      style={{ background: 'var(--app-bg)', borderBottom: '1px solid var(--border-subtle)' }}
-    >
-      <Link href={homeHref} className="flex items-center gap-2.5">
-        <Logo size={38} className="text-white" />
-        <span
-          className="font-semibold text-sm tracking-tight"
-          style={{ color: 'var(--text-primary)' }}
+    <header className="relative z-20 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b bg-background px-4 py-3 sm:px-6">
+      <div className="flex min-w-0 flex-1 items-center gap-4">
+        <Link
+          href={homeHref}
+          aria-label="JustScan home"
+          className="flex shrink-0 items-center gap-2"
         >
-          JustScan
-        </span>
-      </Link>
-
-      <div className="flex items-center gap-2">
+          <Logo size={28} />
+          <span className="hidden text-sm font-semibold tracking-tight sm:inline">JustScan</span>
+        </Link>
+        {title ? (
+          <>
+            <span aria-hidden className="h-5 border-l" />
+            <h1 title={title} className="min-w-0 truncate text-sm font-medium">
+              {title}
+            </h1>
+          </>
+        ) : null}
+      </div>
+      <div className="flex max-w-full flex-wrap items-center gap-2">
+        {leadingActions}
         <Button onPress={onToggleTheme} isIconOnly variant="tertiary" aria-label="Toggle theme">
           {isDark ? <Sun01Icon size={16} /> : <Moon02Icon size={16} />}
         </Button>
@@ -58,7 +66,6 @@ export function PublicNavbar({
             </Button>
           </Link>
         ) : null}
-        {leadingActions}
         <Link href={isLoggedIn ? '/scans' : '/login'}>
           <Button variant="secondary">{isLoggedIn ? 'Dashboard →' : 'Sign in'}</Button>
         </Link>

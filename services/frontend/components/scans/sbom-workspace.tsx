@@ -15,6 +15,10 @@ import * as dagre from '@dagrejs/dagre';
 import {
   Button,
   Card,
+  Checkbox,
+  Popover,
+  Tabs,
+  Tooltip,
   Chip,
   Drawer,
   Label,
@@ -25,7 +29,7 @@ import {
   type SortDescriptor,
   useOverlayState,
 } from '@/components/ui';
-import { Download01Icon, GitBranchIcon, PackageIcon, ShareKnowledgeIcon } from 'hugeicons-react';
+import { Download01Icon, FilterIcon, GitBranchIcon, PackageIcon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type SBOMWorkspaceProps = {
@@ -50,7 +54,7 @@ function PackageNode({ data }: NodeProps<Node<PackageNodeData>>) {
   const count = data.component.vulnerability_count ?? 0;
   return (
     <div
-      className="nodrag nopan min-w-48 cursor-pointer rounded-xl border border-border bg-white px-3 py-2.5 text-foreground shadow-sm transition-colors hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:border-border dark:bg-muted dark:text-foreground dark:hover:bg-muted"
+      className="nodrag nopan min-w-48 cursor-pointer rounded-xl border border-border bg-card px-3 py-2.5 text-foreground shadow-sm transition-colors hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring dark:border-border dark:bg-muted dark:text-foreground dark:hover:bg-muted"
       role="button"
       tabIndex={0}
       aria-label={`Open ${packageLabel(data.component)} ${data.component.version}`}
@@ -296,7 +300,8 @@ export function SBOMWorkspace({
   );
 
   useEffect(() => {
-    if (!focusPackage || loading || handledFocusRequestRef.current === focusPackage.requestId) return;
+    if (!focusPackage || loading || handledFocusRequestRef.current === focusPackage.requestId)
+      return;
     const exactMatch = components.find(
       (component) =>
         packageLabel(component) === focusPackage.packageName &&
@@ -330,300 +335,340 @@ export function SBOMWorkspace({
           </div>
         </Card>
       ) : null}
-      <Card className="surface-panel p-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <Chip variant="soft" color="accent">
-              {total} packages
-            </Chip>
-            <Chip variant="soft" color={document?.graph_complete ? 'success' : 'warning'}>
-              {document?.graph_complete
-                ? 'Dependency graph complete'
-                : 'Dependency graph unavailable or partial'}
-            </Chip>
-            <Chip variant="soft">Source: {sourceLabel}</Chip>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(['inventory', 'tree', 'graph'] as View[]).map((item) => (
-              <Button
-                key={item}
-                size="sm"
-                variant={view === item ? 'primary' : 'secondary'}
-                onPress={() => selectView(item)}
-              >
-                {item === 'inventory' ? (
-                  <PackageIcon size={16} />
-                ) : item === 'tree' ? (
-                  <GitBranchIcon size={16} />
-                ) : (
-                  <ShareKnowledgeIcon size={16} />
-                )}
-                {item[0].toUpperCase() + item.slice(1)}
-              </Button>
-            ))}
-            {downloadHref && document ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                onPress={() => {
-                  window.location.assign(downloadHref);
-                }}
-              >
-                <Download01Icon size={16} />
-                CycloneDX
-              </Button>
-            ) : null}
+      <Card className="overflow-hidden gap-0 py-0">
+        <div className="border-b border-border p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-medium">Packages &amp; SBOM</h2>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {total.toLocaleString()} packages
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {sourceLabel} ·{' '}
+                {document
+                  ? document.graph_complete
+                    ? 'Complete dependency graph'
+                    : 'Partial dependency graph'
+                  : 'Loading inventory'}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Tabs selectedKey={view} onSelectionChange={(key) => selectView(String(key) as View)}>
+                <Tabs.List aria-label="SBOM view">
+                  {(['inventory', 'tree', 'graph'] as View[]).map((item) => (
+                    <Tabs.Tab key={item} id={item}>
+                      {item[0].toUpperCase() + item.slice(1)}
+                    </Tabs.Tab>
+                  ))}
+                </Tabs.List>
+                {(['inventory', 'tree', 'graph'] as View[]).map((item) => (
+                  <Tabs.Panel key={item} id={item} className="hidden" />
+                ))}
+              </Tabs>
+              {downloadHref && document ? (
+                <Tooltip>
+                  <Tooltip.Trigger>
+                    <Button
+                      aria-label="Download CycloneDX SBOM"
+                      variant="ghost"
+                      size="icon"
+                      onPress={() => window.location.assign(downloadHref)}
+                    >
+                      <Download01Icon size={16} />
+                    </Button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Content>Download CycloneDX SBOM</Tooltip.Content>
+                </Tooltip>
+              ) : null}
+            </div>
           </div>
         </div>
-      </Card>
 
-      {view === 'inventory' ? (
-        <>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <SearchField
-              value={query}
-              onChange={setQuery}
-              variant="secondary"
-              aria-label="Search packages"
-              className="flex-1"
-            >
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input placeholder="Search packages, versions, or ecosystems…" />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-            <Select
-              value={ecosystem}
-              onChange={(value) => setEcosystem(typeof value === 'string' ? value : 'all')}
-              variant="secondary"
-              aria-label="Filter by ecosystem"
-              className="min-w-48"
-            >
-              <Label className="sr-only">Ecosystem</Label>
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="all">All ecosystems</ListBox.Item>
-                  {ecosystems.map((item) => (
-                    <ListBox.Item key={item} id={item}>
-                      {item}
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-            <Button
-              size="sm"
-              variant={vulnerableOnly ? 'danger' : 'secondary'}
-              onPress={() => setVulnerableOnly((value) => !value)}
-            >
-              Vulnerable only
-            </Button>
-          </div>
-          <Card className="surface-panel overflow-hidden">
-            <Table variant="secondary">
-              <Table.ScrollContainer>
-                <Table.Content
-                  aria-label="SBOM package inventory"
-                  className="min-w-[820px] table-fixed"
-                  sortDescriptor={sortDescriptor}
-                  onSortChange={setSortDescriptor}
+        {view === 'inventory' ? (
+          <>
+            <div className="flex flex-col gap-2 border-b border-border p-3 lg:flex-row lg:items-center">
+              <SearchField
+                value={query}
+                onChange={setQuery}
+                variant="secondary"
+                aria-label="Search packages"
+                className="flex-1"
+              >
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder="Search packages, versions, or ecosystems…" />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+              <Popover>
+                <Popover.Trigger>
+                  <Button variant="outline">
+                    <FilterIcon size={15} />
+                    Filters
+                    {ecosystem !== 'all' || vulnerableOnly
+                      ? ` (${Number(ecosystem !== 'all') + Number(vulnerableOnly)})`
+                      : ''}
+                  </Button>
+                </Popover.Trigger>
+                <Popover.Content
+                  placement="bottom end"
+                  className="w-64 space-y-4 p-4"
+                  aria-label="Package filters"
                 >
-                  <Table.Header>
-                    <Table.Column id="package" allowsSorting isRowHeader className="w-[34%]">
-                      Package
-                    </Table.Column>
-                    <Table.Column id="version" allowsSorting className="w-[12%]">
-                      Version
-                    </Table.Column>
-                    <Table.Column id="ecosystem" allowsSorting className="w-[10%]">
-                      Type
-                    </Table.Column>
-                    <Table.Column id="dependency_depth" allowsSorting className="w-[14%]">
-                      Relationship
-                    </Table.Column>
-                    <Table.Column id="vulnerabilities" allowsSorting className="w-[12%]">
-                      Vulnerabilities
-                    </Table.Column>
-                    <Table.Column id="license" allowsSorting className="w-[18%]">
-                      License
-                    </Table.Column>
-                  </Table.Header>
-                  <Table.Body
-                    key={loading ? 'loading' : inventoryRows.length === 0 ? 'empty' : 'packages'}
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium">Package filters</h3>
+                    {ecosystem !== 'all' || vulnerableOnly ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onPress={() => {
+                          setEcosystem('all');
+                          setVulnerableOnly(false);
+                        }}
+                      >
+                        Reset
+                      </Button>
+                    ) : null}
+                  </div>
+                  <Select
+                    value={ecosystem}
+                    onChange={(value) => setEcosystem(typeof value === 'string' ? value : 'all')}
+                    variant="secondary"
+                    aria-label="Filter by ecosystem"
+                    className="w-full"
                   >
-                    {loading ? (
-                      <Table.Row id="loading">
-                        <Table.Cell colSpan={6}>
-                          <div className="py-10 text-center text-sm text-muted-foreground">
-                            Loading package evidence…
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ) : inventoryRows.length === 0 ? (
-                      <Table.Row id="empty">
-                        <Table.Cell colSpan={6}>
-                          <div className="py-10 text-center text-sm text-muted-foreground">
-                            No packages match these filters.
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ) : (
-                      inventoryRows.map(({ component, rowID }) => (
-                        <Table.Row key={rowID} id={rowID} className="hover:bg-surface-secondary">
-                          <Table.Cell className="max-w-0">
-                            <Button
-                              variant="ghost"
-                              className="-mx-2 h-auto w-full min-w-0 justify-start text-left"
-                              aria-label={`Open ${packageLabel(component)} ${component.version}`}
-                              onPress={() => void openComponent(component)}
-                            >
-                              <span className="min-w-0 w-full">
-                                <span className="block truncate font-medium">
-                                  {packageLabel(component)}
-                                </span>
-                                <span className="block truncate font-mono text-xs text-muted-foreground">
-                                  {component.package_url || component.bom_ref || 'No package URL'}
-                                </span>
-                              </span>
-                            </Button>
-                          </Table.Cell>
-                          <Table.Cell className="truncate">{component.version || '—'}</Table.Cell>
-                          <Table.Cell className="truncate">
-                            <Chip size="sm" variant="soft">
-                              {component.ecosystem || component.type}
-                            </Chip>
-                          </Table.Cell>
-                          <Table.Cell className="truncate">
-                            {component.is_root
-                              ? 'Root'
-                              : component.dependency_depth != null
-                                ? `Depth ${component.dependency_depth}`
-                                : 'Unknown'}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Chip
-                              size="sm"
-                              variant="soft"
-                              color={
-                                (component.vulnerability_count ?? 0) > 0 ? 'danger' : 'default'
-                              }
-                            >
-                              {component.vulnerability_count ?? 0}
-                            </Chip>
-                          </Table.Cell>
-                          <Table.Cell className="truncate">
-                            {component.licenses?.join(', ') || component.license || '—'}
+                    <Label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                      Ecosystem
+                    </Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="all">All ecosystems</ListBox.Item>
+                        {ecosystems.map((item) => (
+                          <ListBox.Item key={item} id={item}>
+                            {item}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                  <Checkbox isSelected={vulnerableOnly} onChange={setVulnerableOnly}>
+                    <Checkbox.Control>
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                    <span>Vulnerable packages only</span>
+                  </Checkbox>
+                </Popover.Content>
+              </Popover>
+            </div>
+            <div>
+              <Table variant="secondary">
+                <Table.ScrollContainer className="rounded-none border-0">
+                  <Table.Content
+                    aria-label="SBOM package inventory"
+                    className="min-w-[1120px] table-fixed [&_td]:px-3 [&_td]:py-3 [&_th]:px-3"
+                    sortDescriptor={sortDescriptor}
+                    onSortChange={setSortDescriptor}
+                  >
+                    <Table.Header>
+                      <Table.Column id="package" allowsSorting isRowHeader className="w-auto">
+                        Package
+                      </Table.Column>
+                      <Table.Column id="version" allowsSorting className="w-[160px]">
+                        Version
+                      </Table.Column>
+                      <Table.Column id="ecosystem" allowsSorting className="w-[112px]">
+                        Type
+                      </Table.Column>
+                      <Table.Column id="dependency_depth" allowsSorting className="w-[144px]">
+                        Relationship
+                      </Table.Column>
+                      <Table.Column id="vulnerabilities" allowsSorting className="w-[160px]">
+                        Vulnerabilities
+                      </Table.Column>
+                      <Table.Column id="license" allowsSorting className="w-[180px]">
+                        License
+                      </Table.Column>
+                    </Table.Header>
+                    <Table.Body
+                      key={loading ? 'loading' : inventoryRows.length === 0 ? 'empty' : 'packages'}
+                    >
+                      {loading ? (
+                        <Table.Row id="loading">
+                          <Table.Cell colSpan={6}>
+                            <div className="py-10 text-center text-sm text-muted-foreground">
+                              Loading package evidence…
+                            </div>
                           </Table.Cell>
                         </Table.Row>
-                      ))
-                    )}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
-          </Card>
-        </>
-      ) : null}
+                      ) : inventoryRows.length === 0 ? (
+                        <Table.Row id="empty">
+                          <Table.Cell colSpan={6}>
+                            <div className="py-10 text-center text-sm text-muted-foreground">
+                              No packages match these filters.
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      ) : (
+                        inventoryRows.map(({ component, rowID }) => (
+                          <Table.Row key={rowID} id={rowID} className="hover:bg-surface-secondary">
+                            <Table.Cell className="max-w-0">
+                              <Button
+                                variant="ghost"
+                                className="h-auto w-full min-w-0 justify-start rounded-sm p-0 text-left"
+                                aria-label={`Open ${packageLabel(component)} ${component.version}`}
+                                onPress={() => void openComponent(component)}
+                              >
+                                <span className="min-w-0 w-full">
+                                  <span className="block truncate font-medium">
+                                    {packageLabel(component)}
+                                  </span>
+                                  <span className="block truncate font-mono text-xs text-muted-foreground">
+                                    {component.package_url || component.bom_ref || 'No package URL'}
+                                  </span>
+                                </span>
+                              </Button>
+                            </Table.Cell>
+                            <Table.Cell className="truncate font-mono text-xs">
+                              <span title={component.version}>{component.version || '—'}</span>
+                            </Table.Cell>
+                            <Table.Cell className="truncate">
+                              <Chip size="sm" variant="soft">
+                                {component.ecosystem || component.type}
+                              </Chip>
+                            </Table.Cell>
+                            <Table.Cell className="truncate">
+                              {component.is_root
+                                ? 'Root'
+                                : component.dependency_depth != null
+                                  ? `Depth ${component.dependency_depth}`
+                                  : 'Unknown'}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Chip
+                                size="sm"
+                                variant="soft"
+                                color={
+                                  (component.vulnerability_count ?? 0) > 0 ? 'danger' : 'default'
+                                }
+                              >
+                                {component.vulnerability_count ?? 0}
+                              </Chip>
+                            </Table.Cell>
+                            <Table.Cell className="truncate">
+                              {component.licenses?.join(', ') || component.license || '—'}
+                            </Table.Cell>
+                          </Table.Row>
+                        ))
+                      )}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </div>
+          </>
+        ) : null}
 
-      {view === 'tree' ? (
-        <Card className="surface-panel p-4">
-          {graphLoading ? (
-            <p className="text-sm text-muted-foreground">Loading dependency relationships…</p>
-          ) : !graphAvailable ? (
-            <div className="space-y-2">
-              <p className="font-medium">
-                Dependency relationships are not available for this scan.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                This is a legacy package inventory created before JustScan retained CycloneDX
-                dependency data. Packages remain clickable below; re-scan the artifact to generate
-                its dependency tree.
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {graph.nodes.map((component) => (
-                  <Button
-                    key={component.id}
-                    variant="secondary"
-                    className="justify-start"
-                    onPress={() => void openComponent(component)}
-                  >
-                    <PackageIcon size={15} />
-                    <span className="truncate">
-                      {packageLabel(component)} {component.version}
-                    </span>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <>
-              <p className="mb-3 text-sm text-muted-foreground">
-                Expand the dependency story from the scanned artifact. A package can occur under
-                more than one parent; cycles are marked instead of repeated.
-              </p>
-              <div className="space-y-1">
-                {roots.map((root) => (
-                  <TreeNode
-                    key={root.id}
-                    component={root}
-                    byID={byID}
-                    childMap={childMap}
-                    onOpen={openComponent}
-                    ancestry={new Set()}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-        </Card>
-      ) : null}
-
-      {view === 'graph' ? (
-        <Card className="surface-panel overflow-hidden">
-          {graphLoading ? (
-            <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
-              Loading dependency graph…
-            </div>
-          ) : !graphAvailable ? (
-            <div className="flex min-h-[420px] flex-col items-center justify-center p-8 text-center">
-              <GitBranchIcon size={28} className="text-muted-foreground" />
-              <p className="mt-4 font-medium">No dependency graph is available for this scan.</p>
-              <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-                The legacy inventory has package records but no declared relationships. Re-scan to
-                generate a CycloneDX dependency graph; package details are still available from
-                Inventory or Tree.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="h-[min(65vh,680px)] min-h-[420px]">
-                <ReactFlow
-                  nodes={flow.nodes}
-                  edges={flow.edges}
-                  nodeTypes={nodeTypes}
-                  fitView
-                  nodesDraggable={false}
-                  nodesConnectable={false}
-                >
-                  <Background color="var(--divider)" gap={18} />
-                  <Controls />
-                </ReactFlow>
-              </div>
-              {graph.truncated ? (
-                <div className="border-t border-divider px-4 py-3 text-sm text-warning-foreground">
-                  Graph is capped for performance. Open a package from inventory to inspect its
-                  immediate neighborhood.
+        {view === 'tree' ? (
+          <div className="p-4">
+            {graphLoading ? (
+              <p className="text-sm text-muted-foreground">Loading dependency relationships…</p>
+            ) : !graphAvailable ? (
+              <div className="space-y-2">
+                <p className="font-medium">
+                  Dependency relationships are not available for this scan.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  This is a legacy package inventory created before JustScan retained CycloneDX
+                  dependency data. Packages remain clickable below; re-scan the artifact to generate
+                  its dependency tree.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {graph.nodes.map((component) => (
+                    <Button
+                      key={component.id}
+                      variant="secondary"
+                      className="justify-start"
+                      onPress={() => void openComponent(component)}
+                    >
+                      <PackageIcon size={15} />
+                      <span className="truncate">
+                        {packageLabel(component)} {component.version}
+                      </span>
+                    </Button>
+                  ))}
                 </div>
-              ) : null}
-            </>
-          )}
-        </Card>
-      ) : null}
+              </div>
+            ) : (
+              <>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Expand the dependency story from the scanned artifact. A package can occur under
+                  more than one parent; cycles are marked instead of repeated.
+                </p>
+                <div className="space-y-1">
+                  {roots.map((root) => (
+                    <TreeNode
+                      key={root.id}
+                      component={root}
+                      byID={byID}
+                      childMap={childMap}
+                      onOpen={openComponent}
+                      ancestry={new Set()}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
+
+        {view === 'graph' ? (
+          <div>
+            {graphLoading ? (
+              <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
+                Loading dependency graph…
+              </div>
+            ) : !graphAvailable ? (
+              <div className="flex min-h-[420px] flex-col items-center justify-center p-8 text-center">
+                <GitBranchIcon size={28} className="text-muted-foreground" />
+                <p className="mt-4 font-medium">No dependency graph is available for this scan.</p>
+                <p className="mt-2 max-w-lg text-sm text-muted-foreground">
+                  The legacy inventory has package records but no declared relationships. Re-scan to
+                  generate a CycloneDX dependency graph; package details are still available from
+                  Inventory or Tree.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="h-[min(65vh,680px)] min-h-[420px]">
+                  <ReactFlow
+                    nodes={flow.nodes}
+                    edges={flow.edges}
+                    nodeTypes={nodeTypes}
+                    fitView
+                    nodesDraggable={false}
+                    nodesConnectable={false}
+                  >
+                    <Background color="var(--divider)" gap={18} />
+                    <Controls />
+                  </ReactFlow>
+                </div>
+                {graph.truncated ? (
+                  <div className="border-t border-divider px-4 py-3 text-sm text-warning-foreground">
+                    Graph is capped for performance. Open a package from inventory to inspect its
+                    immediate neighborhood.
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
+        ) : null}
+      </Card>
 
       {selected ? (
         <Drawer.Backdrop isOpen={drawer.isOpen} onOpenChange={drawer.setOpen} variant="blur">
@@ -801,7 +846,10 @@ function TreeNode({
       {expanded
         ? childNodes.map((child) =>
             nextAncestry.has(child.id) ? (
-              <div key={`${component.id}-${child.id}`} className="ml-8 py-1 text-xs text-muted-foreground">
+              <div
+                key={`${component.id}-${child.id}`}
+                className="ml-8 py-1 text-xs text-muted-foreground"
+              >
                 ↳ {packageLabel(child)} (cycle)
               </div>
             ) : (

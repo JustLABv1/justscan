@@ -644,7 +644,11 @@ function StepStatusIcon({ state, title }: { state: ProgressStepState; title: str
 function StepIdentityIcon({ state, stepKey }: { state: ProgressStepState; stepKey: string }) {
   const Icon = STEP_IDENTITY_ICONS[stepKey] ?? FileSearchIcon;
   const iconClassName =
-    state === 'pending' ? 'text-muted-foreground' : state === 'active' ? 'text-primary' : 'text-success-foreground';
+    state === 'pending'
+      ? 'text-muted-foreground'
+      : state === 'active'
+        ? 'text-primary'
+        : 'text-success-foreground';
 
   return <Icon aria-hidden className={iconClassName} size={20} />;
 }
@@ -848,7 +852,9 @@ function PipelineStepOverview({ steps }: { steps: PipelineStepRuntime[] }) {
                   </Badge.Anchor>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-foreground">{step.title}</p>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">{step.durationLabel}</p>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">
+                      {step.durationLabel}
+                    </p>
                   </div>
                 </div>
               </li>
@@ -870,12 +876,12 @@ function PipelineDurationList({
   onStepSelect?: (stepId: string) => void;
 }) {
   return (
-    <div className="rounded-xl bg-surface-secondary p-3 sm:p-4">
+    <div>
       <ol className="space-y-1.5">
         {steps.map((step, index) => {
           const tone = stepStateTone(step.state);
           const isSelected = selectedStepId === step.runtimeId;
-          const rowClassName = `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${
+          const rowClassName = `flex h-auto w-full items-center justify-start gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-left ${
             step.state === 'active' ? 'bg-primary/5' : ''
           } ${isSelected ? 'ring-1 ring-primary/25' : ''}`;
           const rowContent = (
@@ -884,7 +890,9 @@ function PipelineDurationList({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{step.title}</p>
                 {step.startedAt ? (
-                  <p className="mt-0.5 text-xs text-muted-foreground">Started {timeAgo(step.startedAt)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Started {timeAgo(step.startedAt)}
+                  </p>
                 ) : null}
               </div>
               <span className={`rounded-full px-2.5 py-1 font-mono text-xs ${tone.rowClassName}`}>
@@ -896,13 +904,14 @@ function PipelineDurationList({
           return (
             <li key={`${step.runtimeId}-duration-${index}`}>
               {onStepSelect ? (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  aria-pressed={isSelected}
                   className={rowClassName}
-                  onClick={() => onStepSelect(step.runtimeId)}
+                  onPress={() => onStepSelect(step.runtimeId)}
                 >
                   {rowContent}
-                </button>
+                </Button>
               ) : (
                 <div className={rowClassName}>{rowContent}</div>
               )}
@@ -917,27 +926,103 @@ function PipelineDurationList({
 function PipelineLiveLogs({
   activeStep,
   detailMessage,
+  history = false,
 }: {
   activeStep: PipelineStepRuntime | null;
   detailMessage: string;
+  history?: boolean;
 }) {
   const visibleLogs =
     activeStep && activeStep.output.length > 0
       ? activeStep.output.slice(-7)
-      : [
-          `$ justscan scan --step ${activeStep?.key ?? 'queued'}`,
-          `-> ${detailMessage}`,
-          '-> waiting for the next backend update',
-        ];
+      : history
+        ? ['No output was recorded for this stage.']
+        : [
+            `$ justscan scan --step ${activeStep?.key ?? 'queued'}`,
+            `-> ${detailMessage}`,
+            '-> waiting for the next backend update',
+          ];
 
   return (
-    <div className="rounded-xl bg-surface-secondary p-4 shadow-surface sm:p-5">
-      <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-xl font-mono text-xs text-foreground">
+    <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-lg font-mono text-xs text-foreground">
         {visibleLogs
           .map((line) => (line.startsWith('$') ? line : `-> ${line.replace(/^->\s?/, '')}`))
           .join('\n')}
       </pre>
     </div>
+  );
+}
+
+function PipelineHistoryCard({
+  status,
+  subtitle,
+  providerName,
+  elapsed,
+  runtimeSteps,
+  activeStep,
+  detailMessage,
+  selectedStepId,
+  onStepSelect,
+  actions,
+}: Pick<
+  Parameters<typeof ScanPipelineCard>[0],
+  | 'status'
+  | 'subtitle'
+  | 'providerName'
+  | 'elapsed'
+  | 'runtimeSteps'
+  | 'activeStep'
+  | 'detailMessage'
+  | 'selectedStepId'
+  | 'onStepSelect'
+  | 'actions'
+>) {
+  return (
+    <Card className="overflow-hidden gap-0 py-0">
+      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3 p-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Card.Title className="text-sm font-medium">Execution timeline</Card.Title>
+            <Chip size="sm" variant="soft">
+              {providerName}
+            </Chip>
+            <Chip color={pipelineStatusColor(status)} size="sm" variant="soft">
+              {scanStatusLabel(status)}
+            </Chip>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+        {actions}
+      </Card.Header>
+      <div className="grid border-y border-border lg:grid-cols-[minmax(240px,1fr)_minmax(0,2fr)]">
+        <div className="min-w-0 border-b border-border p-3 lg:border-r lg:border-b-0">
+          <PipelineDurationList
+            onStepSelect={onStepSelect}
+            selectedStepId={selectedStepId}
+            steps={runtimeSteps}
+          />
+        </div>
+        <div className="min-w-0 space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-medium">{activeStep?.title ?? 'Step output'}</h3>
+            <span className="font-mono text-xs text-muted-foreground">
+              {activeStep?.durationLabel}
+            </span>
+          </div>
+          {activeStep?.startedAt ? (
+            <p className="text-xs text-muted-foreground">
+              Started {fullDate(activeStep.startedAt)}
+            </p>
+          ) : null}
+          <PipelineLiveLogs history activeStep={activeStep} detailMessage={detailMessage} />
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-muted-foreground">
+        <span>{formatElapsed(elapsed)} elapsed</span>
+        <span>{runtimeSteps.length} stages</span>
+      </div>
+    </Card>
   );
 }
 
@@ -955,6 +1040,7 @@ function ScanPipelineCard({
   selectedStepId,
   onStepSelect,
   actions,
+  history = false,
 }: {
   status: string;
   image?: string;
@@ -969,7 +1055,25 @@ function ScanPipelineCard({
   selectedStepId?: string | null;
   onStepSelect?: (stepId: string) => void;
   actions?: ReactNode;
+  history?: boolean;
 }) {
+  if (history)
+    return (
+      <PipelineHistoryCard
+        {...{
+          status,
+          subtitle,
+          providerName,
+          elapsed,
+          runtimeSteps,
+          activeStep,
+          detailMessage,
+          selectedStepId,
+          onStepSelect,
+          actions,
+        }}
+      />
+    );
   const compactImage = compactImageLabel(image);
   const description = image || compactImage || subtitle || progress.note;
 
@@ -990,7 +1094,7 @@ function ScanPipelineCard({
       <Card.Header className="flex-row flex-wrap items-start justify-between gap-3 px-5 pt-5 sm:px-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Card.Title className="text-lg">Scan pipeline</Card.Title>
+            <Card.Title className="text-sm font-medium">Scan pipeline</Card.Title>
             <Chip size="sm" variant="secondary">
               {providerName}
             </Chip>
@@ -1012,7 +1116,7 @@ function ScanPipelineCard({
         </div>
       </Card.Header>
 
-      <Card.Content className="gap-4 px-5 pb-5 sm:px-6 sm:pb-6">
+      <Card.Content className="space-y-4 px-4 pb-4">
         <PipelineStepOverview steps={runtimeSteps} />
         <PipelineDurationList
           onStepSelect={onStepSelect}
@@ -1268,6 +1372,7 @@ export function ScanStepTimeline({
   return (
     <section className="space-y-4">
       <ScanPipelineCard
+        history
         actions={
           canShowXrayDebug ? (
             <Button

@@ -32,7 +32,7 @@ function ShellPageTitle({ title, status, meta, actions, breadcrumbs }: PageTitle
         ? createPortal(
             <div id="tour-page-header" className="flex min-w-0 items-center gap-2">
               {breadcrumbs && breadcrumbs.length > 1 ? (
-                <Breadcrumbs className="min-w-0 text-sm">
+                <Breadcrumbs className="min-w-0 overflow-hidden text-sm">
                   {breadcrumbs.map((item, index) => (
                     <Breadcrumbs.Item
                       key={`${item.href ?? 'current'}:${item.label}`}

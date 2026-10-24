@@ -278,13 +278,46 @@ export const ButtonGroup = Object.assign(
   ),
   { Separator }
 );
-export const Breadcrumbs = Object.assign(Aria.Breadcrumbs, {
-  Item: ({ href, children, ...props }: Aria.BreadcrumbProps & { href?: string }) => (
-    <Aria.Breadcrumb {...props}>
-      {href ? <Aria.Link href={href}>{children}</Aria.Link> : children}
-    </Aria.Breadcrumb>
-  ),
-});
+export const Breadcrumbs = Object.assign(
+  function Breadcrumbs<T extends object>({ className, ...props }: Aria.BreadcrumbsProps<T>) {
+    return (
+      <Aria.Breadcrumbs
+        className={cn(
+          'flex min-w-0 items-center gap-2 whitespace-nowrap [&>li]:min-w-0',
+          typeof className === 'string' && className
+        )}
+        {...props}
+      />
+    );
+  },
+  {
+    Item: ({
+      href,
+      children,
+      className,
+      ...props
+    }: Omit<Aria.BreadcrumbProps, 'children'> & { href?: string; children?: React.ReactNode }) => (
+      <Aria.Breadcrumb
+        className={cn(
+          'flex min-w-0 items-center gap-2 [&:not(:first-child)]:before:content-["/"] before:text-muted-foreground/50',
+          typeof className === 'string' && className
+        )}
+        {...props}
+      >
+        {href ? (
+          <Aria.Link
+            className="truncate text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            href={href}
+          >
+            {children}
+          </Aria.Link>
+        ) : (
+          <span className="truncate font-medium">{children}</span>
+        )}
+      </Aria.Breadcrumb>
+    ),
+  }
+);
 export const Avatar = Object.assign(
   function Avatar({
     className,

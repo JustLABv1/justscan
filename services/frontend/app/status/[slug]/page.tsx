@@ -556,7 +556,7 @@ function MobileImageStatusCard({
   const totalFindings = getFindingTotal(item);
 
   return (
-    <Card className="border border-divider/70 bg-surface/70 p-4 shadow-sm" variant="secondary">
+    <Card className="gap-3 p-4" variant="secondary">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted-foreground">
@@ -569,7 +569,9 @@ function MobileImageStatusCard({
             >
               {item.image_name}
             </Link>
-            <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{item.image_tag}</p>
+            <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+              {item.image_tag}
+            </p>
           </div>
         </div>
         <Link href={`/scans/details/${item.latest_scan_id}`}>
@@ -595,7 +597,9 @@ function MobileImageStatusCard({
         </div>
         <div>
           <p className="text-muted-foreground">High</p>
-          <p className="mt-0.5 font-semibold tabular-nums text-warning-foreground">{item.high_count}</p>
+          <p className="mt-0.5 font-semibold tabular-nums text-warning-foreground">
+            {item.high_count}
+          </p>
         </div>
         <div>
           <p className="text-muted-foreground">All findings</p>
@@ -870,7 +874,7 @@ function StatusItemHistoryModal({
     <Drawer state={state}>
       <Drawer.Backdrop variant="blur">
         <Drawer.Content placement="right">
-          <Drawer.Dialog className="flex h-full w-full max-w-xl flex-col border-l border-divider bg-surface ">
+          <Drawer.Dialog className="flex h-full w-full max-w-xl flex-col border-l border-border bg-background">
             <Drawer.Header className="border-b border-divider/70 p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-3">
@@ -885,7 +889,9 @@ function StatusItemHistoryModal({
                       {item?.image_name ?? 'Loading image'}
                     </Drawer.Heading>
                     {item ? (
-                      <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{item.image_tag}</p>
+                      <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+                        {item.image_tag}
+                      </p>
                     ) : null}
                   </div>
                 </div>
@@ -919,7 +925,7 @@ function StatusItemHistoryModal({
                 />
               ) : null}
 
-              <Card className="border border-divider/70 p-4" variant="secondary">
+              <Card className="gap-2 p-4" variant="secondary">
                 <p className="text-xs font-semibold text-foreground">14-day scan history</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Choose a completed scan to compare its findings.
@@ -959,13 +965,21 @@ function StatusItemHistoryModal({
                         value: displayedScan.critical_count,
                         color: 'text-danger',
                       },
-                      { label: 'High', value: displayedScan.high_count, color: 'text-warning-foreground' },
+                      {
+                        label: 'High',
+                        value: displayedScan.high_count,
+                        color: 'text-warning-foreground',
+                      },
                       {
                         label: 'Medium',
                         value: displayedScan.medium_count,
                         color: 'text-warning-foreground',
                       },
-                      { label: 'Low', value: displayedScan.low_count, color: 'text-muted-foreground' },
+                      {
+                        label: 'Low',
+                        value: displayedScan.low_count,
+                        color: 'text-muted-foreground',
+                      },
                     ].map((metric) => (
                       <div key={metric.label} className="rounded-xl bg-surface p-3">
                         <p className="text-xs font-medium text-muted-foreground">{metric.label}</p>
@@ -1433,22 +1447,6 @@ export default function PublicStatusPage() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.38] dark:opacity-[0.24]"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--primary) 22%, transparent) 1px, transparent 0)',
-          backgroundSize: '24px 24px',
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(circle at 12% 4%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 24%), radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 22%)',
-        }}
-      />
-
       <PublicStatusHeader
         isDark={isDark}
         latestObservedAt={latestObservedAt}
@@ -1461,30 +1459,9 @@ export default function PublicStatusPage() {
       />
 
       <main className="relative z-10 mx-auto w-full max-w-[1600px] space-y-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Shield01Icon size={15} aria-hidden />
-              Container image status
-            </div>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              {data.page.name}
-            </h1>
-            {showHeaderDescription ? (
-              <p className="mt-1.5 max-w-3xl text-sm leading-6 text-muted-foreground">{headerDescription}</p>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <Chip className="capitalize sm:hidden" size="sm" variant="secondary">
-              <Chip.Label>{data.page.visibility}</Chip.Label>
-            </Chip>
-            <Chip className="lg:hidden" size="sm" variant="secondary">
-              <Chip.Label>
-                Updated {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
-              </Chip.Label>
-            </Chip>
-          </div>
-        </section>
+        {showHeaderDescription ? (
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{headerDescription}</p>
+        ) : null}
 
         <OverallStatusBanner
           autoRefreshPaused={!isPageVisible}
@@ -1531,10 +1508,7 @@ export default function PublicStatusPage() {
         />
 
         {(data.git_repository_sources?.length ?? 0) > 0 ? (
-          <Card
-            className="border border-divider/70 bg-surface/70 p-4 shadow-sm"
-            variant="secondary"
-          >
+          <Card className="gap-3 p-4" variant="secondary">
             <div className="flex items-center gap-2">
               <Shield01Icon size={16} className="text-muted-foreground" aria-hidden />
               <h2 className="text-sm font-semibold text-foreground">Git repository health</h2>
@@ -1671,7 +1645,9 @@ export default function PublicStatusPage() {
                           </Select>
                         </div>
                         <div className="space-y-1.5">
-                          <p className="text-xs font-medium text-muted-foreground">Organization policy</p>
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Organization policy
+                          </p>
                           <Select
                             aria-label="Filter images by organization policy result"
                             variant="secondary"
@@ -1833,7 +1809,9 @@ export default function PublicStatusPage() {
                             />
                           </Table.Cell>
                           <Table.Cell>
-                            <span className="text-xs text-muted-foreground">{timeAgo(item.observed_at)}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {timeAgo(item.observed_at)}
+                            </span>
                           </Table.Cell>
                         </Table.Row>
                       ))

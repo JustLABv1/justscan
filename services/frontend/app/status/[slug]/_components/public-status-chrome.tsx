@@ -1,5 +1,6 @@
 'use client';
 
+import { StatCard } from '@/components/ui/stat-card';
 import { Logo } from '@/components/logo';
 import type { StatusPageUpdate } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
@@ -18,14 +19,6 @@ type StatusTone = {
   label: string;
   color: string;
   description: string;
-};
-
-const METRIC_VALUE_CLASS = {
-  success: 'text-success-foreground',
-  warning: 'text-warning-foreground',
-  danger: 'text-danger',
-  accent: 'text-primary',
-  default: 'text-foreground',
 };
 
 export type StatusMetric = {
@@ -75,7 +68,9 @@ export function PublicStatusHeader({
           </div>
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">JustScan Status</p>
-            <p className="truncate text-sm font-semibold text-foreground">{pageName}</p>
+            <h1 className="truncate text-sm font-semibold text-foreground" title={pageName}>
+              {pageName}
+            </h1>
           </div>
         </div>
 
@@ -139,7 +134,7 @@ export function OverallStatusBanner({
   staleAfterHours: number;
 }) {
   return (
-    <Card className="overflow-hidden border border-divider/70 bg-surface/70 p-0 shadow-sm">
+    <Card className="gap-0 overflow-hidden py-0">
       <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span
@@ -190,29 +185,16 @@ export function StatusMetrics({
   onSelect?: (key: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       {metrics.map((metric) => (
-        <Card
+        <StatCard
           key={metric.key}
-          className={`border bg-surface/60 p-0 shadow-sm transition-colors ${
-            activeKey === metric.key ? 'border-primary' : 'border-divider/70'
-          }`}
-          variant="secondary"
-        >
-          <button
-            type="button"
-            aria-pressed={activeKey === metric.key}
-            className="w-full rounded-[inherit] p-3 text-left outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-primary sm:p-4"
-            onClick={() => onSelect?.(metric.key)}
-          >
-            <p
-              className={`text-xl font-semibold tabular-nums ${METRIC_VALUE_CLASS[metric.color ?? 'default']}`}
-            >
-              {metric.value.toLocaleString()}
-            </p>
-            <p className="mt-0.5 text-xs font-medium text-muted-foreground">{metric.label}</p>
-          </button>
-        </Card>
+          label={metric.label}
+          value={metric.value.toLocaleString()}
+          tone={metric.color ?? 'default'}
+          selected={activeKey === metric.key}
+          onPress={onSelect ? () => onSelect(metric.key) : undefined}
+        />
       ))}
     </div>
   );

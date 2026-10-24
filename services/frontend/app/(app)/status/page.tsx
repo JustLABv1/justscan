@@ -12,7 +12,8 @@ import {
   fieldSelectTriggerClassName,
   fieldTextAreaClassName,
 } from '@/components/ui/form-styles';
-import { PageHeader } from '@/components/ui/page-header';
+import { StatCard } from '@/components/ui/stat-card';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -62,6 +63,7 @@ import {
   Select,
   Spinner,
   Table,
+  Tabs,
   TextArea,
   useOverlayState,
 } from '@/components/ui';
@@ -763,7 +765,7 @@ export default function StatusPagesPage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <PageContainer>
       <PageHeader
         title="Status Pages"
         description="Publish current image-tag health internally or externally."
@@ -778,13 +780,68 @@ export default function StatusPagesPage() {
         <StatusAlert status="danger" title="Status pages failed to load" description={error} />
       ) : null}
 
+      {!loading && pages.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {[
+            { key: 'all', label: 'Status pages', value: pages.length, hint: 'Current workspace' },
+            ...visibilityOptions.map((option) => ({
+              key: option.id,
+              label: option.label,
+              value: pages.filter((page) => page.visibility === option.id).length,
+              hint:
+                option.id === 'public'
+                  ? 'Visible without signing in'
+                  : option.id === 'private'
+                    ? 'Owner and organization access'
+                    : 'Signed-in users',
+            })),
+          ].map((metric) => (
+            <StatCard
+              key={metric.key}
+              label={metric.label}
+              value={metric.value}
+              hint={metric.hint}
+              selected={metric.key !== 'all' && visibilityFilter === metric.key}
+              onPress={() => setVisibilityFilter(metric.key as 'all' | StatusPage['visibility'])}
+            />
+          ))}
+        </div>
+      ) : null}
       <div className="space-y-4">
-        <Card className="p-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Card className="gap-0 overflow-hidden py-0">
+          <Card.Header className="space-y-3 border-b p-4">
+            <div className="flex items-center justify-between gap-3">
+              <Card.Title>Published views</Card.Title>
+              <span className="text-xs text-muted-foreground">
+                {filteredPages.length} of {pages.length} pages
+              </span>
+            </div>
+            <Tabs
+              selectedKey={visibilityFilter}
+              onSelectionChange={(key) =>
+                setVisibilityFilter(String(key) as 'all' | StatusPage['visibility'])
+              }
+              variant="secondary"
+            >
+              <Tabs.ListContainer className="overflow-x-auto">
+                <Tabs.List aria-label="Status page visibility" className="min-w-max">
+                  {[{ id: 'all', label: 'All pages' }, ...visibilityOptions].map((option) => (
+                    <Tabs.Tab id={option.id} key={option.id}>
+                      {option.label}
+                      <Tabs.Indicator />
+                    </Tabs.Tab>
+                  ))}
+                </Tabs.List>
+              </Tabs.ListContainer>
+              {['all', ...visibilityOptions.map((option) => option.id)].map((key) => (
+                <Tabs.Panel id={key} key={key} className="hidden" />
+              ))}
+            </Tabs>
             <SearchField
               name="status-pages-search"
+              aria-label="Search status pages"
               variant="secondary"
-              className="w-full sm:w-[22rem]"
+              className="w-full"
             >
               <SearchField.Group>
                 <SearchField.SearchIcon />
@@ -796,170 +853,143 @@ export default function StatusPagesPage() {
                 <SearchField.ClearButton />
               </SearchField.Group>
             </SearchField>
-            <Select
-              value={visibilityFilter}
-              onChange={(value) =>
-                setVisibilityFilter(
-                  value === 'private' || value === 'authenticated' || value === 'public'
-                    ? value
-                    : 'all'
-                )
+          </Card.Header>
+          {loading ? (
+            <div className="surface-card flex justify-center rounded-xl border border-divider/70 py-16">
+              <Spinner size="lg" />
+            </div>
+          ) : filteredPages.length === 0 ? (
+            <EmptyState
+              action={
+                pages.length > 0 || !canMutateActiveScope
+                  ? undefined
+                  : { label: 'Create status page', onClick: openCreate }
               }
-              className="w-full sm:w-44"
-              variant="secondary"
-            >
-              <Label className="sr-only">Visibility</Label>
-              <Select.Trigger className="">
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="all">All visibility</ListBox.Item>
-                  <ListBox.Item id="private">Private</ListBox.Item>
-                  <ListBox.Item id="authenticated">Authenticated</ListBox.Item>
-                  <ListBox.Item id="public">Public</ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-        </Card>
-
-        {loading ? (
-          <div className="surface-card flex justify-center rounded-xl border border-divider/70 py-16">
-            <Spinner size="lg" />
-          </div>
-        ) : filteredPages.length === 0 ? (
-          <EmptyState
-            action={
-              pages.length > 0 || !canMutateActiveScope
-                ? undefined
-                : { label: 'Create status page', onClick: openCreate }
-            }
-            description={
-              pages.length > 0
-                ? 'No status pages match the current filters. Adjust visibility or search terms to widen the results.'
-                : 'No status pages exist yet. Create one to publish current image-tag health for a curated or global set of workloads.'
-            }
-            eyebrow="Status pages"
-            icon={<EyeIcon size={28} />}
-            title={pages.length > 0 ? 'No matching pages' : 'No status pages yet'}
-          />
-        ) : (
-          <Card className="surface-card overflow-hidden rounded-xl border border-divider/70">
-            <Card.Content className="p-0">
-              <Table variant="secondary">
-                <Table.ScrollContainer>
-                  <Table.Content aria-label="Status pages" className="min-w-[920px]">
-                    <Table.Header>
-                      <Table.Column isRowHeader>Name</Table.Column>
-                      <Table.Column>Visibility</Table.Column>
-                      <Table.Column>Scope</Table.Column>
-                      <Table.Column>Slug</Table.Column>
-                      <Table.Column>Access</Table.Column>
-                      <Table.Column>Updated</Table.Column>
-                      <Table.Column className="text-right">Actions</Table.Column>
-                    </Table.Header>
-                    <Table.Body>
-                      {filteredPages.map((page) => (
-                        <Table.Row
-                          key={page.id}
-                          id={page.id}
-                          className="hover:bg-[var(--row-hover)]"
-                        >
-                          <Table.Cell>
-                            <div>
-                              <p className="font-medium text-foreground">
-                                {page.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                                {page.description || 'No description'}
-                              </p>
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Chip
-                              className="capitalize"
-                              color={visibilityTone(page.visibility)}
-                              size="sm"
-                              variant="soft"
-                            >
-                              {page.visibility}
-                            </Chip>
-                          </Table.Cell>
-                          <Table.Cell className="text-xs text-muted-foreground">
-                            {describeScope(page)}
-                          </Table.Cell>
-                          <Table.Cell className="font-mono text-xs text-muted-foreground dark:text-foreground">
-                            /status/{page.slug}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="mt-1.5">
-                              <OwnershipBadge
-                                ownerType={page.owner_type}
-                                ownerOrgId={page.owner_org_id}
-                                orgNamesById={orgNamesById}
-                              />
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell className="text-xs text-muted-foreground">
-                            {timeAgo(page.updated_at)}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="flex justify-end">
-                              <RowActionsMenu
-                                label={`Open actions menu for ${page.name}`}
-                                items={[
-                                  {
-                                    id: 'open',
-                                    label: 'Open page',
-                                    icon: <EyeIcon size={15} />,
-                                    onAction: () => window.open(`/status/${page.slug}`, '_blank'),
-                                  },
-                                  ...(canManageStatusPage(page)
-                                    ? [
-                                        {
-                                          id: 'share',
-                                          label: 'Manage access',
-                                          icon: <Shield01Icon size={15} />,
-                                          onAction: () => openShareModal(page),
-                                        },
-                                        {
-                                          id: 'edit',
-                                          label: 'Edit status page',
-                                          icon: <PencilEdit01Icon size={15} />,
-                                          onAction: () => openEdit(page),
-                                        },
-                                        {
-                                          id: 'delete',
-                                          label: 'Delete status page',
-                                          icon: <Delete01Icon size={15} />,
-                                          variant: 'danger' as const,
-                                          onAction: () => {
-                                            void handleDelete(page.id);
+              description={
+                pages.length > 0
+                  ? 'No status pages match the current filters. Adjust visibility or search terms to widen the results.'
+                  : 'No status pages exist yet. Create one to publish current image-tag health for a curated or global set of workloads.'
+              }
+              eyebrow="Status pages"
+              icon={<EyeIcon size={28} />}
+              title={pages.length > 0 ? 'No matching pages' : 'No status pages yet'}
+            />
+          ) : (
+            <div>
+              <Card.Content className="p-0">
+                <Table variant="secondary">
+                  <Table.ScrollContainer className="rounded-none border-0">
+                    <Table.Content aria-label="Status pages" className="min-w-[1120px] [&_td]:py-3">
+                      <Table.Header>
+                        <Table.Column isRowHeader>Name</Table.Column>
+                        <Table.Column>Visibility</Table.Column>
+                        <Table.Column>Scope</Table.Column>
+                        <Table.Column>Slug</Table.Column>
+                        <Table.Column>Access</Table.Column>
+                        <Table.Column>Updated</Table.Column>
+                        <Table.Column className="w-px whitespace-nowrap text-right">
+                          Actions
+                        </Table.Column>
+                      </Table.Header>
+                      <Table.Body>
+                        {filteredPages.map((page) => (
+                          <Table.Row
+                            key={page.id}
+                            id={page.id}
+                            className="hover:bg-[var(--row-hover)]"
+                          >
+                            <Table.Cell>
+                              <div>
+                                <p className="font-medium text-foreground">{page.name}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                                  {page.description || 'No description'}
+                                </p>
+                              </div>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Chip
+                                className="capitalize"
+                                color={visibilityTone(page.visibility)}
+                                size="sm"
+                                variant="soft"
+                              >
+                                {page.visibility}
+                              </Chip>
+                            </Table.Cell>
+                            <Table.Cell className="text-xs text-muted-foreground">
+                              {describeScope(page)}
+                            </Table.Cell>
+                            <Table.Cell className="font-mono text-xs text-muted-foreground dark:text-foreground">
+                              /status/{page.slug}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <div className="mt-1.5">
+                                <OwnershipBadge
+                                  ownerType={page.owner_type}
+                                  ownerOrgId={page.owner_org_id}
+                                  orgNamesById={orgNamesById}
+                                />
+                              </div>
+                            </Table.Cell>
+                            <Table.Cell className="text-xs text-muted-foreground">
+                              {timeAgo(page.updated_at)}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <div className="flex justify-end">
+                                <RowActionsMenu
+                                  label={`Open actions menu for ${page.name}`}
+                                  items={[
+                                    {
+                                      id: 'open',
+                                      label: 'Open page',
+                                      icon: <EyeIcon size={15} />,
+                                      onAction: () => window.open(`/status/${page.slug}`, '_blank'),
+                                    },
+                                    ...(canManageStatusPage(page)
+                                      ? [
+                                          {
+                                            id: 'share',
+                                            label: 'Manage access',
+                                            icon: <Shield01Icon size={15} />,
+                                            onAction: () => openShareModal(page),
                                           },
-                                        },
-                                      ]
-                                    : []),
-                                ]}
-                              />
-                            </div>
-                          </Table.Cell>
-                        </Table.Row>
-                      ))}
-                    </Table.Body>
-                  </Table.Content>
-                </Table.ScrollContainer>
-              </Table>
-            </Card.Content>
-          </Card>
-        )}
+                                          {
+                                            id: 'edit',
+                                            label: 'Edit status page',
+                                            icon: <PencilEdit01Icon size={15} />,
+                                            onAction: () => openEdit(page),
+                                          },
+                                          {
+                                            id: 'delete',
+                                            label: 'Delete status page',
+                                            icon: <Delete01Icon size={15} />,
+                                            variant: 'danger' as const,
+                                            onAction: () => {
+                                              void handleDelete(page.id);
+                                            },
+                                          },
+                                        ]
+                                      : []),
+                                  ]}
+                                />
+                              </div>
+                            </Table.Cell>
+                          </Table.Row>
+                        ))}
+                      </Table.Body>
+                    </Table.Content>
+                  </Table.ScrollContainer>
+                </Table>
+              </Card.Content>
+            </div>
+          )}
+        </Card>
       </div>
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="lg" placement="center">
-            <Modal.Dialog>
+          <Modal.Container size="xl" placement="center">
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading className="text-foreground font-semibold">
                   {editing ? 'Edit Status Page' : 'Create Status Page'}
@@ -967,7 +997,7 @@ export default function StatusPagesPage() {
                 <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
               </Modal.Header>
 
-              <Modal.Body className="min-h-0 overflow-y-auto overscroll-contain py-6">
+              <Modal.Body className="min-h-0 overflow-y-auto overscroll-contain py-5">
                 <form id="status-page-form" onSubmit={handleSubmit} className="space-y-6">
                   {formError && (
                     <Alert status="danger">
@@ -977,66 +1007,43 @@ export default function StatusPagesPage() {
                       </Alert.Content>
                     </Alert>
                   )}
-                  <div
-                    className="space-y-4"
-                    aria-label={`Step ${formStep + 1} of ${statusPageSteps.length}`}
-                  >
-                    <div className="text-xs">
-                      <span className="font-medium text-muted-foreground">
-                        Step {formStep + 1} of {statusPageSteps.length}
-                      </span>
-                    </div>
-                    <ol className="relative grid grid-cols-4">
-                      <span
-                        aria-hidden
-                        className="absolute left-[12.5%] right-[12.5%] top-3 h-px"
-                        style={{ backgroundColor: 'var(--divider)' }}
-                      />
-                      <span
-                        aria-hidden
-                        className="absolute left-[12.5%] top-3 h-0.5"
-                        style={{
-                          width: `${(formStep / (statusPageSteps.length - 1)) * 75}%`,
-                          backgroundColor: 'var(--primary)',
-                        }}
-                      />
+                  <nav aria-label="Status page setup" className="border-b pb-4">
+                    <ol className="flex items-center gap-2">
                       {statusPageSteps.map((step, index) => (
-                        <li key={step} className="relative min-w-0 text-center">
+                        <li
+                          key={step}
+                          aria-current={index === formStep ? 'step' : undefined}
+                          className={`flex min-w-0 items-center gap-2 ${index === statusPageSteps.length - 1 ? '' : 'flex-1'}`}
+                        >
                           <span
-                            className={`mx-auto flex size-6 items-center justify-center rounded-full border-2 text-xs font-semibold ${index > formStep ? 'border-border bg-surface text-muted-foreground' : ''}`}
-                            style={
-                              index < formStep
-                                ? {
-                                    borderColor: 'var(--primary)',
-                                    backgroundColor: 'var(--primary)',
-                                    color: 'white',
-                                  }
-                                : index === formStep
-                                  ? { borderColor: 'var(--primary)', color: 'var(--primary)' }
-                                  : undefined
-                            }
+                            className={`flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-medium ${index <= formStep ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-muted/30 text-muted-foreground'}`}
                           >
-                            {index < formStep ? (
-                              <Tick02Icon size={14} strokeWidth={2.5} aria-hidden />
-                            ) : (
-                              index + 1
-                            )}
+                            {index < formStep ? <Tick02Icon size={14} aria-hidden /> : index + 1}
                           </span>
                           <span
-                            className={`mt-1 block truncate text-xs ${index === formStep ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+                            className={`sr-only truncate text-xs sm:not-sr-only ${index === formStep ? 'font-medium text-foreground' : 'text-muted-foreground'}`}
                           >
                             {step}
                           </span>
+                          {index < statusPageSteps.length - 1 ? (
+                            <span
+                              aria-hidden
+                              className={`h-px min-w-3 flex-1 ${index < formStep ? 'bg-primary' : 'bg-border'}`}
+                            />
+                          ) : null}
                         </li>
                       ))}
                     </ol>
-                  </div>
+                  </nav>
                   {formStep === 0 && (
                     <>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                         <div className="space-y-1.5">
-                          <Label className={fieldLabelCls}>Name</Label>
+                          <Label htmlFor="status-page-field-1" className={fieldLabelCls}>
+                            Name
+                          </Label>
                           <Input
+                            id="status-page-field-1"
                             className={`${fieldCls} ${detailsErrors.name ? ' border-danger' : ''}`}
                             placeholder="Production Containers"
                             value={name}
@@ -1054,8 +1061,11 @@ export default function StatusPagesPage() {
                           )}
                         </div>
                         <div className="space-y-1.5">
-                          <Label className={fieldLabelCls}>Slug</Label>
+                          <Label htmlFor="status-page-field-2" className={fieldLabelCls}>
+                            Slug
+                          </Label>
                           <Input
+                            id="status-page-field-2"
                             className={`${fieldCls} ${detailsErrors.slug ? ' border-danger' : ''}`}
                             placeholder="production-containers"
                             value={slug}
@@ -1074,8 +1084,11 @@ export default function StatusPagesPage() {
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className={fieldLabelCls}>Description</Label>
+                        <Label htmlFor="status-page-field-3" className={fieldLabelCls}>
+                          Description
+                        </Label>
                         <TextArea
+                          id="status-page-field-3"
                           className={textareaCls + ' '}
                           placeholder="Share current security and scan freshness for externally visible workloads."
                           value={description}
@@ -1126,8 +1139,11 @@ export default function StatusPagesPage() {
                           </Select.Popover>
                         </Select>
                         <div className="space-y-1.5">
-                          <Label className={fieldLabelCls}>Stale After Hours</Label>
+                          <Label htmlFor="status-page-field-4" className={fieldLabelCls}>
+                            Stale after (hours)
+                          </Label>
                           <Input
+                            id="status-page-field-4"
                             className={`${fieldCls} ${detailsErrors.staleAfterHours ? ' border-danger' : ''}`}
                             value={staleAfterHours}
                             onChange={(event) => {
@@ -1192,15 +1208,15 @@ export default function StatusPagesPage() {
                             <Radio
                               key={mode}
                               value={mode}
-                              className="group relative flex h-full min-h-28 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-secondary data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
+                              className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-border bg-transparent p-4 transition-colors hover:bg-accent/50 data-[selected]:border-primary data-[selected]:bg-accent/50"
                             >
                               <Radio.Control className="absolute right-3 top-3">
                                 <Radio.Indicator />
                               </Radio.Control>
                               <Radio.Content className="flex min-w-0 flex-col items-start gap-1 pr-7">
-                                <Label className="block text-sm font-semibold text-foreground">
+                                <span className="block text-sm font-semibold text-foreground">
                                   {title}
-                                </Label>
+                                </span>
                                 <Description className="mt-1 block break-words text-xs leading-5 text-muted-foreground">
                                   {detail}
                                 </Description>
@@ -1231,15 +1247,15 @@ export default function StatusPagesPage() {
                                 <Radio
                                   key={mode}
                                   value={mode}
-                                  className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-secondary data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
+                                  className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-border bg-transparent p-4 transition-colors hover:bg-accent/50 data-[selected]:border-primary data-[selected]:bg-accent/50"
                                 >
                                   <Radio.Control className="absolute right-3 top-3">
                                     <Radio.Indicator />
                                   </Radio.Control>
                                   <Radio.Content className="flex min-w-0 flex-col items-start gap-1 pr-7">
-                                    <Label className="block text-sm font-semibold text-foreground">
+                                    <span className="block text-sm font-semibold text-foreground">
                                       {title}
-                                    </Label>
+                                    </span>
                                     <Description className="mt-1 block break-words text-xs leading-5 text-muted-foreground">
                                       {detail}
                                     </Description>
@@ -1312,7 +1328,7 @@ export default function StatusPagesPage() {
                                 variant="secondary"
                                 className="w-full gap-0 bg-surface transition-colors data-[selected=true]:bg-primary/5"
                               >
-                                <Checkbox.Content className="flex w-full min-w-0 items-start justify-start gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary">
+                                <Checkbox.Content className="flex w-full min-w-0 items-start justify-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/50">
                                   <Checkbox.Control className="mt-0.5">
                                     <Checkbox.Indicator />
                                   </Checkbox.Control>
@@ -1352,7 +1368,7 @@ export default function StatusPagesPage() {
                         const isPickingImages = gitImageSelectionEnabled[repositoryId] ?? false;
 
                         return (
-                          <Card key={repositoryId} className="space-y-3 bg-surface-secondary p-4">
+                          <Card key={repositoryId} className="gap-3 rounded-lg border p-4">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
                                 <p className="text-sm font-semibold text-foreground">
@@ -1425,7 +1441,7 @@ export default function StatusPagesPage() {
                                       variant="secondary"
                                       className="w-full bg-surface"
                                     >
-                                      <Checkbox.Content className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left hover:bg-secondary">
+                                      <Checkbox.Content className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left hover:bg-accent/50">
                                         <Checkbox.Control>
                                           <Checkbox.Indicator />
                                         </Checkbox.Control>
@@ -1470,8 +1486,9 @@ export default function StatusPagesPage() {
                         </Card>
                       ) : (
                         <div className="w-full">
-                          <Card
-                            className={`space-y-3 bg-surface-secondary p-4${imageScopeMode !== 'exact' ? ' hidden' : ''}`}
+                          <section
+                            className={`space-y-4${imageScopeMode !== 'exact' ? ' hidden' : ''}`}
+                            aria-label="Select image tags"
                           >
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
@@ -1487,140 +1504,82 @@ export default function StatusPagesPage() {
                               </Chip>
                             </div>
 
-                            <Input
-                              className={`${fieldCls} font-mono`}
-                              placeholder="Filter by image, tag, or status"
+                            <SearchField
+                              aria-label="Filter image tags"
                               value={targetQuery}
-                              onChange={(event) => setTargetQuery(event.target.value)}
-                            />
-
-                            <Card className="overflow-hidden">
+                              onChange={setTargetQuery}
+                            >
+                              <SearchField.Group>
+                                <SearchField.SearchIcon />
+                                <SearchField.Input placeholder="Search image, tag, or status…" />
+                                <SearchField.ClearButton />
+                              </SearchField.Group>
+                            </SearchField>
+                            <div className="overflow-hidden rounded-lg border">
                               {loadingOptions ? (
-                                <p className="p-4 text-sm text-muted-foreground">Loading image tags…</p>
+                                <p className="p-6 text-sm text-muted-foreground">
+                                  Loading image tags…
+                                </p>
                               ) : filteredTargetOptions.length === 0 ? (
-                                <p className="px-4 py-8 text-sm text-muted-foreground">
+                                <p className="p-6 text-sm text-muted-foreground">
                                   {targetQuery.trim()
-                                    ? 'No image tags match the current filter.'
-                                    : 'No tracked image tags are available yet.'}
+                                    ? 'No image tags match this search.'
+                                    : 'No tracked image tags available.'}
                                 </p>
                               ) : (
-                                <div className="max-h-80 overflow-y-auto divide-y">
-                                  {filteredTargetOptions.map((option) => {
-                                    const isSelected = selectedTargetKeys.has(option.id);
-                                    return (
-                                      <label
-                                        key={option.id}
-                                        className="flex items-start gap-3 p-3 cursor-pointer transition-colors"
-                                        style={
-                                          isSelected
-                                            ? {
-                                                background:
-                                                  'color-mix(in srgb, var(--primary) 9%, transparent)',
-                                              }
-                                            : undefined
-                                        }
-                                      >
-                                        <span
-                                          className="relative mt-1 flex size-4 shrink-0 items-center justify-center rounded border transition-colors"
-                                          style={
-                                            isSelected
-                                              ? {
-                                                  borderColor: 'var(--primary)',
-                                                  background: 'var(--primary)',
-                                                }
-                                              : { borderColor: 'rgba(113,113,122,0.4)' }
-                                          }
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            checked={isSelected}
-                                            className="absolute inset-0 cursor-pointer opacity-0"
-                                            onChange={(e) => {
-                                              const checked = e.target.checked;
-                                              setSelectedTargetKeys((current) => {
-                                                const next = new Set(current);
-                                                if (checked) {
-                                                  next.add(option.id);
-                                                } else {
-                                                  next.delete(option.id);
-                                                }
-                                                return next;
-                                              });
-                                            }}
-                                          />
-                                          {isSelected && (
-                                            <svg
-                                              className="size-3 text-white pointer-events-none"
-                                              viewBox="0 0 12 12"
-                                              fill="none"
-                                            >
-                                              <path
-                                                d="M2.5 6l2.5 2.5 4.5-5"
-                                                stroke="currentColor"
-                                                strokeWidth="1.5"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                              />
-                                            </svg>
-                                          )}
-                                        </span>
-
-                                        <span className="min-w-0 flex-1 text-left">
-                                          <div className="flex flex-wrap items-center gap-2">
-                                            <p className="font-mono text-sm break-all text-foreground">
-                                              {option.label}
-                                            </p>
-                                            <span
-                                              className="rounded-full px-2 py-0.5 text-xs font-semibold capitalize"
-                                              style={
-                                                option.latest_status === 'failed'
-                                                  ? {
-                                                      background: 'rgba(239,68,68,0.12)',
-                                                      color: '#f87171',
-                                                    }
-                                                  : option.latest_status === 'completed'
-                                                    ? {
-                                                        background: 'rgba(34,197,94,0.12)',
-                                                        color: '#4ade80',
-                                                      }
-                                                    : {
-                                                        background: 'rgba(59,130,246,0.12)',
-                                                        color: '#93c5fd',
-                                                      }
-                                              }
-                                            >
-                                              {option.latest_status}
-                                            </span>
-                                          </div>
-                                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                            <span>Seen {timeAgo(option.observed_at)}</span>
-                                            <span
-                                              className="rounded-full px-2 py-0.5 text-xs font-semibold"
-                                              style={{
-                                                background: 'rgba(239,68,68,0.1)',
-                                                color: '#f87171',
-                                              }}
-                                            >
-                                              C {option.critical_count}
-                                            </span>
-                                            <span
-                                              className="rounded-full px-2 py-0.5 text-xs font-semibold"
-                                              style={{
-                                                background: 'rgba(249,115,22,0.1)',
-                                                color: '#fb923c',
-                                              }}
-                                            >
-                                              H {option.high_count}
-                                            </span>
-                                          </div>
-                                        </span>
-                                      </label>
-                                    );
-                                  })}
+                                <div className="max-h-80 divide-y overflow-y-auto">
+                                  {filteredTargetOptions.map((option) => (
+                                    <Checkbox
+                                      key={option.id}
+                                      isSelected={selectedTargetKeys.has(option.id)}
+                                      onChange={(checked) =>
+                                        setSelectedTargetKeys((current) => {
+                                          const next = new Set(current);
+                                          if (checked) next.add(option.id);
+                                          else next.delete(option.id);
+                                          return next;
+                                        })
+                                      }
+                                      className="flex w-full items-start gap-3 rounded-none px-4 py-3 hover:bg-accent/40 data-[selected]:bg-accent/50"
+                                    >
+                                      <Checkbox.Control className="mt-0.5 shrink-0">
+                                        <Checkbox.Indicator />
+                                      </Checkbox.Control>
+                                      <div className="min-w-0 flex-1 space-y-2">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <span className="break-all font-mono text-sm">
+                                            {option.label}
+                                          </span>
+                                          <Chip
+                                            size="sm"
+                                            variant="soft"
+                                            color={
+                                              option.latest_status === 'failed'
+                                                ? 'danger'
+                                                : option.latest_status === 'completed'
+                                                  ? 'success'
+                                                  : 'default'
+                                            }
+                                          >
+                                            {option.latest_status}
+                                          </Chip>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                          <span>Seen {timeAgo(option.observed_at)}</span>
+                                          <span className="text-destructive">
+                                            {option.critical_count} critical
+                                          </span>
+                                          <span className="text-warning-foreground">
+                                            {option.high_count} high
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </Checkbox>
+                                  ))}
                                 </div>
                               )}
-                            </Card>
-                          </Card>
+                            </div>
+                          </section>
 
                           <Card
                             className={`space-y-3 bg-surface-secondary p-4${imageScopeMode !== 'pattern' ? ' hidden' : ''}`}
@@ -1664,9 +1623,7 @@ export default function StatusPagesPage() {
 
                             <Card>
                               <div className="flex items-center justify-between gap-3">
-                                <p className="text-sm font-medium text-foreground">
-                                  Preview
-                                </p>
+                                <p className="text-sm font-medium text-foreground">Preview</p>
                                 <Chip color="accent" variant="soft">
                                   {regexMatchedOptions.length} matching
                                 </Chip>
@@ -1718,169 +1675,129 @@ export default function StatusPagesPage() {
 
                   {formStep === 3 && (
                     <>
-                      <Card className="bg-surface-secondary p-4">
-                        <p className="text-base font-semibold text-foreground">Ready to publish?</p>
-                        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-                          <div>
-                            <dt className="text-muted-foreground">Visibility</dt>
-                            <dd className="mt-1 font-medium capitalize">{visibility}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Freshness</dt>
-                            <dd className="mt-1 font-medium">{staleAfterHours || 72} hours</dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Git sources</dt>
-                            <dd className="mt-1 font-medium">
-                              {includesGitSources
-                                ? selectedGitRepositoryIds.length
-                                : 'Not included'}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Image scope</dt>
-                            <dd className="mt-1 font-medium">
-                              {includesImageScope
-                                ? imageScopeMode === 'all'
-                                  ? 'All tracked tags'
-                                  : imageScopeMode === 'exact'
-                                    ? `${selectedTargets.length} selected tags`
-                                    : `${imagePatterns.length} regex patterns`
-                                : 'Not included'}
-                            </dd>
-                          </div>
-                        </dl>
-                      </Card>
-                      <p className="text-xs text-muted-foreground">
-                        Choose one or more exact `image:tag` entries, add regex include patterns, or
-                        enable “Include all image tags”.
-                      </p>
-
-                      {includesImageScope && imageScopeMode !== 'all' && (
-                        <Card className="bg-surface-secondary">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">
-                                Publish Scope
-                              </p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {selectedTargets.length} exact tag
-                                {selectedTargets.length === 1 ? '' : 's'} and {imagePatterns.length}{' '}
-                                regex pattern{imagePatterns.length === 1 ? '' : 's'} configured.
-                              </p>
-                            </div>
-                          </div>
-
-                          {selectedTargets.length > 0 && (
-                            <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
-                              <div className="flex flex-wrap gap-2">
-                                {selectedTargets.slice(0, 12).map((target) => (
-                                  <Chip
-                                    key={`${target.image_name}:${target.image_tag}`}
-                                    color="accent"
-                                    variant="soft"
-                                  >
-                                    {target.image_name}:{target.image_tag}
-                                  </Chip>
-                                ))}
-                                {selectedTargets.length > 12 && (
-                                  <span
-                                    className="rounded-full px-2.5 py-1 text-xs font-semibold text-muted-foreground"
-                                    style={{
-                                      background: 'var(--status-pill-bg)',
-                                      border: '1px solid var(--surface-border)',
-                                    }}
-                                  >
-                                    +{selectedTargets.length - 12} more exact tags
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {imagePatterns.length > 0 && (
-                            <div className="max-h-24 overflow-y-auto [overflow-anchor:none]">
-                              <div className="flex flex-wrap gap-2">
-                                {imagePatterns.map((pattern) => (
-                                  <span
-                                    key={pattern}
-                                    className="rounded-full px-2.5 py-1 text-xs font-mono"
-                                    style={{
-                                      background: 'rgba(59,130,246,0.12)',
-                                      border: '1px solid rgba(59,130,246,0.2)',
-                                      color: '#93c5fd',
-                                    }}
-                                  >
-                                    {pattern}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {selectedTargets.length === 0 && imagePatterns.length === 0 && (
-                            <p className="text-xs leading-5 text-muted-foreground">
-                              Selections and regex matches will appear here without changing the
-                              modal height.
-                            </p>
-                          )}
-                        </Card>
-                      )}
-
-                      {includesImageScope &&
-                        imageScopeMode !== 'all' &&
-                        !loadingOptions &&
-                        !scopeIsValid && (
-                          <p className="text-xs text-destructive">
-                            Select at least one exact image tag or add a regex include pattern.
+                      <section className="space-y-4" aria-label="Review status page">
+                        <div>
+                          <h3 className="text-sm font-semibold">Review status page</h3>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Confirm the audience and published scope before saving.
                           </p>
-                        )}
-
-                      <div className="grid grid-cols-1 p-2 md:grid-cols-2 gap-4 items-start">
-                        <div className="space-y-1.5">
-                          <Label className={fieldLabelCls}>Active Banner Title (optional)</Label>
-                          <Input
-                            className={fieldCls + ' '}
-                            value={updateTitle}
-                            onChange={(event) => setUpdateTitle(event.target.value)}
-                            placeholder="Database refresh in progress"
-                          />
                         </div>
-                        <Select
-                          value={updateLevel}
-                          onChange={(value) =>
-                            setUpdateLevel(String(value) as (typeof updateLevelOptions)[number])
-                          }
-                          className="w-full"
-                          placeholder="Select a banner level"
-                        >
-                          <Label className={fieldLabelCls}>Banner Level</Label>
-                          <Select.Trigger className={selectTriggerCls + ' '}>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox>
-                              {updateLevelOptions.map((option) => (
-                                <ListBox.Item id={option} key={option} textValue={option}>
-                                  {option}
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
+                        <dl className="divide-y rounded-lg border text-sm">
+                          {[
+                            ['Name', name],
+                            [
+                              'Visibility',
+                              visibilityOptions.find((option) => option.id === visibility)?.label ??
+                                visibility,
+                            ],
+                            ['Freshness', `${staleAfterHours || 72} hours`],
+                            [
+                              'Git sources',
+                              includesGitSources
+                                ? `${selectedGitRepositoryIds.length} repositories`
+                                : 'Not included',
+                            ],
+                            [
+                              'Image scope',
+                              includesImageScope
+                                ? imageScopeMode === 'all'
+                                  ? 'All tracked image tags'
+                                  : imageScopeMode === 'pattern'
+                                    ? `${imagePatterns.length} patterns`
+                                    : `${selectedTargets.length} selected tags`
+                                : 'Not included',
+                            ],
+                          ].map(([label, value]) => (
+                            <div
+                              key={label}
+                              className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 px-4 py-3 sm:grid-cols-[10rem_minmax(0,1fr)]"
+                            >
+                              <dt className="text-muted-foreground">{label}</dt>
+                              <dd className="break-words font-medium">{value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        {includesImageScope && imageScopeMode !== 'all' ? (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Included image scope
+                            </p>
+                            <ul className="max-h-36 space-y-1 overflow-y-auto rounded-lg border px-4 py-3 font-mono text-xs">
+                              {selectedTargets.map((target) => (
+                                <li
+                                  key={`${target.image_name}:${target.image_tag}`}
+                                  className="break-all"
+                                >
+                                  {target.image_name}:{target.image_tag}
+                                </li>
                               ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
-                      </div>
+                              {imagePatterns.map((pattern) => (
+                                <li key={pattern} className="break-all">
+                                  Pattern: {pattern}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                      </section>
+                      <details className="rounded-lg border">
+                        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+                          Optional status banner{updateTitle.trim() ? ` · ${updateTitle}` : ''}
+                        </summary>
+                        <div className="space-y-4 border-t p-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="status-page-field-5" className={fieldLabelCls}>
+                                Active Banner Title (optional)
+                              </Label>
+                              <Input
+                                id="status-page-field-5"
+                                className={fieldCls + ' '}
+                                value={updateTitle}
+                                onChange={(event) => setUpdateTitle(event.target.value)}
+                                placeholder="Database refresh in progress"
+                              />
+                            </div>
+                            <Select
+                              value={updateLevel}
+                              onChange={(value) =>
+                                setUpdateLevel(String(value) as (typeof updateLevelOptions)[number])
+                              }
+                              className="w-full"
+                              placeholder="Select a banner level"
+                            >
+                              <Label className={fieldLabelCls}>Banner Level</Label>
+                              <Select.Trigger className={selectTriggerCls + ' '}>
+                                <Select.Value />
+                                <Select.Indicator />
+                              </Select.Trigger>
+                              <Select.Popover>
+                                <ListBox>
+                                  {updateLevelOptions.map((option) => (
+                                    <ListBox.Item id={option} key={option} textValue={option}>
+                                      {option}
+                                      <ListBox.ItemIndicator />
+                                    </ListBox.Item>
+                                  ))}
+                                </ListBox>
+                              </Select.Popover>
+                            </Select>
+                          </div>
 
-                      <div className="space-y-1.5 p-2">
-                        <Label className={fieldLabelCls}>Active Banner Message</Label>
-                        <TextArea
-                          className={textareaCls + ' '}
-                          value={updateBody}
-                          onChange={(event) => setUpdateBody(event.target.value)}
-                          placeholder="We are re-scanning images after a registry credential rotation. Short-lived stale states are expected."
-                        />
-                      </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="status-page-field-6" className={fieldLabelCls}>
+                              Active banner message
+                            </Label>
+                            <TextArea
+                              id="status-page-field-6"
+                              className={textareaCls + ' '}
+                              value={updateBody}
+                              onChange={(event) => setUpdateBody(event.target.value)}
+                              placeholder="We are re-scanning images after a registry credential rotation. Short-lived stale states are expected."
+                            />
+                          </div>
+                        </div>
+                      </details>
                     </>
                   )}
                 </form>
@@ -1890,12 +1807,7 @@ export default function StatusPagesPage() {
                 className="flex items-center justify-between gap-3 px-6 py-4"
                 style={{ borderTop: '1px solid var(--border-subtle)' }}
               >
-                <Button
-                  type="button"
-                  variant="tertiary"
-                  className=""
-                  onPress={modal.close}
-                >
+                <Button type="button" variant="tertiary" className="" onPress={modal.close}>
                   Cancel
                 </Button>
                 <div className="flex items-center gap-2">
@@ -1911,6 +1823,7 @@ export default function StatusPagesPage() {
                   ) : null}
                   {formStep < statusPageSteps.length - 1 ? (
                     <Button
+                      key="continue-step"
                       type="button"
                       isDisabled={!canAdvanceStatusPageStep}
                       onPress={() => void advanceStatusPageStep()}
@@ -1919,6 +1832,7 @@ export default function StatusPagesPage() {
                     </Button>
                   ) : (
                     <Button
+                      key="save-status-page"
                       type="submit"
                       form="status-page-form"
                       isDisabled={
@@ -1943,7 +1857,7 @@ export default function StatusPagesPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading className="text-foreground font-semibold">
                   Manage Status Page Access
@@ -1958,10 +1872,8 @@ export default function StatusPagesPage() {
                   </Alert>
                 )}
                 {shareTarget ? (
-                  <Card className="py-3 bg-surface-secondary">
-                    <p className="text-sm font-medium text-foreground">
-                      {shareTarget.name}
-                    </p>
+                  <Card className="gap-2 rounded-lg border bg-muted/30 p-3">
+                    <p className="text-sm font-medium text-foreground">{shareTarget.name}</p>
                     <p className="mt-1 text-xs text-muted-foreground font-mono">
                       /status/{shareTarget.slug}
                     </p>
@@ -1977,9 +1889,7 @@ export default function StatusPagesPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Current access
-                    </h3>
+                    <h3 className="text-sm font-semibold text-foreground">Current access</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Organizations listed here can open and manage this status page.
                     </p>
@@ -1995,19 +1905,19 @@ export default function StatusPagesPage() {
                       {shares.map((share) => (
                         <Card
                           key={share.org_id}
-                          className="flex flex-col items-start justify-between gap-3 px-4 py-3 bg-surface-secondary"
+                          className="flex flex-row flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
                         >
                           <div>
-                            <p className="text-sm font-medium text-foreground">
-                              {share.org_name}
-                            </p>
+                            <p className="text-sm font-medium text-foreground">{share.org_name}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
                               {share.is_owner ? 'Owner workspace' : 'Shared access'}
                             </p>
                           </div>
                           <div>
                             {share.is_owner ? (
-                              <span className="text-xs font-medium text-muted-foreground">Locked</span>
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Locked
+                              </span>
                             ) : (
                               <Button
                                 onClick={() => {
@@ -2028,9 +1938,7 @@ export default function StatusPagesPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Grant access
-                    </h3>
+                    <h3 className="text-sm font-semibold text-foreground">Grant access</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Share this status page with another organization you manage.
                     </p>
@@ -2046,9 +1954,7 @@ export default function StatusPagesPage() {
                         value={shareOrgId}
                         onChange={(value) => setShareOrgId(String(value))}
                       >
-                        <Select.Trigger
-                          className={`${fieldInputClassName} flex-1 `}
-                        >
+                        <Select.Trigger className={`${fieldInputClassName} flex-1 `}>
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -2098,6 +2004,6 @@ export default function StatusPagesPage() {
         </Modal.Backdrop>
       </Modal>
       {dialog}
-    </div>
+    </PageContainer>
   );
 }

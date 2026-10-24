@@ -1,7 +1,13 @@
 'use client';
 
 // Base shimmer block
-export function Skeleton({ className = '', style }: { className?: string; style?: React.CSSProperties }) {
+export function Skeleton({
+  className = '',
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return <div className={`skeleton ${className}`} style={style} />;
 }
 
@@ -63,8 +69,13 @@ export function DashboardBriefingMetricSkeleton() {
 
 export function StatCardSkeleton() {
   return (
-    <div aria-hidden className="flex h-full min-w-0 flex-col rounded-xl border border-border bg-secondary/40 p-1">
-      <div className="flex min-h-8 items-center px-2 py-1"><Skeleton className="h-4 w-28 rounded" /></div>
+    <div
+      aria-hidden
+      className="flex h-full min-w-0 flex-col rounded-xl border border-border bg-secondary/40 p-1"
+    >
+      <div className="flex min-h-8 items-center px-2 py-1">
+        <Skeleton className="h-4 w-28 rounded" />
+      </div>
       <div className="flex min-h-17 flex-1 flex-col justify-center rounded-lg border border-border bg-card px-3 py-2">
         <Skeleton className="h-7 w-20 rounded" />
         <Skeleton className="mt-1 h-3 w-36 max-w-full rounded" />
@@ -92,8 +103,14 @@ export function RecentScanRowSkeleton() {
 
 export function ChartSkeleton() {
   return (
-    <div className="rounded-xl p-5"
-      style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)', boxShadow: 'var(--surface-shadow)' }}>
+    <div
+      className="rounded-xl p-5"
+      style={{
+        background: 'var(--surface-bg)',
+        border: '1px solid var(--surface-border)',
+        boxShadow: 'var(--surface-shadow)',
+      }}
+    >
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <Skeleton className="size-9 rounded-xl" />
@@ -115,41 +132,34 @@ export function ChartSkeleton() {
 
 export function DashboardLoadingSkeleton() {
   return (
-    <div className="p-6 space-y-4">
-      <DashboardFocusCardSkeleton />
-
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <DashboardBriefingMetricSkeleton />
-        <DashboardBriefingMetricSkeleton />
-        <DashboardBriefingMetricSkeleton />
-        <DashboardBriefingMetricSkeleton />
-        <DashboardBriefingMetricSkeleton />
-        <DashboardBriefingMetricSkeleton />
+    <div
+      aria-label="Loading dashboard"
+      className="mx-auto w-full max-w-[1800px] space-y-4 p-4 md:p-5"
+    >
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+        {Array.from({ length: 5 }, (_, index) => (
+          <div key={index} className="space-y-3 rounded-xl border border-border p-4">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-8 w-16" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+        ))}
       </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.55fr)]">
-        <ChartSkeleton />
-        <div
-          className="flex min-h-[240px] flex-col rounded-xl p-5"
-          style={{
-            background: 'var(--surface-bg)',
-            border: '1px solid var(--surface-border)',
-            boxShadow: 'var(--surface-shadow)',
-          }}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-2">
-              <Skeleton className="h-6 w-28 rounded-lg" />
-              <Skeleton className="h-4 w-44 rounded" />
-            </div>
-            <Skeleton className="h-4 w-16 rounded" />
-          </div>
-          <Skeleton className="mt-4 h-4 w-32 rounded" />
-          <div className="mt-4 flex-1">
-            <Skeleton className="h-full min-h-[152px] w-full rounded-xl" />
-          </div>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
+        <div className="space-y-3 rounded-xl border border-border p-4">
+          <Skeleton className="h-5 w-32" />
+          {Array.from({ length: 6 }, (_, index) => (
+            <Skeleton key={index} className="h-12 w-full" />
+          ))}
+        </div>
+        <div className="space-y-3 rounded-xl border border-border p-4">
+          <Skeleton className="h-5 w-24" />
+          {Array.from({ length: 5 }, (_, index) => (
+            <Skeleton key={index} className="h-14 w-full" />
+          ))}
         </div>
       </div>
+      <ChartSkeleton />
     </div>
   );
 }
@@ -183,7 +193,9 @@ export function TableRowSkeleton({ cols = 5 }: { cols?: number }) {
     <tr>
       {Array.from({ length: cols }).map((_, i) => (
         <td key={i} className="px-4 py-3.5">
-          <Skeleton className={`h-4 rounded ${i === 0 ? 'w-40' : i === cols - 1 ? 'w-16' : 'w-24'}`} />
+          <Skeleton
+            className={`h-4 rounded ${i === 0 ? 'w-40' : i === cols - 1 ? 'w-16' : 'w-24'}`}
+          />
         </td>
       ))}
     </tr>
@@ -201,18 +213,27 @@ export function ScanDetailSkeleton() {
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="rounded-xl p-4"
-            style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
+          <div
+            key={i}
+            className="rounded-xl p-4"
+            style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
+          >
             <Skeleton className="h-3 w-14 rounded mb-2" />
             <Skeleton className="h-7 w-10 rounded" />
           </div>
         ))}
       </div>
-      <div className="rounded-xl p-5"
-        style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}>
+      <div
+        className="rounded-xl p-5"
+        style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
+      >
         <div className="space-y-2.5">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className={`h-12 w-full rounded-xl ${i > 0 ? 'opacity-70' : ''}`} style={{ opacity: 1 - i * 0.12 }} />
+            <Skeleton
+              key={i}
+              className={`h-12 w-full rounded-xl ${i > 0 ? 'opacity-70' : ''}`}
+              style={{ opacity: 1 - i * 0.12 }}
+            />
           ))}
         </div>
       </div>

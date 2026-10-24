@@ -8,3 +8,11 @@ The Helm workflow renders a chart, extracts images from Kubernetes workloads, an
 Use the public Helm scan page for an exploratory scan, or use an authenticated workspace when the resulting evidence, policy verdicts, and ownership should be retained.
 
 For repository-based Helm and Kustomize layouts, use [GitOps discovery](/scan-and-analyze/gitops).
+
+## Public chart scans
+
+Open `/public/scan/helm` and enter a public HTTP Helm repository or an `oci://` chart reference. HTTP repositories also require a chart name. The version is optional; for OCI sources, an explicit version overrides the tag in the reference.
+
+Choose **Extract images**, review the image references, and edit or deselect images before scanning. Choose a platform or leave automatic detection enabled, then start the selected scans.
+
+Recent runs are stored on the current device. Open a run to see aggregate findings and the latest attempt for each image. Use the status tabs and search to find images by name, tag, or source. Open an image for its vulnerability details, retry an individual failed scan, or use **Re-scan chart** to extract the chart again and create a new run.

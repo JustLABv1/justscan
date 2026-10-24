@@ -16,6 +16,7 @@ import {
 import { FormAlert, StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { fieldSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { StatCard } from '@/components/ui/stat-card';
 import { PageTitle } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
@@ -507,22 +508,14 @@ function ScanOverviewMetric({
   active?: boolean;
 }) {
   return (
-    <Button
-      variant="outline"
-      aria-pressed={onPress ? active : undefined}
+    <StatCard
+      label={label}
+      value={value.toLocaleString()}
+      icon={icon}
+      tone={tone}
       onPress={onPress}
-      className={`h-auto min-w-0 flex-col items-start gap-2 p-3 whitespace-normal ${active ? 'border-primary bg-muted' : ''}`}
-    >
-      <span className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground">
-        {label}
-        {icon}
-      </span>
-      <span
-        className={`text-2xl font-semibold tabular-nums ${tone === 'danger' && value > 0 ? 'text-destructive' : tone === 'success' ? 'text-success-foreground' : 'text-foreground'}`}
-      >
-        {value.toLocaleString()}
-      </span>
-    </Button>
+      selected={onPress ? active : undefined}
+    />
   );
 }
 
@@ -2528,7 +2521,7 @@ function ScanDetailContent() {
               {blockedPolicyDetails.summary}
             </p>
           ) : null}
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <ScanOverviewMetric
               label="Vulnerabilities"
               value={scanVulnerabilityTotal}

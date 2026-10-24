@@ -10,6 +10,7 @@ import {
   Search,
   X,
   Check,
+  Minus,
   Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -410,20 +411,39 @@ export const SearchField = Object.assign(
   }
 );
 
+const CheckboxIndeterminateContext = React.createContext(false);
+function CheckboxIndicator() {
+  const indeterminate = React.useContext(CheckboxIndeterminateContext);
+  const Icon = indeterminate ? Minus : Check;
+  return (
+    <Icon
+      aria-hidden
+      className="size-3 opacity-0 group-data-[selected]:opacity-100 group-data-[indeterminate]:opacity-100"
+    />
+  );
+}
+
 export const Checkbox = Object.assign(
   function Checkbox({
     className,
     variant: _variant,
+    children,
     ...props
   }: React.ComponentProps<typeof Aria.Checkbox> & { variant?: string }) {
     return (
       <Aria.Checkbox
         className={cn(
-          'group inline-flex cursor-pointer items-center gap-2 text-sm disabled:opacity-50',
+          'group inline-flex cursor-pointer items-center gap-2 text-sm data-[disabled]:cursor-default data-[disabled]:opacity-50',
           typeof className === 'string' && className
         )}
         {...props}
-      />
+      >
+        {(state) => (
+          <CheckboxIndeterminateContext.Provider value={state.isIndeterminate}>
+            {typeof children === 'function' ? children(state) : children}
+          </CheckboxIndeterminateContext.Provider>
+        )}
+      </Aria.Checkbox>
     );
   },
   {
@@ -438,9 +458,7 @@ export const Checkbox = Object.assign(
         {children}
       </span>
     ),
-    Indicator: () => (
-      <Check className="size-3 opacity-0 group-data-[selected]:opacity-100 group-data-[indeterminate]:opacity-100" />
-    ),
+    Indicator: CheckboxIndicator,
     Content: part('span', 'inline-flex items-center gap-2'),
   }
 );

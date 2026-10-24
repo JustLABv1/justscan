@@ -1,5 +1,7 @@
 'use client';
 
+import { ChevronDown, ChevronRight } from 'lucide-react';
+
 import type { SBOMComponent, SBOMComponentDetail, SBOMGraph, Vulnerability } from '@/lib/api';
 import {
   Background,
@@ -815,24 +817,29 @@ function TreeNode({
   const nextAncestry = new Set(ancestry).add(component.id);
   return (
     <div style={{ marginLeft: depth ? 20 : 0 }}>
-      <div className="flex min-h-9 items-center gap-2 rounded-lg px-2 hover:bg-surface-secondary">
-        <Button
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          isDisabled={!childNodes.length}
-          aria-label={
-            expanded ? `Collapse ${packageLabel(component)}` : `Expand ${packageLabel(component)}`
-          }
-          onPress={() => setExpanded(!expanded)}
-        >
-          {childNodes.length ? (expanded ? '−' : '+') : '·'}
-        </Button>
+      <div className="flex min-h-9 min-w-0 items-center gap-2 rounded-md px-2 hover:bg-muted/40">
+        {childNodes.length > 0 ? (
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-expanded={expanded}
+            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${packageLabel(component)}`}
+            onPress={() => setExpanded(!expanded)}
+          >
+            {expanded ? (
+              <ChevronDown className="size-3.5" />
+            ) : (
+              <ChevronRight className="size-3.5" />
+            )}
+          </Button>
+        ) : (
+          <span aria-hidden className="size-6 shrink-0" />
+        )}
         <Button
           size="sm"
           variant="ghost"
           onPress={() => void onOpen(component)}
-          className="min-w-0 justify-start"
+          className="h-auto min-w-0 flex-1 shrink justify-start gap-2 whitespace-normal px-0 py-1 text-left"
         >
           <span className="truncate">{packageLabel(component)}</span>
           <span className="font-mono text-xs text-muted-foreground">{component.version}</span>

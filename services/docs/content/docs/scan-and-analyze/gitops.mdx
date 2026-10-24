@@ -5,6 +5,8 @@ description: Discover container images from registry references, GitLab CI, Kust
 
 Connect a Git repository in the application, validate access, then run discovery before scheduling scans. A dry run renders the configured deployment inputs and discovers images only; it never queues scans.
 
+The **Git repositories** inventory shows scheduling and last-run information alongside each repository. Search by name, clone URL, or Git ref, or filter scheduled and manual repositories. Open a repository to use **Images** for scan selection, **Discovery review** for ambiguous deployment markers, **Source tree** for file-to-image relationships, **Configuration** for repository connection details, Helm sources, and ignored paths, and **Activity** for recent runs. Registry override patterns are expandable within the discovered-images panel; image search and bulk scan controls remain visible. In **Source tree**, expand a file to inspect image references, then select a reference to open its filtered **Images** view.
+
 ## Discovery modes
 
 - **Registry image references (recommended)** searches repository text and configuration for concrete references under one selected configured registry or custom host/path. It discovers files automatically; no CI, manifest, or other path list is required.
@@ -12,6 +14,8 @@ Connect a Git repository in the application, validate access, then run discovery
 - **Kustomize entrypoints** renders only operator-selected repository paths.
 - **Plain Kubernetes manifests** extracts images from `containers`, `initContainers`, and `ephemeralContainers`.
 - **GitLab CI configuration** extracts global, default, and job-level `image` and `services` declarations. Add one or more relative CI config paths, or leave the paths empty to use `.gitlab-ci.yml` or `.gitlab-ci.yaml` at the repository root.
+
+In **Discovery review**, search source paths or detected types and switch between pending and handled markers. Click a pending path or its checkbox to select it. **Select visible** affects only rows matching the current search; **Clear** removes all pending selection. Use **Ignore selected** for paths that are not deployment inputs, or **Resolve** to classify a marker. Selection is retained when searching, and the toolbar indicates when selected markers are outside the visible results.
 
 After a dry run, review discovered images, select the ones that should be tracked, then create scans. Excluded images remain visible in the review so their deployment context is retained without scheduling future scans.
 

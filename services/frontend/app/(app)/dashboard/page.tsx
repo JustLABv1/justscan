@@ -1,4 +1,5 @@
 'use client';
+import { StatCard } from '@/components/ui/stat-card';
 import { DashboardImageReview } from '@/components/dashboard/dashboard-image-review';
 import {
   Activity,
@@ -179,20 +180,7 @@ function DashboardMetric({
   icon: ReactNode;
   onPress: () => void;
 }) {
-  return (
-    <Button
-      variant="ghost"
-      onPress={onPress}
-      className="h-auto min-w-0 flex-col items-start gap-3 whitespace-normal rounded-lg border border-border/60 p-3 text-left"
-    >
-      <span className="flex items-center gap-2 text-sm">
-        <span className="flex size-8 items-center justify-center rounded-lg bg-muted">{icon}</span>
-        {label}
-      </span>
-      <span className="block text-2xl font-semibold tabular-nums">{value}</span>
-      <span className="-mt-2 text-xs font-normal text-muted-foreground">{hint}</span>
-    </Button>
-  );
+  return <StatCard {...{ label, value, hint, icon, onPress }} />;
 }
 
 export default function DashboardPage() {
@@ -641,7 +629,7 @@ export default function DashboardPage() {
         />
       ) : null}
 
-      <Card className="grid grid-cols-2 gap-1 p-1 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         <DashboardMetric
           label="Scan runs"
           value={stats.total_scans.toLocaleString()}
@@ -693,7 +681,7 @@ export default function DashboardPage() {
           icon={<Radar className="size-4 text-success-foreground" />}
           onPress={() => openDrilldown('watchlist')}
         />
-      </Card>
+      </div>
 
       <section
         className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]"

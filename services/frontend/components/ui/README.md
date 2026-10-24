@@ -46,3 +46,7 @@ Do not overwrite an existing shared component without migrating its consumers.
 Use `pnpm lint`, `pnpm exec tsc --noEmit`, and `pnpm build` after changing shared
 controls. Also exercise selection, keyboard focus, and nested overlays in the
 browser; a type check cannot verify these behaviors.
+
+### Statistic cards
+
+Use `StatCard` for page-level metrics across the dashboard, scans, repository pages, and admin views. It owns the single surface, padding, label/value typography, optional icon/hint, and semantic tone. Use `onPress` for navigation or filtering and `selected` for a toggled filter; do not restyle a `Button` or `Card` to create another metric design. Use `StatCardSkeleton` while loading. Legacy `variant` values remain source-compatible and share the same appearance. Metric grids use `gap-3`; only the column count changes with the page layout.

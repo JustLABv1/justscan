@@ -71,12 +71,10 @@ export function StatCardSkeleton() {
   return (
     <div
       aria-hidden
-      className="flex h-full min-w-0 flex-col rounded-xl border border-border bg-secondary/40 p-1"
+      className="flex h-full min-h-26 min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-3"
     >
-      <div className="flex min-h-8 items-center px-2 py-1">
-        <Skeleton className="h-4 w-28 rounded" />
-      </div>
-      <div className="flex min-h-17 flex-1 flex-col justify-center rounded-lg border border-border bg-card px-3 py-2">
+      <Skeleton className="h-5 w-28 max-w-full rounded" />
+      <div className="flex flex-1 flex-col justify-start">
         <Skeleton className="h-7 w-20 rounded" />
         <Skeleton className="mt-1 h-3 w-36 max-w-full rounded" />
       </div>
@@ -136,13 +134,9 @@ export function DashboardLoadingSkeleton() {
       aria-label="Loading dashboard"
       className="mx-auto w-full max-w-[1800px] space-y-4 p-4 md:p-5"
     >
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         {Array.from({ length: 5 }, (_, index) => (
-          <div key={index} className="space-y-3 rounded-xl border border-border p-4">
-            <Skeleton className="h-5 w-24" />
-            <Skeleton className="h-8 w-16" />
-            <Skeleton className="h-3 w-28" />
-          </div>
+          <StatCardSkeleton key={index} />
         ))}
       </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">

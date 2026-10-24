@@ -330,17 +330,33 @@ const body = (props: React.ComponentProps<'div'>) => <div {...props} />;
 const disclosure = ({ className, ...props }: Aria.DisclosureProps) => (
   <Aria.Disclosure className={cn('group', typeof className === 'string' && className)} {...props} />
 );
-const indicator = ({ children, className }: { children?: React.ReactNode; className?: string }) => (
-  <span className={cn('ml-auto transition-transform group-data-[expanded]:rotate-180', className)}>
-    {children ?? <Indicator />}
-  </span>
-);
+const DisclosureIndicator = ({
+  children,
+  className,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+}) => {
+  const state = React.useContext(Aria.DisclosureStateContext);
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'ml-auto flex size-4 shrink-0 items-center justify-center text-muted-foreground transition-transform duration-150 motion-reduce:transition-none',
+        state?.isExpanded && 'rotate-180',
+        className
+      )}
+    >
+      {children ?? <Indicator />}
+    </span>
+  );
+};
 export const Disclosure = Object.assign(disclosure, {
   Heading: heading,
   Trigger: trigger,
   Content: Aria.DisclosurePanel,
   Body: body,
-  Indicator: indicator,
+  Indicator: DisclosureIndicator,
 });
 export const Accordion = Object.assign(
   function Accordion({
@@ -356,6 +372,6 @@ export const Accordion = Object.assign(
     Trigger: trigger,
     Panel: Aria.DisclosurePanel,
     Body: body,
-    Indicator: indicator,
+    Indicator: DisclosureIndicator,
   }
 );

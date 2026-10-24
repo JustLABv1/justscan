@@ -9,6 +9,7 @@ import {
   ListBox,
   Modal,
   Select,
+  SearchField,
   Switch,
   Table,
   TextArea,
@@ -29,6 +30,7 @@ import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
+import { StatCard } from '@/components/ui/stat-card';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -45,7 +47,7 @@ import {
   type Registry,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { timeAgo } from '@/lib/time';
+import { fullDate, timeAgo } from '@/lib/time';
 
 type Draft = Required<
   Pick<
@@ -90,6 +92,8 @@ const initialDraft: Draft = {
 };
 
 export default function GitRepositoriesPage() {
+  const [query, setQuery] = useState('');
+  const [scheduleFilter, setScheduleFilter] = useState('all');
   const [repositories, setRepositories] = useState<GitRepository[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -303,6 +307,15 @@ export default function GitRepositoriesPage() {
     }
   }
 
+  const visibleRepositories = repositories.filter(
+    (repository) =>
+      `${repository.name} ${repository.clone_url} ${repository.ref}`
+        .toLowerCase()
+        .includes(query.trim().toLowerCase()) &&
+      (scheduleFilter === 'all' ||
+        (scheduleFilter === 'scheduled' ? repository.enabled : !repository.enabled))
+  );
+
   return (
     <PageContainer>
       <PageTitle
@@ -315,6 +328,31 @@ export default function GitRepositoriesPage() {
           </Button>
         }
       />
+      {!loading && !loadError ? (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[
+            { label: 'Connected repositories', value: repositories.length },
+            {
+              label: 'Scheduled',
+              value: repositories.filter((repository) => repository.enabled).length,
+            },
+            {
+              label: 'Manual only',
+              value: repositories.filter((repository) => !repository.enabled).length,
+            },
+            {
+              label: 'Never run',
+              value: repositories.filter((repository) => !repository.last_run_at).length,
+            },
+          ].map((metric) => (
+            <StatCard
+              key={metric.label}
+              label={metric.label}
+              value={metric.value.toLocaleString()}
+            />
+          ))}
+        </div>
+      ) : null}
       <LoadableCollectionState
         emptyState={
           <EmptyState
@@ -337,109 +375,199 @@ export default function GitRepositoriesPage() {
         }
         retry={() => void load()}
       >
-        <Table>
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Git repositories" className="md:min-w-[720px]">
-              <Table.Header>
-                <Table.Column isRowHeader>Repository</Table.Column>
-                <Table.Column className="hidden md:table-cell">Ref</Table.Column>
-                <Table.Column className="hidden md:table-cell">Schedule</Table.Column>
-                <Table.Column className="hidden md:table-cell">Last run</Table.Column>
-                <Table.Column>Actions</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {repositories.map((repository) => (
-                  <Table.Row key={repository.id}>
-                    <Table.Cell>
-                      <div className="space-y-1">
-                        <Link
-                          className="font-medium text-foreground hover:text-primary"
-                          href={`/git-repositories/${repository.id}`}
-                        >
-                          {repository.name}
-                        </Link>
-                        <p className="max-w-sm truncate text-xs text-muted-foreground">
-                          {repository.clone_url}
-                        </p>
-                        <div className="flex flex-wrap gap-x-2 text-xs text-muted-foreground md:hidden">
-                          <span>{repository.ref}</span>
-                          <span aria-hidden="true">·</span>
-                          <span>{repository.enabled ? repository.schedule : 'Manual'}</span>
-                          <span aria-hidden="true">·</span>
-                          <span>
-                            {repository.last_run_at ? timeAgo(repository.last_run_at) : 'Never'}
-                          </span>
+        <Card className="overflow-hidden gap-0 py-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-4">
+            <div>
+              <h2 className="text-sm font-medium">Repository inventory</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                GitOps image discovery and scheduled scanning
+              </p>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {visibleRepositories.length} of {repositories.length}
+            </span>
+          </div>
+          <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row">
+            <SearchField
+              aria-label="Search repositories"
+              value={query}
+              onChange={setQuery}
+              className="min-w-0 flex-1"
+            >
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input placeholder="Search names, URLs, or refs…" />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
+            <Select
+              aria-label="Repository schedule filter"
+              value={scheduleFilter}
+              onChange={(value) => setScheduleFilter(String(value))}
+              className="sm:w-44"
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="all">All repositories</ListBox.Item>
+                  <ListBox.Item id="scheduled">Scheduled</ListBox.Item>
+                  <ListBox.Item id="manual">Manual only</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+          <Table>
+            <Table.ScrollContainer className="rounded-none border-0">
+              <Table.Content
+                aria-label="Git repositories"
+                className="min-w-[960px] table-fixed [&_td]:px-4 [&_td]:py-3 [&_th]:px-4"
+              >
+                <Table.Header>
+                  <Table.Column isRowHeader className="w-auto">
+                    Repository
+                  </Table.Column>
+                  <Table.Column className="w-[160px]">Ref / discovery</Table.Column>
+                  <Table.Column className="w-[200px]">Schedule</Table.Column>
+                  <Table.Column className="w-[144px]">Last run</Table.Column>
+                  <Table.Column className="w-16">
+                    <span className="sr-only">Actions</span>
+                  </Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {visibleRepositories.length === 0 ? (
+                    <Table.Row id="no-matches">
+                      <Table.Cell colSpan={5}>
+                        <div className="space-y-2 py-12 text-center">
+                          <p className="text-sm font-medium">No matching repositories</p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onPress={() => {
+                              setQuery('');
+                              setScheduleFilter('all');
+                            }}
+                          >
+                            Clear filters
+                          </Button>
                         </div>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell className="hidden md:table-cell">
-                      <code className="text-xs">{repository.ref}</code>
-                    </Table.Cell>
-                    <Table.Cell className="hidden md:table-cell">
-                      <Chip
-                        color={repository.enabled ? 'success' : 'default'}
-                        size="sm"
-                        variant="soft"
-                      >
-                        {repository.enabled ? repository.schedule : 'Manual'}
-                      </Chip>
-                    </Table.Cell>
-                    <Table.Cell className="hidden md:table-cell">
-                      {repository.last_run_at ? timeAgo(repository.last_run_at) : 'Never'}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <RowActionsMenu
-                        label={`Actions for ${repository.name}`}
-                        items={[
+                      </Table.Cell>
+                    </Table.Row>
+                  ) : null}
+                  {visibleRepositories.map((repository) => (
+                    <Table.Row key={repository.id} id={repository.id}>
+                      <Table.Cell>
+                        <div className="space-y-1">
+                          <Link
+                            className="block truncate rounded-sm font-medium text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                            href={`/git-repositories/${repository.id}`}
+                          >
+                            {repository.name}
+                          </Link>
+                          <p className="truncate font-mono text-xs text-muted-foreground">
+                            {repository.clone_url}
+                          </p>
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <code className="block truncate text-xs" title={repository.ref}>
+                          {repository.ref}
+                        </code>
+                        <p className="mt-1 text-xs text-muted-foreground">
                           {
-                            id: 'run',
-                            label: 'Run scan',
-                            icon: <PlayIcon size={15} />,
-                            pending: pendingAction === `run:${repository.id}:changed`,
-                            disabled:
-                              pendingAction !== null &&
-                              pendingAction !== `run:${repository.id}:changed`,
-                            onAction: () => void run(repository),
-                          },
-                          {
-                            id: 'full',
-                            label: 'Full rescan',
-                            icon: <PlayIcon size={15} />,
-                            pending: pendingAction === `run:${repository.id}:all`,
-                            disabled:
-                              pendingAction !== null &&
-                              pendingAction !== `run:${repository.id}:all`,
-                            onAction: () => void run(repository, 'all'),
-                          },
-                          {
-                            id: 'edit',
-                            label: 'Edit settings',
-                            icon: <PencilEdit01Icon size={15} />,
-                            onAction: () => edit(repository),
-                          },
-                          {
-                            id: 'delete',
-                            label: 'Delete',
-                            icon: <Delete01Icon size={15} />,
-                            variant: 'danger',
-                            pending: pendingAction === `delete:${repository.id}`,
-                            disabled:
-                              pendingAction !== null && pendingAction !== `delete:${repository.id}`,
-                            onAction: () => void remove(repository),
-                          },
-                        ]}
-                      />
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+                            {
+                              auto: 'Automatic',
+                              kustomize: 'Kustomize',
+                              manifests: 'Manifests',
+                              registry: 'Registry references',
+                              gitlab_ci: 'GitLab CI',
+                            }[repository.discovery_mode]
+                          }
+                        </p>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Chip
+                          color={repository.enabled ? 'success' : 'default'}
+                          size="sm"
+                          variant="soft"
+                        >
+                          {repository.enabled ? repository.schedule : 'Manual'}
+                        </Chip>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {repository.enabled ? repository.timezone : 'On demand'}
+                        </p>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span
+                          className="text-xs text-muted-foreground"
+                          title={
+                            repository.last_run_at ? fullDate(repository.last_run_at) : undefined
+                          }
+                        >
+                          {repository.last_run_at ? timeAgo(repository.last_run_at) : 'Not run yet'}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <RowActionsMenu
+                          label={`Actions for ${repository.name}`}
+                          items={[
+                            {
+                              id: 'run',
+                              label: 'Run scan',
+                              icon: <PlayIcon size={15} />,
+                              pending: pendingAction === `run:${repository.id}:changed`,
+                              disabled:
+                                pendingAction !== null &&
+                                pendingAction !== `run:${repository.id}:changed`,
+                              onAction: () => void run(repository),
+                            },
+                            {
+                              id: 'full',
+                              label: 'Full rescan',
+                              icon: <PlayIcon size={15} />,
+                              pending: pendingAction === `run:${repository.id}:all`,
+                              disabled:
+                                pendingAction !== null &&
+                                pendingAction !== `run:${repository.id}:all`,
+                              onAction: () => void run(repository, 'all'),
+                            },
+                            {
+                              id: 'edit',
+                              label: 'Edit settings',
+                              icon: <PencilEdit01Icon size={15} />,
+                              onAction: () => edit(repository),
+                            },
+                            {
+                              id: 'delete',
+                              label: 'Delete',
+                              icon: <Delete01Icon size={15} />,
+                              variant: 'danger',
+                              pending: pendingAction === `delete:${repository.id}`,
+                              disabled:
+                                pendingAction !== null &&
+                                pendingAction !== `delete:${repository.id}`,
+                              onAction: () => void remove(repository),
+                            },
+                          ]}
+                        />
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </Card>
       </LoadableCollectionState>
       {dialog}
       <Modal>
-        <Modal.Backdrop isDismissable={false} isOpen={overlay.isOpen} onOpenChange={overlay.setOpen}>
+        <Modal.Backdrop
+          isDismissable={false}
+          isOpen={overlay.isOpen}
+          onOpenChange={overlay.setOpen}
+        >
           <Modal.Container size="lg">
             <Modal.Dialog>
               <Modal.CloseTrigger />

@@ -404,7 +404,7 @@ function ScansPageContent() {
           </AlertDialog.Container>
         </AlertDialog.Backdrop>
       </AlertDialog>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-2">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3">
         <Metric
           description="Current filter scope"
           icon={<Shield01Icon size={16} />}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Card } from '@/components/ui';
+import { Card, Button } from '@/components/ui';
 import { Badge } from '@/components/ui/badge';
 import { Minus, TrendingDown, TrendingUp } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -33,6 +33,7 @@ interface StatCardProps {
   iconTone?: SurfaceIconTone;
   iconVariant?: SurfaceIconVariant;
   tone?: StatCardTone;
+  /** @deprecated All statistics use the same compact surface. */
   variant?: StatCardVariant;
   aside?: ReactNode;
   className?: string;
@@ -43,6 +44,8 @@ interface StatCardProps {
   hintClassName?: string;
   hintStyle?: CSSProperties;
   inline?: boolean;
+  onPress?: () => void;
+  selected?: boolean;
 }
 
 export function StatCard({
@@ -52,9 +55,9 @@ export function StatCard({
   trend,
   icon,
   iconTone,
-  iconVariant,
+  iconVariant: _iconVariant,
   tone = 'default',
-  variant = 'compact',
+  variant: _variant,
   aside,
   className,
   style,
@@ -64,12 +67,17 @@ export function StatCard({
   hintClassName,
   hintStyle,
   inline,
+  onPress,
+  selected,
 }: StatCardProps) {
   const labelId = useId();
-  const resolvedTone = tone === 'neutral' ? 'default' : tone;
+  const valueId = `${labelId}-value`;
+  const hintId = `${labelId}-hint`;
+  const resolvedTone =
+    tone === 'neutral' || ((value === 0 || value === '0') && tone === 'danger') ? 'default' : tone;
   const valueTones: Record<SurfaceIconTone, string> = {
     default: 'text-foreground',
-    danger: 'text-danger',
+    danger: 'text-destructive',
     warning: 'text-warning-foreground',
     success: 'text-success-foreground',
     accent: 'text-primary',
@@ -82,40 +90,29 @@ export function StatCard({
       aria-labelledby={labelId}
       data-slot="stat-card"
       className={cn(
-        'flex h-full min-w-0 flex-col gap-0 rounded-xl bg-muted/50 p-1 shadow-none ring-0 border border-border',
+        'relative flex h-full min-h-26 min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-3 shadow-none ring-0',
+        selected && 'border-primary bg-muted/40',
         className
       )}
       style={style}
     >
-      <div className="flex min-h-8 min-w-0 items-center justify-between gap-2 px-2 py-1">
-        <p id={labelId} className="min-w-0 text-sm font-medium leading-5 text-foreground">
+      <div className="flex min-h-5 min-w-0 items-center justify-between gap-2">
+        <p id={labelId} className="min-w-0 text-xs font-medium leading-5 text-muted-foreground">
           {label}
         </p>
-        {icon ? (
-          <SurfaceIcon
-            icon={icon}
-            tone={iconTone ?? resolvedTone}
-            size="xs"
-            variant={iconVariant}
-          />
-        ) : null}
+        {icon ? <SurfaceIcon icon={icon} tone={iconTone ?? resolvedTone} size="xs" /> : null}
       </div>
       <Card.Content
-        className={cn(
-          'flex min-w-0 flex-1 flex-col justify-center rounded-lg border border-border bg-card px-3 py-2',
-          variant === 'stacked' ? 'min-h-20 py-3' : 'min-h-17',
-          contentClassName
-        )}
+        className={cn('flex min-w-0 flex-1 flex-col justify-start p-0', contentClassName)}
       >
         <div className="flex min-w-0 items-start justify-between gap-4">
           <div
+            id={valueId}
             className={cn(
               'min-w-0 break-words text-left font-semibold tabular-nums tracking-tight',
-              valueClassName ??
-                cn(
-                  variant === 'stacked' ? 'text-2xl leading-tight' : 'text-2xl leading-tight',
-                  valueTones[resolvedTone]
-                )
+              valueTones[resolvedTone],
+              'text-2xl leading-tight',
+              valueClassName
             )}
             style={valueStyle}
           >
@@ -152,6 +149,7 @@ export function StatCard({
         ) : null}
         {hint != null ? (
           <div
+            id={hintId}
             className={cn(
               trend ? 'mt-1.5' : 'mt-1',
               'min-w-0 text-xs leading-4',
@@ -164,6 +162,16 @@ export function StatCard({
           </div>
         ) : null}
       </Card.Content>
+      {onPress ? (
+        <Button
+          variant="ghost"
+          onPress={onPress}
+          aria-labelledby={`${labelId} ${valueId}`}
+          aria-describedby={hint != null ? hintId : undefined}
+          aria-pressed={selected}
+          className="absolute inset-0 z-10 h-full w-full rounded-xl p-0 hover:bg-foreground/[0.025] focus-visible:ring-3 focus-visible:ring-ring/50"
+        />
+      ) : null}
     </Card>
   );
 }

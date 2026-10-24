@@ -1,7 +1,7 @@
 'use client';
 import { Button, Modal, useOverlayState } from '@/components/ui';
 import { AlertCircleIcon } from 'hugeicons-react';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 
 interface ConfirmOptions {
   title: string;
@@ -29,57 +29,63 @@ function ConfirmDialogUI({
   onCancel,
   loading,
 }: ConfirmDialogUIProps) {
-  const iconColor =
+  const descriptionId = useId();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const iconTone =
     variant === 'danger'
-      ? 'var(--color-danger-soft-foreground)'
+      ? 'bg-destructive/10 text-destructive'
       : variant === 'warning'
-        ? 'var(--color-warning-soft-foreground)'
-        : 'var(--color-accent-soft-foreground)';
-  const iconBg =
-    variant === 'danger'
-      ? 'var(--color-danger-soft-hover)'
-      : variant === 'warning'
-        ? 'var(--color-warning-soft-hover)'
-        : 'var(--color-accent-soft-hover)';
-  const iconBorder =
-    variant === 'danger'
-      ? 'var(--color-danger-soft-foreground)'
-      : variant === 'warning'
-        ? 'var(--color-warning-soft-foreground)'
-        : 'var(--color-accent-soft-foreground)';
-  const variantStyle =
-    variant === 'danger' ? 'danger' : variant === 'warning' ? 'tertiary' : 'primary';
+        ? 'bg-warning/10 text-warning-foreground'
+        : 'bg-muted text-muted-foreground';
 
   return (
     <Modal state={state}>
       <Modal.Backdrop isDismissable={false}>
-        <Modal.Container size="sm" placement="center">
-          <Modal.Dialog>
-            <Modal.Body className="px-6 pb-2">
-              <div className="flex flex-col items-center text-center gap-4">
-                <div
-                  className="size-12 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: iconBg, border: `1px solid ${iconBorder}` }}
+        <Modal.Container size="sm" className="sm:max-w-md" placement="center">
+          <Modal.Dialog
+            role="alertdialog"
+            aria-describedby={descriptionId}
+            className="overflow-hidden"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              cancelRef.current?.focus();
+            }}
+            onEscapeKeyDown={() => {
+              if (!loading) onCancel();
+            }}
+          >
+            <Modal.Body className="p-6">
+              <div className="flex items-start gap-3">
+                <span
+                  aria-hidden
+                  className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${iconTone}`}
                 >
-                  <AlertCircleIcon size={22} color={iconColor} />
-                </div>
-                <div className="space-y-1.5">
-                  <Modal.Heading className="text-base font-semibold text-foreground">
+                  <AlertCircleIcon size={18} />
+                </span>
+                <div className="min-w-0 space-y-2">
+                  <Modal.Heading className="text-base font-semibold leading-6">
                     {title}
                   </Modal.Heading>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{message}</p>
+                  <p id={descriptionId} className="text-sm leading-6 text-muted-foreground">
+                    {message}
+                  </p>
                 </div>
               </div>
             </Modal.Body>
-            <Modal.Footer>
-              <Button className="flex-1" onPress={onCancel} variant="tertiary" isDisabled={loading}>
+            <Modal.Footer className="flex flex-row justify-end gap-2 border-t bg-muted/20 px-6 py-4">
+              <Button ref={cancelRef} onPress={onCancel} variant="outline" isDisabled={loading}>
                 {cancelLabel}
               </Button>
               <Button
-                className={`flex-1 ${variant === 'warning' ? 'bg-warning-soft-foreground' : ''}`}
                 isDisabled={loading}
+                isPending={loading}
                 onPress={onConfirm}
-                variant={variantStyle}
+                variant={variant === 'danger' ? 'destructive' : 'primary'}
+                className={
+                  variant === 'danger'
+                    ? 'bg-destructive text-white hover:bg-destructive/90 dark:bg-destructive dark:hover:bg-destructive/90'
+                    : undefined
+                }
               >
                 {confirmLabel}
               </Button>

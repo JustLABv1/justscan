@@ -9,6 +9,8 @@ The home dashboard separates historical scan totals from current image posture. 
 
 Use **Scan outcomes** to review activity over a selected time range and open scans for a day or outcome. **Risk trend** shows historical average findings per finalized scan. **Monitoring coverage** reports the share of enabled watchlist images scanned within seven days; an unavailable percentage is shown as a dash rather than zero. No trend changes or scores are estimated when evidence is missing.
 
+On the watchlist, summary cards open the corresponding monitoring focus. Use the **All**, **Attention**, **CVE confirmation**, **Stale**, **Never scanned**, and **Healthy** tabs to narrow the list, then search by image or tag and filter active or paused schedules. Schedule and coverage columns remain available through horizontal scrolling on smaller screens.
+
 Use **Scan now** on an item when a scheduled run cannot wait. Select multiple writable items to scan, enable, pause, or remove them together. Use **Set schedule** to apply one cron schedule and timezone to all selected items. **Add multiple** accepts one image reference per line or pasted/imported `.txt` and `.csv` content; a CSV header is ignored, duplicate references are skipped, and an omitted tag defaults to `latest`.
 
 Configure an NVD API key when you need faster CVE enrichment. The cache lifetime is controlled by `vuln_kb.cache_days`. CVE Intelligence monitors changes to retained findings through the NVD change feed instead of refreshing every Vulnerability KB entry on every run. Review notification delivery and freshness expectations before treating a missed watchlist scan as an incident.

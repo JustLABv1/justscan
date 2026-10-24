@@ -8,7 +8,7 @@ import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useClientAuth } from '@/hooks/use-client-auth';
@@ -370,7 +370,7 @@ export default function TagsPage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <PageContainer>
       <PageHeader
         title="Tags"
         description={
@@ -408,7 +408,7 @@ export default function TagsPage() {
         retry={() => void load()}
         loadingFallback={
           <Card className="space-y-4" role="status">
-            <SearchField name="tags-search" variant="secondary" className="w-full xl:max-w-md">
+            <SearchField name="tags-search" variant="secondary" className="w-full">
               <SearchField.Group>
                 <SearchField.SearchIcon />
                 <SearchField.Input
@@ -442,27 +442,33 @@ export default function TagsPage() {
           </Card>
         }
       >
-        <Card className="space-y-4">
-          <SearchField name="tags-search" variant="secondary" className="w-full xl:max-w-md">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                aria-label="Filter tags"
-                placeholder="Filter tags by name, owner, or color..."
-                value={filterQuery}
-                onChange={(event) => {
-                  setFilterQuery(event.target.value);
-                  setPage(1);
-                }}
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
+        <Card className="gap-0 overflow-hidden py-0">
+          <Card.Header className="space-y-3 border-b p-4">
+            <div className="flex items-center justify-between gap-3">
+              <Card.Title>Scan tags</Card.Title>
+              <span className="text-xs text-muted-foreground">{tags.length} tags</span>
+            </div>
+            <SearchField name="tags-search" variant="secondary" className="w-full">
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
+                  aria-label="Filter tags"
+                  placeholder="Filter tags by name, owner, or color..."
+                  value={filterQuery}
+                  onChange={(event) => {
+                    setFilterQuery(event.target.value);
+                    setPage(1);
+                  }}
+                />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
+          </Card.Header>
           <Table variant="secondary">
-            <Table.ScrollContainer>
+            <Table.ScrollContainer className="rounded-none border-0">
               <Table.Content
                 aria-label="Tags table"
-                className="min-w-[720px]"
+                className="min-w-[640px] [&_td]:py-3"
                 sortDescriptor={sortDescriptor}
                 onSortChange={setSortDescriptor}
               >
@@ -481,7 +487,7 @@ export default function TagsPage() {
                       </Table.SortableColumnHeader>
                     )}
                   </Table.Column>
-                  <Table.Column className="text-right">Actions</Table.Column>
+                  <Table.Column className="w-px whitespace-nowrap text-right">Actions</Table.Column>
                 </Table.Header>
                 <Table.Body
                   items={pagedTags}
@@ -501,7 +507,9 @@ export default function TagsPage() {
                             aria-hidden="true"
                           />
                           <span className="truncate text-sm font-medium">{tag.name}</span>
-                          <span className="font-mono text-xs text-muted-foreground">{tag.color}</span>
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {tag.color}
+                          </span>
                         </div>
                       </Table.Cell>
                       <Table.Cell>
@@ -560,7 +568,7 @@ export default function TagsPage() {
                 </Table.Body>
               </Table.Content>
             </Table.ScrollContainer>
-            <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
+            <Table.Footer className="flex flex-wrap items-center justify-between px-4 py-3 gap-3">
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 Showing {visibleTags.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
                 {Math.min(effectivePage * PAGE_SIZE, visibleTags.length)} of {visibleTags.length}
@@ -612,7 +620,7 @@ export default function TagsPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading>{editing ? 'Edit Tag' : 'New Tag'}</Modal.Heading>
                 <Modal.CloseTrigger />
@@ -626,7 +634,6 @@ export default function TagsPage() {
                     placeholder="production"
                     required
                     value={name}
-                    className="bg-surface-secondary"
                   />
                   <div className="space-y-2.5 flex flex-col">
                     <Label className="text-sm font-medium text-muted-foreground dark:text-foreground">
@@ -636,7 +643,10 @@ export default function TagsPage() {
                       value={parsedColor}
                       onChange={(nextColor) => setColor(nextColor.toString('hex'))}
                     >
-                      <ColorPicker.Trigger className="flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5">
+                      <ColorPicker.Trigger
+                        aria-label="Choose tag color"
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5"
+                      >
                         <div className="flex items-center gap-2.5">
                           <ColorSwatch size="md" />
                           <span className="text-xs font-mono text-muted-foreground">{color}</span>
@@ -705,7 +715,7 @@ export default function TagsPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading>Manage Tag Access</Modal.Heading>
                 <Modal.CloseTrigger />
@@ -725,9 +735,7 @@ export default function TagsPage() {
                             boxShadow: `0 0 8px ${shareTarget.color}88`,
                           }}
                         />
-                        <p className="text-sm font-medium text-foreground">
-                          {shareTarget.name}
-                        </p>
+                        <p className="text-sm font-medium text-foreground">{shareTarget.name}</p>
                       </div>
                       <OwnershipBadge
                         ownerType={shareTarget.owner_type}
@@ -740,9 +748,7 @@ export default function TagsPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Current access
-                    </h3>
+                    <h3 className="text-sm font-semibold text-foreground">Current access</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Organizations listed here can apply this tag to scans they manage.
                     </p>
@@ -770,7 +776,9 @@ export default function TagsPage() {
                               </p>
                             </div>
                             {share.is_owner ? (
-                              <span className="text-xs font-medium text-muted-foreground">Locked</span>
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Locked
+                              </span>
                             ) : (
                               <Button
                                 onPress={() => {
@@ -793,9 +801,7 @@ export default function TagsPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Grant access
-                    </h3>
+                    <h3 className="text-sm font-semibold text-foreground">Grant access</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Share this tag with another organization you manage.
                     </p>
@@ -863,6 +869,6 @@ export default function TagsPage() {
         </Modal.Backdrop>
       </Modal>
       {confirmDialog}
-    </div>
+    </PageContainer>
   );
 }

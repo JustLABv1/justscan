@@ -4,7 +4,7 @@ import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
   acceptOrgInvite,
@@ -198,7 +198,7 @@ export default function OrgsPage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <PageContainer>
       <PageHeader
         title="Organizations"
         description={
@@ -228,9 +228,7 @@ export default function OrgsPage() {
               <UserAdd01Icon size={20} color="#f59e0b" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-foreground">
-                Pending Invites
-              </h2>
+              <h2 className="text-sm font-semibold text-foreground">Pending Invites</h2>
               <p className="text-sm text-muted-foreground">
                 Review organization invitations tied to your account email.
               </p>
@@ -345,96 +343,101 @@ export default function OrgsPage() {
         retry={() => void load()}
       >
         <>
-          <Card className="p-3">
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-              <SearchField name="org-search" variant="secondary" className="min-w-0 flex-1">
-                <SearchField.Group>
-                  <SearchField.SearchIcon />
-                  <SearchField.Input
-                    aria-label="Search organizations"
-                    placeholder="Search organizations, descriptions, or members..."
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                  />
-                  <SearchField.ClearButton />
-                </SearchField.Group>
-              </SearchField>
-              <div className="flex flex-wrap items-center gap-2">
-                <Select
-                  aria-label="Sort organizations by"
-                  className="w-full sm:w-[180px]"
-                  value={sortByValue}
-                  variant="secondary"
-                  onChange={(value) =>
-                    setSortDescriptor((previous) => ({
-                      ...previous,
-                      column: String(value || 'name'),
-                    }))
-                  }
-                >
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id="name" textValue="Name">
-                        Name
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                      <ListBox.Item id="policies" textValue="Policies">
-                        Policies
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                      <ListBox.Item id="members" textValue="Members">
-                        Members
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                      <ListBox.Item id="updated" textValue="Updated">
-                        Updated
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-                <Select
-                  aria-label="Sort organizations direction"
-                  className="w-full sm:w-[160px]"
-                  value={sortDirectionValue}
-                  variant="secondary"
-                  onChange={(value) =>
-                    setSortDescriptor((previous) => ({
-                      ...previous,
-                      direction: value === 'desc' ? 'descending' : 'ascending',
-                    }))
-                  }
-                >
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id="asc" textValue="Ascending">
-                        Ascending
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                      <ListBox.Item id="desc" textValue="Descending">
-                        Descending
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+          <Card className="gap-0 overflow-hidden py-0">
+            <Card.Header className="space-y-3 border-b p-4">
+              <div className="flex items-center justify-between gap-3">
+                <Card.Title>Organizations</Card.Title>
+                <span className="text-xs text-muted-foreground">{orgs.length} memberships</span>
               </div>
-            </div>
-          </Card>
-          <Card className="overflow-hidden">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+                <SearchField name="org-search" variant="secondary" className="min-w-0 flex-1">
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input
+                      aria-label="Search organizations"
+                      placeholder="Search organizations, descriptions, or members..."
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                    />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select
+                    aria-label="Sort organizations by"
+                    className="w-full sm:w-[180px]"
+                    value={sortByValue}
+                    variant="secondary"
+                    onChange={(value) =>
+                      setSortDescriptor((previous) => ({
+                        ...previous,
+                        column: String(value || 'name'),
+                      }))
+                    }
+                  >
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="name" textValue="Name">
+                          Name
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item id="policies" textValue="Policies">
+                          Policies
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item id="members" textValue="Members">
+                          Members
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item id="updated" textValue="Updated">
+                          Updated
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                  <Select
+                    aria-label="Sort organizations direction"
+                    className="w-full sm:w-[160px]"
+                    value={sortDirectionValue}
+                    variant="secondary"
+                    onChange={(value) =>
+                      setSortDescriptor((previous) => ({
+                        ...previous,
+                        direction: value === 'desc' ? 'descending' : 'ascending',
+                      }))
+                    }
+                  >
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="asc" textValue="Ascending">
+                          Ascending
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item id="desc" textValue="Descending">
+                          Descending
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </div>
+              </div>
+            </Card.Header>
+
             <Table variant="secondary">
-              <Table.ScrollContainer>
+              <Table.ScrollContainer className="rounded-none border-0">
                 <Table.Content
                   aria-label="Organizations table"
-                  className="md:min-w-[900px]"
+                  className="min-w-[960px] [&_td]:py-3"
                   sortDescriptor={sortDescriptor}
                   onSortChange={setSortDescriptor}
                 >
@@ -446,28 +449,30 @@ export default function OrgsPage() {
                         </Table.SortableColumnHeader>
                       )}
                     </Table.Column>
-                    <Table.Column className="hidden md:table-cell" id="members" allowsSorting>
+                    <Table.Column className="min-w-32" id="members" allowsSorting>
                       {({ sortDirection }) => (
                         <Table.SortableColumnHeader sortDirection={sortDirection}>
                           Members
                         </Table.SortableColumnHeader>
                       )}
                     </Table.Column>
-                    <Table.Column className="hidden md:table-cell" id="policies" allowsSorting>
+                    <Table.Column className="min-w-32" id="policies" allowsSorting>
                       {({ sortDirection }) => (
                         <Table.SortableColumnHeader sortDirection={sortDirection}>
                           Policies
                         </Table.SortableColumnHeader>
                       )}
                     </Table.Column>
-                    <Table.Column className="hidden md:table-cell" id="updated" allowsSorting>
+                    <Table.Column className="min-w-32" id="updated" allowsSorting>
                       {({ sortDirection }) => (
                         <Table.SortableColumnHeader sortDirection={sortDirection}>
                           Updated
                         </Table.SortableColumnHeader>
                       )}
                     </Table.Column>
-                    <Table.Column className="text-right">Actions</Table.Column>
+                    <Table.Column className="w-px whitespace-nowrap text-right">
+                      Actions
+                    </Table.Column>
                   </Table.Header>
                   <Table.Body>
                     {sortedOrgs.length === 0 ? (
@@ -521,19 +526,19 @@ export default function OrgsPage() {
                               </div>
                             </div>
                           </Table.Cell>
-                          <Table.Cell className="hidden md:table-cell">
+                          <Table.Cell className="min-w-32">
                             <Chip variant="soft">
                               {org.member_count ?? 0}{' '}
                               {(org.member_count ?? 0) === 1 ? 'member' : 'members'}
                             </Chip>
                           </Table.Cell>
-                          <Table.Cell className="hidden md:table-cell">
+                          <Table.Cell className="min-w-32">
                             <Chip variant="soft">
                               {org.policy_count ?? 0}{' '}
                               {org.policy_count === 1 ? 'policy' : 'policies'}
                             </Chip>
                           </Table.Cell>
-                          <Table.Cell className="hidden text-xs text-muted-foreground md:table-cell">
+                          <Table.Cell className="whitespace-nowrap text-xs text-muted-foreground">
                             {formatDateOnly(org.updated_at)}
                           </Table.Cell>
                           <Table.Cell>
@@ -574,7 +579,7 @@ export default function OrgsPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading>New Organization</Modal.Heading>
                 <Modal.CloseTrigger />
@@ -590,14 +595,12 @@ export default function OrgsPage() {
                     placeholder="e.g. Production"
                     required
                     value={name}
-                    className="bg-surface-secondary"
                   />
                   <FormField
                     label="Description"
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Optional description"
                     value={description}
-                    className="bg-surface-secondary"
                   />
                 </form>
               </Modal.Body>
@@ -614,6 +617,6 @@ export default function OrgsPage() {
         </Modal.Backdrop>
       </Modal>
       {confirmDialog}
-    </div>
+    </PageContainer>
   );
 }

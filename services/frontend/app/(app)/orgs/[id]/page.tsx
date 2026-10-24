@@ -12,7 +12,7 @@ import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { fieldSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RouteLoadingState } from '@/components/route-state';
 import {
   createOrgInvite,
@@ -525,7 +525,7 @@ function OrgDetailContent() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <PageContainer>
       <PageHeader
         title={org.name}
         description={
@@ -541,6 +541,7 @@ function OrgDetailContent() {
 
       <div className="space-y-3">
         <Tabs
+          variant="primary"
           className="w-full"
           selectedKey={activeTab}
           onSelectionChange={(key) => handleTabChange(String(key) as OrgTabId)}
@@ -564,15 +565,6 @@ function OrgDetailContent() {
             </Tabs.Panel>
           ))}
         </Tabs>
-
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            {ORG_TABS.find((tab) => tab.id === activeTab)?.label}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {ORG_TABS.find((tab) => tab.id === activeTab)?.description}
-          </p>
-        </div>
       </div>
 
       <div>
@@ -659,25 +651,16 @@ function OrgDetailContent() {
       <Modal state={policyModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading>{editingPolicy ? 'Edit Policy' : 'New Policy'}</Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
               <Modal.Body className="py-5 max-h-[60vh] overflow-y-auto">
                 <form id="policy-form" onSubmit={handleSavePolicy} className="space-y-5">
-                  {policyError && (
-                    <div
-                      className="rounded-xl px-3 py-2.5 text-sm"
-                      style={{
-                        background: 'rgba(239,68,68,0.1)',
-                        border: '1px solid rgba(239,68,68,0.2)',
-                        color: '#f87171',
-                      }}
-                    >
-                      {policyError}
-                    </div>
-                  )}
+                  {policyError ? (
+                    <FormAlert title="Policy could not be saved" description={policyError} />
+                  ) : null}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium" htmlFor="policy-name">
                       Policy Name <span className="text-destructive">*</span>
@@ -935,7 +918,7 @@ function OrgDetailContent() {
       <Modal state={inviteModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading>Invite Member</Modal.Heading>
                 <Modal.CloseTrigger />
@@ -955,9 +938,7 @@ function OrgDetailContent() {
                     className="bg-surface-secondary"
                   />
                   <div className="flex flex-col gap-1">
-                    <Label className="text-sm font-medium text-muted-foreground">
-                      Role
-                    </Label>
+                    <Label className="text-sm font-medium text-muted-foreground">Role</Label>
                     <Select
                       aria-label="Invite member role"
                       value={inviteRole}
@@ -993,6 +974,6 @@ function OrgDetailContent() {
         </Modal.Backdrop>
       </Modal>
       {confirmDialog}
-    </div>
+    </PageContainer>
   );
 }

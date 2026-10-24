@@ -22,15 +22,7 @@ function SummaryMetric({
   detail: string;
   color?: 'default' | 'danger' | 'warning' | 'success';
 }) {
-  return (
-    <StatCard
-      label={label}
-      value={value}
-      hint={<Chip color={color} size="sm" variant="soft">{detail}</Chip>}
-      tone={color}
-      variant="stacked"
-    />
-  );
+  return <StatCard label={label} value={value} hint={detail} tone={color} />;
 }
 
 export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabProps) {

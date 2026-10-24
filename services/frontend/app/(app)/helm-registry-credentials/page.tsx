@@ -5,6 +5,7 @@ import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
+import { StatCard } from '@/components/ui/stat-card';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -35,6 +36,7 @@ import {
   SearchField,
   Select,
   Table,
+  Tabs,
   useOverlayState,
 } from '@/components/ui';
 import {
@@ -279,6 +281,27 @@ export default function HelmRegistryCredentialsPage() {
           </Button>
         }
       />
+      {!loading && items.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <StatCard label="Credentials" value={items.length} hint="Available in this workspace" />
+          <StatCard
+            label="OCI sources"
+            value={items.filter((item) => item.protocol === 'oci').length}
+            hint="Chart registry credentials"
+          />
+          <StatCard
+            label="HTTP sources"
+            value={items.filter((item) => item.protocol === 'http').length}
+            hint="Chart repository credentials"
+          />
+          <StatCard
+            label="Unhealthy"
+            value={items.filter((item) => item.health_status === 'unhealthy').length}
+            hint="Last recorded check"
+            tone="danger"
+          />
+        </div>
+      ) : null}
       <LoadableCollectionState
         emptyState={
           <EmptyState
@@ -305,74 +328,79 @@ export default function HelmRegistryCredentialsPage() {
           </Card>
         }
       >
-        <Card className="space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <SearchField
-              name="helm-credentials-search"
+        <Card className="gap-0 overflow-hidden py-0">
+          <Card.Header className="space-y-3 border-b p-4">
+            <Card.Title>Chart credentials</Card.Title>
+            <Tabs
+              selectedKey={protocolFilter}
+              onSelectionChange={(key) => setProtocolFilter(String(key) as 'all' | 'oci' | 'http')}
               variant="secondary"
-              className="w-full sm:max-w-sm"
             >
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  aria-label="Search Helm credentials"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search name, URL, username, or authentication..."
-                />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-            <div className="flex w-full gap-2 sm:w-auto">
-              <Select
-                aria-label="Filter Helm credentials by protocol"
-                value={protocolFilter}
-                onChange={(value) =>
-                  setProtocolFilter(value === 'oci' || value === 'http' ? value : 'all')
-                }
-                className="flex-1 sm:w-36"
+              <Tabs.ListContainer>
+                <Tabs.List aria-label="Helm credential protocol">
+                  {[
+                    { id: 'all', label: 'All protocols' },
+                    { id: 'oci', label: 'OCI' },
+                    { id: 'http', label: 'HTTP' },
+                  ].map((option) => (
+                    <Tabs.Tab id={option.id} key={option.id}>
+                      {option.label}
+                      <Tabs.Indicator />
+                    </Tabs.Tab>
+                  ))}
+                </Tabs.List>
+              </Tabs.ListContainer>
+              {['all', 'oci', 'http'].map((key) => (
+                <Tabs.Panel key={key} id={key} className="hidden" />
+              ))}
+            </Tabs>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <SearchField
+                name="helm-credentials-search"
                 variant="secondary"
+                className="min-w-0 flex-1"
               >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="all">All protocols</ListBox.Item>
-                    <ListBox.Item id="oci">OCI</ListBox.Item>
-                    <ListBox.Item id="http">HTTP</ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-              <Select
-                aria-label="Filter Helm credentials by health"
-                value={healthFilter}
-                onChange={(value) =>
-                  setHealthFilter(
-                    value === 'healthy' || value === 'unhealthy' || value === 'unknown'
-                      ? value
-                      : 'all'
-                  )
-                }
-                className="flex-1 sm:w-40"
-                variant="secondary"
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="all">All health</ListBox.Item>
-                    <ListBox.Item id="healthy">Healthy</ListBox.Item>
-                    <ListBox.Item id="unhealthy">Unhealthy</ListBox.Item>
-                    <ListBox.Item id="unknown">Unknown</ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    aria-label="Search Helm credentials"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search name, URL, username, or authentication..."
+                  />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+              <div className="flex w-full gap-2 sm:w-auto">
+                <Select
+                  aria-label="Filter Helm credentials by health"
+                  value={healthFilter}
+                  onChange={(value) =>
+                    setHealthFilter(
+                      value === 'healthy' || value === 'unhealthy' || value === 'unknown'
+                        ? value
+                        : 'all'
+                    )
+                  }
+                  className="flex-1 sm:w-40"
+                  variant="secondary"
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="all">All health</ListBox.Item>
+                      <ListBox.Item id="healthy">Healthy</ListBox.Item>
+                      <ListBox.Item id="unhealthy">Unhealthy</ListBox.Item>
+                      <ListBox.Item id="unknown">Unknown</ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </div>
             </div>
-          </div>
+          </Card.Header>
           {filteredItems.length === 0 ? (
             <EmptyState
               icon={<Key01Icon size={28} />}
@@ -389,14 +417,19 @@ export default function HelmRegistryCredentialsPage() {
             />
           ) : (
             <Table variant="secondary">
-              <Table.ScrollContainer>
-                <Table.Content aria-label="Helm registry credentials" className="md:min-w-[780px]">
+              <Table.ScrollContainer className="rounded-none border-0">
+                <Table.Content
+                  aria-label="Helm registry credentials"
+                  className="min-w-[1040px] [&_td]:py-3"
+                >
                   <Table.Header>
                     <Table.Column isRowHeader>Credential</Table.Column>
-                    <Table.Column className="hidden md:table-cell">Endpoint</Table.Column>
-                    <Table.Column className="hidden md:table-cell">Authentication</Table.Column>
-                    <Table.Column className="hidden md:table-cell">Health</Table.Column>
-                    <Table.Column className="flex justify-end">Actions</Table.Column>
+                    <Table.Column className="min-w-44">Endpoint</Table.Column>
+                    <Table.Column className="min-w-44">Authentication</Table.Column>
+                    <Table.Column className="min-w-44">Health</Table.Column>
+                    <Table.Column className="w-px whitespace-nowrap text-right">
+                      Actions
+                    </Table.Column>
                   </Table.Header>
                   <Table.Body>
                     {filteredItems.map((item) => (
@@ -407,18 +440,20 @@ export default function HelmRegistryCredentialsPage() {
                             <Chip size="sm" variant="soft">
                               {item.protocol.toUpperCase()}
                             </Chip>
-                            <p className="truncate text-xs text-muted-foreground md:hidden">{item.url}</p>
+                            <p className="truncate text-xs text-muted-foreground md:hidden">
+                              {item.url}
+                            </p>
                             <p className="text-xs capitalize text-muted-foreground md:hidden">
                               {item.auth_type.replace('_', ' ')} · {item.health_status}
                             </p>
                           </div>
                         </Table.Cell>
-                        <Table.Cell className="hidden md:table-cell">
+                        <Table.Cell className="min-w-44">
                           <p className="max-w-md break-all font-mono text-xs text-muted-foreground">
                             {item.url}
                           </p>
                         </Table.Cell>
-                        <Table.Cell className="hidden md:table-cell">
+                        <Table.Cell className="min-w-44">
                           <div className="space-y-1">
                             <p className="text-sm">{item.auth_type.replace('_', ' ')}</p>
                             {item.username ? (
@@ -426,7 +461,7 @@ export default function HelmRegistryCredentialsPage() {
                             ) : null}
                           </div>
                         </Table.Cell>
-                        <Table.Cell className="hidden md:table-cell">
+                        <Table.Cell className="min-w-44">
                           <div className="space-y-1">
                             <Chip
                               color={
@@ -442,7 +477,9 @@ export default function HelmRegistryCredentialsPage() {
                               {item.health_status}
                             </Chip>
                             {item.health_message ? (
-                              <p className="max-w-48 text-xs text-muted-foreground">{item.health_message}</p>
+                              <p className="max-w-48 text-xs text-muted-foreground">
+                                {item.health_message}
+                              </p>
                             ) : null}
                           </div>
                         </Table.Cell>
@@ -498,7 +535,7 @@ export default function HelmRegistryCredentialsPage() {
       <Modal isOpen={modal.isOpen} onOpenChange={modal.setOpen}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container>
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading>
                   {editing ? 'Edit Helm credential' : 'Add Helm credential'}
@@ -591,7 +628,7 @@ export default function HelmRegistryCredentialsPage() {
       <Modal isOpen={shareModal.isOpen} onOpenChange={shareModal.setOpen}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container>
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading>Credential access</Modal.Heading>
                 <Modal.CloseTrigger />
@@ -609,7 +646,9 @@ export default function HelmRegistryCredentialsPage() {
                     </Button>
                   </div>
                 ) : sharesLoading ? (
-                  <div className="py-8 text-center text-sm text-muted-foreground">Loading access grants…</div>
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    Loading access grants…
+                  </div>
                 ) : (
                   <>
                     <Select
@@ -642,7 +681,9 @@ export default function HelmRegistryCredentialsPage() {
                       Grant access
                     </Button>
                     {shares.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No organizations have access yet.</p>
+                      <p className="text-sm text-muted-foreground">
+                        No organizations have access yet.
+                      </p>
                     ) : (
                       shares.map((share) => (
                         <div

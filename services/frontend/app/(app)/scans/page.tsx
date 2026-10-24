@@ -1,10 +1,8 @@
 'use client';
 
+import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { ImageOverviewTable } from '@/components/scans/image-overview-table';
-import {
-  FilterDisclosureTrigger,
-  filterDisclosureBodyClassName,
-} from '@/components/ui/filter-toolbar';
+import { FilterDisclosureTrigger } from '@/components/ui/filter-toolbar';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -31,17 +29,14 @@ import {
   AlertDialog,
   Button,
   Card,
-  DateField,
-  DateRangePicker,
   Disclosure,
   Label,
   ListBox,
   Pagination,
-  RangeCalendar,
   SearchField,
   Select,
   Spinner,
-} from '@heroui/react';
+} from '@/components/ui';
 import { Clock01Icon, GitCompareIcon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -376,14 +371,14 @@ function ScansPageContent() {
                         Deleting {pendingDelete?.scan_count ?? 0} scan{' '}
                         {(pendingDelete?.scan_count ?? 0) === 1 ? 'run' : 'runs'}…
                       </p>
-                      <p className="text-sm leading-6 text-muted">
+                      <p className="text-sm leading-6 text-muted-foreground">
                         Large histories can take a little while. Keep this window open until the
                         deletion finishes.
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm leading-6 text-muted">
+                  <p className="text-sm leading-6 text-muted-foreground">
                     This removes <strong>{pendingDelete?.image_name}</strong>, including all{' '}
                     {pendingDelete?.tag_count ?? 0} tags and {pendingDelete?.scan_count ?? 0} scan
                     runs in this workspace. This cannot be undone.
@@ -409,7 +404,7 @@ function ScansPageContent() {
           </AlertDialog.Container>
         </AlertDialog.Backdrop>
       </AlertDialog>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-2">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3">
         <Metric
           description="Current filter scope"
           icon={<Shield01Icon size={16} />}
@@ -444,231 +439,6 @@ function ScansPageContent() {
           value={visibleOverview.active}
         />
       </div>
-      <Card className="p-3">
-        <Disclosure className="w-full">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-            <SearchField
-              aria-label="Search images, tags, or labels"
-              className="min-w-0 flex-1"
-              value={query}
-              onChange={(value) => updateFilters({ query: value })}
-              variant="secondary"
-            >
-              <Label className="sr-only">Search images, tags, or labels</Label>
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input placeholder="Search images, tags, or labels…" />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-            <Select
-              aria-label="Latest state"
-              className="min-w-[180px]"
-              value={status || '__all__'}
-              onChange={(value) =>
-                updateFilters({ status: value === '__all__' ? '' : String(value ?? '') })
-              }
-              variant="secondary"
-            >
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  {STATUS_OPTIONS.map((option) => (
-                    <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>
-                      {option.label}
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-            <Select
-              aria-label="Current risk"
-              className="min-w-[170px]"
-              value={critical || '__all__'}
-              onChange={(value) =>
-                updateFilters({
-                  critical: (value === '__all__'
-                    ? ''
-                    : String(value ?? '')) as ScanFilters['critical'],
-                })
-              }
-              variant="secondary"
-            >
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="__all__">Any risk</ListBox.Item>
-                  <ListBox.Item id="yes">Has critical</ListBox.Item>
-                  <ListBox.Item id="no">No critical</ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
-            <FilterDisclosureTrigger activeCount={filterCount} label="More filters" />
-          </div>
-          <Disclosure.Content>
-            <Disclosure.Body className={filterDisclosureBodyClassName}>
-              <Select
-                aria-label="Time range"
-                className="min-w-[180px] flex-1"
-                value={range || '__all__'}
-                onChange={(value) =>
-                  updateFilters({
-                    range: (value === '__all__' ? '' : String(value ?? '')) as ScanFilters['range'],
-                    date: '',
-                    dateTo: '',
-                  })
-                }
-                variant="secondary"
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="__all__">All time</ListBox.Item>
-                    {RECENT_ACTIVITY_RANGE_OPTIONS.map((option) => (
-                      <ListBox.Item key={option.id} id={option.id}>
-                        {option.label}
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-              <DateRangePicker
-                aria-label="Scan date range"
-                className="min-w-[280px] flex-1"
-                value={selectedDateRange}
-                onChange={(value) =>
-                  updateFilters({
-                    date: value?.start.toString() ?? '',
-                    dateTo: value?.end.toString() ?? '',
-                    range: '',
-                  })
-                }
-              >
-                <Label className="sr-only">Scan date range</Label>
-                <DateField.Group fullWidth variant="secondary">
-                  <DateField.Input slot="start">
-                    {(segment) => <DateField.Segment segment={segment} />}
-                  </DateField.Input>
-                  <DateRangePicker.RangeSeparator />
-                  <DateField.Input slot="end">
-                    {(segment) => <DateField.Segment segment={segment} />}
-                  </DateField.Input>
-                  <DateField.Suffix>
-                    <DateRangePicker.Trigger>
-                      <DateRangePicker.TriggerIndicator />
-                    </DateRangePicker.Trigger>
-                  </DateField.Suffix>
-                </DateField.Group>
-                <DateRangePicker.Popover>
-                  <RangeCalendar aria-label="Scan date range">
-                    <RangeCalendar.Header>
-                      <RangeCalendar.YearPickerTrigger>
-                        <RangeCalendar.YearPickerTriggerHeading />
-                        <RangeCalendar.YearPickerTriggerIndicator />
-                      </RangeCalendar.YearPickerTrigger>
-                      <RangeCalendar.NavButton slot="previous" />
-                      <RangeCalendar.NavButton slot="next" />
-                    </RangeCalendar.Header>
-                    <RangeCalendar.Grid>
-                      <RangeCalendar.GridHeader>
-                        {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
-                      </RangeCalendar.GridHeader>
-                      <RangeCalendar.GridBody>
-                        {(calendarDate) => <RangeCalendar.Cell date={calendarDate} />}
-                      </RangeCalendar.GridBody>
-                    </RangeCalendar.Grid>
-                  </RangeCalendar>
-                </DateRangePicker.Popover>
-              </DateRangePicker>
-              <Select
-                aria-label="Policy result"
-                className="min-w-[180px] flex-1"
-                value={policy || '__all__'}
-                onChange={(value) =>
-                  updateFilters({
-                    policy: (value === '__all__'
-                      ? ''
-                      : String(value ?? '')) as ScanFilters['policy'],
-                  })
-                }
-                variant="secondary"
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="__all__">Any policy result</ListBox.Item>
-                    <ListBox.Item id="fail">Policy failed</ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-              <Select
-                aria-label="CVE intelligence"
-                className="min-w-[200px] flex-1"
-                value={intelligence || '__all__'}
-                onChange={(value) =>
-                  updateFilters({
-                    intelligence: (value === '__all__'
-                      ? ''
-                      : String(value ?? '')) as ScanFilters['intelligence'],
-                  })
-                }
-                variant="secondary"
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="__all__">Any CVE intelligence</ListBox.Item>
-                    <ListBox.Item id="confirmation_pending">Confirmation pending</ListBox.Item>
-                    <ListBox.Item id="changed">Changed</ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-              <Select
-                aria-label="Sort images"
-                className="min-w-[180px] flex-1"
-                value={sort || '__default__'}
-                onChange={(value) =>
-                  updateFilters({ sort: value === '__default__' ? '' : String(value ?? '') })
-                }
-                variant="secondary"
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="__default__">Last scanned</ListBox.Item>
-                    <ListBox.Item id="risk_desc">Highest risk</ListBox.Item>
-                    <ListBox.Item id="scan_count_desc">Most scans</ListBox.Item>
-                    <ListBox.Item id="image_asc">Image name</ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-              {activeFilters ? (
-                <Button onPress={clearFilters} size="sm" variant="tertiary">
-                  Clear filters
-                </Button>
-              ) : null}
-            </Disclosure.Body>
-          </Disclosure.Content>
-        </Disclosure>
-      </Card>
       {error ? (
         <StatusAlert
           className="border-danger/40"
@@ -686,8 +456,219 @@ function ScansPageContent() {
           }
         />
       ) : null}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden gap-0 py-0">
         <ImageOverviewTable
+          toolbar={
+            <div className="border-b border-border p-3">
+              <Disclosure className="w-full">
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+                  <SearchField
+                    aria-label="Search images, tags, or labels"
+                    className="min-w-0 flex-1"
+                    value={query}
+                    onChange={(value) => updateFilters({ query: value })}
+                    variant="secondary"
+                  >
+                    <Label className="sr-only">Search images, tags, or labels</Label>
+                    <SearchField.Group>
+                      <SearchField.SearchIcon />
+                      <SearchField.Input placeholder="Search images, tags, or labels…" />
+                      <SearchField.ClearButton />
+                    </SearchField.Group>
+                  </SearchField>
+                  <Select
+                    aria-label="Latest state"
+                    className="min-w-[180px]"
+                    value={status || '__all__'}
+                    onChange={(value) =>
+                      updateFilters({ status: value === '__all__' ? '' : String(value ?? '') })
+                    }
+                    variant="secondary"
+                  >
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {STATUS_OPTIONS.map((option) => (
+                          <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>
+                            {option.label}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                  <Select
+                    aria-label="Current risk"
+                    className="min-w-[170px]"
+                    value={critical || '__all__'}
+                    onChange={(value) =>
+                      updateFilters({
+                        critical: (value === '__all__'
+                          ? ''
+                          : String(value ?? '')) as ScanFilters['critical'],
+                      })
+                    }
+                    variant="secondary"
+                  >
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="__all__">Any risk</ListBox.Item>
+                        <ListBox.Item id="yes">Has critical</ListBox.Item>
+                        <ListBox.Item id="no">No critical</ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                  <FilterDisclosureTrigger activeCount={filterCount} label="More filters" />
+                </div>
+                <Disclosure.Content>
+                  <Disclosure.Body className="mt-3 grid grid-cols-1 gap-3 border-t border-border pt-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <Select
+                      aria-label="Time range"
+                      className="min-w-0 w-full"
+                      value={range || '__all__'}
+                      onChange={(value) =>
+                        updateFilters({
+                          range: (value === '__all__'
+                            ? ''
+                            : String(value ?? '')) as ScanFilters['range'],
+                          date: '',
+                          dateTo: '',
+                        })
+                      }
+                      variant="secondary"
+                    >
+                      <Label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Time window
+                      </Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__all__">All time</ListBox.Item>
+                          {RECENT_ACTIVITY_RANGE_OPTIONS.map((option) => (
+                            <ListBox.Item key={option.id} id={option.id}>
+                              {option.label}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <div className="min-w-0 sm:col-span-2">
+                      <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Custom date range
+                      </span>
+                      <DateRangeFilter
+                        value={selectedDateRange}
+                        onChange={(value) =>
+                          updateFilters({
+                            date: value?.start.toString() ?? '',
+                            dateTo: value?.end.toString() ?? '',
+                            range: '',
+                          })
+                        }
+                      />
+                    </div>
+                    <Select
+                      aria-label="Policy result"
+                      className="min-w-0 w-full"
+                      value={policy || '__all__'}
+                      onChange={(value) =>
+                        updateFilters({
+                          policy: (value === '__all__'
+                            ? ''
+                            : String(value ?? '')) as ScanFilters['policy'],
+                        })
+                      }
+                      variant="secondary"
+                    >
+                      <Label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Policy result
+                      </Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__all__">Any policy result</ListBox.Item>
+                          <ListBox.Item id="fail">Policy failed</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <Select
+                      aria-label="CVE intelligence"
+                      className="min-w-0 w-full"
+                      value={intelligence || '__all__'}
+                      onChange={(value) =>
+                        updateFilters({
+                          intelligence: (value === '__all__'
+                            ? ''
+                            : String(value ?? '')) as ScanFilters['intelligence'],
+                        })
+                      }
+                      variant="secondary"
+                    >
+                      <Label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        CVE intelligence
+                      </Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__all__">Any CVE intelligence</ListBox.Item>
+                          <ListBox.Item id="confirmation_pending">
+                            Confirmation pending
+                          </ListBox.Item>
+                          <ListBox.Item id="changed">Changed</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <Select
+                      aria-label="Sort images"
+                      className="min-w-0 w-full"
+                      value={sort || '__default__'}
+                      onChange={(value) =>
+                        updateFilters({ sort: value === '__default__' ? '' : String(value ?? '') })
+                      }
+                      variant="secondary"
+                    >
+                      <Label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Sort by
+                      </Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__default__">Last scanned</ListBox.Item>
+                          <ListBox.Item id="risk_desc">Highest risk</ListBox.Item>
+                          <ListBox.Item id="scan_count_desc">Most scans</ListBox.Item>
+                          <ListBox.Item id="image_asc">Image name</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    {activeFilters ? (
+                      <Button onPress={clearFilters} size="sm" variant="tertiary">
+                        Clear filters
+                      </Button>
+                    ) : null}
+                  </Disclosure.Body>
+                </Disclosure.Content>
+              </Disclosure>
+            </div>
+          }
+          key={JSON.stringify([page, refreshKey])}
           hasActiveFilters={activeFilters}
           images={images}
           loading={loading && images.length === 0}
@@ -697,7 +678,7 @@ function ScansPageContent() {
       </Card>
       {total > 0 ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted-foreground">
             Showing {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, total)} of {total}{' '}
             images
           </p>

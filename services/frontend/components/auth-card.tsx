@@ -1,7 +1,7 @@
 'use client';
 
 import { Logo } from '@/components/logo';
-import { Card } from '@heroui/react';
+import { Card } from '@/components/ui';
 import type { ReactNode } from 'react';
 
 type AuthCardProps = {

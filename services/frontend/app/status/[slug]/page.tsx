@@ -33,7 +33,7 @@ import {
   Table,
   Tooltip,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowRight01Icon,
   Cancel01Icon,
@@ -72,7 +72,7 @@ const STATUS_COLOR: Record<string, string> = {
   stale: '#eab308',
   failed: '#ef4444',
   blocked_by_xray_policy: '#f59e0b',
-  pending: 'color-mix(in srgb, var(--accent) 78%, white)',
+  pending: 'color-mix(in srgb, var(--primary) 78%, white)',
   running: '#60a5fa',
   cancelled: '#52525b',
   waiting_for_xray: '#f59e0b',
@@ -243,7 +243,7 @@ function StatusDot({ status }: { status: string }) {
   const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium capitalize"
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium capitalize"
       style={{
         color: 'var(--text-secondary)',
         background: 'var(--status-pill-bg)',
@@ -471,7 +471,7 @@ function RecentScanStrip({
               <Link
                 href={`/scans/details/${day.scan.scan_id}`}
                 aria-label={label}
-                className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {content}
               </Link>
@@ -525,19 +525,19 @@ function FindingsSummary({ item }: { item: StatusPageItem }) {
     <div className="space-y-1.5 tabular-nums">
       <div className="flex items-baseline gap-1.5">
         <span className="text-base font-semibold text-foreground">{totalFindings}</span>
-        <span className="text-xs text-muted">findings</span>
+        <span className="text-xs text-muted-foreground">findings</span>
       </div>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
         <span className="text-xs text-danger">{item.critical_count} critical</span>
-        <span className="text-xs text-warning">{item.high_count} high</span>
+        <span className="text-xs text-warning-foreground">{item.high_count} high</span>
       </div>
       <p
         className={
           totalDelta > 0
-            ? 'text-[11px] text-danger'
+            ? 'text-xs text-danger'
             : totalDelta < 0
-              ? 'text-[11px] text-success'
-              : 'text-[11px] text-muted'
+              ? 'text-xs text-success-foreground'
+              : 'text-xs text-muted-foreground'
         }
       >
         {trendLabel}
@@ -559,7 +559,7 @@ function MobileImageStatusCard({
     <Card className="border border-divider/70 bg-surface/70 p-4 shadow-sm" variant="secondary">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted-foreground">
             <PackageIcon size={17} aria-hidden />
           </span>
           <div className="min-w-0">
@@ -569,7 +569,7 @@ function MobileImageStatusCard({
             >
               {item.image_name}
             </Link>
-            <p className="mt-0.5 truncate font-mono text-[11px] text-muted">{item.image_tag}</p>
+            <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{item.image_tag}</p>
           </div>
         </div>
         <Link href={`/scans/details/${item.latest_scan_id}`}>
@@ -590,15 +590,15 @@ function MobileImageStatusCard({
 
       <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
         <div>
-          <p className="text-muted">Critical</p>
+          <p className="text-muted-foreground">Critical</p>
           <p className="mt-0.5 font-semibold tabular-nums text-danger">{item.critical_count}</p>
         </div>
         <div>
-          <p className="text-muted">High</p>
-          <p className="mt-0.5 font-semibold tabular-nums text-warning">{item.high_count}</p>
+          <p className="text-muted-foreground">High</p>
+          <p className="mt-0.5 font-semibold tabular-nums text-warning-foreground">{item.high_count}</p>
         </div>
         <div>
-          <p className="text-muted">All findings</p>
+          <p className="text-muted-foreground">All findings</p>
           <p className="mt-0.5 font-semibold tabular-nums text-foreground">{totalFindings}</p>
         </div>
       </div>
@@ -606,7 +606,7 @@ function MobileImageStatusCard({
 
       <div className="mt-4 border-t border-divider/70 pt-3">
         <RecentScanStrip item={item} scans={scans} />
-        <p className="mt-3 text-[11px] text-muted">Scanned {timeAgo(item.observed_at)}</p>
+        <p className="mt-3 text-xs text-muted-foreground">Scanned {timeAgo(item.observed_at)}</p>
       </div>
     </Card>
   );
@@ -638,13 +638,13 @@ function ScanTimeline({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span
-          className="text-[10px] font-medium uppercase tracking-widest"
+          className="text-xs font-medium uppercase tracking-widest"
           style={{ color: 'var(--text-faint)' }}
         >
           Older
         </span>
         <span
-          className="text-[10px] font-medium uppercase tracking-widest"
+          className="text-xs font-medium uppercase tracking-widest"
           style={{ color: 'var(--text-faint)' }}
         >
           Latest
@@ -691,7 +691,7 @@ function ScanTimeline({
                       onBlur={() => setHoveredId(null)}
                       onMouseEnter={() => setHoveredId(scan.scan_id)}
                       onMouseLeave={() => setHoveredId(null)}
-                      className="relative flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                      className="relative flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                     >
                       <span
                         className="relative flex size-4 shrink-0 items-center justify-center rounded-full transition-all duration-200"
@@ -732,7 +732,7 @@ function ScanTimeline({
           const { color } = getScanHistoryMeta(infoScan);
           return (
             <div
-              className="flex items-center gap-2 text-[12px]"
+              className="flex items-center gap-2 text-xs"
               style={{ color: 'var(--text-secondary)' }}
             >
               <span className="size-2 shrink-0 rounded-full" style={{ background: color }} />
@@ -870,22 +870,22 @@ function StatusItemHistoryModal({
     <Drawer state={state}>
       <Drawer.Backdrop variant="blur">
         <Drawer.Content placement="right">
-          <Drawer.Dialog className="flex h-full w-full max-w-xl flex-col border-l border-divider bg-surface shadow-2xl">
+          <Drawer.Dialog className="flex h-full w-full max-w-xl flex-col border-l border-divider bg-surface ">
             <Drawer.Header className="border-b border-divider/70 p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted-foreground">
                     <PackageIcon size={18} aria-hidden />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                       Scan history
                     </p>
                     <Drawer.Heading className="mt-1 break-words font-mono text-sm font-semibold text-foreground sm:text-base">
                       {item?.image_name ?? 'Loading image'}
                     </Drawer.Heading>
                     {item ? (
-                      <p className="mt-1 truncate font-mono text-xs text-muted">{item.image_tag}</p>
+                      <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{item.image_tag}</p>
                     ) : null}
                   </div>
                 </div>
@@ -921,7 +921,7 @@ function StatusItemHistoryModal({
 
               <Card className="border border-divider/70 p-4" variant="secondary">
                 <p className="text-xs font-semibold text-foreground">14-day scan history</p>
-                <p className="mt-1 text-xs text-muted">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Choose a completed scan to compare its findings.
                 </p>
                 <div className="mt-4">
@@ -941,7 +941,7 @@ function StatusItemHistoryModal({
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-medium text-muted">
+                      <p className="text-xs font-medium text-muted-foreground">
                         {selectedScan?.is_latest === false ? 'Previous scan' : 'Latest scan'}
                       </p>
                       <p className="mt-1 text-sm font-semibold text-foreground">
@@ -959,16 +959,16 @@ function StatusItemHistoryModal({
                         value: displayedScan.critical_count,
                         color: 'text-danger',
                       },
-                      { label: 'High', value: displayedScan.high_count, color: 'text-warning' },
+                      { label: 'High', value: displayedScan.high_count, color: 'text-warning-foreground' },
                       {
                         label: 'Medium',
                         value: displayedScan.medium_count,
-                        color: 'text-warning',
+                        color: 'text-warning-foreground',
                       },
-                      { label: 'Low', value: displayedScan.low_count, color: 'text-muted' },
+                      { label: 'Low', value: displayedScan.low_count, color: 'text-muted-foreground' },
                     ].map((metric) => (
                       <div key={metric.label} className="rounded-xl bg-surface p-3">
-                        <p className="text-[11px] font-medium text-muted">{metric.label}</p>
+                        <p className="text-xs font-medium text-muted-foreground">{metric.label}</p>
                         <p className={`mt-1 text-lg font-semibold tabular-nums ${metric.color}`}>
                           {metric.value}
                         </p>
@@ -979,7 +979,7 @@ function StatusItemHistoryModal({
               ) : null}
 
               {scanAccess === 'denied' ? (
-                <p className="text-xs leading-5 text-muted">
+                <p className="text-xs leading-5 text-muted-foreground">
                   Scan details are only available when your JustScan account has access to this
                   scan.
                 </p>
@@ -1030,13 +1030,13 @@ function PublicStatusPageSkeleton() {
           <Skeleton className="h-3 w-36 rounded" />
           <Skeleton className="h-8 w-64 rounded-lg" />
         </div>
-        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="h-24 w-full rounded-xl" />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 5 }, (_, index) => (
-            <Skeleton key={index} className="h-20 rounded-2xl" />
+            <Skeleton key={index} className="h-20 rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-96 w-full rounded-2xl" />
+        <Skeleton className="h-96 w-full rounded-xl" />
       </main>
     </div>
   );
@@ -1345,15 +1345,15 @@ export default function PublicStatusPage() {
   if (!data) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-6">
-        <div className="rounded-2xl border border-divider bg-content1 p-8 max-w-md text-center space-y-4">
-          <div className="size-11 rounded-2xl mx-auto flex items-center justify-center bg-content2">
+        <div className="rounded-xl border border-divider bg-content1 p-8 max-w-md text-center space-y-4">
+          <div className="size-11 rounded-xl mx-auto flex items-center justify-center bg-content2">
             <Logo size={18} className="text-foreground" />
           </div>
           <div>
             <h1 className="text-lg font-semibold text-foreground">
               {needsAuth ? 'Authentication Required' : 'Status Page Unavailable'}
             </h1>
-            <p className="text-sm text-default-500 mt-1.5">{error}</p>
+            <p className="text-sm text-muted-foreground mt-1.5">{error}</p>
           </div>
           {needsAuth && (
             <Link
@@ -1437,7 +1437,7 @@ export default function PublicStatusPage() {
         className="pointer-events-none absolute inset-0 opacity-[0.38] dark:opacity-[0.24]"
         style={{
           backgroundImage:
-            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 22%, transparent) 1px, transparent 0)',
+            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--primary) 22%, transparent) 1px, transparent 0)',
           backgroundSize: '24px 24px',
         }}
       />
@@ -1445,7 +1445,7 @@ export default function PublicStatusPage() {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(circle at 12% 4%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 24%), radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 22%)',
+            'radial-gradient(circle at 12% 4%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 24%), radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 22%)',
         }}
       />
 
@@ -1463,7 +1463,7 @@ export default function PublicStatusPage() {
       <main className="relative z-10 mx-auto w-full max-w-[1600px] space-y-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <Shield01Icon size={15} aria-hidden />
               Container image status
             </div>
@@ -1471,7 +1471,7 @@ export default function PublicStatusPage() {
               {data.page.name}
             </h1>
             {showHeaderDescription ? (
-              <p className="mt-1.5 max-w-3xl text-sm leading-6 text-muted">{headerDescription}</p>
+              <p className="mt-1.5 max-w-3xl text-sm leading-6 text-muted-foreground">{headerDescription}</p>
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -1536,7 +1536,7 @@ export default function PublicStatusPage() {
             variant="secondary"
           >
             <div className="flex items-center gap-2">
-              <Shield01Icon size={16} className="text-muted" aria-hidden />
+              <Shield01Icon size={16} className="text-muted-foreground" aria-hidden />
               <h2 className="text-sm font-semibold text-foreground">Git repository health</h2>
             </div>
             <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -1551,14 +1551,14 @@ export default function PublicStatusPage() {
                     </p>
                     <StatusBadge status={source.status} />
                   </div>
-                  <p className="mt-2 text-xs text-muted">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     {source.image_count} current image{source.image_count === 1 ? '' : 's'} ·{' '}
                     {source.completed_at
                       ? `last good run ${timeAgo(source.completed_at)}`
                       : 'No successful run yet'}
                   </p>
                   {source.commit_sha ? (
-                    <p className="mt-1 truncate font-mono text-[11px] text-muted">
+                    <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
                       {source.commit_sha}
                     </p>
                   ) : null}
@@ -1578,7 +1578,7 @@ export default function PublicStatusPage() {
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <PackageIcon size={17} className="text-muted" aria-hidden />
+                  <PackageIcon size={17} className="text-muted-foreground" aria-hidden />
                   <h2 className="text-base font-semibold text-foreground">Scanned images</h2>
                   <Chip size="sm" variant="secondary">
                     <Chip.Label>
@@ -1589,7 +1589,7 @@ export default function PublicStatusPage() {
                     </Chip.Label>
                   </Chip>
                 </div>
-                <p className="mt-1 text-xs text-muted">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Current health, policy failures, findings, and a 14-day scan history.
                 </p>
               </div>
@@ -1626,7 +1626,7 @@ export default function PublicStatusPage() {
                           <Popover.Heading className="text-sm font-semibold text-foreground">
                             Filter images
                           </Popover.Heading>
-                          <p className="mt-1 text-xs text-muted">
+                          <p className="mt-1 text-xs text-muted-foreground">
                             Refine the currently shown images.
                           </p>
                         </div>
@@ -1641,7 +1641,7 @@ export default function PublicStatusPage() {
                       </div>
                       <div className="space-y-3">
                         <div className="space-y-1.5">
-                          <p className="text-xs font-medium text-muted">Image state</p>
+                          <p className="text-xs font-medium text-muted-foreground">Image state</p>
                           <Select
                             aria-label="Filter images by state"
                             variant="secondary"
@@ -1671,7 +1671,7 @@ export default function PublicStatusPage() {
                           </Select>
                         </div>
                         <div className="space-y-1.5">
-                          <p className="text-xs font-medium text-muted">Organization policy</p>
+                          <p className="text-xs font-medium text-muted-foreground">Organization policy</p>
                           <Select
                             aria-label="Filter images by organization policy result"
                             variant="secondary"
@@ -1706,10 +1706,10 @@ export default function PublicStatusPage() {
             </div>
             {hasImageFilters ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-medium text-muted">Active filters</span>
+                <span className="text-xs font-medium text-muted-foreground">Active filters</span>
                 {searchQuery.trim() ? (
                   <Button
-                    className="h-7 px-2 text-[11px]"
+                    className=" "
                     size="sm"
                     variant="secondary"
                     onPress={() => setSearchQuery('')}
@@ -1720,7 +1720,7 @@ export default function PublicStatusPage() {
                 ) : null}
                 {statusFilter !== '__all__' ? (
                   <Button
-                    className="h-7 px-2 text-[11px]"
+                    className=" "
                     size="sm"
                     variant="secondary"
                     onPress={() => setStatusFilter('__all__')}
@@ -1731,7 +1731,7 @@ export default function PublicStatusPage() {
                 ) : null}
                 {decisionFilter !== '__all__' ? (
                   <Button
-                    className="h-7 px-2 text-[11px]"
+                    className=" "
                     size="sm"
                     variant="secondary"
                     onPress={() => setDecisionFilter('__all__')}
@@ -1746,7 +1746,7 @@ export default function PublicStatusPage() {
 
           <div className="space-y-3 p-3 md:hidden">
             {filteredTrackedItems.length === 0 ? (
-              <div className="py-12 text-center text-sm text-muted">
+              <div className="py-12 text-center text-sm text-muted-foreground">
                 {trackedItems.length === 0
                   ? 'No images are currently tracked.'
                   : 'No images match the current filters.'}
@@ -1777,7 +1777,7 @@ export default function PublicStatusPage() {
                     {filteredTrackedItems.length === 0 ? (
                       <Table.Row id="empty">
                         <Table.Cell colSpan={5}>
-                          <div className="py-12 text-center text-sm text-muted">
+                          <div className="py-12 text-center text-sm text-muted-foreground">
                             {trackedItems.length === 0
                               ? 'No images are currently tracked.'
                               : 'No images match the current filters.'}
@@ -1793,7 +1793,7 @@ export default function PublicStatusPage() {
                         >
                           <Table.Cell>
                             <div className="flex max-w-[40rem] items-start gap-3">
-                              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+                              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted-foreground">
                                 <PackageIcon size={15} aria-hidden />
                               </span>
                               <div className="min-w-0">
@@ -1809,11 +1809,11 @@ export default function PublicStatusPage() {
                                     {item.image_name}
                                   </p>
                                 )}
-                                <p className="mt-0.5 truncate font-mono text-[11px] text-muted">
+                                <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
                                   {item.image_tag}
                                 </p>
                                 {item.source_repository_name ? (
-                                  <p className="mt-1 truncate text-[11px] text-muted">
+                                  <p className="mt-1 truncate text-xs text-muted-foreground">
                                     {item.source_repository_name}
                                   </p>
                                 ) : null}
@@ -1833,7 +1833,7 @@ export default function PublicStatusPage() {
                             />
                           </Table.Cell>
                           <Table.Cell>
-                            <span className="text-xs text-muted">{timeAgo(item.observed_at)}</span>
+                            <span className="text-xs text-muted-foreground">{timeAgo(item.observed_at)}</span>
                           </Table.Cell>
                         </Table.Row>
                       ))

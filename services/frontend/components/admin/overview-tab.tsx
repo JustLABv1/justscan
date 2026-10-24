@@ -31,7 +31,7 @@ import type { AdminDashboard, AdminDashboardVulnerabilityTrendPoint } from '@/li
 import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Card, Chip, Link, Skeleton } from '@heroui/react';
+import { Button, Card, Chip, Link, Skeleton } from '@/components/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 function formatCompact(value: number) {
@@ -111,7 +111,7 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
 
       <div className="flex flex-wrap gap-2">
         {SEVERITY_SERIES.map((severity) => (
-          <Chip key={severity.key} variant="soft" size="sm" className="text-xs text-foreground/70">
+          <Chip key={severity.key} variant="soft" size="sm" className="text-xs text-muted-foreground">
             <span
               className="mr-1.5 inline-block size-2 rounded-full"
               style={{ background: severity.color }}
@@ -435,14 +435,14 @@ export function OverviewTab() {
           value={dashboard.queues.needs_attention.toLocaleString()}
           hint={`${failedScans} failed · ${dashboard.queues.blocked_policies} blocked`}
           hintClassName={
-            dashboard.queues.needs_attention > 0 ? 'text-warning' : 'text-muted-foreground'
+            dashboard.queues.needs_attention > 0 ? 'text-warning-foreground' : 'text-muted-foreground'
           }
         />
         <SummaryTile
           label="API Requests 24h"
           value={formatCompact(dashboard.insights.api_requests_24h)}
           hint={`${telemetryErrorRate}% error rate`}
-          hintClassName={telemetryErrorRate > 0 ? 'text-warning' : 'text-muted-foreground'}
+          hintClassName={telemetryErrorRate > 0 ? 'text-warning-foreground' : 'text-muted-foreground'}
         />
       </div>
 

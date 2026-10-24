@@ -10,7 +10,7 @@ import {
 } from '@/lib/api';
 import { getApiBase } from '@/lib/api/base';
 import { deferEffect } from '@/lib/defer-effect';
-import { Alert, Button, ButtonGroup, Card, Chip, Label, ListBox, Select } from '@heroui/react';
+import { Alert, Button, ButtonGroup, Card, Chip, Label, ListBox, Select } from '@/components/ui';
 import { Copy01Icon, Download01Icon, Key01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -51,10 +51,10 @@ function CodeBlock({
 
   return (
     <div
-      className={`flex flex-col overflow-hidden rounded-2xl border border-divider bg-surface-secondary ${className ?? ''}`}
+      className={`flex flex-col overflow-hidden rounded-xl border border-divider bg-surface-secondary ${className ?? ''}`}
     >
       <div className="flex items-center justify-between gap-3 border-b border-divider px-4 py-2.5">
-        <span className="text-xs font-medium text-muted">{label}</span>
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
         <Button size="sm" variant="secondary" onPress={() => void copy()}>
           <Copy01Icon size={14} />
           {copied ? 'Copied' : 'Copy'}
@@ -81,9 +81,9 @@ function CopyValue({ label, value }: { label: string; value: string }) {
   }
 
   return (
-    <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-divider bg-surface-secondary p-4">
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-divider bg-surface-secondary p-4">
       <div className="min-w-0">
-        <p className="text-xs font-medium text-muted">{label}</p>
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <code className="mt-1 block truncate text-sm font-medium">{value || 'Loading…'}</code>
       </div>
       <Button size="sm" variant="secondary" onPress={() => void copy()} isDisabled={!value}>
@@ -170,63 +170,51 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
         <Card.Header>
           <Card.Title>Set up the JustScan CLI</Card.Title>
           <Card.Description>
-            Sign in with your JustScan account for local work, or create a least-privilege token
-            for CI/CD. JustScan does the scanning; the CLI only talks to this instance.
+            Sign in with your JustScan account for local work, or create a least-privilege token for
+            CI/CD. JustScan does the scanning; the CLI only talks to this instance.
           </Card.Description>
         </Card.Header>
         <Card.Content className="space-y-8">
           <section className="flex flex-wrap items-center justify-between gap-4 border-b border-divider pb-6">
             <div className="flex items-start gap-3">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-accent-foreground">
                 1
               </span>
               <div>
                 <p className="text-sm font-medium">Install the CLI</p>
-                <p className="mt-1 text-xs text-muted">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Download the latest release. Run <code>justscan version --check</code> later to
                   check for updates.
                 </p>
               </div>
             </div>
             <ButtonGroup size="sm">
-              <Button
-                variant="primary"
-                render={(props: any) => (
-                  <a
-                    {...props}
-                    href="https://github.com/JustLABv1/justscan/releases/latest"
-                    target="_blank"
-                    rel="noreferrer"
-                  />
-                )}
-              >
-                <Download01Icon size={15} />
-                Download CLI
+              <Button variant="primary" asChild>
+                <a
+                  href="https://github.com/JustLABv1/justscan/releases/latest"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Download01Icon size={15} />
+                  Download CLI
+                </a>
               </Button>
-              <Button
-                variant="secondary"
-                render={(props: any) => (
-                  <a
-                    {...props}
-                    href="/docs/integrations/cli"
-                    target="_blank"
-                    rel="noreferrer"
-                  />
-                )}
-              >
-                CLI guide
+              <Button variant="secondary" asChild>
+                <a href="/docs/integrations/cli" target="_blank" rel="noreferrer">
+                  CLI guide
+                </a>
               </Button>
             </ButtonGroup>
           </section>
 
           <section className="space-y-3 border-b border-divider pb-6">
             <div className="flex items-start gap-3">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-tertiary text-xs font-semibold text-muted">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-tertiary text-xs font-semibold text-muted-foreground">
                 2
               </span>
               <div>
                 <p className="text-sm font-medium">Connect to this organization</p>
-                <p className="mt-1 text-xs text-muted">Copy these values into your CLI profile.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Copy these values into your CLI profile.</p>
               </div>
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
@@ -237,12 +225,12 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
 
           <section className="space-y-5">
             <div className="flex items-start gap-3">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-tertiary text-xs font-semibold text-muted">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-tertiary text-xs font-semibold text-muted-foreground">
                 3
               </span>
               <div>
                 <p className="text-sm font-medium">Choose how you will use the CLI</p>
-                <p className="mt-1 text-xs text-muted">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Sign in for interactive work, or create a dedicated token for CI/CD.
                 </p>
               </div>
@@ -252,7 +240,7 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
               <div className="flex h-full flex-col gap-3">
                 <div>
                   <p className="text-sm font-medium">Personal terminal</p>
-                  <p className="mt-1 text-xs text-muted">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Sign in with your own JustScan account; the CLI stores the session in your
                     operating system’s keychain.
                   </p>
@@ -267,7 +255,7 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
               <div className="space-y-3">
                 <div>
                   <p className="text-sm font-medium">CI/CD pipeline</p>
-                  <p className="mt-1 text-xs text-muted">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Create a least-privilege token, then store it as a secret in your CI provider.
                   </p>
                 </div>
@@ -276,7 +264,7 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                     <p className="text-sm font-medium">Pipeline token</p>
                     <Link
                       href={`/orgs/${org.id}?tab=access&section=tokens`}
-                      className="text-xs font-medium text-accent hover:underline"
+                      className="text-xs font-medium text-primary hover:underline"
                     >
                       Manage tokens
                     </Link>
@@ -293,7 +281,7 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                         className="min-w-36 flex-1"
                       >
                         <Label>Token lifetime</Label>
-                        <Select.Trigger className="border border-divider bg-surface shadow-sm">
+                        <Select.Trigger className="border border-divider ">
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -319,7 +307,9 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                   ) : null}
                 </div>
 
-                {tokenError ? <FormAlert description={tokenError} title="Token creation failed" /> : null}
+                {tokenError ? (
+                  <FormAlert description={tokenError} title="Token creation failed" />
+                ) : null}
                 {token ? (
                   <>
                     <Alert status="warning" className="border-warning/40 bg-warning/15">
@@ -327,8 +317,8 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                       <Alert.Content>
                         <Alert.Title>Copy this token now</Alert.Title>
                         <Alert.Description>
-                          It is shown only once. Store it in a secret manager or CI secret, never
-                          in a profile or source file.
+                          It is shown only once. Store it in a secret manager or CI secret, never in
+                          a profile or source file.
                         </Alert.Description>
                       </Alert.Content>
                     </Alert>
@@ -353,9 +343,9 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
         </Card.Header>
         <Card.Content>
           {history.length === 0 ? (
-            <p className="text-sm text-muted">Run a scan with the CLI to create history.</p>
+            <p className="text-sm text-muted-foreground">Run a scan with the CLI to create history.</p>
           ) : (
-            <div className="divide-y divide-divider rounded-2xl border border-divider">
+            <div className="divide-y divide-divider rounded-xl border border-divider">
               {history.map((entry) => (
                 <div
                   key={entry.id}
@@ -365,7 +355,7 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                     <p className="truncate text-sm font-medium">
                       {entry.scan.image_name}:{entry.scan.image_tag}
                     </p>
-                    <p className="text-xs text-muted">
+                    <p className="text-xs text-muted-foreground">
                       {entry.initiator?.token_description || entry.source.replaceAll('_', ' ')}
                       {entry.external_ref ? ` · ${entry.external_ref}` : ''}
                     </p>

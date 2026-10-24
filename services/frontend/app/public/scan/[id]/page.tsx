@@ -2,7 +2,7 @@
 import { PublicNavbar } from '@/components/public/public-navbar';
 import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
 import { FormField } from '@/components/ui/form-field';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
@@ -27,7 +27,7 @@ import {
   Select,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowLeft01Icon,
   Bug02Icon,
@@ -45,9 +45,9 @@ import { isAbortError } from '@/lib/utils';
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   CRITICAL: {
     label: 'Critical',
-    color: 'text-red-500 dark:text-red-400',
-    bg: 'bg-red-500/10',
-    border: 'border-red-500/20',
+    color: 'text-destructive dark:text-destructive',
+    bg: 'bg-destructive/10',
+    border: 'border-destructive/20',
   },
   HIGH: {
     label: 'High',
@@ -57,21 +57,21 @@ const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; bor
   },
   MEDIUM: {
     label: 'Medium',
-    color: 'text-yellow-600 dark:text-yellow-400',
-    bg: 'bg-yellow-500/10',
-    border: 'border-yellow-500/20',
+    color: 'text-warning-foreground dark:text-warning-foreground',
+    bg: 'bg-warning/10',
+    border: 'border-warning/20',
   },
   LOW: {
     label: 'Low',
-    color: 'text-blue-500 dark:text-blue-400',
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/20',
+    color: 'text-info-foreground dark:text-info-foreground',
+    bg: 'bg-info/10',
+    border: 'border-info/20',
   },
   UNKNOWN: {
     label: 'Unknown',
-    color: 'text-zinc-500',
-    bg: 'bg-zinc-500/10',
-    border: 'border-zinc-500/20',
+    color: 'text-muted-foreground',
+    bg: 'bg-muted/10',
+    border: 'border-border/20',
   },
 };
 
@@ -93,7 +93,7 @@ function SourceBadge({ source }: { source?: string }) {
   const label = isOSV ? 'OSV.dev' : isXray ? 'Xray' : source?.trim() || 'Trivy';
   return (
     <span
-      className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
+      className="text-xs font-semibold px-1.5 py-0.5 rounded-md shrink-0"
       style={
         isOSV
           ? {
@@ -108,9 +108,9 @@ function SourceBadge({ source }: { source?: string }) {
                 border: '1px solid rgba(245,158,11,0.22)',
               }
             : {
-                background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-                color: 'color-mix(in srgb, var(--accent) 55%, white)',
-                border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
+                background: 'color-mix(in srgb, var(--primary) 12%, transparent)',
+                color: 'color-mix(in srgb, var(--primary) 55%, white)',
+                border: '1px solid color-mix(in srgb, var(--primary) 22%, transparent)',
               }
       }
       title={
@@ -134,7 +134,7 @@ function ScannerDatabaseCard({
 }) {
   return (
     <div
-      className="rounded-2xl border p-4"
+      className="rounded-xl border p-4"
       style={{ background: 'var(--surface-bg)', border: '1px solid var(--surface-border)' }}
     >
       <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
@@ -419,7 +419,7 @@ export default function PublicScanResultPage() {
     }
   }
 
-  const selectTriggerCls = heroSelectTriggerClassName;
+  const selectTriggerCls = fieldSelectTriggerClassName;
 
   function openVulnerabilityDetails(vulnerability: Vulnerability) {
     setSelectedVulnerability(vulnerability);
@@ -442,12 +442,12 @@ export default function PublicScanResultPage() {
         style={{ background: 'var(--app-bg)' }}
       >
         <div className="text-center space-y-3">
-          <p role="alert" className="text-red-500 dark:text-red-400 text-sm">
+          <p role="alert" className="text-destructive dark:text-destructive text-sm">
             {error}
           </p>
           <Link
             href="/public/scan/image"
-            className="text-accent dark:text-accent text-sm hover:underline"
+            className="text-primary dark:text-primary text-sm hover:underline"
           >
             ← Try another scan
           </Link>
@@ -482,7 +482,7 @@ export default function PublicScanResultPage() {
         className="pointer-events-none absolute inset-0 opacity-[0.45] dark:opacity-[0.32]"
         style={{
           backgroundImage:
-            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 28%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 3%, transparent) 1px, transparent 1px)',
+            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--primary) 28%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 3%, transparent) 1px, transparent 1px)',
           backgroundPosition: 'center top, center top, center top',
           backgroundSize: '24px 24px, 24px 24px, 24px 24px',
         }}
@@ -491,8 +491,8 @@ export default function PublicScanResultPage() {
         className="pointer-events-none absolute inset-0"
         style={{
           background: isDark
-            ? 'radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 20%), radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 22%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 24%)'
-            : 'radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 18%), radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 22%)',
+            ? 'radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 20%), radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 22%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 24%)'
+            : 'radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 18%), radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 22%)',
         }}
       />
 
@@ -509,7 +509,7 @@ export default function PublicScanResultPage() {
           className="pointer-events-none absolute inset-0 opacity-35"
           style={{
             background:
-              'radial-gradient(circle at 68% 24%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 24%)',
+              'radial-gradient(circle at 68% 24%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 24%)',
           }}
         />
 
@@ -526,7 +526,7 @@ export default function PublicScanResultPage() {
           <div className="space-y-6">
             {actionError && (
               <div
-                className="rounded-2xl px-4 py-3 text-sm"
+                className="rounded-xl px-4 py-3 text-sm"
                 style={{
                   background: 'rgba(239,68,68,0.08)',
                   border: '1px solid rgba(239,68,68,0.18)',
@@ -537,7 +537,7 @@ export default function PublicScanResultPage() {
               </div>
             )}
 
-            <Card className="overflow-hidden rounded-[2rem] border border-divider/60 bg-surface/40 p-5 shadow-sm backdrop-blur sm:p-6">
+            <Card className="overflow-hidden rounded-xl border border-divider/60 bg-surface/40 p-5 shadow-sm backdrop-blur sm:p-6">
               <div className="space-y-4">
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                   <div className="flex flex-wrap items-center gap-2">
@@ -596,7 +596,7 @@ export default function PublicScanResultPage() {
                         variant="primary"
                       >
                         {reScanning ? (
-                          <span className="size-3.5 rounded-full border-2 border-accent-400/30 border-t-accent-400 animate-spin" />
+                          <span className="size-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
                         ) : (
                           <Refresh01Icon size={15} />
                         )}
@@ -615,7 +615,7 @@ export default function PublicScanResultPage() {
                   </h1>
                   {scan?.image_digest ? (
                     <div
-                      className="break-words font-mono text-xs text-muted"
+                      className="break-words font-mono text-xs text-muted-foreground"
                       style={{ overflowWrap: 'anywhere' }}
                     >
                       {scan.image_digest}
@@ -674,7 +674,7 @@ export default function PublicScanResultPage() {
                 />
                 <Link
                   href="/public/scan/image"
-                  className="inline-block text-sm text-accent hover:underline"
+                  className="inline-block text-sm text-primary hover:underline"
                 >
                   Try another image →
                 </Link>
@@ -683,7 +683,7 @@ export default function PublicScanResultPage() {
 
             {isBlockedByXrayPolicy && activeTab === 'overview' && (
               <div
-                className="rounded-2xl px-6 py-5"
+                className="rounded-xl px-6 py-5"
                 style={{
                   background: 'rgba(245,158,11,0.10)',
                   border: '1px solid rgba(245,158,11,0.22)',
@@ -760,14 +760,14 @@ export default function PublicScanResultPage() {
                         }
                         className={`border ${border} bg-surface/50 shadow-sm backdrop-blur ${
                           severityFilter === label.toUpperCase()
-                            ? 'ring-1 ring-accent/50'
+                            ? 'ring-1 ring-primary/50'
                             : 'border-divider/60'
                         }`}
                         valueClassName={`text-2xl font-bold ${color}`}
                         hintStyle={{
                           color:
                             severityFilter === label.toUpperCase()
-                              ? 'var(--accent)'
+                              ? 'var(--primary)'
                               : 'var(--text-faint)',
                         }}
                       />
@@ -801,7 +801,7 @@ export default function PublicScanResultPage() {
                             setPage(1);
                           }}
                         >
-                          <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                          <Select.Trigger className={`${selectTriggerCls} `}>
                             <Select.Value />
                             <Select.Indicator />
                           </Select.Trigger>
@@ -821,7 +821,7 @@ export default function PublicScanResultPage() {
                             name="public-scan-vuln-search"
                             className="w-full"
                           >
-                            <SearchField.Group className="h-11">
+                            <SearchField.Group className="">
                               <SearchField.SearchIcon />
                               <SearchField.Input
                                 placeholder="Search package..."
@@ -836,7 +836,7 @@ export default function PublicScanResultPage() {
                             name="public-scan-vuln-cve-search"
                             className="w-full"
                           >
-                            <SearchField.Group className="h-11">
+                            <SearchField.Group className="">
                               <SearchField.SearchIcon />
                               <SearchField.Input
                                 placeholder="Search CVE (e.g. CVE-2026-31789)..."
@@ -855,7 +855,7 @@ export default function PublicScanResultPage() {
                               setPage(1);
                             }}
                           >
-                            <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                            <Select.Trigger className={`${selectTriggerCls} `}>
                               <Select.Value />
                               <Select.Indicator />
                             </Select.Trigger>
@@ -879,7 +879,7 @@ export default function PublicScanResultPage() {
                               setPage(1);
                             }}
                           >
-                            <Select.Trigger className={`${selectTriggerCls} h-11`}>
+                            <Select.Trigger className={`${selectTriggerCls} `}>
                               <Select.Value />
                               <Select.Indicator />
                             </Select.Trigger>
@@ -913,7 +913,7 @@ export default function PublicScanResultPage() {
                               setHasFix(!hasFix);
                               setPage(1);
                             }}
-                            className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full h-11`}
+                            className={`${hasFix ? 'btn-primary' : 'btn-secondary'} w-full `}
                             variant={hasFix ? 'primary' : 'secondary'}
                           >
                             Has Fix
@@ -928,7 +928,7 @@ export default function PublicScanResultPage() {
                     <div
                       role="alert"
                       aria-live="assertive"
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive dark:text-destructive"
                     >
                       <span>
                         Couldn&apos;t refresh vulnerabilities: {vulnError} Showing the last
@@ -945,7 +945,7 @@ export default function PublicScanResultPage() {
                     </div>
                   )}
                   <div
-                    className="max-w-full overflow-x-auto rounded-2xl"
+                    className="max-w-full overflow-x-auto rounded-xl"
                     style={{
                       background: 'var(--surface-bg)',
                       border: '1px solid var(--surface-border)',
@@ -985,7 +985,7 @@ export default function PublicScanResultPage() {
                                     }}
                                     className="inline-flex items-center gap-1 cursor-pointer select-none"
                                     style={{
-                                      color: active ? 'var(--accent)' : 'var(--text-faint)',
+                                      color: active ? 'var(--primary)' : 'var(--text-faint)',
                                     }}
                                   >
                                     <span>{label}</span>
@@ -1002,7 +1002,7 @@ export default function PublicScanResultPage() {
                                   <div
                                     role="alert"
                                     aria-live="assertive"
-                                    className="flex flex-col items-center gap-3 py-12 text-center text-sm text-red-600 dark:text-red-300"
+                                    className="flex flex-col items-center gap-3 py-12 text-center text-sm text-destructive dark:text-destructive"
                                   >
                                     <span>Couldn&apos;t load vulnerabilities: {vulnError}</span>
                                     <Button
@@ -1026,10 +1026,10 @@ export default function PublicScanResultPage() {
                                   >
                                     <div className="flex justify-center">
                                       <div
-                                        className="size-6 rounded-full border-2 border-t-accent-500 animate-spin"
+                                        className="size-6 rounded-full border-2 border-t-primary animate-spin"
                                         style={{
                                           borderColor: 'var(--border-subtle)',
-                                          borderTopColor: 'var(--accent)',
+                                          borderTopColor: 'var(--primary)',
                                         }}
                                       />
                                     </div>
@@ -1063,7 +1063,7 @@ export default function PublicScanResultPage() {
                                         <button
                                           type="button"
                                           onClick={() => openVulnerabilityDetails(v)}
-                                          className="font-mono text-xs text-accent dark:text-accent hover:underline transition-colors"
+                                          className="font-mono text-xs text-primary dark:text-primary hover:underline transition-colors"
                                         >
                                           {v.vuln_id}
                                         </button>
@@ -1085,7 +1085,7 @@ export default function PublicScanResultPage() {
                                   >
                                     {v.installed_version}
                                   </Table.Cell>
-                                  <Table.Cell className="font-mono text-xs text-emerald-600 dark:text-emerald-500">
+                                  <Table.Cell className="font-mono text-xs text-success-foreground dark:text-success-foreground">
                                     {v.fixed_version || (
                                       <span style={{ color: 'var(--text-faint)' }}>-</span>
                                     )}
@@ -1140,10 +1140,10 @@ export default function PublicScanResultPage() {
 
                 {/* Sign-in CTA */}
                 <div
-                  className="rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                  className="rounded-xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                   style={{
-                    background: 'color-mix(in srgb, var(--accent) 6%, transparent)',
-                    border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
+                    background: 'color-mix(in srgb, var(--primary) 6%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)',
                   }}
                 >
                   <div>

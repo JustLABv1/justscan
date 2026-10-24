@@ -11,7 +11,7 @@ import {
 import { VulnerabilityKBTable } from '@/components/vulnkb/vulnerability-kb-table';
 import { listKBEntries, type VulnKBEntry } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Spinner } from '@heroui/react';
+import { Spinner } from '@/components/ui';
 import { InformationCircleIcon } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
@@ -298,7 +298,7 @@ function VulnKBPageContent() {
         onPageChange={goToPage}
       />
 
-      <p className="flex items-center gap-1.5 text-xs text-zinc-400">
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <InformationCircleIcon size={13} />
         Select a CVE to view its source timeline, references, and authorized scan exposure.
       </p>

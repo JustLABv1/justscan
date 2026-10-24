@@ -36,7 +36,7 @@ import {
   Select,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Delete01Icon,
   Key01Icon,
@@ -297,7 +297,7 @@ export default function HelmRegistryCredentialsPage() {
         loadingFallback={
           <Card>
             <Card.Content
-              className="flex min-h-48 items-center justify-center text-sm text-muted"
+              className="flex min-h-48 items-center justify-center text-sm text-muted-foreground"
               role="status"
             >
               Loading Helm credentials…
@@ -407,14 +407,14 @@ export default function HelmRegistryCredentialsPage() {
                             <Chip size="sm" variant="soft">
                               {item.protocol.toUpperCase()}
                             </Chip>
-                            <p className="truncate text-xs text-muted md:hidden">{item.url}</p>
-                            <p className="text-xs capitalize text-muted md:hidden">
+                            <p className="truncate text-xs text-muted-foreground md:hidden">{item.url}</p>
+                            <p className="text-xs capitalize text-muted-foreground md:hidden">
                               {item.auth_type.replace('_', ' ')} · {item.health_status}
                             </p>
                           </div>
                         </Table.Cell>
                         <Table.Cell className="hidden md:table-cell">
-                          <p className="max-w-md break-all font-mono text-xs text-muted">
+                          <p className="max-w-md break-all font-mono text-xs text-muted-foreground">
                             {item.url}
                           </p>
                         </Table.Cell>
@@ -422,7 +422,7 @@ export default function HelmRegistryCredentialsPage() {
                           <div className="space-y-1">
                             <p className="text-sm">{item.auth_type.replace('_', ' ')}</p>
                             {item.username ? (
-                              <p className="text-xs text-muted">{item.username}</p>
+                              <p className="text-xs text-muted-foreground">{item.username}</p>
                             ) : null}
                           </div>
                         </Table.Cell>
@@ -442,7 +442,7 @@ export default function HelmRegistryCredentialsPage() {
                               {item.health_status}
                             </Chip>
                             {item.health_message ? (
-                              <p className="max-w-48 text-xs text-muted">{item.health_message}</p>
+                              <p className="max-w-48 text-xs text-muted-foreground">{item.health_message}</p>
                             ) : null}
                           </div>
                         </Table.Cell>
@@ -609,7 +609,7 @@ export default function HelmRegistryCredentialsPage() {
                     </Button>
                   </div>
                 ) : sharesLoading ? (
-                  <div className="py-8 text-center text-sm text-muted">Loading access grants…</div>
+                  <div className="py-8 text-center text-sm text-muted-foreground">Loading access grants…</div>
                 ) : (
                   <>
                     <Select
@@ -642,7 +642,7 @@ export default function HelmRegistryCredentialsPage() {
                       Grant access
                     </Button>
                     {shares.length === 0 ? (
-                      <p className="text-sm text-muted">No organizations have access yet.</p>
+                      <p className="text-sm text-muted-foreground">No organizations have access yet.</p>
                     ) : (
                       shares.map((share) => (
                         <div

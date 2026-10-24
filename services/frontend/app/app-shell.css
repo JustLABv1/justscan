@@ -1,0 +1,54 @@
+@layer components {
+  .app-shell {
+    --shell-sidebar: var(--sidebar);
+    --shell-content: var(--background);
+    --shell-hover: var(--sidebar-accent);
+    background: var(--shell-sidebar);
+  }
+
+  .shell-sidebar {
+    background: var(--shell-sidebar);
+    transition: width 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .shell-sidebar-header {
+    min-height: 68px;
+  }
+  .shell-content {
+    background: var(--shell-content);
+  }
+  .shell-search {
+    background: transparent;
+  }
+
+  .shell-nav-link {
+    min-height: 36px;
+    color: var(--muted-foreground);
+    transition:
+      background-color 120ms ease,
+      color 120ms ease;
+  }
+
+  .shell-nav-link:hover {
+    background: var(--shell-hover);
+    color: var(--foreground);
+  }
+  .shell-nav-link[aria-current='page'] {
+    background: var(--shell-content);
+    color: var(--foreground);
+    font-weight: 500;
+  }
+
+  @media (min-width: 768px) {
+    .app-shell[data-collapsed='true'] .shell-nav-link {
+      min-height: 36px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell-sidebar,
+    .shell-nav-link {
+      transition: none;
+    }
+  }
+}

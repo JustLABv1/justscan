@@ -83,7 +83,7 @@ function ChartLegendContent({
           type="button"
           className={cn(
             className,
-            'rounded-sm px-1 py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent'
+            'rounded-sm px-1 py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary'
           )}
           aria-label={`Toggle ${itemConfig?.label ?? key}`}
           aria-pressed={isSelected}

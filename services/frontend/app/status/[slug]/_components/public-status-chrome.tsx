@@ -3,7 +3,7 @@
 import { Logo } from '@/components/logo';
 import type { StatusPageUpdate } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip } from '@heroui/react';
+import { Alert, Button, Card, Chip } from '@/components/ui';
 import {
   Clock01Icon,
   Globe02Icon,
@@ -21,10 +21,10 @@ type StatusTone = {
 };
 
 const METRIC_VALUE_CLASS = {
-  success: 'text-success',
-  warning: 'text-warning',
+  success: 'text-success-foreground',
+  warning: 'text-warning-foreground',
   danger: 'text-danger',
-  accent: 'text-accent',
+  accent: 'text-primary',
   default: 'text-foreground',
 };
 
@@ -74,7 +74,7 @@ export function PublicStatusHeader({
             <Logo size={20} />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-muted">JustScan Status</p>
+            <p className="text-xs font-medium text-muted-foreground">JustScan Status</p>
             <p className="truncate text-sm font-semibold text-foreground">{pageName}</p>
           </div>
         </div>
@@ -150,10 +150,10 @@ export function OverallStatusBanner({
           </span>
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-foreground">{tone.label}</h2>
-            <p className="mt-0.5 text-sm leading-6 text-muted">{tone.description}</p>
+            <p className="mt-0.5 text-sm leading-6 text-muted-foreground">{tone.description}</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted lg:justify-end">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground lg:justify-end">
           <span>
             <strong className="font-semibold text-foreground">{healthyCount}</strong> healthy
           </span>
@@ -195,14 +195,14 @@ export function StatusMetrics({
         <Card
           key={metric.key}
           className={`border bg-surface/60 p-0 shadow-sm transition-colors ${
-            activeKey === metric.key ? 'border-accent' : 'border-divider/70'
+            activeKey === metric.key ? 'border-primary' : 'border-divider/70'
           }`}
           variant="secondary"
         >
           <button
             type="button"
             aria-pressed={activeKey === metric.key}
-            className="w-full rounded-[inherit] p-3 text-left outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-accent sm:p-4"
+            className="w-full rounded-[inherit] p-3 text-left outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-primary sm:p-4"
             onClick={() => onSelect?.(metric.key)}
           >
             <p
@@ -210,7 +210,7 @@ export function StatusMetrics({
             >
               {metric.value.toLocaleString()}
             </p>
-            <p className="mt-0.5 text-xs font-medium text-muted">{metric.label}</p>
+            <p className="mt-0.5 text-xs font-medium text-muted-foreground">{metric.label}</p>
           </button>
         </Card>
       ))}
@@ -227,7 +227,7 @@ export function ActiveStatusUpdates({ updates }: { updates: StatusPageUpdate[] }
         <h2 id="status-updates-heading" className="text-sm font-semibold text-foreground">
           Active updates
         </h2>
-        <span className="text-xs text-muted">
+        <span className="text-xs text-muted-foreground">
           {updates.length} active {updates.length === 1 ? 'notice' : 'notices'}
         </span>
       </div>
@@ -241,7 +241,7 @@ export function ActiveStatusUpdates({ updates }: { updates: StatusPageUpdate[] }
             <Alert.Content>
               <Alert.Title>{update.title}</Alert.Title>
               {update.body ? <Alert.Description>{update.body}</Alert.Description> : null}
-              <p className="mt-1 text-[11px] text-muted">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {update.created_at || update.updated_at
                   ? `Posted ${timeAgo(update.created_at ?? update.updated_at ?? '')}`
                   : 'Recently posted'}

@@ -1,6 +1,6 @@
 'use client';
 
-import { buttonVariants, Dropdown, Label, Spinner } from '@heroui/react';
+import { buttonVariants, Dropdown, Label, Spinner } from '@/components/ui';
 import { MoreVerticalIcon } from 'hugeicons-react';
 import type { ReactNode } from 'react';
 

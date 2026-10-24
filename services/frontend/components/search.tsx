@@ -21,7 +21,7 @@ import {
   SearchField,
   Spinner,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowRight01Icon,
   Building04Icon,
@@ -205,7 +205,7 @@ function matchesQuery(query: string, values: string[]) {
 
 function PaletteSectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+    <p className="px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
       {children}
     </p>
   );
@@ -246,7 +246,7 @@ function PaletteRow({
         active ? 'bg-surface-secondary' : 'hover:bg-surface-secondary'
       }`}
     >
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-divider bg-surface text-muted">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-divider bg-surface text-muted-foreground">
         {icon}
       </div>
       <div className="min-w-0 flex-1">
@@ -258,7 +258,7 @@ function PaletteRow({
           </p>
           {badge}
         </div>
-        <p className="truncate text-xs text-muted">{description}</p>
+        <p className="truncate text-xs text-muted-foreground">{description}</p>
       </div>
       {trailing ? <div className="shrink-0">{trailing}</div> : null}
     </button>
@@ -503,7 +503,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
       <Modal.Container placement="top" size="cover" className="pt-[8vh]">
         <Modal.Dialog
           aria-label="Command palette"
-          className="mx-auto w-full max-w-4xl overflow-hidden rounded-3xl"
+          className="mx-auto w-full max-w-4xl overflow-hidden "
         >
           <Modal.CloseTrigger />
           <Modal.Body className="p-0">
@@ -514,7 +514,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 value={query}
                 onChange={setQuery}
               >
-                <SearchField.Group className="h-12">
+                <SearchField.Group className="">
                   {loading ? <Spinner size="sm" /> : <SearchField.SearchIcon />}
                   <SearchField.Input
                     ref={inputRef}
@@ -531,7 +531,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                   ) : null}
                 </SearchField.Group>
               </SearchField>
-              <p className="mt-2 text-xs text-muted">
+              <p className="mt-2 text-xs text-muted-foreground">
                 Use this command surface for quick navigation, workspace switching, and scoped
                 search.
               </p>
@@ -539,7 +539,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
             <div id="search-results" role="listbox" aria-label="Command palette results">
               {showEmpty ? (
-                <p className="px-4 py-8 text-center text-sm text-muted">
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
                   No commands or search results for{' '}
                   <span className="font-medium text-foreground">&ldquo;{query}&rdquo;</span>.
                 </p>
@@ -583,7 +583,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                             description={page.description}
                             onMouseEnter={() => setActiveIdx(globalIdx)}
                             onPress={() => navigate({ kind: 'page', data: page })}
-                            trailing={<span className="text-[11px] text-muted">{page.href}</span>}
+                            trailing={<span className="text-xs text-muted-foreground">{page.href}</span>}
                           />
                         );
                       })}
@@ -736,8 +736,8 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           </Modal.Body>
 
           <Modal.Footer className="flex items-center justify-between border-t border-divider px-4 py-2">
-            <p className="text-[11px] text-muted">Scoped to your active workspace.</p>
-            <div className="flex items-center gap-3 text-[10px] text-muted">
+            <p className="text-xs text-muted-foreground">Scoped to your active workspace.</p>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <Kbd>
                   <Kbd.Abbr keyValue="up" />

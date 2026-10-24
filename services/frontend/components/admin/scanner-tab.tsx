@@ -7,7 +7,7 @@ import { getScannerHealth } from '@/lib/api/dashboard';
 import type { ScannerHealth } from '@/lib/api/types/dashboard';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate } from '@/lib/time';
-import { Button, Card, Chip } from '@heroui/react';
+import { Button, Card, Chip } from '@/components/ui';
 import { useCallback, useEffect, useState } from 'react';
 
 function formatDbAge(hours?: number | null): string {
@@ -50,7 +50,7 @@ export function ScannerTab() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">Scanner Health</h2>
-            <p className="text-sm text-zinc-500">Live worker cache status from the current backend instance.</p>
+            <p className="text-sm text-muted-foreground">Live worker cache status from the current backend instance.</p>
           </div>
           <Button variant="secondary" onPress={load} isDisabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
@@ -76,7 +76,7 @@ export function ScannerTab() {
 
                 <Card variant="secondary">
                   <Card.Content>
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-xs text-muted-foreground">
                       Status is based on when each worker last downloaded its local DB copy. A worker is healthy if it downloaded within the last {health.max_allowed_age_hours}h.
                     </p>
                   </Card.Content>
@@ -89,26 +89,26 @@ export function ScannerTab() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <Chip size="sm" variant="soft">Worker {worker.worker_id}</Chip>
                           <Chip size="sm" variant="soft" color={statusColor(worker.status)} className="capitalize">{worker.status}</Chip>
-                          <span className="text-xs text-zinc-500">Trivy {worker.trivy_version || 'unknown'}</span>
+                          <span className="text-xs text-muted-foreground">Trivy {worker.trivy_version || 'unknown'}</span>
                         </div>
-                        <span className="text-xs text-zinc-500" title={worker.cache_dir}>{worker.cache_dir}</span>
+                        <span className="text-xs text-muted-foreground" title={worker.cache_dir}>{worker.cache_dir}</span>
                       </div>
 
                       <div className="grid gap-3 md:grid-cols-2 text-xs">
                         <Card variant="secondary">
                           <Card.Content className="space-y-1">
-                            <p className="text-zinc-500">Vulnerability DB</p>
+                            <p className="text-muted-foreground">Vulnerability DB</p>
                             <p>Snapshot age: {formatDbAge(worker.vuln_db_age_hours)}</p>
-                            <p className="text-zinc-500">Updated: {worker.vuln_db_updated_at ? fullDate(worker.vuln_db_updated_at) : 'Unknown'}</p>
-                            <p className="text-zinc-500">Downloaded: {worker.vuln_db_downloaded_at ? fullDate(worker.vuln_db_downloaded_at) : 'Unknown'}</p>
+                            <p className="text-muted-foreground">Updated: {worker.vuln_db_updated_at ? fullDate(worker.vuln_db_updated_at) : 'Unknown'}</p>
+                            <p className="text-muted-foreground">Downloaded: {worker.vuln_db_downloaded_at ? fullDate(worker.vuln_db_downloaded_at) : 'Unknown'}</p>
                           </Card.Content>
                         </Card>
                         <Card variant="secondary">
                           <Card.Content className="space-y-1">
-                            <p className="text-zinc-500">Java DB</p>
+                            <p className="text-muted-foreground">Java DB</p>
                             <p>Snapshot age: {formatDbAge(worker.java_db_age_hours)}</p>
-                            <p className="text-zinc-500">Updated: {worker.java_db_updated_at ? fullDate(worker.java_db_updated_at) : 'Unknown'}</p>
-                            <p className="text-zinc-500">Downloaded: {worker.java_db_downloaded_at ? fullDate(worker.java_db_downloaded_at) : 'Unknown'}</p>
+                            <p className="text-muted-foreground">Updated: {worker.java_db_updated_at ? fullDate(worker.java_db_updated_at) : 'Unknown'}</p>
+                            <p className="text-muted-foreground">Downloaded: {worker.java_db_downloaded_at ? fullDate(worker.java_db_downloaded_at) : 'Unknown'}</p>
                           </Card.Content>
                         </Card>
                       </div>

@@ -56,7 +56,7 @@ export function PublicShell({
         className="pointer-events-none absolute inset-0 opacity-[0.42] dark:opacity-[0.28]"
         style={{
           backgroundImage:
-            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 24%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 3%, transparent) 1px, transparent 1px)',
+            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--primary) 24%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 3%, transparent) 1px, transparent 1px)',
           backgroundPosition: 'center top, center top, center top',
           backgroundSize: '24px 24px, 24px 24px, 24px 24px',
         }}
@@ -65,7 +65,7 @@ export function PublicShell({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 18%), radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 22%)',
+            'radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 18%), radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 22%)',
         }}
       />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_45%)]" />

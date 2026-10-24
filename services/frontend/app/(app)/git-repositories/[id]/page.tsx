@@ -1,5 +1,7 @@
 'use client';
 
+import { DiscoveryReviewTable } from '@/components/git-repositories/discovery-review-table';
+
 import {
   Accordion,
   buttonVariants,
@@ -16,8 +18,10 @@ import {
   Select,
   Spinner,
   TextArea,
+  Tabs,
+  Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Cancel01Icon,
   Clock01Icon,
@@ -30,6 +34,7 @@ import {
   Search01Icon,
   Settings02Icon,
 } from 'hugeicons-react';
+import { FileCode2 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -38,8 +43,9 @@ import { useToast } from '@/components/toast';
 import { StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
-import { PageContainer, PageTitle } from '@/components/ui/page-header';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { StatCard } from '@/components/ui/stat-card';
+import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import {
   cancelGitRepositoryRun,
   createGitRepositoryDiscoveryRule,
@@ -247,7 +253,7 @@ function RegistryResolutionSummary({
           <Chip className="shrink-0" color="accent" size="sm" variant="soft">
             Configured override
           </Chip>
-          {host ? <code className="truncate text-xs text-muted">{host}</code> : null}
+          {host ? <code className="truncate text-xs text-muted-foreground">{host}</code> : null}
         </div>
         <Description className="!block">
           {overrideRegistry
@@ -270,7 +276,7 @@ function RegistryResolutionSummary({
           >
             {inferredRegistry ? 'Configured match' : 'Configured match unavailable'}
           </Chip>
-          {host ? <code className="truncate text-xs text-muted">{host}</code> : null}
+          {host ? <code className="truncate text-xs text-muted-foreground">{host}</code> : null}
         </div>
         <Description className="!block">
           {inferredRegistry
@@ -288,7 +294,7 @@ function RegistryResolutionSummary({
           <Chip className="shrink-0" color="warning" size="sm" variant="soft">
             Custom / unconfigured host
           </Chip>
-          <code className="truncate text-xs text-muted">{host}</code>
+          <code className="truncate text-xs text-muted-foreground">{host}</code>
         </div>
         <Description className="!block">
           No JustScan registry entry matches this host. Automatic matching keeps the original host;
@@ -367,6 +373,7 @@ function targetGroup(
 
 export default function GitRepositoryDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [detailView, setDetailView] = useState('images');
   const router = useRouter();
   const [repository, setRepository] = useState<GitRepository | null>(null);
   const [runs, setRuns] = useState<GitRepositoryRun[]>([]);
@@ -676,20 +683,6 @@ export default function GitRepositoryDetailPage() {
     }
   }
 
-  async function ignoreCandidate(candidate: GitRepositoryRunCandidate) {
-    try {
-      await createGitRepositoryDiscoveryRule(id, {
-        path_pattern: candidate.path,
-        resolution: 'ignore',
-        config: {},
-      });
-      success('Path ignored. Running a new dry discovery.');
-      await discover();
-    } catch (caught) {
-      error(caught instanceof Error ? caught.message : 'Could not ignore this path.');
-    }
-  }
-
   function toggleCandidate(candidateID: string, isSelected: boolean) {
     setSelectedCandidateIDs((current) => {
       const next = new Set(current);
@@ -699,10 +692,18 @@ export default function GitRepositoryDetailPage() {
     });
   }
 
-  function toggleAllPending(isSelected: boolean) {
-    setSelectedCandidateIDs(
-      isSelected ? new Set(pendingCandidates.map((candidate) => candidate.id)) : new Set()
-    );
+  function toggleAllPending(
+    isSelected: boolean,
+    ids = pendingCandidates.map((candidate) => candidate.id)
+  ) {
+    setSelectedCandidateIDs((current) => {
+      const next = new Set(current);
+      for (const id of ids) {
+        if (isSelected) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
   }
 
   function toggleImage(imageRef: string, isSelected: boolean) {
@@ -1045,7 +1046,7 @@ export default function GitRepositoryDetailPage() {
     return (
       <PageContainer>
         <Card>
-          <Card.Content className="flex items-center gap-2 py-12 text-sm text-foreground/60">
+          <Card.Content className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
             <Spinner size="sm" /> Loading repository…
           </Card.Content>
         </Card>
@@ -1137,14 +1138,16 @@ export default function GitRepositoryDetailPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard
           title="Needs review"
+          onPress={() => setDetailView('review')}
           value={String(candidates.filter((candidate) => candidate.status === 'unresolved').length)}
           detail="ambiguous deployment markers"
         />
         <MetricCard
           title="Latest discovery"
+          onPress={() => setDetailView('images')}
           value={String(previewImages.length)}
           detail="unique image references"
         />
@@ -1158,6 +1161,7 @@ export default function GitRepositoryDetailPage() {
                   ? 'CI config files'
                   : 'Deployment targets'
           }
+          onPress={() => setDetailView('tree')}
           value={String(files.length)}
           detail={
             repository.discovery_mode === 'manifests'
@@ -1177,771 +1181,852 @@ export default function GitRepositoryDetailPage() {
         />
       </div>
 
-      {repository.discovery_excludes?.length ? (
-        <Card>
-          <Card.Header>
-            <Card.Title>Ignored discovery paths</Card.Title>
-            <Card.Description>
-              These repository-relative globs are skipped before automatic discovery scans.
-            </Card.Description>
-          </Card.Header>
-          <Card.Content className="flex flex-wrap gap-2">
-            {repository.discovery_excludes.map((path) => (
-              <Chip key={path} size="sm" variant="soft">
-                <code>{path}</code>
-              </Chip>
+      <Tabs
+        selectedKey={detailView}
+        onSelectionChange={(key) => setDetailView(String(key))}
+        className="gap-4"
+      >
+        <Tabs.ListContainer className="overflow-x-auto border-b border-border">
+          <Tabs.List
+            aria-label="Repository views"
+            className="h-10 min-w-max gap-4 rounded-none bg-transparent p-0"
+          >
+            {[
+              { id: 'images', label: 'Images' },
+              { id: 'review', label: 'Discovery review' },
+              { id: 'tree', label: 'Source tree' },
+              { id: 'configuration', label: 'Configuration' },
+              { id: 'activity', label: 'Activity' },
+            ].map((tab) => (
+              <Tabs.Tab
+                key={tab.id}
+                id={tab.id}
+                className="h-10 flex-none rounded-none border-0 border-b-2 border-transparent px-0 data-[selected]:border-foreground data-[selected]:bg-transparent data-[selected]:shadow-none dark:data-[selected]:bg-transparent"
+              >
+                {tab.label}
+                {tab.id === 'review' && pendingCandidates.length > 0 ? (
+                  <span className="ml-1 rounded bg-warning/10 px-1.5 text-xs tabular-nums text-warning-foreground">
+                    {pendingCandidates.length}
+                  </span>
+                ) : null}
+              </Tabs.Tab>
             ))}
-          </Card.Content>
-        </Card>
-      ) : null}
+          </Tabs.List>
+        </Tabs.ListContainer>
+        <Tabs.Panel id="configuration" className="space-y-4 outline-none">
+          <Card className="gap-3">
+            <Card.Header>
+              <Card.Title>Repository configuration</Card.Title>
+              <Card.Description>Connection, discovery, and scheduling context</Card.Description>
+            </Card.Header>
+            <Card.Content>
+              <dl className="grid gap-4 sm:grid-cols-2">
+                <div className="min-w-0 sm:col-span-2">
+                  <dt className="text-xs text-muted-foreground">Clone URL</dt>
+                  <dd className="mt-1 break-all font-mono text-sm">{repository.clone_url}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Git ref</dt>
+                  <dd className="mt-1 break-all font-mono text-sm">{repository.ref}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Discovery mode</dt>
+                  <dd className="mt-1 text-sm">{discoveryModeLabel(repository.discovery_mode)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Schedule</dt>
+                  <dd className="mt-1 text-sm">
+                    {repository.enabled
+                      ? `${repository.schedule} · ${repository.timezone}`
+                      : 'Manual scanning'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Rescan policy</dt>
+                  <dd className="mt-1 text-sm">
+                    {repository.rescan_policy === 'all' ? 'All images' : 'Changed images only'}
+                  </dd>
+                </div>
+              </dl>
+            </Card.Content>
+          </Card>
 
-      <Card className="overflow-hidden">
-        <Card.Header className="!flex-row items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
-              <PackageIcon size={17} />
-            </span>
-            <div className="min-w-0">
-              <Card.Title>Managed Helm sources</Card.Title>
-              <Card.Description>
-                Render local or external Git charts with values from this deployment repository.
-              </Card.Description>
-            </div>
-          </div>
-          <Button size="sm" variant="secondary" onPress={() => void openHelmSourceEditor()}>
-            Add Helm source
-          </Button>
-        </Card.Header>
-        <Card.Content className="p-0">
-          <Accordion hideSeparator variant="surface">
-            <Accordion.Item id="managed-helm-sources">
-              <Accordion.Heading>
-                <Accordion.Trigger className="px-5 py-3 hover:bg-surface-secondary">
-                  <span className="text-sm font-medium">Configured sources</span>
-                  <Chip size="sm" variant="soft">
-                    {helmSources.length}
+          {repository.discovery_excludes?.length ? (
+            <Card>
+              <Card.Header>
+                <Card.Title>Ignored discovery paths</Card.Title>
+                <Card.Description>
+                  These repository-relative globs are skipped before automatic discovery scans.
+                </Card.Description>
+              </Card.Header>
+              <Card.Content className="flex flex-wrap gap-2">
+                {repository.discovery_excludes.map((path) => (
+                  <Chip key={path} size="sm" variant="soft">
+                    <code>{path}</code>
                   </Chip>
-                  <Accordion.Indicator />
-                </Accordion.Trigger>
-              </Accordion.Heading>
-              <Accordion.Panel>
-                <Accordion.Body className="space-y-3 px-5 pb-5">
-                  {helmSources.length === 0 ? (
-                    <p className="text-sm text-muted">
-                      Add a source when a chart lives outside this repository or needs explicit Helm
-                      values.
-                    </p>
-                  ) : (
-                    helmSources.map((source) => {
-                      const credential = source.helm_registry_credential_id
-                        ? helmCredentialByID.get(source.helm_registry_credential_id)
-                        : null;
-                      return (
-                        <div
-                          key={source.id}
-                          className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-3"
-                        >
-                          <div className="min-w-0 space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <code className="text-xs font-medium text-foreground">
-                                {source.chart_path}
-                              </code>
-                              <Chip size="sm" variant="soft">
-                                {source.source_type === 'local'
-                                  ? 'This repository'
-                                  : source.source_type === 'repository'
-                                    ? 'Registered repository'
-                                    : 'Direct Git URL'}
-                              </Chip>
-                            </div>
-                            <p className="text-xs text-muted">
-                              {source.values.length > 0
-                                ? `Values: ${source.values.join(', ')}`
-                                : 'Chart defaults only'}
-                              {source.release_name ? ` · Release: ${source.release_name}` : ''}
+                ))}
+              </Card.Content>
+            </Card>
+          ) : null}
+
+          <Card className="overflow-hidden gap-0 py-0">
+            <Card.Header className="flex flex-row flex-wrap items-start justify-between gap-3 border-b border-border p-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <PackageIcon size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <Card.Title>Managed Helm sources</Card.Title>
+                  <Card.Description>
+                    Render local or external Git charts with values from this deployment repository.
+                  </Card.Description>
+                </div>
+              </div>
+              <Button size="sm" variant="secondary" onPress={() => void openHelmSourceEditor()}>
+                Add Helm source
+              </Button>
+            </Card.Header>
+            <Card.Content className="p-0">
+              <div className="divide-y divide-border">
+                {helmSources.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">
+                    Add a source when a chart lives outside this repository or needs explicit Helm
+                    values.
+                  </p>
+                ) : (
+                  helmSources.map((source) => {
+                    const credential = source.helm_registry_credential_id
+                      ? helmCredentialByID.get(source.helm_registry_credential_id)
+                      : null;
+                    return (
+                      <div
+                        key={source.id}
+                        className="flex flex-wrap items-start justify-between gap-3 px-4 py-3"
+                      >
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <code className="break-all text-xs font-medium text-foreground">
+                              {source.chart_path}
+                            </code>
+                            <Chip size="sm" variant="soft">
+                              {source.source_type === 'local'
+                                ? 'This repository'
+                                : source.source_type === 'repository'
+                                  ? 'Registered repository'
+                                  : 'Direct Git URL'}
+                            </Chip>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {source.values.length > 0
+                              ? `Values: ${source.values.join(', ')}`
+                              : 'Chart defaults only'}
+                            {source.release_name ? ` · Release: ${source.release_name}` : ''}
+                          </p>
+                          <div className="text-xs text-muted-foreground">
+                            <p>
+                              Dependency credentials:{' '}
+                              {credential?.name ??
+                                (source.dependency_registry_id
+                                  ? 'Legacy image registry'
+                                  : 'Automatic matching')}
                             </p>
-                            <div className="text-xs text-muted">
-                              <p>
-                                Dependency credentials:{' '}
-                                {credential?.name ??
-                                  (source.dependency_registry_id
-                                    ? 'Legacy image registry'
-                                    : 'Automatic matching')}
+                            {credential ? (
+                              <p className="mt-0.5 break-all text-muted-foreground/80">
+                                {credential.protocol.toUpperCase()} · {credential.url}
                               </p>
-                              {credential ? (
-                                <p className="mt-0.5 break-all text-muted/80">
-                                  {credential.protocol.toUpperCase()} · {credential.url}
-                                </p>
-                              ) : null}
-                              {source.dependency_registry_id ? (
-                                <p className="mt-1 text-warning">
-                                  Legacy registry link — edit and select a Helm credential to
-                                  migrate it.
-                                </p>
-                              ) : null}
-                            </div>
-                            {source.source_type === 'url' ? (
-                              <p className="truncate text-xs text-muted">
-                                {source.clone_url} · {source.ref}
+                            ) : null}
+                            {source.dependency_registry_id ? (
+                              <p className="mt-1 text-warning-foreground">
+                                Legacy registry link — edit and select a Helm credential to migrate
+                                it.
                               </p>
                             ) : null}
                           </div>
-                          <div className="flex shrink-0 gap-2">
-                            <Button
-                              size="sm"
-                              variant="tertiary"
-                              onPress={() => void openHelmSourceEditor(source)}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="danger-soft"
-                              onPress={() => void removeHelmSource(source)}
-                            >
-                              Remove
-                            </Button>
-                          </div>
+                          {source.source_type === 'url' ? (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {source.clone_url} · {source.ref}
+                            </p>
+                          ) : null}
                         </div>
-                      );
-                    })
-                  )}
-                </Accordion.Body>
-              </Accordion.Panel>
-            </Accordion.Item>
-          </Accordion>
-        </Card.Content>
-      </Card>
-
-      {!preview ? (
-        <EmptyState
-          icon={<Search01Icon />}
-          title="No discovery preview yet"
-          description="Run a dry discovery to inspect every image and its Git location before creating a scan."
-          action={{ label: 'Run dry discovery', onClick: () => void discover() }}
-        />
-      ) : (
-        <>
-          {candidates.length > 0 ? (
-            <Card>
-              <Card.Header className="!flex-row items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
-                  <Search01Icon size={17} />
-                </span>
-                <div>
-                  <Card.Title>Discovery review</Card.Title>
-                  <Card.Description>
-                    JustScan found deployment markers it cannot safely classify on its own. Ignore a
-                    marker when it is not a deployment input.
-                  </Card.Description>
+                        <RowActionsMenu
+                          label={`Actions for Helm source ${source.chart_path}`}
+                          items={[
+                            {
+                              id: 'edit',
+                              label: 'Edit source',
+                              icon: <Settings02Icon size={14} />,
+                              onAction: () => void openHelmSourceEditor(source),
+                            },
+                            {
+                              id: 'remove',
+                              label: 'Remove source',
+                              icon: <Delete01Icon size={14} />,
+                              variant: 'danger',
+                              onAction: () => void removeHelmSource(source),
+                            },
+                          ]}
+                        />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </Card.Content>
+          </Card>
+        </Tabs.Panel>
+        <Tabs.Panel id="images" className="space-y-4 outline-none">
+          {!preview ? (
+            <EmptyState
+              icon={<Search01Icon />}
+              title="No discovery preview yet"
+              description="Run a dry discovery to inspect images and their source locations before creating a scan."
+              action={{ label: 'Run dry discovery', onClick: () => void discover() }}
+            />
+          ) : (
+            <Card className="overflow-hidden gap-0 py-0">
+              <Card.Header className="flex flex-row flex-wrap items-start justify-between gap-3 border-b border-border p-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <PackageIcon size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
+                    <Card.Title>Discovered images</Card.Title>
+                    <Card.Description>
+                      {repository.discovery_mode === 'registry'
+                        ? `This discovery searches ${registryDiscoverySource(repository, registries)} and keeps each matching image reference tied to its source file. Review the results, then scan only the workloads you want to track.`
+                        : repository.discovery_mode === 'gitlab_ci'
+                          ? 'Images and service declarations found in GitLab CI YAML. Review the results, then scan only the workloads you want to track.'
+                          : 'Review the images found in this dry run, then scan only the workloads you want to track.'}
+                    </Card.Description>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Chip size="sm" variant="soft">
+                    {preview.run.image_count} images
+                  </Chip>
+                  <Chip size="sm" variant="soft">
+                    {timeAgo(preview.run.created_at)}
+                  </Chip>
                 </div>
               </Card.Header>
-              <Card.Content>
-                <Accordion
-                  defaultExpandedKeys={pendingCandidates.length > 0 ? ['pending'] : []}
-                  variant="surface"
-                >
-                  <Accordion.Item id="pending">
+              <Card.Content className="p-0">
+                <Accordion className="border-b border-border">
+                  <Accordion.Item id="registry-patterns">
                     <Accordion.Heading>
-                      <Accordion.Trigger>
-                        <span>Needs review</span>
-                        <Chip
-                          size="sm"
-                          color={pendingCandidates.length > 0 ? 'warning' : 'success'}
-                          variant="soft"
-                        >
-                          {pendingCandidates.length}
-                        </Chip>
+                      <Accordion.Trigger className="px-4 py-3">
+                        <span>Registry override patterns</span>
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {imageRegistryOverrideRules.length} configured
+                        </span>
                         <Accordion.Indicator />
                       </Accordion.Trigger>
                     </Accordion.Heading>
                     <Accordion.Panel>
-                      <Accordion.Body className="space-y-2">
-                        {pendingCandidates.length === 0 ? (
-                          <p className="text-sm text-foreground/60">Nothing needs a decision.</p>
-                        ) : (
-                          <>
-                            <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
-                              <Checkbox
-                                isIndeterminate={
-                                  selectedCandidateIDs.size > 0 &&
-                                  selectedCandidateIDs.size < pendingCandidates.length
-                                }
-                                isSelected={selectedCandidateIDs.size === pendingCandidates.length}
-                                onChange={toggleAllPending}
-                                variant="secondary"
-                              >
-                                <Checkbox.Content>
-                                  <Checkbox.Control>
-                                    <Checkbox.Indicator />
-                                  </Checkbox.Control>
-                                  <Label>Select all pending</Label>
-                                </Checkbox.Content>
-                              </Checkbox>
-                              <Button
-                                isDisabled={selectedCandidateIDs.size === 0}
-                                isPending={ignoringCandidates}
-                                size="sm"
-                                variant="secondary"
-                                onPress={() => void ignoreSelectedCandidates()}
-                              >
-                                Ignore selected
-                                {selectedCandidateIDs.size > 0
-                                  ? ` (${selectedCandidateIDs.size})`
-                                  : ''}
-                              </Button>
+                      <Accordion.Body>
+                        <div className="m-4 space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+                          <div>
+                            <p className="text-sm font-medium">Registry override patterns</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Changing a discovered image creates a pattern for its repository
+                              across tags. Add broader RE2-compatible patterns here. Exact image
+                              overrides take precedence; when patterns overlap, the most recently
+                              updated pattern wins.
+                            </p>
+                          </div>
+                          {imageRegistryOverrideRules.length > 0 ? (
+                            <div className="space-y-2">
+                              {imageRegistryOverrideRules.map((rule) => {
+                                const ruleRegistry = registryByID.get(rule.registry_id);
+                                const matchCount = previewImages.filter((image) =>
+                                  imageRegistryRuleMatches(rule.pattern, image.full_ref)
+                                ).length;
+                                return (
+                                  <div
+                                    key={rule.id}
+                                    className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2"
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <code className="block break-all text-xs text-foreground">
+                                        {rule.pattern}
+                                      </code>
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        {ruleRegistry?.name ?? 'Registry unavailable'} · matches{' '}
+                                        {matchCount}{' '}
+                                        {matchCount === 1
+                                          ? 'discovered image'
+                                          : 'discovered images'}
+                                      </p>
+                                    </div>
+                                    <Button
+                                      aria-label={`Remove registry pattern ${rule.pattern}`}
+                                      isDisabled={savingRegistryRule}
+                                      isIconOnly
+                                      size="sm"
+                                      variant="tertiary"
+                                      onPress={() => void removeImageRegistryOverrideRule(rule)}
+                                    >
+                                      <Delete01Icon size={16} />
+                                    </Button>
+                                  </div>
+                                );
+                              })}
                             </div>
-                            {pendingCandidates.map((candidate) => (
-                              <CandidateRow
-                                key={candidate.id}
-                                candidate={candidate}
-                                isSelected={selectedCandidateIDs.has(candidate.id)}
-                                onIgnore={ignoreCandidate}
-                                onReview={review}
-                                onSelectedChange={toggleCandidate}
+                          ) : null}
+                          <form
+                            onSubmit={saveImageRegistryOverrideRule}
+                            className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto]"
+                          >
+                            <div className="space-y-2">
+                              <FormField
+                                label="Image ref regex"
+                                placeholder="^ghcr\\.io/team/api(:.*)?$"
+                                value={registryRulePattern}
+                                onChange={(event) => setRegistryRulePattern(event.target.value)}
+                                className="bg-surface"
+                                description="Match against full discovered image refs. Example: ^ghcr\\.io/team/api(:.*)?$. Uses Go RE2 syntax."
                               />
-                            ))}
-                          </>
-                        )}
+                            </div>
+                            <Select
+                              aria-label="Registry for image ref pattern"
+                              isDisabled={savingRegistryRule || registries.length === 0}
+                              value={registryRuleRegistryID || '__none__'}
+                              onChange={(value) =>
+                                setRegistryRuleRegistryID(
+                                  String(value === '__none__' ? '' : (value ?? ''))
+                                )
+                              }
+                              variant="secondary"
+                            >
+                              <Label>Registry</Label>
+                              <Select.Trigger>
+                                <Select.Value />
+                                <Select.Indicator />
+                              </Select.Trigger>
+                              <Select.Popover>
+                                <ListBox>
+                                  <ListBox.Item id="__none__">Choose a registry</ListBox.Item>
+                                  {registries.map((registry) => (
+                                    <ListBox.Item
+                                      key={registry.id}
+                                      id={registry.id}
+                                      textValue={registry.name}
+                                    >
+                                      {registry.name}
+                                    </ListBox.Item>
+                                  ))}
+                                </ListBox>
+                              </Select.Popover>
+                            </Select>
+                            <Button
+                              isDisabled={!registryRulePattern.trim() || !registryRuleRegistryID}
+                              isPending={savingRegistryRule}
+                              type="submit"
+                              variant="secondary"
+                            >
+                              Save pattern
+                            </Button>
+                            {registryRuleError ? (
+                              <p className="text-xs text-danger md:col-span-3">
+                                {registryRuleError}
+                              </p>
+                            ) : null}
+                          </form>
+                        </div>
                       </Accordion.Body>
                     </Accordion.Panel>
                   </Accordion.Item>
-                  {handledCandidates.length > 0 ? (
-                    <Accordion.Item id="handled">
-                      <Accordion.Heading>
-                        <Accordion.Trigger>
-                          <span>Resolved and ignored</span>
-                          <Chip size="sm" variant="soft">
-                            {handledCandidates.length}
-                          </Chip>
-                          <Accordion.Indicator />
-                        </Accordion.Trigger>
-                      </Accordion.Heading>
-                      <Accordion.Panel>
-                        <Accordion.Body className="space-y-2">
-                          {handledCandidates.map((candidate) => (
-                            <CandidateRow key={candidate.id} candidate={candidate} />
-                          ))}
-                        </Accordion.Body>
-                      </Accordion.Panel>
-                    </Accordion.Item>
-                  ) : null}
                 </Accordion>
-              </Card.Content>
-            </Card>
-          ) : null}
-          <Card className="overflow-hidden">
-            <Card.Header className="!flex-row items-start justify-between gap-4">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
-                  <PackageIcon size={17} />
-                </span>
-                <div className="min-w-0">
-                  <Card.Title>Discovered images</Card.Title>
-                  <Card.Description>
-                    {repository.discovery_mode === 'registry'
-                      ? `This discovery searches ${registryDiscoverySource(repository, registries)} and keeps each matching image reference tied to its source file. Review the results, then scan only the workloads you want to track.`
-                      : repository.discovery_mode === 'gitlab_ci'
-                        ? 'Images and service declarations found in GitLab CI YAML. Review the results, then scan only the workloads you want to track.'
-                        : 'Review the images found in this dry run, then scan only the workloads you want to track.'}
-                  </Card.Description>
+                <div className="m-4 mb-0">
+                  <SearchField
+                    aria-label="Search discovered images"
+                    className="w-full sm:max-w-md"
+                    value={imageSearch}
+                    onChange={setImageSearch}
+                    variant="secondary"
+                  >
+                    <SearchField.Group>
+                      <SearchField.SearchIcon />
+                      <SearchField.Input placeholder="Search image name, tag, or digest" />
+                      <SearchField.ClearButton />
+                    </SearchField.Group>
+                  </SearchField>
                 </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Chip size="sm" variant="soft">
-                  {preview.run.image_count} images
-                </Chip>
-                <Chip size="sm" variant="soft">
-                  {timeAgo(preview.run.created_at)}
-                </Chip>
-              </div>
-            </Card.Header>
-            <Card.Content className="p-0">
-              <div className="m-4 space-y-3 rounded-xl border border-divider/70 bg-surface-secondary p-4">
-                <div>
-                  <p className="text-sm font-medium">Registry override patterns</p>
-                  <p className="mt-1 text-xs text-muted">
-                    Changing a discovered image creates a pattern for its repository across tags.
-                    Add broader RE2-compatible patterns here. Exact image overrides take precedence;
-                    when patterns overlap, the most recently updated pattern wins.
-                  </p>
-                </div>
-                {imageRegistryOverrideRules.length > 0 ? (
-                  <div className="space-y-2">
-                    {imageRegistryOverrideRules.map((rule) => {
-                      const ruleRegistry = registryByID.get(rule.registry_id);
-                      const matchCount = previewImages.filter((image) =>
-                        imageRegistryRuleMatches(rule.pattern, image.full_ref)
-                      ).length;
-                      return (
-                        <div
-                          key={rule.id}
-                          className="flex min-w-0 items-center gap-3 rounded-lg border border-divider/70 bg-surface px-3 py-2"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <code className="block break-all text-xs text-foreground">
-                              {rule.pattern}
-                            </code>
-                            <p className="mt-1 text-xs text-muted">
-                              {ruleRegistry?.name ?? 'Registry unavailable'} · matches {matchCount}{' '}
-                              {matchCount === 1 ? 'discovered image' : 'discovered images'}
-                            </p>
-                          </div>
-                          <Button
-                            aria-label={`Remove registry pattern ${rule.pattern}`}
-                            isDisabled={savingRegistryRule}
-                            isIconOnly
-                            size="sm"
-                            variant="tertiary"
-                            onPress={() => void removeImageRegistryOverrideRule(rule)}
-                          >
-                            <Delete01Icon size={16} />
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-                <form
-                  onSubmit={saveImageRegistryOverrideRule}
-                  className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto]"
-                >
-                  <div className="space-y-2">
-                    <FormField
-                      label="Image ref regex"
-                      placeholder="^ghcr\\.io/team/api(:.*)?$"
-                      value={registryRulePattern}
-                      onChange={(event) => setRegistryRulePattern(event.target.value)}
-                      className="bg-surface"
-                      description="Match against full discovered image refs. Example: ^ghcr\\.io/team/api(:.*)?$. Uses Go RE2 syntax."
-                    />
-                  </div>
-                  <Select
-                    aria-label="Registry for image ref pattern"
-                    isDisabled={savingRegistryRule || registries.length === 0}
-                    value={registryRuleRegistryID || '__none__'}
-                    onChange={(value) =>
-                      setRegistryRuleRegistryID(String(value === '__none__' ? '' : (value ?? '')))
+                <div className="m-4 flex flex-wrap items-end gap-4 rounded-xl border border-border bg-muted/30 px-3 py-2.5">
+                  <Checkbox
+                    isDisabled={filteredSelectableImages.length === 0}
+                    isIndeterminate={
+                      selectedFilteredImageCount > 0 &&
+                      selectedFilteredImageCount < filteredSelectableImages.length
                     }
+                    isSelected={
+                      filteredSelectableImages.length > 0 &&
+                      selectedFilteredImageCount === filteredSelectableImages.length
+                    }
+                    onChange={toggleAllImages}
                     variant="secondary"
                   >
-                    <Label>Registry</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        <ListBox.Item id="__none__">Choose a registry</ListBox.Item>
-                        {registries.map((registry) => (
-                          <ListBox.Item
-                            key={registry.id}
-                            id={registry.id}
-                            textValue={registry.name}
-                          >
-                            {registry.name}
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                  <Button
-                    isDisabled={!registryRulePattern.trim() || !registryRuleRegistryID}
-                    isPending={savingRegistryRule}
-                    type="submit"
-                    variant="secondary"
-                  >
-                    Save pattern
-                  </Button>
-                  {registryRuleError ? (
-                    <p className="text-xs text-danger md:col-span-3">{registryRuleError}</p>
-                  ) : null}
-                </form>
-              </div>
-              <div className="m-4 mb-0">
-                <SearchField
-                  aria-label="Search discovered images"
-                  className="w-full sm:max-w-md"
-                  value={imageSearch}
-                  onChange={setImageSearch}
-                  variant="secondary"
-                >
-                  <SearchField.Group>
-                    <SearchField.SearchIcon />
-                    <SearchField.Input placeholder="Search image name, tag, or digest" />
-                    <SearchField.ClearButton />
-                  </SearchField.Group>
-                </SearchField>
-              </div>
-              <div className="m-4 flex flex-wrap items-end gap-4 rounded-xl border border-divider/70 bg-surface-secondary px-3 py-2.5">
-                <Checkbox
-                  isDisabled={filteredSelectableImages.length === 0}
-                  isIndeterminate={
-                    selectedFilteredImageCount > 0 &&
-                    selectedFilteredImageCount < filteredSelectableImages.length
-                  }
-                  isSelected={
-                    filteredSelectableImages.length > 0 &&
-                    selectedFilteredImageCount === filteredSelectableImages.length
-                  }
-                  onChange={toggleAllImages}
-                  variant="secondary"
-                >
-                  <Checkbox.Content>
-                    <Checkbox.Control>
-                      <Checkbox.Indicator />
-                    </Checkbox.Control>
-                    <div className="flex flex-col gap-0.5">
-                      <Label>Select all scan-enabled images</Label>
-                      <Description>
-                        {filteredSelectableImages.length}
-                        {normalizedImageSearch
-                          ? ` of ${selectableImages.length} matching`
-                          : ''}{' '}
-                        ready to add to a scan
-                      </Description>
-                    </div>
-                  </Checkbox.Content>
-                </Checkbox>
-                <div className="ml-auto flex shrink-0 flex-wrap gap-2">
-                  <Button
-                    isDisabled={selectedImageRefs.size === 0}
-                    isPending={startingScan}
-                    size="sm"
-                    variant="primary"
-                    onPress={() => void startScan([...selectedImageRefs])}
-                  >
-                    Scan selected{selectedImageRefs.size > 0 ? ` (${selectedImageRefs.size})` : ''}
-                  </Button>
-                  <Button
-                    isDisabled={selectedImageRefs.size === 0}
-                    isPending={updatingImageExclusions}
-                    size="sm"
-                    variant="tertiary"
-                    onPress={() => void excludeImages([...selectedImageRefs])}
-                  >
-                    Exclude selected
-                  </Button>
-                </div>
-              </div>
-              <div className="border-t border-divider/70">
-                {filteredPreviewImages.map((image) => {
-                  const locations = locationsFor(image);
-                  const exclusion = exclusionByRef.get(image.full_ref);
-                  const registryOverride = imageRegistryOverrideByRef.get(image.full_ref);
-                  const registryOverrideRule = imageRegistryOverrideRules.find((rule) =>
-                    imageRegistryRuleMatches(rule.pattern, image.full_ref)
-                  );
-                  const selectedRegistryID =
-                    registryOverride?.registry_id ?? registryOverrideRule?.registry_id;
-                  const selectedRegistry = selectedRegistryID
-                    ? registryByID.get(selectedRegistryID)
-                    : undefined;
-                  const inferredRegistry = image.registry_id
-                    ? registryByID.get(image.registry_id)
-                    : undefined;
-                  const imageHost = imageRegistryHost(image.full_ref);
-                  const latestScan = latestScanByRef.get(image.full_ref);
-                  return (
-                    <div
-                      key={image.id}
-                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 border-b border-divider/70 px-4 py-3 last:border-b-0 transition-colors hover:bg-surface-hovered"
+                    <Checkbox.Content>
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                      <div className="flex flex-col gap-0.5">
+                        <Label>Select all scan-enabled images</Label>
+                        <Description>
+                          {filteredSelectableImages.length}
+                          {normalizedImageSearch
+                            ? ` of ${selectableImages.length} matching`
+                            : ''}{' '}
+                          ready to add to a scan
+                        </Description>
+                      </div>
+                    </Checkbox.Content>
+                  </Checkbox>
+                  <div className="ml-auto flex shrink-0 flex-wrap gap-2">
+                    <Button
+                      isDisabled={selectedImageRefs.size === 0}
+                      isPending={startingScan}
+                      size="sm"
+                      variant="primary"
+                      onPress={() => void startScan([...selectedImageRefs])}
                     >
-                      <Checkbox
-                        aria-label={`Select ${image.full_ref}`}
-                        className="mt-2 shrink-0"
-                        isDisabled={Boolean(exclusion)}
-                        isSelected={selectedImageRefs.has(image.full_ref)}
-                        onChange={(next) => toggleImage(image.full_ref, next)}
-                        variant="secondary"
+                      Scan selected
+                      {selectedImageRefs.size > 0 ? ` (${selectedImageRefs.size})` : ''}
+                    </Button>
+                    <Button
+                      isDisabled={selectedImageRefs.size === 0}
+                      isPending={updatingImageExclusions}
+                      size="sm"
+                      variant="tertiary"
+                      onPress={() => void excludeImages([...selectedImageRefs])}
+                    >
+                      Exclude selected
+                    </Button>
+                  </div>
+                </div>
+                <div className="border-t border-border">
+                  {filteredPreviewImages.map((image) => {
+                    const locations = locationsFor(image);
+                    const exclusion = exclusionByRef.get(image.full_ref);
+                    const registryOverride = imageRegistryOverrideByRef.get(image.full_ref);
+                    const registryOverrideRule = imageRegistryOverrideRules.find((rule) =>
+                      imageRegistryRuleMatches(rule.pattern, image.full_ref)
+                    );
+                    const selectedRegistryID =
+                      registryOverride?.registry_id ?? registryOverrideRule?.registry_id;
+                    const selectedRegistry = selectedRegistryID
+                      ? registryByID.get(selectedRegistryID)
+                      : undefined;
+                    const inferredRegistry = image.registry_id
+                      ? registryByID.get(image.registry_id)
+                      : undefined;
+                    const imageHost = imageRegistryHost(image.full_ref);
+                    const latestScan = latestScanByRef.get(image.full_ref);
+                    return (
+                      <div
+                        key={image.id}
+                        className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 border-b border-border px-4 py-3 last:border-b-0 transition-colors hover:bg-secondary"
                       >
-                        <Checkbox.Content>
-                          <Checkbox.Control>
-                            <Checkbox.Indicator />
-                          </Checkbox.Control>
-                        </Checkbox.Content>
-                      </Checkbox>
-                      <Accordion className="min-w-0 flex-1" hideSeparator>
-                        <Accordion.Item id={image.id}>
-                          <Accordion.Heading>
-                            <Accordion.Trigger className="min-w-0 py-0">
-                              <span className="flex min-w-0 flex-1 items-start gap-3 text-left">
-                                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-tertiary text-muted">
-                                  <PackageIcon size={16} />
-                                </span>
-                                <span className="min-w-0 flex-1 space-y-1.5">
-                                  <code className="block truncate text-xs font-medium text-foreground">
-                                    {image.full_ref}
-                                  </code>
-                                  <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                                    <span>
-                                      {locations.length} deployment{' '}
-                                      {locations.length === 1 ? 'location' : 'locations'}
+                        <Checkbox
+                          aria-label={`Select ${image.full_ref}`}
+                          className="mt-2 shrink-0"
+                          isDisabled={Boolean(exclusion)}
+                          isSelected={selectedImageRefs.has(image.full_ref)}
+                          onChange={(next) => toggleImage(image.full_ref, next)}
+                          variant="secondary"
+                        >
+                          <Checkbox.Content>
+                            <Checkbox.Control>
+                              <Checkbox.Indicator />
+                            </Checkbox.Control>
+                          </Checkbox.Content>
+                        </Checkbox>
+                        <Accordion className="min-w-0 flex-1" hideSeparator>
+                          <Accordion.Item id={image.id}>
+                            <Accordion.Heading>
+                              <Accordion.Trigger className="min-w-0 flex-wrap gap-y-2 py-0 hover:no-underline">
+                                <span className="flex min-w-0 flex-1 items-start gap-3 text-left">
+                                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                                    <PackageIcon size={16} />
+                                  </span>
+                                  <span className="min-w-0 flex-1 space-y-1.5">
+                                    <code className="block truncate text-xs font-medium text-foreground">
+                                      {image.full_ref}
+                                    </code>
+                                    <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                                      <span>
+                                        {locations.length} deployment{' '}
+                                        {locations.length === 1 ? 'location' : 'locations'}
+                                      </span>
+                                      {latestScan ? (
+                                        <span>Last scanned {timeAgo(latestScan.created_at)}</span>
+                                      ) : (
+                                        <span>Not scanned yet</span>
+                                      )}
                                     </span>
-                                    {latestScan ? (
-                                      <span>Last scanned {timeAgo(latestScan.created_at)}</span>
-                                    ) : (
-                                      <span>Not scanned yet</span>
-                                    )}
                                   </span>
                                 </span>
-                              </span>
-                              {exclusion ? (
-                                <Chip className="shrink-0" color="warning" size="sm" variant="soft">
-                                  Excluded
-                                </Chip>
-                              ) : null}
-                              {registryOverride || registryOverrideRule ? (
-                                <Chip className="shrink-0" color="accent" size="sm" variant="soft">
-                                  {selectedRegistry?.name ?? 'Configured override'}
-                                  {!registryOverride && registryOverrideRule ? ' · regex' : ''}
-                                </Chip>
-                              ) : image.registry_id ? (
-                                <Chip
-                                  className="shrink-0"
-                                  color={inferredRegistry ? 'accent' : 'warning'}
-                                  size="sm"
-                                  variant="soft"
-                                >
-                                  {inferredRegistry
-                                    ? `Matched: ${inferredRegistry.name}`
-                                    : 'Configured match unavailable'}
-                                </Chip>
-                              ) : imageHost ? (
-                                <Chip className="shrink-0" color="warning" size="sm" variant="soft">
-                                  Custom host: {imageHost}
-                                </Chip>
-                              ) : null}
-                              {latestScan ? (
-                                <span className="shrink-0">
-                                  <StatusBadge
-                                    status={latestScan.status}
-                                    externalStatus={latestScan.external_status}
-                                  />
-                                </span>
-                              ) : null}
-                              <Accordion.Indicator className="shrink-0" />
-                            </Accordion.Trigger>
-                          </Accordion.Heading>
-                          <Accordion.Panel>
-                            <Accordion.Body className="mt-3 border-t border-divider/70 pt-3">
-                              <div className="mb-4 rounded-lg border border-divider/70 bg-surface-secondary p-3">
-                                <RegistryResolutionSummary
-                                  image={image}
-                                  inferredRegistry={inferredRegistry}
-                                  override={registryOverride}
-                                  overrideRegistry={selectedRegistry}
-                                />
-                                <div className="mt-4 border-t border-divider/70 pt-4">
-                                  <ImageRegistrySelect
-                                    registries={registries}
-                                    value={selectedRegistryID ?? null}
-                                    isDisabled={savingImageRegistryRef === image.full_ref}
-                                    onChange={(value) =>
-                                      void updateImageRegistry(image.full_ref, value)
-                                    }
-                                  />
-                                </div>
-                              </div>
-                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted">
-                                Deployment locations
-                              </p>
-                              <div className="grid gap-2 sm:grid-cols-2">
-                                {locations.map((location) => (
-                                  <div
-                                    key={`${location.file}:${location.path}`}
-                                    className="rounded-lg border border-divider/70 bg-surface-secondary px-3 py-2.5 text-xs"
+                                {exclusion ? (
+                                  <Chip
+                                    className="shrink-0"
+                                    color="warning"
+                                    size="sm"
+                                    variant="soft"
                                   >
-                                    <p className="truncate font-mono text-foreground">
-                                      {location.target
-                                        ? `Rendered from ${location.target}`
-                                        : location.file}
-                                    </p>
-                                    <p className="mt-1 truncate text-muted">{location.path}</p>
-                                    <p className="mt-1.5 text-muted">
-                                      {location.kind ?? 'Manifest'}
-                                      {location.name ? `/${location.name}` : ''}
-                                      {location.namespace ? ` · ${location.namespace}` : ''}
-                                    </p>
+                                    Excluded
+                                  </Chip>
+                                ) : null}
+                                {registryOverride || registryOverrideRule ? (
+                                  <Chip
+                                    className="shrink-0"
+                                    color="accent"
+                                    size="sm"
+                                    variant="soft"
+                                  >
+                                    {selectedRegistry?.name ?? 'Configured override'}
+                                    {!registryOverride && registryOverrideRule ? ' · regex' : ''}
+                                  </Chip>
+                                ) : image.registry_id ? (
+                                  <Chip
+                                    className="shrink-0"
+                                    color={inferredRegistry ? 'accent' : 'warning'}
+                                    size="sm"
+                                    variant="soft"
+                                  >
+                                    {inferredRegistry
+                                      ? `Matched: ${inferredRegistry.name}`
+                                      : 'Configured match unavailable'}
+                                  </Chip>
+                                ) : imageHost ? (
+                                  <Chip
+                                    className="shrink-0"
+                                    color="warning"
+                                    size="sm"
+                                    variant="soft"
+                                  >
+                                    Custom host: {imageHost}
+                                  </Chip>
+                                ) : null}
+                                {latestScan ? (
+                                  <span className="shrink-0">
+                                    <StatusBadge
+                                      status={latestScan.status}
+                                      externalStatus={latestScan.external_status}
+                                    />
+                                  </span>
+                                ) : null}
+                                <Accordion.Indicator className="shrink-0" />
+                              </Accordion.Trigger>
+                            </Accordion.Heading>
+                            <Accordion.Panel>
+                              <Accordion.Body className="mt-3 border-t border-border pt-3">
+                                <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3">
+                                  <RegistryResolutionSummary
+                                    image={image}
+                                    inferredRegistry={inferredRegistry}
+                                    override={registryOverride}
+                                    overrideRegistry={selectedRegistry}
+                                  />
+                                  <div className="mt-4 border-t border-border pt-4">
+                                    <ImageRegistrySelect
+                                      registries={registries}
+                                      value={selectedRegistryID ?? null}
+                                      isDisabled={savingImageRegistryRef === image.full_ref}
+                                      onChange={(value) =>
+                                        void updateImageRegistry(image.full_ref, value)
+                                      }
+                                    />
                                   </div>
-                                ))}
-                              </div>
-                              {latestScan ? (
-                                <Button
-                                  className="mt-3"
-                                  size="sm"
-                                  variant="secondary"
-                                  onPress={() =>
-                                    router.push(`/scans/details/${latestScan.scan_id}`)
-                                  }
-                                >
-                                  Open latest scan · {timeAgo(latestScan.created_at)}
-                                </Button>
-                              ) : null}
-                            </Accordion.Body>
-                          </Accordion.Panel>
-                        </Accordion.Item>
-                      </Accordion>
-                      {exclusion ? (
-                        <Button
-                          className="mt-2 shrink-0"
-                          isPending={updatingImageExclusions}
-                          size="sm"
-                          variant="secondary"
-                          onPress={() => void reenableImage(exclusion)}
-                        >
-                          Re-enable
-                        </Button>
-                      ) : (
-                        <Button
-                          className="mt-2 shrink-0"
-                          isPending={updatingImageExclusions}
-                          size="sm"
-                          variant="outline"
-                          onPress={() => void excludeImages([image.full_ref])}
-                        >
-                          Exclude
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
-                {filteredPreviewImages.length === 0 ? (
-                  <p className="px-4 py-8 text-center text-sm text-muted">
-                    No discovered images match “{imageSearch}”.
+                                </div>
+                                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                                  Deployment locations
+                                </p>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {locations.map((location) => (
+                                    <div
+                                      key={`${location.file}:${location.path}`}
+                                      className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs"
+                                    >
+                                      <p className="truncate font-mono text-foreground">
+                                        {location.target
+                                          ? `Rendered from ${location.target}`
+                                          : location.file}
+                                      </p>
+                                      <p className="mt-1 truncate text-muted-foreground">
+                                        {location.path}
+                                      </p>
+                                      <p className="mt-1.5 text-muted-foreground">
+                                        {location.kind ?? 'Manifest'}
+                                        {location.name ? `/${location.name}` : ''}
+                                        {location.namespace ? ` · ${location.namespace}` : ''}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                                {latestScan ? (
+                                  <Button
+                                    className="mt-3"
+                                    size="sm"
+                                    variant="secondary"
+                                    onPress={() =>
+                                      router.push(`/scans/details/${latestScan.scan_id}`)
+                                    }
+                                  >
+                                    Open latest scan · {timeAgo(latestScan.created_at)}
+                                  </Button>
+                                ) : null}
+                              </Accordion.Body>
+                            </Accordion.Panel>
+                          </Accordion.Item>
+                        </Accordion>
+                        {exclusion ? (
+                          <Button
+                            className="mt-2 shrink-0"
+                            isPending={updatingImageExclusions}
+                            size="sm"
+                            variant="secondary"
+                            onPress={() => void reenableImage(exclusion)}
+                          >
+                            Re-enable
+                          </Button>
+                        ) : (
+                          <Button
+                            className="mt-2 shrink-0"
+                            isPending={updatingImageExclusions}
+                            size="sm"
+                            variant="outline"
+                            onPress={() => void excludeImages([image.full_ref])}
+                          >
+                            Exclude
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {filteredPreviewImages.length === 0 ? (
+                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      No discovered images match “{imageSearch}”.
+                    </p>
+                  ) : null}
+                </div>
+              </Card.Content>
+            </Card>
+          )}
+        </Tabs.Panel>
+        <Tabs.Panel id="review" className="outline-none">
+          {!preview ? (
+            <EmptyState
+              icon={<Search01Icon />}
+              title="No discovery preview yet"
+              description="Run a dry discovery to inspect images and deployment markers before creating a scan."
+              action={{ label: 'Run dry discovery', onClick: () => void discover() }}
+            />
+          ) : (
+            <DiscoveryReviewTable
+              pending={pendingCandidates}
+              handled={handledCandidates}
+              selectedIds={selectedCandidateIDs}
+              busy={ignoringCandidates}
+              onSelect={toggleCandidate}
+              onSelectMany={toggleAllPending}
+              onClear={() => toggleAllPending(false)}
+              onIgnoreSelected={() => void ignoreSelectedCandidates()}
+              onReview={review}
+            />
+          )}
+        </Tabs.Panel>
+        <Tabs.Panel id="tree" className="space-y-4 outline-none">
+          {!preview ? (
+            <EmptyState
+              icon={<Search01Icon />}
+              title="No discovery preview yet"
+              description="Run a dry discovery to inspect images and their source locations before creating a scan."
+              action={{ label: 'Run dry discovery', onClick: () => void discover() }}
+            />
+          ) : (
+            <Card className="overflow-hidden gap-0 py-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-4">
+                <div>
+                  <h2 className="text-sm font-medium">Source tree</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Expand a source to inspect its image references.
                   </p>
-                ) : null}
-              </div>
-            </Card.Content>
-          </Card>
-          <Card className="overflow-hidden p-0">
-            <Accordion hideSeparator>
-              <Accordion.Item id="repository-tree">
-                <Accordion.Heading>
-                  <Accordion.Trigger>
-                    <span className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
-                        <Folder01Icon size={17} />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-foreground">
-                          Repository tree
-                        </span>
-                        <span className="mt-0.5 block truncate text-xs text-muted">
-                          {repository.discovery_mode === 'manifests'
-                            ? 'Source manifests and their detected image references'
-                            : repository.discovery_mode === 'registry'
-                              ? `Registry references from ${registryDiscoverySource(repository, registries)}`
-                              : repository.discovery_mode === 'gitlab_ci'
-                                ? 'GitLab CI config files and their detected image references'
-                                : 'Rendered deployment targets and their detected image references'}
-                        </span>
-                      </span>
-                    </span>
-                    <Chip className="shrink-0" size="sm" variant="soft">
-                      {files.length} {files.length === 1 ? 'file' : 'files'}
-                    </Chip>
-                    <Accordion.Indicator className="shrink-0" />
-                  </Accordion.Trigger>
-                </Accordion.Heading>
-                <Accordion.Panel>
-                  <Accordion.Body className="border-t border-divider/70 px-4 py-4">
-                    <div className="space-y-5">
-                      {filesByDeploymentType.map(([deploymentType, items]) => (
-                        <section key={deploymentType}>
-                          <div className="mb-2 flex items-center gap-2">
-                            <p className="text-sm font-medium">{deploymentType}</p>
-                            <Chip size="sm" variant="soft">
-                              {items.length} targets
-                            </Chip>
-                          </div>
-                          <Accordion variant="surface">
-                            {items.map(([file, refs]) => (
-                              <Accordion.Item
-                                key={`${deploymentType}:${file}`}
-                                id={`${deploymentType}:${file}`}
-                              >
-                                <Accordion.Heading>
-                                  <Accordion.Trigger>
-                                    <span className="flex min-w-0 flex-1 items-center gap-2">
-                                      <Folder01Icon className="shrink-0" size={16} />
-                                      <span className="truncate font-mono text-xs">{file}</span>
-                                    </span>
-                                    <Chip size="sm" variant="soft">
-                                      {new Set(refs).size} images
-                                    </Chip>
-                                    <Accordion.Indicator />
-                                  </Accordion.Trigger>
-                                </Accordion.Heading>
-                                <Accordion.Panel>
-                                  <Accordion.Body className="flex flex-wrap gap-2">
-                                    {[...new Set(refs)].map((ref) => (
-                                      <Chip key={ref} size="sm" variant="soft">
-                                        {ref}
-                                      </Chip>
-                                    ))}
-                                  </Accordion.Body>
-                                </Accordion.Panel>
-                              </Accordion.Item>
-                            ))}
-                          </Accordion>
-                        </section>
-                      ))}
-                    </div>
-                  </Accordion.Body>
-                </Accordion.Panel>
-              </Accordion.Item>
-            </Accordion>
-          </Card>
-        </>
-      )}
-
-      <Card>
-        <Card.Header className="!flex-row items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
-            <Clock01Icon size={17} />
-          </span>
-          <div>
-            <Card.Title>Recent activity</Card.Title>
-            <Card.Description>Latest discovery and scan runs for this repository.</Card.Description>
-          </div>
-        </Card.Header>
-        <Card.Content className="space-y-2">
-          {runs.slice(0, 6).map((run) => (
-            <div key={run.id} className="flex items-center justify-between gap-3 text-sm">
-              <div>
-                <Chip
-                  size="sm"
-                  variant="soft"
-                  color={run.trigger === 'dry_run' ? 'accent' : 'default'}
-                >
-                  {run.trigger === 'dry_run' ? 'Dry run' : run.trigger}
-                </Chip>
-                <Chip
-                  className="ml-2"
-                  color={
-                    run.status === 'failed'
-                      ? 'danger'
-                      : run.status === 'completed'
-                        ? 'success'
-                        : run.status === 'partial'
-                          ? 'warning'
-                          : 'accent'
-                  }
-                  size="sm"
-                  variant="soft"
-                >
-                  {run.status}
-                </Chip>
-                <span className="ml-2">
-                  {run.image_count} images · {run.scan_count} scans
+                </div>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {files.length} {files.length === 1 ? 'source' : 'sources'}
                 </span>
               </div>
-              <span className="text-foreground/60">{timeAgo(run.created_at)}</span>
+              {filesByDeploymentType.length === 0 ? (
+                <div className="p-8">
+                  <EmptyState
+                    icon={<FileCode2 className="size-6" />}
+                    title="No source paths found"
+                    description="Source files appear here after discovery identifies image references."
+                  />
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {filesByDeploymentType.map(([deploymentType, items]) => (
+                    <section key={deploymentType}>
+                      <div className="flex items-center justify-between gap-2 bg-muted/20 px-4 py-2">
+                        <h3 className="text-xs font-medium text-muted-foreground">
+                          {deploymentType}
+                        </h3>
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {items.length} {items.length === 1 ? 'source' : 'sources'}
+                        </span>
+                      </div>
+                      <Accordion allowsMultipleExpanded className="divide-y divide-border">
+                        {items.map(([file, refs]) => (
+                          <Accordion.Item
+                            key={`${deploymentType}:${file}`}
+                            id={`${deploymentType}:${file}`}
+                          >
+                            <Accordion.Heading>
+                              <Accordion.Trigger className="gap-3 px-4 py-3 font-normal hover:bg-muted/30 hover:no-underline">
+                                <FileCode2 className="size-4 shrink-0 text-muted-foreground" />
+                                <span
+                                  className="min-w-0 flex-1 truncate text-left font-mono text-xs"
+                                  title={file}
+                                >
+                                  {file}
+                                </span>
+                                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                                  {new Set(refs).size}{' '}
+                                  {new Set(refs).size === 1 ? 'image' : 'images'}
+                                </span>
+                                <Accordion.Indicator />
+                              </Accordion.Trigger>
+                            </Accordion.Heading>
+                            <Accordion.Panel>
+                              <Accordion.Body className="border-t border-border bg-muted/10 px-4 py-2 pl-11">
+                                <ul className="divide-y divide-border">
+                                  {[...new Set(refs)].map((ref) => (
+                                    <li key={ref} className="flex min-w-0 items-start gap-2 py-2">
+                                      <PackageIcon
+                                        size={14}
+                                        className="mt-0.5 shrink-0 text-muted-foreground"
+                                      />
+                                      <Button
+                                        variant="link"
+                                        className="h-auto min-w-0 justify-start whitespace-normal break-all p-0 text-left font-mono text-xs"
+                                        onPress={() => {
+                                          setImageSearch(ref);
+                                          setDetailView('images');
+                                        }}
+                                      >
+                                        {ref}
+                                      </Button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </Accordion.Body>
+                            </Accordion.Panel>
+                          </Accordion.Item>
+                        ))}
+                      </Accordion>
+                    </section>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+        </Tabs.Panel>
+        <Tabs.Panel id="activity" className="outline-none">
+          <Card className="overflow-hidden gap-0 py-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-4">
+              <div>
+                <h2 className="text-sm font-medium">Recent activity</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Latest discovery and scan runs for this repository
+                </p>
+              </div>
+              <span className="text-xs text-muted-foreground">{Math.min(runs.length, 6)} runs</span>
             </div>
-          ))}
-        </Card.Content>
-      </Card>
+            <Table>
+              <Table.ScrollContainer className="rounded-none border-0">
+                <Table.Content
+                  aria-label="Repository run history"
+                  className="min-w-[960px] table-fixed [&_td]:whitespace-normal [&_td]:px-4 [&_td]:py-3 [&_th]:px-4"
+                >
+                  <Table.Header>
+                    <Table.Column isRowHeader className="w-auto">
+                      Run
+                    </Table.Column>
+                    <Table.Column className="w-36">State</Table.Column>
+                    <Table.Column className="w-28">Images</Table.Column>
+                    <Table.Column className="w-28">Scans</Table.Column>
+                    <Table.Column className="w-36">Commit</Table.Column>
+                    <Table.Column className="w-40">Started</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {runs.length === 0 ? (
+                      <Table.Row id="empty-runs">
+                        <Table.Cell colSpan={6}>
+                          <div className="space-y-2 py-12 text-center">
+                            <Clock01Icon size={24} className="mx-auto text-muted-foreground" />
+                            <p className="text-sm font-medium">No runs yet</p>
+                            <p className="text-xs text-muted-foreground">
+                              Discover images to start recording repository activity.
+                            </p>
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    ) : (
+                      runs.slice(0, 6).map((run) => (
+                        <Table.Row key={run.id} id={run.id}>
+                          <Table.Cell>
+                            <p className="text-sm font-medium">
+                              {run.trigger === 'dry_run'
+                                ? 'Discovery preview'
+                                : run.trigger.replaceAll('_', ' ')}
+                            </p>
+                            <code className="mt-1 block truncate text-xs text-muted-foreground">
+                              {run.ref}
+                            </code>
+                            {run.error_message ? (
+                              <p className="mt-1 break-words text-xs text-destructive">
+                                {run.error_message}
+                              </p>
+                            ) : null}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Chip
+                              size="sm"
+                              variant="soft"
+                              color={
+                                run.status === 'failed'
+                                  ? 'danger'
+                                  : run.status === 'completed'
+                                    ? 'success'
+                                    : run.status === 'partial' || run.status === 'cancelled'
+                                      ? 'warning'
+                                      : 'accent'
+                              }
+                            >
+                              {run.status}
+                            </Chip>
+                          </Table.Cell>
+                          <Table.Cell className="tabular-nums">{run.image_count}</Table.Cell>
+                          <Table.Cell className="tabular-nums">{run.scan_count}</Table.Cell>
+                          <Table.Cell>
+                            <code className="text-xs text-muted-foreground" title={run.commit_sha}>
+                              {run.commit_sha ? run.commit_sha.slice(0, 8) : '—'}
+                            </code>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span
+                              className="text-xs text-muted-foreground"
+                              title={fullDate(run.created_at)}
+                            >
+                              {timeAgo(run.created_at)}
+                            </span>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))
+                    )}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </Card>
+        </Tabs.Panel>
+      </Tabs>
 
       <Modal>
         <Modal.Backdrop
@@ -2285,79 +2370,21 @@ function MetricCard({
   value,
   detail,
   mono = false,
+  onPress,
 }: {
   title: string;
   value: string;
   detail: string;
   mono?: boolean;
+  onPress?: () => void;
 }) {
   return (
     <StatCard
+      onPress={onPress}
       label={title}
-      value={value}
+      value={mono && value !== '—' ? value.slice(0, 8) : value}
       hint={detail}
-      variant="stacked"
-      className="h-full"
-      valueClassName={mono ? 'truncate font-mono text-sm font-semibold' : undefined}
+      valueClassName={mono ? 'truncate font-mono' : undefined}
     />
-  );
-}
-
-function CandidateRow({
-  candidate,
-  isSelected = false,
-  onIgnore,
-  onReview,
-  onSelectedChange,
-}: {
-  candidate: GitRepositoryRunCandidate;
-  isSelected?: boolean;
-  onIgnore?: (candidate: GitRepositoryRunCandidate) => Promise<void>;
-  onReview?: (candidate: GitRepositoryRunCandidate) => void;
-  onSelectedChange?: (candidateID: string, isSelected: boolean) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-divider/70 p-3">
-      <div className="flex min-w-0 items-center gap-3">
-        {candidate.status === 'unresolved' && onSelectedChange ? (
-          <Checkbox
-            aria-label={`Select ${candidate.path}`}
-            isSelected={isSelected}
-            onChange={(next) => onSelectedChange(candidate.id, next)}
-            variant="secondary"
-          >
-            <Checkbox.Content>
-              <Checkbox.Control>
-                <Checkbox.Indicator />
-              </Checkbox.Control>
-            </Checkbox.Content>
-          </Checkbox>
-        ) : null}
-        <div>
-          <p className="font-mono text-xs">{candidate.path}</p>
-          <p className="mt-1 text-xs text-foreground/60">
-            {candidate.detected_type.replace('_', ' ')} · {candidate.confidence}
-          </p>
-        </div>
-      </div>
-      {candidate.status === 'unresolved' && onIgnore && onReview ? (
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="tertiary" onPress={() => void onIgnore(candidate)}>
-            Ignore
-          </Button>
-          <Button size="sm" variant="secondary" onPress={() => onReview(candidate)}>
-            <Settings02Icon size={15} /> Resolve
-          </Button>
-        </div>
-      ) : (
-        <Chip
-          size="sm"
-          color={candidate.status === 'ignored' ? 'default' : 'success'}
-          variant="soft"
-        >
-          {candidate.status.replace('_', ' ')}
-        </Chip>
-      )}
-    </div>
   );
 }

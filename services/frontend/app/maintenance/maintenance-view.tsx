@@ -1,7 +1,7 @@
 'use client';
 
 import { PublicShell } from '@/components/public/public-shell';
-import { Button, Card, Chip } from '@heroui/react';
+import { Button, Card, Chip } from '@/components/ui';
 import Link from 'next/link';
 
 export function MaintenanceView({ message }: { message: string }) {
@@ -10,7 +10,7 @@ export function MaintenanceView({ message }: { message: string }) {
       contentClassName="max-w-5xl"
       header={
         <header className="relative z-10 flex items-center justify-between px-5 py-5 sm:px-8">
-          <Link href="/" className="text-sm font-semibold tracking-[0.28em] text-foreground/70">
+          <Link href="/" className="text-sm font-semibold tracking-[0.28em] text-muted-foreground">
             JUSTSCAN
           </Link>
           <Link href="/login">
@@ -21,7 +21,7 @@ export function MaintenanceView({ message }: { message: string }) {
         </header>
       }
     >
-      <Card className="surface-card w-full max-w-3xl rounded-[2rem] border border-divider/70 shadow-xl shadow-black/5">
+      <Card className="surface-card w-full max-w-3xl rounded-xl border border-divider/70 shadow-xl shadow-black/5">
         <Card.Content className="space-y-6 p-7 sm:p-10">
           <Chip color="warning" size="sm" variant="soft">
             Maintenance mode

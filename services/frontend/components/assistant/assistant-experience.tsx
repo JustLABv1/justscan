@@ -11,7 +11,7 @@ import {
   Select,
   Skeleton,
   TextArea,
-} from '@heroui/react';
+} from '@/components/ui';
 import { Clock01Icon, PlusSignIcon, Rocket01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -552,7 +552,7 @@ export function AssistantExperience({
           >
             <div className="min-w-0 flex-1 text-left">
               <p className="truncate text-sm font-semibold">{item.title}</p>
-              <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock01Icon size={11} />
                 <span>Updated {timeAgo(item.updatedAt)}</span>
               </div>
@@ -609,7 +609,7 @@ export function AssistantExperience({
                   <ListBox.Item id={provider.key} key={provider.key} textValue={provider.label}>
                     <div className="flex flex-col">
                       <span>{provider.label}</span>
-                      <span className="text-xs text-zinc-500">
+                      <span className="text-xs text-muted-foreground">
                         {provider.default ? 'Default provider' : provider.key}
                       </span>
                     </div>
@@ -631,7 +631,7 @@ export function AssistantExperience({
             }}
             placeholder="Recent chats"
           >
-            <Select.Trigger className="h-8 w-[18rem] max-w-[38vw] px-2" aria-label="Recent chats">
+            <Select.Trigger className=" w-[18rem] max-w-[38vw] " aria-label="Recent chats">
               <Select.Value className="truncate" />
               <Select.Indicator />
             </Select.Trigger>
@@ -695,7 +695,7 @@ export function AssistantExperience({
                     <AlertDialog.Heading>Delete conversation?</AlertDialog.Heading>
                   </AlertDialog.Header>
                   <AlertDialog.Body>
-                    <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                    <p className="text-sm leading-6 text-muted-foreground dark:text-foreground">
                       This removes{' '}
                       <strong>{conversationPendingDelete?.title ?? 'this conversation'}</strong> and
                       its message history from this scope.
@@ -726,13 +726,13 @@ export function AssistantExperience({
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {!settings?.enabled ? (
-              <Card className="p-5 text-sm text-muted" variant="secondary">
+              <Card className="p-5 text-sm text-muted-foreground" variant="secondary">
                 AI is disabled on this instance.
               </Card>
             ) : providers.length === 0 ? (
-              <Card className="p-5 text-sm text-muted" variant="secondary">
+              <Card className="p-5 text-sm text-muted-foreground" variant="secondary">
                 No enabled provider is configured. Ask an administrator to configure one in{' '}
-                <Link href="/admin/ai" className="text-accent hover:text-accent/80">
+                <Link href="/admin/ai" className="text-primary hover:text-primary/80">
                   Admin → AI
                 </Link>
                 .
@@ -742,7 +742,7 @@ export function AssistantExperience({
                 <ScrollShadow className="min-h-0 flex-1 overflow-y-auto px-2 md:px-4">
                   <div className="flex min-h-full w-full flex-col">
                     {hasMessages ? (
-                      <div className="mb-5 flex items-center gap-2 text-xs text-muted">
+                      <div className="mb-5 flex items-center gap-2 text-xs text-muted-foreground">
                         <span>{hasMeaningfulContext ? scopeLabel : 'JustScan workspace'}</span>
                         <span>•</span>
                         {currentProvider ? <span>{currentProvider.label}</span> : null}
@@ -754,7 +754,7 @@ export function AssistantExperience({
                         <Avatar className="mb-6 size-14" color="accent" variant="soft">
                           <Avatar.Fallback>AI</Avatar.Fallback>
                         </Avatar>
-                        <p className="text-sm font-medium tracking-[0.08em] text-muted">
+                        <p className="text-sm font-medium tracking-[0.08em] text-muted-foreground">
                           {greetingLabel}
                         </p>
                         <h2 className="mt-4 max-w-3xl text-balance text-4xl font-semibold tracking-tight md:text-5xl">
@@ -762,7 +762,7 @@ export function AssistantExperience({
                             ? `How can I help with ${scopeLabel}?`
                             : 'How can I assist with JustScan today?'}
                         </h2>
-                        <p className="mt-4 max-w-xl text-sm leading-7 text-muted">
+                        <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">
                           {scopeDescription}
                         </p>
                       </div>
@@ -775,7 +775,7 @@ export function AssistantExperience({
                           >
                             {item.role === 'assistant' ? <MessageAvatar role="assistant" /> : null}
                             <Card
-                              className={`w-full max-w-[min(100%,52rem)] overflow-hidden rounded-[28px] ${item.role === 'user' ? 'rounded-br-[0.9rem]' : 'rounded-bl-[0.9rem]'}`}
+                              className={`w-full max-w-[min(100%,52rem)] overflow-hidden rounded-xl ${item.role === 'user' ? 'rounded-br-[0.9rem]' : 'rounded-bl-[0.9rem]'}`}
                               variant={item.role === 'user' ? 'tertiary' : 'secondary'}
                             >
                               <Card.Content className="px-5 py-4">
@@ -787,16 +787,16 @@ export function AssistantExperience({
                                   </div>
                                 ) : null}
                                 {item.thinking ? (
-                                  <div className="flex items-center gap-2 py-2 text-sm text-muted">
+                                  <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
                                     <span>Thinking</span>
                                     <span className="flex gap-1">
-                                      <span className="size-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:0ms]" />
-                                      <span className="size-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:150ms]" />
-                                      <span className="size-2 animate-pulse rounded-full bg-zinc-400 [animation-delay:300ms]" />
+                                      <span className="size-2 animate-pulse rounded-full bg-muted [animation-delay:0ms]" />
+                                      <span className="size-2 animate-pulse rounded-full bg-muted [animation-delay:150ms]" />
+                                      <span className="size-2 animate-pulse rounded-full bg-muted [animation-delay:300ms]" />
                                     </span>
                                   </div>
                                 ) : (
-                                  <div className="space-y-3 text-[15px] leading-7 text-zinc-800 dark:text-zinc-100">
+                                  <div className="space-y-3 text-sm leading-7 text-foreground">
                                     {renderMessageContent(item.content)}
                                   </div>
                                 )}
@@ -824,7 +824,7 @@ export function AssistantExperience({
                                             {toolCallLabel(toolCall, status)}
                                           </Button>
                                           {execution?.error ? (
-                                            <p className="text-xs text-rose-500">
+                                            <p className="text-xs text-destructive">
                                               {execution.error}
                                             </p>
                                           ) : null}
@@ -1026,7 +1026,7 @@ function renderMessageContent(content: string) {
       if (/^#{1,6}\s+/.test(block)) {
         return (
           <p
-            className="text-base font-semibold text-zinc-900 dark:text-zinc-50"
+            className="text-base font-semibold text-foreground"
             key={`${block}-${index}`}
           >
             {renderInlineMarkdown(block.replace(/^#{1,6}\s+/, ''))}
@@ -1071,7 +1071,7 @@ function renderInlineMarkdown(value: string): ReactNode[] {
     if (match[2]) {
       result.push(
         <strong
-          className="font-semibold text-zinc-900 dark:text-zinc-50"
+          className="font-semibold text-foreground"
           key={`${fullMatch}-${start}`}
         >
           {match[2]}
@@ -1080,7 +1080,7 @@ function renderInlineMarkdown(value: string): ReactNode[] {
     } else if (match[3]) {
       result.push(
         <code
-          className="rounded bg-zinc-950/5 px-1.5 py-0.5 font-mono text-[0.95em] text-zinc-900 dark:bg-white/10 dark:text-zinc-50"
+          className="rounded bg-background/5 px-1.5 py-0.5 font-mono text-[0.95em] text-foreground dark:bg-white/10 dark:text-foreground"
           key={`${fullMatch}-${start}`}
         >
           {match[3]}
@@ -1106,7 +1106,7 @@ function renderLinkNode(href: string, label: string, key: string) {
   if (/^\/[a-z0-9?=/_-]+$/i.test(href)) {
     return (
       <Link
-        className="text-accent hover:text-accent dark:text-accent dark:hover:text-accent"
+        className="text-primary hover:text-primary dark:text-primary dark:hover:text-primary"
         href={href}
         key={key}
       >
@@ -1117,7 +1117,7 @@ function renderLinkNode(href: string, label: string, key: string) {
   if (/^https?:\/\//i.test(href)) {
     return (
       <a
-        className="text-accent hover:text-accent dark:text-accent dark:hover:text-accent"
+        className="text-primary hover:text-primary dark:text-primary dark:hover:text-primary"
         href={href}
         key={key}
         rel="noreferrer"

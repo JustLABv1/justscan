@@ -1,7 +1,7 @@
 'use client';
 
 import type { ScanIntelligencePolicyImpactResponse } from '@/lib/api';
-import { Accordion, Alert, Button, Chip, Link as HeroLink } from '@heroui/react';
+import { Accordion, Alert, Button, Chip, Link as UiLink } from '@/components/ui';
 import { Refresh01Icon, ShieldKeyIcon } from 'hugeicons-react';
 
 interface IntelligencePolicyImpactBannerProps {
@@ -132,7 +132,7 @@ export function IntelligencePolicyImpactBanner({
           <Chip color="default" size="sm" variant="soft">
             {changedFindingCount} finding{changedFindingCount === 1 ? '' : 's'} affected
           </Chip>
-          <span className="text-xs text-muted">Stored result preserved</span>
+          <span className="text-xs text-muted-foreground">Stored result preserved</span>
         </div>
 
         <Accordion className="w-full overflow-hidden rounded-lg border border-divider/70 bg-surface/40" hideSeparator>
@@ -142,10 +142,10 @@ export function IntelligencePolicyImpactBanner({
                 <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
                   Review policy impact
                 </span>
-                <span className="hidden text-xs text-muted sm:inline">
+                <span className="hidden text-xs text-muted-foreground sm:inline">
                   {policyNames.length} {policyNames.length === 1 ? 'policy' : 'policies'} affected
                 </span>
-                <Accordion.Indicator className="shrink-0 text-muted group-hover:text-foreground [&>svg]:size-4" />
+                <Accordion.Indicator className="shrink-0 text-muted-foreground group-hover:text-foreground [&>svg]:size-4" />
               </Accordion.Trigger>
             </Accordion.Heading>
             <Accordion.Panel className="border-t border-divider/70">
@@ -158,39 +158,39 @@ export function IntelligencePolicyImpactBanner({
                     >
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                         <span className="font-medium text-foreground">{policy.policy_name}</span>
-                        <span className="text-muted">
+                        <span className="text-muted-foreground">
                           {formatStatus(policy.historical_status)} →{' '}
                           {formatStatus(policy.current_status)}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-muted">{policy.reason}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{policy.reason}</p>
                     </div>
                   ))}
                 </div>
 
                 {cves.length > 0 ? (
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                     <span>Changed CVEs:</span>
                     {cves.map((cve) => (
-                      <HeroLink
+                      <UiLink
                         key={cve}
-                        className="font-mono text-accent underline-offset-2"
+                        className="font-mono text-primary underline-offset-2"
                         href={`/vulnkb/${encodeURIComponent(cve)}`}
                       >
                         {cve}
-                      </HeroLink>
+                      </UiLink>
                     ))}
                   </div>
                 ) : null}
 
-                <p className="text-xs text-muted">Policies: {policyNames.join(', ')}</p>
+                <p className="text-xs text-muted-foreground">Policies: {policyNames.join(', ')}</p>
               </Accordion.Body>
             </Accordion.Panel>
           </Accordion.Item>
         </Accordion>
 
         {!canRescan && rescanDisabledReason ? (
-          <p className="text-xs text-muted">{rescanDisabledReason}</p>
+          <p className="text-xs text-muted-foreground">{rescanDisabledReason}</p>
         ) : null}
       </Alert.Content>
     </Alert>

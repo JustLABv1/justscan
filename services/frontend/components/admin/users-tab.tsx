@@ -27,7 +27,7 @@ import {
   Select,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Delete01Icon,
   PencilEdit01Icon,
@@ -311,7 +311,7 @@ export function UsersTab() {
               </Table.Header>
               <Table.Body
                 renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-zinc-500">
+                  <div className="py-10 text-center text-sm text-muted-foreground">
                     {loading ? 'Loading users...' : 'No users match your filters.'}
                   </div>
                 )}
@@ -319,7 +319,7 @@ export function UsersTab() {
                 {pagedUsers.map((user) => (
                   <Table.Row key={user.id} id={user.id} className="hover:bg-[var(--row-hover)]">
                     <Table.Cell className="font-medium">{user.username}</Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">{user.email}</Table.Cell>
+                    <Table.Cell className="text-xs text-muted-foreground">{user.email}</Table.Cell>
                     <Table.Cell>
                       <Chip size="sm" variant="soft">
                         {userAuthLabel(user.auth_type)}
@@ -335,20 +335,20 @@ export function UsersTab() {
                         {user.disabled ? 'Disabled' : 'Active'}
                       </Chip>
                     </Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">
+                    <Table.Cell className="text-xs text-muted-foreground">
                       {user.last_login_at ? (
                         <div className="space-y-0.5">
                           <p title={fullDate(user.last_login_at)}>{timeAgo(user.last_login_at)}</p>
-                          <p className="text-[11px] text-zinc-400">
+                          <p className="text-xs text-muted-foreground">
                             via{' '}
                             {userAuthLabel(user.last_login_method || user.auth_type).toLowerCase()}
                           </p>
                         </div>
                       ) : (
-                        <span className="text-zinc-400">Never</span>
+                        <span className="text-muted-foreground">Never</span>
                       )}
                     </Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">
+                    <Table.Cell className="text-xs text-muted-foreground">
                       <span title={fullDate(user.created_at)}>{timeAgo(user.created_at)}</span>
                     </Table.Cell>
                     <Table.Cell>
@@ -395,7 +395,7 @@ export function UsersTab() {
             </Table.Content>
           </Table.ScrollContainer>
           <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-            <span className="text-xs text-zinc-500 whitespace-nowrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               Showing {filteredUsers.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
               {Math.min(effectivePage * PAGE_SIZE, filteredUsers.length)} of {filteredUsers.length}
             </span>

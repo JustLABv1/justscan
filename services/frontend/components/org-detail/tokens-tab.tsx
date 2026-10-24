@@ -22,7 +22,7 @@ import {
   Table,
   useOverlayState,
   type SortDescriptor,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Cancel01Icon,
   Copy01Icon,
@@ -104,7 +104,7 @@ function OrgTokenExpiry({ token }: { token: APIToken }) {
   const expiresAt = new Date(token.expires_at);
   const now = new Date();
   return (
-    <span className="text-sm text-zinc-500" title={fullDate(token.expires_at)}>
+    <span className="text-sm text-muted-foreground" title={fullDate(token.expires_at)}>
       {expiresAt < now ? (
         <>Expired {timeAgo(token.expires_at)}</>
       ) : (
@@ -138,7 +138,7 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
           <Modal.Dialog className="overflow-hidden">
             <Modal.Header>
               <div className="flex min-w-0 items-center gap-3">
-                <Modal.Icon className="bg-accent/10 text-accent">
+                <Modal.Icon className="bg-primary/10 text-primary">
                   <Key01Icon size={18} />
                 </Modal.Icon>
                 <Modal.Heading className="font-semibold">Token Created</Modal.Heading>
@@ -251,7 +251,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                         type="button"
                         onPress={() => setForm((current) => ({ ...current, scope: value }))}
                         variant={form.scope === value ? 'primary' : 'outline'}
-                        className="h-auto min-h-20 items-start justify-start p-3 text-left"
+                        className="h-auto items-start justify-start text-left"
                       >
                         <span className="flex flex-col items-start gap-1 whitespace-normal">
                           <span className="text-sm font-medium">{label}</span>
@@ -440,7 +440,7 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold">CLI &amp; API Tokens</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Service-account tokens scoped to this organization. Manage the tokens used by the
             JustScan CLI, CI/CD pipelines, and other automated scanning here.
           </p>
@@ -452,27 +452,27 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
           </Button>
         )}
       </div>
-      {featureDisabledReason && <p className="text-xs text-warning">{featureDisabledReason}</p>}
+      {featureDisabledReason && <p className="text-xs text-warning-foreground">{featureDisabledReason}</p>}
 
-      <div className="surface-card rounded-2xl overflow-hidden">
+      <div className="surface-card rounded-xl overflow-hidden">
         {loading ? (
           <div className="flex justify-center py-8">
-            <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+            <div className="size-6 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
           </div>
         ) : tokens.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-6 text-center gap-3">
             <div
-              className="size-12 rounded-2xl flex items-center justify-center"
+              className="size-12 rounded-xl flex items-center justify-center"
               style={{
-                background: 'color-mix(in srgb, var(--accent) 8%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)',
+                background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)',
               }}
             >
-              <Key01Icon size={22} color="color-mix(in srgb, var(--accent) 78%, white)" />
+              <Key01Icon size={22} color="color-mix(in srgb, var(--primary) 78%, white)" />
             </div>
             <div>
-              <p className="font-semibold text-zinc-900 dark:text-white">No org tokens yet</p>
-              <p className="text-sm text-zinc-500 mt-1 max-w-xs">
+              <p className="font-semibold text-foreground">No org tokens yet</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-xs">
                 Create a token to authenticate CI/CD pipelines and automated tools for this
                 organization.
               </p>
@@ -526,7 +526,7 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
                     {sortedTokens.length === 0 ? (
                       <Table.Row id="empty">
                         <Table.Cell colSpan={canManage ? 6 : 5}>
-                          <div className="px-4 py-8 text-center text-sm text-zinc-500">
+                          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                             No tokens match this filter.
                           </div>
                         </Table.Cell>
@@ -535,12 +535,12 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
                       sortedTokens.map((token) => (
                         <Table.Row key={token.id} id={token.id}>
                           <Table.Cell>
-                            <span className="font-medium text-zinc-900 dark:text-white">
+                            <span className="font-medium text-foreground">
                               {token.description}
                             </span>
                           </Table.Cell>
                           <Table.Cell>
-                            <span className="text-zinc-500">{timeAgo(token.created_at)}</span>
+                            <span className="text-muted-foreground">{timeAgo(token.created_at)}</span>
                           </Table.Cell>
                           <Table.Cell>
                             <OrgTokenExpiry token={token} />
@@ -549,7 +549,7 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
                             <OrgTokenStatusBadge token={token} />
                           </Table.Cell>
                           <Table.Cell>
-                            <span className="text-sm text-zinc-500">
+                            <span className="text-sm text-muted-foreground">
                               {token.scope === 'pipeline_scan' ? 'Pipeline scan' : 'Org admin'}
                             </span>
                           </Table.Cell>

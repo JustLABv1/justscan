@@ -4,7 +4,7 @@ import { OwnershipBadge } from '@/components/ui/badges';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { FormAlert } from '@/components/ui/form-alert';
 import type { ResourceShare, Suppression } from '@/lib/api';
-import { Button, Card, ListBox, Modal, Select, useOverlayState } from '@heroui/react';
+import { Button, Card, ListBox, Modal, Select, useOverlayState } from '@/components/ui';
 import { Delete01Icon } from 'hugeicons-react';
 
 type OrgOption = {
@@ -57,7 +57,7 @@ export function ManageSuppressionAccessModal({
         <Modal.Container size="md" placement="center">
           <Modal.Dialog>
             <Modal.Header>
-              <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+              <Modal.Heading className="text-foreground font-semibold">
                 Manage Suppression Access
               </Modal.Heading>
               <Modal.CloseTrigger />
@@ -67,7 +67,7 @@ export function ManageSuppressionAccessModal({
               {target ? (
                 <Card className="py-3" variant="secondary">
                   <div className="flex flex-wrap gap-2">
-                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                    <p className="text-sm font-medium text-foreground">
                       {target.vuln_id}
                     </p>
                     <OwnershipBadge
@@ -76,7 +76,7 @@ export function ManageSuppressionAccessModal({
                       orgNamesById={orgNamesById}
                     />
                   </div>
-                  <p className="font-mono text-xs text-zinc-500" title={target.image_digest}>
+                  <p className="font-mono text-xs text-muted-foreground" title={target.image_digest}>
                     {target.image_digest.length > 48
                       ? `${target.image_digest.slice(0, 48)}…`
                       : target.image_digest}
@@ -86,34 +86,34 @@ export function ManageSuppressionAccessModal({
 
               <div className="space-y-2">
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                  <h3 className="text-sm font-semibold text-foreground">
                     Current access
                   </h3>
-                  <p className="text-xs text-zinc-500 mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Organizations listed here can use this suppression.
                   </p>
                 </div>
                 {loading ? (
                   <div className="flex justify-center py-6">
-                    <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                    <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
                   </div>
                 ) : shares.length === 0 ? (
-                  <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                  <p className="text-sm text-muted-foreground">No organization grants yet.</p>
                 ) : (
                   <div className="space-y-2">
                     {shares.map((share) => (
                       <Card key={share.org_id} variant="secondary">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                            <p className="text-sm font-medium text-foreground">
                               {share.org_name}
                             </p>
-                            <p className="text-xs text-zinc-500">
+                            <p className="text-xs text-muted-foreground">
                               {share.is_owner ? 'Owner workspace' : 'Shared access'}
                             </p>
                           </div>
                           {share.is_owner ? (
-                            <span className="text-xs font-medium text-zinc-500">Locked</span>
+                            <span className="text-xs font-medium text-muted-foreground">Locked</span>
                           ) : (
                             <Button
                               onPress={() => onRevoke(share.org_id)}
@@ -133,15 +133,15 @@ export function ManageSuppressionAccessModal({
 
               <div className="space-y-2">
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                  <h3 className="text-sm font-semibold text-foreground">
                     Grant access
                   </h3>
-                  <p className="text-xs text-zinc-500 mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Share this suppression with another organization you manage.
                   </p>
                 </div>
                 {availableOrgTargets.length === 0 ? (
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-sm text-muted-foreground">
                     No additional organizations are available for sharing.
                   </p>
                 ) : (

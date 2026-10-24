@@ -17,3 +17,9 @@ justscan scan --archive ./team-api.tar --name team-api --tag ci
 ```
 
 Archives must be `.tar`, `.tar.gz`, or `.tgz` and can be up to 5 GiB. Use a pipeline-scoped organization token for unattended work; see [CLI profile and authentication](/integrations/cli#configure-a-profile).
+
+## Browse scan history
+
+On **Scans**, expand an image row to see its tags, then expand a tag to see individual scan runs. Status, vulnerability counts, and scan timestamps stay aligned in the same table. Select a run to open its findings and SBOM.
+
+The page filters select matching images. Expanding an image shows all its tags and history, including runs outside the current image filters. Tags and runs load on demand; use **Load more** for additional results or **Collapse all** to return to the image overview. Existing image and scan detail links remain available.

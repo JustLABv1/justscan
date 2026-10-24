@@ -28,7 +28,7 @@ import {
   SearchField,
   Select,
   Table,
-} from '@heroui/react';
+} from '@/components/ui';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -445,17 +445,17 @@ export function InsightsTab() {
                   </Table.Header>
                   <Table.Body
                     renderEmptyState={() => (
-                      <div className="py-10 text-center text-sm text-zinc-500">
+                      <div className="py-10 text-center text-sm text-muted-foreground">
                         {apiLoading ? 'Loading API logs...' : 'No API logs found.'}
                       </div>
                     )}
                   >
                     {apiLogs.map((log) => (
                       <Table.Row key={log.id} id={log.id} className="hover:bg-[var(--row-hover)]">
-                        <Table.Cell className="text-xs text-zinc-500">
+                        <Table.Cell className="text-xs text-muted-foreground">
                           <span title={fullDate(log.created_at)}>{timeAgo(log.created_at)}</span>
                         </Table.Cell>
-                        <Table.Cell className="text-xs text-zinc-500">
+                        <Table.Cell className="text-xs text-muted-foreground">
                           {log.username || log.email || log.user_id?.slice(0, 8) || 'anon'}
                         </Table.Cell>
                         <Table.Cell>
@@ -463,7 +463,7 @@ export function InsightsTab() {
                             {log.method}
                           </Chip>
                         </Table.Cell>
-                        <Table.Cell className="font-mono text-xs text-zinc-500">
+                        <Table.Cell className="font-mono text-xs text-muted-foreground">
                           {log.path}
                         </Table.Cell>
                         <Table.Cell>
@@ -471,7 +471,7 @@ export function InsightsTab() {
                             {log.status_code}
                           </Chip>
                         </Table.Cell>
-                        <Table.Cell className="text-xs text-zinc-500">
+                        <Table.Cell className="text-xs text-muted-foreground">
                           {log.duration_ms} ms
                         </Table.Cell>
                       </Table.Row>
@@ -480,7 +480,7 @@ export function InsightsTab() {
                 </Table.Content>
               </Table.ScrollContainer>
               <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3">
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-muted-foreground">
                   Showing {apiTotal === 0 ? 0 : (apiPage - 1) * PAGE_SIZE + 1}-
                   {Math.min(apiPage * PAGE_SIZE, apiTotal)} of {apiTotal}
                 </span>
@@ -655,21 +655,21 @@ export function InsightsTab() {
                   </Table.Header>
                   <Table.Body
                     renderEmptyState={() => (
-                      <div className="py-10 text-center text-sm text-zinc-500">
+                      <div className="py-10 text-center text-sm text-muted-foreground">
                         {xrayLoading ? 'Loading xRay logs...' : 'No xRay logs found.'}
                       </div>
                     )}
                   >
                     {xrayLogs.map((log) => (
                       <Table.Row key={log.id} id={log.id} className="hover:bg-[var(--row-hover)]">
-                        <Table.Cell className="text-xs text-zinc-500">
+                        <Table.Cell className="text-xs text-muted-foreground">
                           <span title={fullDate(log.created_at)}>{timeAgo(log.created_at)}</span>
                         </Table.Cell>
                         <Table.Cell className="text-xs">
                           {log.scan_id ? (
                             <Link
                               href={`/scans/details/${log.scan_id}`}
-                              className="font-mono text-accent hover:underline"
+                              className="font-mono text-primary hover:underline"
                             >
                               {log.scan_id.slice(0, 8)}…
                             </Link>
@@ -682,7 +682,7 @@ export function InsightsTab() {
                             {log.method}
                           </Chip>
                         </Table.Cell>
-                        <Table.Cell className="font-mono text-xs text-zinc-500">
+                        <Table.Cell className="font-mono text-xs text-muted-foreground">
                           {log.endpoint}
                         </Table.Cell>
                         <Table.Cell>
@@ -690,7 +690,7 @@ export function InsightsTab() {
                             {log.status_code <= 0 ? 'ERR' : log.status_code}
                           </Chip>
                         </Table.Cell>
-                        <Table.Cell className="text-xs text-zinc-500">
+                        <Table.Cell className="text-xs text-muted-foreground">
                           {log.duration_ms} ms
                         </Table.Cell>
                         <Table.Cell className="max-w-[280px] whitespace-pre-wrap break-words text-xs text-danger">
@@ -702,7 +702,7 @@ export function InsightsTab() {
                 </Table.Content>
               </Table.ScrollContainer>
               <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3">
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-muted-foreground">
                   Showing {xrayTotal === 0 ? 0 : (xrayPage - 1) * PAGE_SIZE + 1}-
                   {Math.min(xrayPage * PAGE_SIZE, xrayTotal)} of {xrayTotal}
                 </span>

@@ -27,7 +27,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   type Key,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   ArrowRight01Icon,
   Clock01Icon,
@@ -69,7 +69,7 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
   const st = statusStyle(record.status);
   const isActive = record.status === 'running' || record.status === 'pending';
   return (
-    <Card className="border border-divider/50 bg-background/55 transition-colors hover:border-accent/30 hover:bg-background/75">
+    <Card className="border border-divider/50 bg-background/55 transition-colors hover:border-primary/30 hover:bg-background/75">
       <button
         type="button"
         onClick={() => router.push(`/public/scan/${record.id}`)}
@@ -132,7 +132,7 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 text-xs text-muted">
+        <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
           <Clock01Icon aria-hidden size={14} />
           <span>{timeAgo(record.created_at)}</span>
           <ArrowRight01Icon aria-hidden size={14} className="hidden sm:block" />
@@ -151,12 +151,12 @@ function HistoryDisclosure({
 }) {
   return (
     <Card className="border border-divider/60 bg-surface/40 p-2 shadow-sm backdrop-blur">
-      <Disclosure className="rounded-[1.5rem]">
+      <Disclosure className="rounded-xl">
         <Disclosure.Heading>
-          <Disclosure.Trigger className="flex w-full items-center justify-between gap-4 rounded-[1.25rem] px-4 py-3 text-left transition-colors hover:bg-background/45">
+          <Disclosure.Trigger className="flex w-full items-center justify-between gap-4 rounded-xl px-4 py-3 text-left transition-colors hover:bg-background/45">
             <div>
               <p className="text-sm font-semibold text-foreground">Recent scans on this device</p>
-              <p className="mt-1 text-xs text-muted">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {history.length} saved locally. Older and stale entries are cleaned up
                 automatically.
               </p>
@@ -172,8 +172,8 @@ function HistoryDisclosure({
               ))}
             </div>
 
-            <div className="flex flex-col gap-3 rounded-[1.25rem] border border-divider/50 bg-background/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-muted">
+            <div className="flex flex-col gap-3 rounded-xl border border-divider/50 bg-background/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
                 Local history is temporary. Sign in when you want permanent scan history and
                 shared workflows.
               </p>
@@ -342,7 +342,7 @@ export default function PublicImageScanPage() {
         className="pointer-events-none absolute inset-0 opacity-[0.55] dark:opacity-[0.42]"
         style={{
           backgroundImage:
-            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 34%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px)',
+            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--primary) 34%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px)',
           backgroundPosition: 'center top, center top, center top',
           backgroundSize: '24px 24px, 24px 24px, 24px 24px',
         }}
@@ -351,8 +351,8 @@ export default function PublicImageScanPage() {
         className="pointer-events-none absolute inset-0"
         style={{
           background: isDark
-            ? 'radial-gradient(circle at 50% 10%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 26%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 24%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 22%)'
-            : 'radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 22%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 18%)',
+            ? 'radial-gradient(circle at 50% 10%, color-mix(in srgb, var(--primary) 11%, transparent), transparent 26%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 24%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 22%)'
+            : 'radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 22%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 18%)',
         }}
       />
       <section className="relative z-10 overflow-hidden">
@@ -368,7 +368,7 @@ export default function PublicImageScanPage() {
           className="pointer-events-none absolute inset-0 opacity-45"
           style={{
             background:
-              'radial-gradient(circle at 64% 48%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 28%)',
+              'radial-gradient(circle at 64% 48%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 28%)',
           }}
         />
 
@@ -400,13 +400,13 @@ export default function PublicImageScanPage() {
                 <h1 className="text-4xl font-semibold leading-tight tracking-normal text-foreground sm:text-5xl">
                   Scan a Docker image instantly.
                 </h1>
-                <p className="mx-auto max-w-xl text-sm leading-7 text-muted sm:text-base">
+                <p className="mx-auto max-w-xl text-sm leading-7 text-muted-foreground sm:text-base">
                   No account needed. Start with a public scan now, then sign in later if you want
                   saved history, exports, and team workflows.
                 </p>
               </div>
 
-              <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-muted">
+              <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
                 <span>{settings?.rate_limit_per_hour ?? 5} free scans per hour</span>
                 <span>Platform-aware scanning</span>
                 <span>Local recent history</span>
@@ -414,12 +414,12 @@ export default function PublicImageScanPage() {
             </div>
 
             <div className="mx-auto w-full max-w-3xl">
-              <Card className="overflow-hidden rounded-[2rem] border border-divider/60 bg-surface/50 px-5 py-5 shadow-sm backdrop-blur sm:px-6 sm:py-6">
+              <Card className="overflow-hidden rounded-xl border border-divider/60 bg-surface/50 px-5 py-5 shadow-sm backdrop-blur sm:px-6 sm:py-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-foreground">Scan Docker image</p>
-                      <p className="mt-1 text-sm text-muted">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         Fast public scans without the signup wall.
                       </p>
                     </div>
@@ -433,21 +433,21 @@ export default function PublicImageScanPage() {
 
                   {isDisabled ? (
                     <div
-                      className="rounded-[1.25rem] px-5 py-4"
+                      className="rounded-xl px-5 py-4"
                       style={{
                         background: 'rgba(239,68,68,0.08)',
                         border: '1px solid rgba(239,68,68,0.2)',
                       }}
                     >
-                      <p className="font-medium text-red-500 dark:text-red-400">
+                      <p className="font-medium text-destructive dark:text-destructive">
                         Public scanning is temporarily disabled
                       </p>
-                      <p className="mt-1 text-sm text-muted">{disabledMessage}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{disabledMessage}</p>
                     </div>
                   ) : (
                     <form onSubmit={handleScan} className="space-y-4">
-                      <div className="flex flex-col gap-3 rounded-[1.25rem] border border-divider/60 px-4 py-4 sm:flex-row sm:items-center">
-                        <div className="flex items-center gap-3 text-muted">
+                      <div className="flex flex-col gap-3 rounded-xl border border-divider/60 px-4 py-4 sm:flex-row sm:items-center">
+                        <div className="flex items-center gap-3 text-muted-foreground">
                           <IrisScanIcon size={20} />
                           <span className="text-xs font-medium uppercase tracking-[0.18em]">
                             Image
@@ -476,10 +476,10 @@ export default function PublicImageScanPage() {
 
                       <div className="space-y-2 border-t border-divider/50 pt-4">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted">
+                          <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                             Platform
                           </span>
-                          <span className="text-xs text-muted">Optional</span>
+                          <span className="text-xs text-muted-foreground">Optional</span>
                         </div>
                         <ToggleButtonGroup
                           selectionMode="single"
@@ -506,10 +506,10 @@ export default function PublicImageScanPage() {
                         </ToggleButtonGroup>
                       </div>
 
-                      {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
+                      {error && <p className="text-sm text-destructive dark:text-destructive">{error}</p>}
 
                       <div className="flex flex-col gap-3 border-t border-divider/50 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-sm text-muted">
+                        <p className="text-sm text-muted-foreground">
                           Sign in later if you want saved history, SBOM exports, and shared workflows.
                         </p>
                         <Link href="/login">
@@ -534,7 +534,7 @@ export default function PublicImageScanPage() {
       </section>
 
       <footer className="relative z-10 px-6 pb-10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 rounded-[2rem] border border-divider/50 bg-surface/35 px-6 py-5 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 rounded-xl border border-divider/50 bg-surface/35 px-6 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>JustScan keeps the public path fast, then grows with you when scans need to be shared.</p>
           <Link href={isLoggedIn ? '/scans' : '/login'}>
             <Button variant="secondary">

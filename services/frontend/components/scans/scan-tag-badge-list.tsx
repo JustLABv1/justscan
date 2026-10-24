@@ -1,7 +1,7 @@
 'use client';
 
 import type { Tag } from '@/lib/api';
-import { Chip } from '@heroui/react';
+import { Chip } from '@/components/ui';
 
 export function ScanTagBadgeList({
   emptyLabel = 'No labels',
@@ -11,7 +11,7 @@ export function ScanTagBadgeList({
   tags?: Tag[];
 }) {
   if (!tags?.length) {
-    return <span className="text-xs text-muted">{emptyLabel}</span>;
+    return <span className="text-xs text-muted-foreground">{emptyLabel}</span>;
   }
 
   return (

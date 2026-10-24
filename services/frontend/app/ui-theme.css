@@ -1,0 +1,255 @@
+@custom-variant dark (&:is(.dark *));
+
+/* ReUI Nova preview baseline: Inter + neutral, from https://reui.io/docs/styling. */
+:root {
+  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  --radius: 0.625rem;
+  --background: #fff;
+  --foreground: #0a0a0a;
+  --card: #fff;
+  --card-foreground: #0a0a0a;
+  --popover: #fff;
+  --popover-foreground: #0a0a0a;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent: #f5f5f5;
+  --accent-foreground: #171717;
+  --destructive: #e40014;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #a1a1a1;
+  --chart-1: #f05100;
+  --chart-2: #009588;
+  --chart-3: #104e64;
+  --chart-4: #fcbb00;
+  --chart-5: #f99c00;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-primary: #171717;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #f5f5f5;
+  --sidebar-accent-foreground: #171717;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #a1a1a1;
+  --destructive-foreground: var(--color-red-800);
+  --success: var(--color-emerald-500);
+  --success-foreground: var(--color-emerald-900);
+  --info: var(--color-violet-500);
+  --info-foreground: var(--color-violet-900);
+  --warning: var(--color-yellow-500);
+  --warning-foreground: var(--color-yellow-900);
+  --invert: var(--color-zinc-900);
+  --invert-foreground: var(--color-zinc-50);
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #171717;
+  --card-foreground: #fafafa;
+  --popover: #262626;
+  --popover-foreground: #fafafa;
+  --primary: #e5e5e5;
+  --primary-foreground: #171717;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --muted: #262626;
+  --muted-foreground: #a1a1a1;
+  --accent: #404040;
+  --accent-foreground: #fafafa;
+  --destructive: #ff6568;
+  --border: #ffffff1a;
+  --input: #ffffff26;
+  --ring: #737373;
+  --chart-1: #1447e6;
+  --chart-2: #00bb7f;
+  --chart-3: #f99c00;
+  --chart-4: #ac4bff;
+  --chart-5: #ff2357;
+  --sidebar: #171717;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #1447e6;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #ffffff1a;
+  --sidebar-ring: #525252;
+  --destructive-foreground: var(--color-red-600);
+  --success: var(--color-emerald-500);
+  --success-foreground: var(--color-emerald-600);
+  --info: var(--color-violet-500);
+  --info-foreground: var(--color-violet-600);
+  --warning: var(--color-yellow-500);
+  --warning-foreground: var(--color-yellow-600);
+  --invert: var(--color-zinc-700);
+  --invert-foreground: var(--color-zinc-50);
+}
+
+:root,
+.dark {
+  --focus: var(--ring);
+  --focus-foreground: var(--foreground);
+  --surface-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+}
+
+/* App semantic aliases keep charts and domain-specific surfaces consistent. */
+:root,
+.dark {
+  --surface: var(--card);
+  --surface-secondary: var(--secondary);
+  --surface-tertiary: color-mix(in oklab, var(--secondary) 75%, var(--background));
+  --surface-bg: var(--card);
+  --surface-border: var(--border);
+  --surface-hover: var(--secondary);
+  --divider: var(--border);
+  --default: var(--secondary);
+  --danger: var(--destructive);
+  --app-bg: var(--background);
+  --card-bg: var(--card);
+  --nav-bg: var(--card);
+  --border-subtle: var(--border);
+  --row-divider: var(--border);
+  --row-hover: color-mix(in oklab, var(--secondary) 65%, transparent);
+  --table-header-bg: var(--secondary);
+  --text-primary: var(--foreground);
+  --text-secondary: color-mix(in oklab, var(--foreground) 80%, transparent);
+  --text-muted: var(--muted-foreground);
+  --text-faint: color-mix(in oklab, var(--muted-foreground) 75%, transparent);
+  --field-background: var(--background);
+  --field-shadow: 0 0 0 1px var(--input);
+  --separator-secondary: var(--border);
+  --separator-tertiary: color-mix(in oklab, var(--border) 60%, transparent);
+  --accent-soft: color-mix(in oklab, var(--primary) 12%, transparent);
+  --accent-soft-hover: color-mix(in oklab, var(--primary) 20%, transparent);
+  --accent-soft-foreground: var(--primary);
+  --color-accent-soft-foreground: var(--primary);
+  --color-accent-soft-hover: var(--accent-soft-hover);
+  --color-danger-soft-foreground: var(--destructive);
+  --color-danger-soft-hover: color-mix(in oklab, var(--destructive) 15%, transparent);
+  --color-warning-soft-foreground: var(--warning-foreground);
+  --color-warning-soft-hover: color-mix(in oklab, var(--warning) 15%, transparent);
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-foreground: var(--primary);
+  --color-default: var(--secondary);
+  --color-default-foreground: var(--foreground);
+  --color-danger: var(--destructive);
+  --color-danger-foreground: var(--destructive-foreground);
+  --color-danger-soft: color-mix(in oklab, var(--destructive) 12%, transparent);
+  --color-danger-soft-foreground: var(--destructive);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-soft: color-mix(in oklab, var(--success) 12%, transparent);
+  --color-success-soft-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-soft: color-mix(in oklab, var(--warning) 12%, transparent);
+  --color-warning-soft-foreground: var(--warning-foreground);
+  --color-invert: var(--invert);
+  --color-invert-foreground: var(--invert-foreground);
+  --color-focus: var(--focus);
+  --color-focus-foreground: var(--focus-foreground);
+  --color-border: var(--border);
+  --color-divider: var(--divider);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-surface: var(--surface);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-tertiary: var(--surface-tertiary);
+  --color-content1: var(--card);
+  --color-content2: var(--secondary);
+  --color-content3: var(--secondary);
+  --color-content4: var(--input);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+  }
+}
+
+@layer components {
+  .surface-input {
+    border: 1px solid var(--input);
+    background: var(--field-background);
+  }
+  .surface-modal,
+  .surface-sidebar {
+    background: var(--card);
+    color: var(--foreground);
+  }
+  .skeleton {
+    background: var(--secondary);
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  .segmented-control-root {
+    display: inline-flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: var(--radius-lg);
+    background: var(--secondary);
+  }
+  .segmented-control-item[data-active='true'] {
+    background: var(--background);
+    color: var(--foreground);
+    box-shadow: var(--surface-shadow);
+  }
+}
+
+.cn-font-heading {
+  font-family: var(--font-heading);
+}

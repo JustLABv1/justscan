@@ -8,9 +8,9 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusAlert } from '@/components/ui/form-alert';
 import {
   fieldLabelClassName,
-  heroFieldClassName,
-  heroSelectTriggerClassName,
-  heroTextAreaClassName,
+  fieldInputClassName,
+  fieldSelectTriggerClassName,
+  fieldTextAreaClassName,
 } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
@@ -64,7 +64,7 @@ import {
   Table,
   TextArea,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Delete01Icon,
   EyeIcon,
@@ -75,9 +75,9 @@ import {
 } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-const fieldCls = heroFieldClassName;
-const textareaCls = heroTextAreaClassName;
-const selectTriggerCls = heroSelectTriggerClassName;
+const fieldCls = fieldInputClassName;
+const textareaCls = fieldTextAreaClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 const fieldLabelCls = fieldLabelClassName;
 
 const visibilityOptions = [
@@ -107,9 +107,9 @@ type TrackingMode = 'git' | 'images' | 'mixed';
 type ImageScopeMode = 'all' | 'exact' | 'pattern';
 type DetailsErrors = Partial<Record<'name' | 'slug' | 'staleAfterHours', string>>;
 const exactSelectionBadgeStyle = {
-  background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-  border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
-  color: 'color-mix(in srgb, var(--accent) 62%, white)',
+  background: 'color-mix(in srgb, var(--primary) 12%, transparent)',
+  border: '1px solid color-mix(in srgb, var(--primary) 22%, transparent)',
+  color: 'color-mix(in srgb, var(--primary) 62%, white)',
 };
 
 type ParsedImagePattern = {
@@ -809,7 +809,7 @@ export default function StatusPagesPage() {
               variant="secondary"
             >
               <Label className="sr-only">Visibility</Label>
-              <Select.Trigger className="h-10">
+              <Select.Trigger className="">
                 <Select.Value />
                 <Select.Indicator />
               </Select.Trigger>
@@ -826,7 +826,7 @@ export default function StatusPagesPage() {
         </Card>
 
         {loading ? (
-          <div className="surface-card flex justify-center rounded-3xl border border-divider/70 py-16">
+          <div className="surface-card flex justify-center rounded-xl border border-divider/70 py-16">
             <Spinner size="lg" />
           </div>
         ) : filteredPages.length === 0 ? (
@@ -846,7 +846,7 @@ export default function StatusPagesPage() {
             title={pages.length > 0 ? 'No matching pages' : 'No status pages yet'}
           />
         ) : (
-          <Card className="surface-card overflow-hidden rounded-3xl border border-divider/70">
+          <Card className="surface-card overflow-hidden rounded-xl border border-divider/70">
             <Card.Content className="p-0">
               <Table variant="secondary">
                 <Table.ScrollContainer>
@@ -869,10 +869,10 @@ export default function StatusPagesPage() {
                         >
                           <Table.Cell>
                             <div>
-                              <p className="font-medium text-zinc-800 dark:text-zinc-100">
+                              <p className="font-medium text-foreground">
                                 {page.name}
                               </p>
-                              <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                                 {page.description || 'No description'}
                               </p>
                             </div>
@@ -887,10 +887,10 @@ export default function StatusPagesPage() {
                               {page.visibility}
                             </Chip>
                           </Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-500">
+                          <Table.Cell className="text-xs text-muted-foreground">
                             {describeScope(page)}
                           </Table.Cell>
-                          <Table.Cell className="font-mono text-xs text-zinc-600 dark:text-zinc-300">
+                          <Table.Cell className="font-mono text-xs text-muted-foreground dark:text-foreground">
                             /status/{page.slug}
                           </Table.Cell>
                           <Table.Cell>
@@ -902,7 +902,7 @@ export default function StatusPagesPage() {
                               />
                             </div>
                           </Table.Cell>
-                          <Table.Cell className="text-xs text-zinc-500">
+                          <Table.Cell className="text-xs text-muted-foreground">
                             {timeAgo(page.updated_at)}
                           </Table.Cell>
                           <Table.Cell>
@@ -961,10 +961,10 @@ export default function StatusPagesPage() {
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog>
               <Modal.Header>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                <Modal.Heading className="text-foreground font-semibold">
                   {editing ? 'Edit Status Page' : 'Create Status Page'}
                 </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
               </Modal.Header>
 
               <Modal.Body className="min-h-0 overflow-y-auto overscroll-contain py-6">
@@ -982,7 +982,7 @@ export default function StatusPagesPage() {
                     aria-label={`Step ${formStep + 1} of ${statusPageSteps.length}`}
                   >
                     <div className="text-xs">
-                      <span className="font-medium text-muted">
+                      <span className="font-medium text-muted-foreground">
                         Step {formStep + 1} of {statusPageSteps.length}
                       </span>
                     </div>
@@ -997,22 +997,22 @@ export default function StatusPagesPage() {
                         className="absolute left-[12.5%] top-3 h-0.5"
                         style={{
                           width: `${(formStep / (statusPageSteps.length - 1)) * 75}%`,
-                          backgroundColor: 'var(--accent)',
+                          backgroundColor: 'var(--primary)',
                         }}
                       />
                       {statusPageSteps.map((step, index) => (
                         <li key={step} className="relative min-w-0 text-center">
                           <span
-                            className={`mx-auto flex size-6 items-center justify-center rounded-full border-2 text-xs font-semibold ${index > formStep ? 'border-default-300 bg-surface text-default-500' : ''}`}
+                            className={`mx-auto flex size-6 items-center justify-center rounded-full border-2 text-xs font-semibold ${index > formStep ? 'border-border bg-surface text-muted-foreground' : ''}`}
                             style={
                               index < formStep
                                 ? {
-                                    borderColor: 'var(--accent)',
-                                    backgroundColor: 'var(--accent)',
+                                    borderColor: 'var(--primary)',
+                                    backgroundColor: 'var(--primary)',
                                     color: 'white',
                                   }
                                 : index === formStep
-                                  ? { borderColor: 'var(--accent)', color: 'var(--accent)' }
+                                  ? { borderColor: 'var(--primary)', color: 'var(--primary)' }
                                   : undefined
                             }
                           >
@@ -1023,7 +1023,7 @@ export default function StatusPagesPage() {
                             )}
                           </span>
                           <span
-                            className={`mt-1 block truncate text-[11px] ${index === formStep ? 'font-semibold text-foreground' : 'text-muted'}`}
+                            className={`mt-1 block truncate text-xs ${index === formStep ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
                           >
                             {step}
                           </span>
@@ -1037,7 +1037,7 @@ export default function StatusPagesPage() {
                         <div className="space-y-1.5">
                           <Label className={fieldLabelCls}>Name</Label>
                           <Input
-                            className={`${fieldCls} bg-surface-secondary${detailsErrors.name ? ' border-danger' : ''}`}
+                            className={`${fieldCls} ${detailsErrors.name ? ' border-danger' : ''}`}
                             placeholder="Production Containers"
                             value={name}
                             onChange={(event) => {
@@ -1056,7 +1056,7 @@ export default function StatusPagesPage() {
                         <div className="space-y-1.5">
                           <Label className={fieldLabelCls}>Slug</Label>
                           <Input
-                            className={`${fieldCls} bg-surface-secondary${detailsErrors.slug ? ' border-danger' : ''}`}
+                            className={`${fieldCls} ${detailsErrors.slug ? ' border-danger' : ''}`}
                             placeholder="production-containers"
                             value={slug}
                             onChange={(event) => {
@@ -1076,7 +1076,7 @@ export default function StatusPagesPage() {
                       <div className="space-y-1.5">
                         <Label className={fieldLabelCls}>Description</Label>
                         <TextArea
-                          className={textareaCls + ' bg-surface-secondary'}
+                          className={textareaCls + ' '}
                           placeholder="Share current security and scan freshness for externally visible workloads."
                           value={description}
                           onChange={(event) => setDescription(event.target.value)}
@@ -1093,7 +1093,7 @@ export default function StatusPagesPage() {
                           placeholder="Select visibility"
                         >
                           <Label className={fieldLabelCls}>Visibility</Label>
-                          <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                          <Select.Trigger className={selectTriggerCls + ' '}>
                             <Select.Value>
                               {({ defaultChildren, isPlaceholder, state }) => {
                                 if (isPlaceholder || state.selectedItems.length === 0) {
@@ -1128,7 +1128,7 @@ export default function StatusPagesPage() {
                         <div className="space-y-1.5">
                           <Label className={fieldLabelCls}>Stale After Hours</Label>
                           <Input
-                            className={`${fieldCls} bg-surface-secondary${detailsErrors.staleAfterHours ? ' border-danger' : ''}`}
+                            className={`${fieldCls} ${detailsErrors.staleAfterHours ? ' border-danger' : ''}`}
                             value={staleAfterHours}
                             onChange={(event) => {
                               setStaleAfterHours(event.target.value);
@@ -1159,7 +1159,7 @@ export default function StatusPagesPage() {
                         <p className="text-base font-semibold text-foreground">
                           What should this page follow?
                         </p>
-                        <p className="mt-1 text-sm text-muted">
+                        <p className="mt-1 text-sm text-muted-foreground">
                           Choose the source first. You’ll only see the configuration it needs next.
                         </p>
                       </div>
@@ -1192,7 +1192,7 @@ export default function StatusPagesPage() {
                             <Radio
                               key={mode}
                               value={mode}
-                              className="group relative flex h-full min-h-28 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-surface-hovered data-[selected=true]:border-accent data-[selected=true]:bg-accent/5"
+                              className="group relative flex h-full min-h-28 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-secondary data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
                             >
                               <Radio.Control className="absolute right-3 top-3">
                                 <Radio.Indicator />
@@ -1201,7 +1201,7 @@ export default function StatusPagesPage() {
                                 <Label className="block text-sm font-semibold text-foreground">
                                   {title}
                                 </Label>
-                                <Description className="mt-1 block break-words text-xs leading-5 text-muted">
+                                <Description className="mt-1 block break-words text-xs leading-5 text-muted-foreground">
                                   {detail}
                                 </Description>
                               </Radio.Content>
@@ -1231,7 +1231,7 @@ export default function StatusPagesPage() {
                                 <Radio
                                   key={mode}
                                   value={mode}
-                                  className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-surface-hovered data-[selected=true]:border-accent data-[selected=true]:bg-accent/5"
+                                  className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-divider bg-surface-secondary p-4 transition-colors hover:bg-secondary data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
                                 >
                                   <Radio.Control className="absolute right-3 top-3">
                                     <Radio.Indicator />
@@ -1240,7 +1240,7 @@ export default function StatusPagesPage() {
                                     <Label className="block text-sm font-semibold text-foreground">
                                       {title}
                                     </Label>
-                                    <Description className="mt-1 block break-words text-xs leading-5 text-muted">
+                                    <Description className="mt-1 block break-words text-xs leading-5 text-muted-foreground">
                                       {detail}
                                     </Description>
                                   </Radio.Content>
@@ -1263,7 +1263,7 @@ export default function StatusPagesPage() {
                           >
                             Repositories to follow
                           </p>
-                          <p className="mt-1 text-xs text-muted">
+                          <p className="mt-1 text-xs text-muted-foreground">
                             Use the latest completed discovery from each repository.
                           </p>
                         </div>
@@ -1289,7 +1289,7 @@ export default function StatusPagesPage() {
 
                       <div className="max-h-52 divide-y divide-divider overflow-y-auto rounded-xl border border-divider bg-surface">
                         {filteredGitRepositories.length === 0 ? (
-                          <p className="p-4 text-sm text-muted">
+                          <p className="p-4 text-sm text-muted-foreground">
                             No accessible Git repositories match this search.
                           </p>
                         ) : (
@@ -1310,9 +1310,9 @@ export default function StatusPagesPage() {
                                   )
                                 }
                                 variant="secondary"
-                                className="w-full gap-0 bg-surface transition-colors data-[selected=true]:bg-accent/5"
+                                className="w-full gap-0 bg-surface transition-colors data-[selected=true]:bg-primary/5"
                               >
-                                <Checkbox.Content className="flex w-full min-w-0 items-start justify-start gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hovered">
+                                <Checkbox.Content className="flex w-full min-w-0 items-start justify-start gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary">
                                   <Checkbox.Control className="mt-0.5">
                                     <Checkbox.Indicator />
                                   </Checkbox.Control>
@@ -1323,7 +1323,7 @@ export default function StatusPagesPage() {
                                     >
                                       {repository.name}
                                     </Label>
-                                    <Description className="block w-full truncate text-xs text-muted">
+                                    <Description className="block w-full truncate text-xs text-muted-foreground">
                                       {repository.ref}
                                     </Description>
                                   </span>
@@ -1358,7 +1358,7 @@ export default function StatusPagesPage() {
                                 <p className="text-sm font-semibold text-foreground">
                                   {repository?.name ?? 'Selected repository'} images
                                 </p>
-                                <p className="mt-1 text-xs leading-5 text-muted">
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                   Choose whether to follow every discovered image or curate the
                                   image names this page publishes.
                                 </p>
@@ -1392,15 +1392,15 @@ export default function StatusPagesPage() {
                             </div>
 
                             {!isPickingImages ? (
-                              <p className="text-xs text-muted">
+                              <p className="text-xs text-muted-foreground">
                                 Following every image from the latest completed discovery.
                               </p>
                             ) : gitRepositoryImages[repositoryId] === undefined ? (
-                              <div className="flex items-center gap-2 text-xs text-muted">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Spinner size="sm" /> Loading the latest discovery…
                               </div>
                             ) : images.length === 0 ? (
-                              <p className="text-xs text-muted">
+                              <p className="text-xs text-muted-foreground">
                                 No completed discovery images are available yet. The page will
                                 follow this repository once a discovery run completes.
                               </p>
@@ -1425,7 +1425,7 @@ export default function StatusPagesPage() {
                                       variant="secondary"
                                       className="w-full bg-surface"
                                     >
-                                      <Checkbox.Content className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left hover:bg-surface-hovered">
+                                      <Checkbox.Content className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left hover:bg-secondary">
                                         <Checkbox.Control>
                                           <Checkbox.Indicator />
                                         </Checkbox.Control>
@@ -1436,7 +1436,7 @@ export default function StatusPagesPage() {
                                           >
                                             {image.image_name}
                                           </Label>
-                                          <Description className="mt-0.5 block text-xs text-muted">
+                                          <Description className="mt-0.5 block text-xs text-muted-foreground">
                                             Latest tag: {image.image_tag}
                                           </Description>
                                         </span>
@@ -1464,7 +1464,7 @@ export default function StatusPagesPage() {
                           <p className="text-sm font-semibold text-foreground">
                             All tracked image tags
                           </p>
-                          <p className="mt-1 text-xs text-muted">
+                          <p className="mt-1 text-xs text-muted-foreground">
                             New tracked images will appear on this page automatically.
                           </p>
                         </Card>
@@ -1475,10 +1475,10 @@ export default function StatusPagesPage() {
                           >
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
-                                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                                <p className="text-sm font-semibold text-foreground">
                                   Exact Image Tags
                                 </p>
-                                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                   Pick individual `image:tag` entries for a tightly curated page.
                                 </p>
                               </div>
@@ -1496,9 +1496,9 @@ export default function StatusPagesPage() {
 
                             <Card className="overflow-hidden">
                               {loadingOptions ? (
-                                <p className="p-4 text-sm text-zinc-500">Loading image tags…</p>
+                                <p className="p-4 text-sm text-muted-foreground">Loading image tags…</p>
                               ) : filteredTargetOptions.length === 0 ? (
-                                <p className="px-4 py-8 text-sm text-zinc-500">
+                                <p className="px-4 py-8 text-sm text-muted-foreground">
                                   {targetQuery.trim()
                                     ? 'No image tags match the current filter.'
                                     : 'No tracked image tags are available yet.'}
@@ -1515,7 +1515,7 @@ export default function StatusPagesPage() {
                                           isSelected
                                             ? {
                                                 background:
-                                                  'color-mix(in srgb, var(--accent) 9%, transparent)',
+                                                  'color-mix(in srgb, var(--primary) 9%, transparent)',
                                               }
                                             : undefined
                                         }
@@ -1525,8 +1525,8 @@ export default function StatusPagesPage() {
                                           style={
                                             isSelected
                                               ? {
-                                                  borderColor: 'var(--accent)',
-                                                  background: 'var(--accent)',
+                                                  borderColor: 'var(--primary)',
+                                                  background: 'var(--primary)',
                                                 }
                                               : { borderColor: 'rgba(113,113,122,0.4)' }
                                           }
@@ -1567,11 +1567,11 @@ export default function StatusPagesPage() {
 
                                         <span className="min-w-0 flex-1 text-left">
                                           <div className="flex flex-wrap items-center gap-2">
-                                            <p className="font-mono text-sm break-all text-zinc-800 dark:text-zinc-100">
+                                            <p className="font-mono text-sm break-all text-foreground">
                                               {option.label}
                                             </p>
                                             <span
-                                              className="rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
+                                              className="rounded-full px-2 py-0.5 text-xs font-semibold capitalize"
                                               style={
                                                 option.latest_status === 'failed'
                                                   ? {
@@ -1592,10 +1592,10 @@ export default function StatusPagesPage() {
                                               {option.latest_status}
                                             </span>
                                           </div>
-                                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                             <span>Seen {timeAgo(option.observed_at)}</span>
                                             <span
-                                              className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                              className="rounded-full px-2 py-0.5 text-xs font-semibold"
                                               style={{
                                                 background: 'rgba(239,68,68,0.1)',
                                                 color: '#f87171',
@@ -1604,7 +1604,7 @@ export default function StatusPagesPage() {
                                               C {option.critical_count}
                                             </span>
                                             <span
-                                              className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                              className="rounded-full px-2 py-0.5 text-xs font-semibold"
                                               style={{
                                                 background: 'rgba(249,115,22,0.1)',
                                                 color: '#fb923c',
@@ -1627,10 +1627,10 @@ export default function StatusPagesPage() {
                           >
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
-                                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                                <p className="text-sm font-semibold text-foreground">
                                   Regex Include Patterns
                                 </p>
-                                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                   One RE2-compatible regex per line. Patterns match against
                                   `image:tag`, image name, and tag.
                                 </p>
@@ -1641,19 +1641,19 @@ export default function StatusPagesPage() {
                             </div>
 
                             <TextArea
-                              className={`${textareaCls} min-h-40 font-mono`}
+                              className={`${textareaCls} font-mono`}
                               placeholder={`^ghcr\\.io/acme/.+:prod-.*$\n^nginx$\n^.*:stable$`}
                               value={imagePatternText}
                               onChange={(event) => setImagePatternText(event.target.value)}
                             />
 
-                            <p className="text-xs leading-5 text-zinc-500">
+                            <p className="text-xs leading-5 text-muted-foreground">
                               Use regex when the scope is tag-driven or too large to maintain
                               manually. Invalid patterns block save.
                             </p>
 
                             {invalidImagePatterns.length > 0 && (
-                              <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-400">
+                              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">
                                 {invalidImagePatterns.map((pattern) => (
                                   <p key={pattern.pattern} className="font-mono break-all">
                                     {pattern.pattern}: {pattern.error}
@@ -1664,7 +1664,7 @@ export default function StatusPagesPage() {
 
                             <Card>
                               <div className="flex items-center justify-between gap-3">
-                                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                                <p className="text-sm font-medium text-foreground">
                                   Preview
                                 </p>
                                 <Chip color="accent" variant="soft">
@@ -1673,11 +1673,11 @@ export default function StatusPagesPage() {
                               </div>
 
                               {imagePatterns.length === 0 ? (
-                                <p className="mt-3 text-xs leading-5 text-zinc-500">
+                                <p className="mt-3 text-xs leading-5 text-muted-foreground">
                                   Add a pattern to preview the tracked tags it would include.
                                 </p>
                               ) : regexMatchedOptions.length === 0 ? (
-                                <p className="mt-3 text-xs leading-5 text-zinc-500">
+                                <p className="mt-3 text-xs leading-5 text-muted-foreground">
                                   Current patterns do not match any tracked image tags outside your
                                   exact selections.
                                 </p>
@@ -1698,7 +1698,7 @@ export default function StatusPagesPage() {
                                   ))}
                                   {regexMatchedOptions.length > 10 && (
                                     <span
-                                      className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500"
+                                      className="rounded-full px-2.5 py-1 text-xs font-semibold text-muted-foreground"
                                       style={{
                                         background: 'var(--status-pill-bg)',
                                         border: '1px solid var(--surface-border)',
@@ -1722,15 +1722,15 @@ export default function StatusPagesPage() {
                         <p className="text-base font-semibold text-foreground">Ready to publish?</p>
                         <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                           <div>
-                            <dt className="text-muted">Visibility</dt>
+                            <dt className="text-muted-foreground">Visibility</dt>
                             <dd className="mt-1 font-medium capitalize">{visibility}</dd>
                           </div>
                           <div>
-                            <dt className="text-muted">Freshness</dt>
+                            <dt className="text-muted-foreground">Freshness</dt>
                             <dd className="mt-1 font-medium">{staleAfterHours || 72} hours</dd>
                           </div>
                           <div>
-                            <dt className="text-muted">Git sources</dt>
+                            <dt className="text-muted-foreground">Git sources</dt>
                             <dd className="mt-1 font-medium">
                               {includesGitSources
                                 ? selectedGitRepositoryIds.length
@@ -1738,7 +1738,7 @@ export default function StatusPagesPage() {
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-muted">Image scope</dt>
+                            <dt className="text-muted-foreground">Image scope</dt>
                             <dd className="mt-1 font-medium">
                               {includesImageScope
                                 ? imageScopeMode === 'all'
@@ -1751,7 +1751,7 @@ export default function StatusPagesPage() {
                           </div>
                         </dl>
                       </Card>
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-xs text-muted-foreground">
                         Choose one or more exact `image:tag` entries, add regex include patterns, or
                         enable “Include all image tags”.
                       </p>
@@ -1760,10 +1760,10 @@ export default function StatusPagesPage() {
                         <Card className="bg-surface-secondary">
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
-                              <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                              <p className="text-sm font-semibold text-foreground">
                                 Publish Scope
                               </p>
-                              <p className="mt-1 text-xs text-zinc-500">
+                              <p className="mt-1 text-xs text-muted-foreground">
                                 {selectedTargets.length} exact tag
                                 {selectedTargets.length === 1 ? '' : 's'} and {imagePatterns.length}{' '}
                                 regex pattern{imagePatterns.length === 1 ? '' : 's'} configured.
@@ -1785,7 +1785,7 @@ export default function StatusPagesPage() {
                                 ))}
                                 {selectedTargets.length > 12 && (
                                   <span
-                                    className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-500"
+                                    className="rounded-full px-2.5 py-1 text-xs font-semibold text-muted-foreground"
                                     style={{
                                       background: 'var(--status-pill-bg)',
                                       border: '1px solid var(--surface-border)',
@@ -1819,7 +1819,7 @@ export default function StatusPagesPage() {
                           )}
 
                           {selectedTargets.length === 0 && imagePatterns.length === 0 && (
-                            <p className="text-xs leading-5 text-zinc-500">
+                            <p className="text-xs leading-5 text-muted-foreground">
                               Selections and regex matches will appear here without changing the
                               modal height.
                             </p>
@@ -1831,7 +1831,7 @@ export default function StatusPagesPage() {
                         imageScopeMode !== 'all' &&
                         !loadingOptions &&
                         !scopeIsValid && (
-                          <p className="text-xs text-red-400">
+                          <p className="text-xs text-destructive">
                             Select at least one exact image tag or add a regex include pattern.
                           </p>
                         )}
@@ -1840,7 +1840,7 @@ export default function StatusPagesPage() {
                         <div className="space-y-1.5">
                           <Label className={fieldLabelCls}>Active Banner Title (optional)</Label>
                           <Input
-                            className={fieldCls + ' bg-surface-secondary'}
+                            className={fieldCls + ' '}
                             value={updateTitle}
                             onChange={(event) => setUpdateTitle(event.target.value)}
                             placeholder="Database refresh in progress"
@@ -1855,7 +1855,7 @@ export default function StatusPagesPage() {
                           placeholder="Select a banner level"
                         >
                           <Label className={fieldLabelCls}>Banner Level</Label>
-                          <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                          <Select.Trigger className={selectTriggerCls + ' '}>
                             <Select.Value />
                             <Select.Indicator />
                           </Select.Trigger>
@@ -1875,7 +1875,7 @@ export default function StatusPagesPage() {
                       <div className="space-y-1.5 p-2">
                         <Label className={fieldLabelCls}>Active Banner Message</Label>
                         <TextArea
-                          className={textareaCls + ' bg-surface-secondary'}
+                          className={textareaCls + ' '}
                           value={updateBody}
                           onChange={(event) => setUpdateBody(event.target.value)}
                           placeholder="We are re-scanning images after a registry credential rotation. Short-lived stale states are expected."
@@ -1893,7 +1893,7 @@ export default function StatusPagesPage() {
                 <Button
                   type="button"
                   variant="tertiary"
-                  className="text-muted"
+                  className=""
                   onPress={modal.close}
                 >
                   Cancel
@@ -1903,7 +1903,7 @@ export default function StatusPagesPage() {
                     <Button
                       type="button"
                       variant="tertiary"
-                      className="text-foreground"
+                      className=""
                       onPress={() => setFormStep((step) => step - 1)}
                     >
                       Back
@@ -1945,7 +1945,7 @@ export default function StatusPagesPage() {
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                <Modal.Heading className="text-foreground font-semibold">
                   Manage Status Page Access
                 </Modal.Heading>
                 <Modal.CloseTrigger />
@@ -1959,10 +1959,10 @@ export default function StatusPagesPage() {
                 )}
                 {shareTarget ? (
                   <Card className="py-3 bg-surface-secondary">
-                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                    <p className="text-sm font-medium text-foreground">
                       {shareTarget.name}
                     </p>
-                    <p className="mt-1 text-xs text-zinc-500 font-mono">
+                    <p className="mt-1 text-xs text-muted-foreground font-mono">
                       /status/{shareTarget.slug}
                     </p>
                     <div className="mt-2">
@@ -1977,19 +1977,19 @@ export default function StatusPagesPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                    <h3 className="text-sm font-semibold text-foreground">
                       Current access
                     </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Organizations listed here can open and manage this status page.
                     </p>
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                    <p className="text-sm text-muted-foreground">No organization grants yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
@@ -1998,16 +1998,16 @@ export default function StatusPagesPage() {
                           className="flex flex-col items-start justify-between gap-3 px-4 py-3 bg-surface-secondary"
                         >
                           <div>
-                            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                            <p className="text-sm font-medium text-foreground">
                               {share.org_name}
                             </p>
-                            <p className="text-xs text-zinc-500 mt-0.5">
+                            <p className="text-xs text-muted-foreground mt-0.5">
                               {share.is_owner ? 'Owner workspace' : 'Shared access'}
                             </p>
                           </div>
                           <div>
                             {share.is_owner ? (
-                              <span className="text-xs font-medium text-zinc-500">Locked</span>
+                              <span className="text-xs font-medium text-muted-foreground">Locked</span>
                             ) : (
                               <Button
                                 onClick={() => {
@@ -2028,15 +2028,15 @@ export default function StatusPagesPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                    <h3 className="text-sm font-semibold text-foreground">
                       Grant access
                     </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Share this status page with another organization you manage.
                     </p>
                   </div>
                   {availableShareTargets.length === 0 ? (
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm text-muted-foreground">
                       No additional organizations are available for sharing.
                     </p>
                   ) : (
@@ -2047,7 +2047,7 @@ export default function StatusPagesPage() {
                         onChange={(value) => setShareOrgId(String(value))}
                       >
                         <Select.Trigger
-                          className={`${heroFieldClassName} flex-1 bg-surface-secondary`}
+                          className={`${fieldInputClassName} flex-1 `}
                         >
                           <Select.Value />
                           <Select.Indicator />

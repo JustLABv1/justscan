@@ -2,7 +2,7 @@
 
 import { LandingButtonLink } from '@/components/landing/landing-controls';
 import { LandingReveal } from '@/components/landing/landing-motion';
-import { Button, Card, Chip, Link } from '@heroui/react';
+import { Button, Card, Chip, Link } from '@/components/ui';
 import {
   ArrowUpRight01Icon,
   CheckmarkCircle02Icon,
@@ -54,7 +54,7 @@ export function LandingIntelligenceSection() {
       <div aria-hidden className="landing-intelligence-glow pointer-events-none absolute inset-0" />
       <div className="relative mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-12 lg:gap-16">
         <LandingReveal className="lg:col-span-5">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             <span aria-hidden className="landing-intelligence-kicker-dot" />
             CVE intelligence
           </div>
@@ -64,7 +64,7 @@ export function LandingIntelligenceSection() {
           >
             Your scan is a snapshot. Your risk picture should not be.
           </h2>
-          <p className="mt-6 max-w-xl text-base leading-7 text-muted sm:text-lg sm:leading-8">
+          <p className="mt-6 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
             Track what changed after the scan, understand the policy impact, and know when a rescan
             is the only answer that closes the loop.
           </p>
@@ -75,7 +75,7 @@ export function LandingIntelligenceSection() {
               showArrow
               size="lg"
             />
-            <Link className="inline-flex items-center gap-1.5 text-sm text-muted" href="/docs">
+            <Link className="inline-flex items-center gap-1.5 text-sm text-muted-foreground" href="/docs">
               Read the workflow
               <ArrowUpRight01Icon aria-hidden size={14} />
             </Link>
@@ -88,7 +88,7 @@ export function LandingIntelligenceSection() {
               <strong className="text-xl font-semibold tracking-[-0.04em] text-foreground">
                 7,412
               </strong>
-              <span className="text-[10px] uppercase tracking-[0.12em] text-muted">
+              <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                 CVE records tracked
               </span>
             </div>
@@ -96,7 +96,7 @@ export function LandingIntelligenceSection() {
               <strong className="text-xl font-semibold tracking-[-0.04em] text-foreground">
                 Live
               </strong>
-              <span className="text-[10px] uppercase tracking-[0.12em] text-muted">
+              <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                 Source history
               </span>
             </div>
@@ -104,7 +104,7 @@ export function LandingIntelligenceSection() {
               <strong className="text-xl font-semibold tracking-[-0.04em] text-foreground">
                 Scoped
               </strong>
-              <span className="text-[10px] uppercase tracking-[0.12em] text-muted">
+              <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                 Policy impact
               </span>
             </div>
@@ -147,7 +147,7 @@ export function LandingIntelligenceSection() {
                         <span>{item.packageName}</span>
                       </span>
                     </span>
-                    <span className="whitespace-nowrap text-[10px] text-muted">{item.time}</span>
+                    <span className="whitespace-nowrap text-xs text-muted-foreground">{item.time}</span>
                   </Button>
                 </li>
               ))}
@@ -162,11 +162,11 @@ export function LandingIntelligenceSection() {
               </Link>
             </div>
             <Card.Footer className="flex items-center justify-between gap-3 border-t border-divider/60 px-5 py-4">
-              <span className="flex items-center gap-2 text-xs text-muted">
-                <Shield01Icon aria-hidden className="text-accent" size={15} />
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Shield01Icon aria-hidden className="text-primary" size={15} />
                 Original scan verdicts stay immutable
               </span>
-              <CheckmarkCircle02Icon aria-hidden className="text-success" size={17} />
+              <CheckmarkCircle02Icon aria-hidden className="text-success-foreground" size={17} />
             </Card.Footer>
           </Card>
         </LandingReveal>

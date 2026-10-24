@@ -3,7 +3,7 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { heroSelectTriggerClassName, heroTextAreaClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName, fieldTextAreaClassName } from '@/components/ui/form-styles';
 import {
   conditionFieldLabels,
   conditionFieldOptions,
@@ -58,7 +58,7 @@ import {
   Table,
   TextArea,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Add01Icon,
   Delete01Icon,
@@ -596,7 +596,7 @@ export function NotificationManager({
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Channels</h2>
-              <p className="text-sm text-zinc-500">Delivery credentials and destination toggles.</p>
+              <p className="text-sm text-muted-foreground">Delivery credentials and destination toggles.</p>
             </div>
             <Button onPress={openCreateChannel} isDisabled={!canManage}>
               <Add01Icon size={15} />
@@ -615,7 +615,7 @@ export function NotificationManager({
                 </Table.Header>
                 <Table.Body
                   renderEmptyState={() => (
-                    <div className="py-8 text-center text-sm text-zinc-500">
+                    <div className="py-8 text-center text-sm text-muted-foreground">
                       {loading ? 'Loading channels...' : 'No notification channels configured.'}
                     </div>
                   )}
@@ -625,7 +625,7 @@ export function NotificationManager({
                       <Table.Cell>
                         <div>
                           <p className="font-medium">{channel.name}</p>
-                          <p className="text-xs text-zinc-500">{channel.type}</p>
+                          <p className="text-xs text-muted-foreground">{channel.type}</p>
                         </div>
                       </Table.Cell>
                       <Table.Cell>
@@ -674,7 +674,7 @@ export function NotificationManager({
                               ]}
                             />
                           ) : (
-                            <span className="text-xs text-muted">Read only</span>
+                            <span className="text-xs text-muted-foreground">Read only</span>
                           )}
                         </div>
                       </Table.Cell>
@@ -690,7 +690,7 @@ export function NotificationManager({
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Rules</h2>
-              <p className="text-sm text-zinc-500">
+              <p className="text-sm text-muted-foreground">
                 Match scan events and route them through selected channels.
               </p>
             </div>
@@ -702,9 +702,9 @@ export function NotificationManager({
 
           <div className="space-y-3">
             {loading ? (
-              <p className="text-sm text-zinc-500">Loading rules...</p>
+              <p className="text-sm text-muted-foreground">Loading rules...</p>
             ) : rules.length === 0 ? (
-              <p className="text-sm text-zinc-500">No rules configured yet.</p>
+              <p className="text-sm text-muted-foreground">No rules configured yet.</p>
             ) : (
               rules.map((rule) => (
                 <Card key={rule.id} variant="secondary" className="space-y-3">
@@ -726,7 +726,7 @@ export function NotificationManager({
                               : 'Immediate'}
                           </Chip>
                         </div>
-                        <p className="mt-1 text-xs text-zinc-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           {summarizeRule(rule, channels)}
                         </p>
                       </div>
@@ -767,7 +767,7 @@ export function NotificationManager({
         <Card className="space-y-4">
           <div>
             <h2 className="text-base font-semibold">Queue</h2>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               Recent notification jobs, retries, and dead letters.
             </p>
           </div>
@@ -782,7 +782,7 @@ export function NotificationManager({
                 </Table.Header>
                 <Table.Body
                   renderEmptyState={() => (
-                    <div className="py-8 text-center text-sm text-zinc-500">
+                    <div className="py-8 text-center text-sm text-muted-foreground">
                       {loading ? 'Loading queue...' : 'No queued notifications yet.'}
                     </div>
                   )}
@@ -792,7 +792,7 @@ export function NotificationManager({
                       <Table.Cell>
                         <div>
                           <p className="font-medium">{job.rule_name ?? 'Rule'}</p>
-                          <p className="text-xs text-zinc-500">
+                          <p className="text-xs text-muted-foreground">
                             {job.channel_name ?? channelNames[job.channel_id] ?? job.channel_id}
                           </p>
                         </div>
@@ -833,7 +833,7 @@ export function NotificationManager({
                               ]}
                             />
                           ) : (
-                            <span className="text-xs text-zinc-500">
+                            <span className="text-xs text-muted-foreground">
                               {job.last_error ? job.last_error : 'Ready'}
                             </span>
                           )}
@@ -850,7 +850,7 @@ export function NotificationManager({
         <Card className="space-y-4">
           <div>
             <h2 className="text-base font-semibold">Deliveries</h2>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               Latest delivery attempts across all channels in this scope.
             </p>
           </div>
@@ -864,7 +864,7 @@ export function NotificationManager({
                 </Table.Header>
                 <Table.Body
                   renderEmptyState={() => (
-                    <div className="py-8 text-center text-sm text-zinc-500">
+                    <div className="py-8 text-center text-sm text-muted-foreground">
                       {loading ? 'Loading deliveries...' : 'No delivery history yet.'}
                     </div>
                   )}
@@ -879,7 +879,7 @@ export function NotificationManager({
                               delivery.channel_id}
                           </p>
                           {delivery.rule_name ? (
-                            <p className="text-xs text-zinc-500">{delivery.rule_name}</p>
+                            <p className="text-xs text-muted-foreground">{delivery.rule_name}</p>
                           ) : null}
                         </div>
                       </Table.Cell>
@@ -956,7 +956,7 @@ export function NotificationManager({
                       }
                       variant="secondary"
                     >
-                      <Select.Trigger className={heroSelectTriggerClassName}>
+                      <Select.Trigger className={fieldSelectTriggerClassName}>
                         <Select.Value />
                         <Select.Indicator />
                       </Select.Trigger>
@@ -1006,7 +1006,7 @@ export function NotificationManager({
                       />
                       <TextArea
                         aria-label="Headers"
-                        className={heroTextAreaClassName}
+                        className={fieldTextAreaClassName}
                         rows={4}
                         variant="secondary"
                         value={channelForm.headers}
@@ -1215,10 +1215,10 @@ export function NotificationManager({
                       }
                       variant="secondary"
                     >
-                      <Select.Trigger className={heroSelectTriggerClassName}>
+                      <Select.Trigger className={fieldSelectTriggerClassName}>
                         <span
                           className={
-                            ruleForm.channel_ids.length > 0 ? 'truncate' : 'truncate text-zinc-500'
+                            ruleForm.channel_ids.length > 0 ? 'truncate' : 'truncate text-muted-foreground'
                           }
                         >
                           {ruleForm.channel_ids.length > 0
@@ -1256,10 +1256,10 @@ export function NotificationManager({
                       }
                       variant="secondary"
                     >
-                      <Select.Trigger className={heroSelectTriggerClassName}>
+                      <Select.Trigger className={fieldSelectTriggerClassName}>
                         <span
                           className={
-                            ruleForm.event_types.length > 0 ? 'truncate' : 'truncate text-zinc-500'
+                            ruleForm.event_types.length > 0 ? 'truncate' : 'truncate text-muted-foreground'
                           }
                         >
                           {ruleForm.event_types.length > 0
@@ -1296,7 +1296,7 @@ export function NotificationManager({
                       }
                       variant="secondary"
                     >
-                      <Select.Trigger className={heroSelectTriggerClassName}>
+                      <Select.Trigger className={fieldSelectTriggerClassName}>
                         <span className="truncate">
                           {deliveryModeLabels[ruleForm.delivery_mode]}
                         </span>
@@ -1339,7 +1339,7 @@ export function NotificationManager({
                     }
                     variant="secondary"
                   >
-                    <Select.Trigger className={heroSelectTriggerClassName}>
+                    <Select.Trigger className={fieldSelectTriggerClassName}>
                       <span className="truncate">{groupOpLabels[ruleForm.op]}</span>
                       <Select.Indicator />
                     </Select.Trigger>
@@ -1360,7 +1360,7 @@ export function NotificationManager({
                   <div className="space-y-2">
                     <div>
                       <p className="text-sm font-medium">Conditions</p>
-                      <p className="text-xs text-muted">
+                      <p className="text-xs text-muted-foreground">
                         Choose known values from guided lists. Resource fields search values visible
                         in this scope, while pattern operators can accept a custom value.
                       </p>
@@ -1394,7 +1394,7 @@ export function NotificationManager({
                             }
                             variant="primary"
                           >
-                            <Select.Trigger className={heroSelectTriggerClassName}>
+                            <Select.Trigger className={fieldSelectTriggerClassName}>
                               <span className="truncate">
                                 {(conditionFieldNames[condition.field] ?? condition.field) ||
                                   'Select field'}
@@ -1435,7 +1435,7 @@ export function NotificationManager({
                             }
                             variant="primary"
                           >
-                            <Select.Trigger className={heroSelectTriggerClassName}>
+                            <Select.Trigger className={fieldSelectTriggerClassName}>
                               <span className="truncate">
                                 {(operatorNames[condition.operator] ?? condition.operator) ||
                                   'Select operator'}

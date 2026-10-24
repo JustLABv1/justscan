@@ -15,7 +15,7 @@ import { deferEffect } from '@/lib/defer-effect';
 import { getHelmImageSourceLabel } from '@/lib/helm-image-overrides';
 import { PublicHelmRunHistoryEntry, updateHelmPublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip, Spinner, Table } from '@heroui/react';
+import { Alert, Button, Card, Chip, Spinner, Table } from '@/components/ui';
 import {
   AlertCircleIcon,
   ArrowReloadHorizontalIcon,
@@ -144,7 +144,7 @@ export default function PublicHelmRunDetailPage() {
   const totalMedium = latestScans.reduce((sum, scan) => sum + (scan.medium_count ?? 0), 0);
   const totalLow = latestScans.reduce((sum, scan) => sum + (scan.low_count ?? 0), 0);
   const statCardClassName = 'border border-divider/60 bg-surface/50 shadow-sm backdrop-blur';
-  const statValueClassName = 'text-lg font-semibold text-zinc-900 dark:text-white';
+  const statValueClassName = 'text-lg font-semibold text-foreground';
 
   useEffect(() => {
     if (
@@ -247,7 +247,7 @@ export default function PublicHelmRunDetailPage() {
         className="pointer-events-none absolute inset-0 opacity-[0.55] dark:opacity-[0.42]"
         style={{
           backgroundImage:
-            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 34%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px)',
+            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--primary) 34%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px)',
           backgroundPosition: 'center top, center top, center top',
           backgroundSize: '24px 24px, 24px 24px, 24px 24px',
         }}
@@ -256,8 +256,8 @@ export default function PublicHelmRunDetailPage() {
         className="pointer-events-none absolute inset-0"
         style={{
           background: isDark
-            ? 'radial-gradient(circle at 50% 10%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 26%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 24%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 22%)'
-            : 'radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 22%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 18%)',
+            ? 'radial-gradient(circle at 50% 10%, color-mix(in srgb, var(--primary) 11%, transparent), transparent 26%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 24%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 22%)'
+            : 'radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 22%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 18%)',
         }}
       />
       <section className="relative z-10 overflow-hidden">
@@ -273,7 +273,7 @@ export default function PublicHelmRunDetailPage() {
           className="pointer-events-none absolute inset-0 opacity-45"
           style={{
             background:
-              'radial-gradient(circle at 64% 48%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 28%)',
+              'radial-gradient(circle at 64% 48%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 28%)',
           }}
         />
         <div className="sticky top-0 z-20">
@@ -330,7 +330,7 @@ export default function PublicHelmRunDetailPage() {
                         {isOCI ? 'OCI' : 'HTTP'}
                       </Chip>
                     </div>
-                    <p className="mt-1 truncate font-mono text-xs text-muted" title={chartUrl}>
+                    <p className="mt-1 truncate font-mono text-xs text-muted-foreground" title={chartUrl}>
                       {displayUrl}
                     </p>
                   </div>
@@ -361,7 +361,7 @@ export default function PublicHelmRunDetailPage() {
               </div>
 
               {latestRun?.created_at ? (
-                <div className="text-sm text-muted">
+                <div className="text-sm text-muted-foreground">
                   <p>Started</p>
                   <p className="font-mono text-xs text-foreground" title={fullDate(latestRun.created_at)}>
                     {fullDate(latestRun.created_at)}
@@ -390,7 +390,7 @@ export default function PublicHelmRunDetailPage() {
               iconTone="success"
               hint="Finished successfully."
               className={statCardClassName}
-              valueClassName={`${statValueClassName} text-emerald-600 dark:text-emerald-400`}
+              valueClassName={`${statValueClassName} text-success-foreground dark:text-success-foreground`}
             />
             <StatCard
               label="Running"
@@ -401,7 +401,7 @@ export default function PublicHelmRunDetailPage() {
               className={statCardClassName}
               valueClassName={
                 pending > 0
-                  ? `${statValueClassName} text-sky-600 dark:text-sky-400`
+                  ? `${statValueClassName} text-info-foreground dark:text-info-foreground`
                   : statValueClassName
               }
             />
@@ -414,7 +414,7 @@ export default function PublicHelmRunDetailPage() {
               className={statCardClassName}
               valueClassName={
                 failed > 0
-                  ? `${statValueClassName} text-red-600 dark:text-red-400`
+                  ? `${statValueClassName} text-destructive dark:text-destructive`
                   : statValueClassName
               }
             />
@@ -427,7 +427,7 @@ export default function PublicHelmRunDetailPage() {
               className={statCardClassName}
               valueClassName={
                 totalCritical > 0
-                  ? `${statValueClassName} text-red-600 dark:text-red-400`
+                  ? `${statValueClassName} text-destructive dark:text-destructive`
                   : statValueClassName
               }
             />
@@ -453,7 +453,7 @@ export default function PublicHelmRunDetailPage() {
               className={statCardClassName}
               valueClassName={
                 totalMedium > 0
-                  ? `${statValueClassName} text-yellow-600 dark:text-yellow-400`
+                  ? `${statValueClassName} text-warning-foreground dark:text-warning-foreground`
                   : statValueClassName
               }
             />
@@ -470,7 +470,7 @@ export default function PublicHelmRunDetailPage() {
 
         {loading ? (
           <Card className="border border-divider/60 bg-surface/50 shadow-sm backdrop-blur">
-            <Card.Content className="flex items-center justify-center gap-3 px-6 py-10 text-sm text-muted">
+            <Card.Content className="flex items-center justify-center gap-3 px-6 py-10 text-sm text-muted-foreground">
               <Spinner size="sm" />
               Loading Helm run…
             </Card.Content>
@@ -479,7 +479,7 @@ export default function PublicHelmRunDetailPage() {
 
         {!loading && items.length === 0 ? (
           <Card className="border border-divider/60 bg-surface/50 shadow-sm backdrop-blur">
-            <Card.Content className="px-6 py-10 text-center text-sm text-muted">
+            <Card.Content className="px-6 py-10 text-center text-sm text-muted-foreground">
               No scans found for this Helm run.
             </Card.Content>
           </Card>
@@ -491,7 +491,7 @@ export default function PublicHelmRunDetailPage() {
               <div className="flex items-center justify-between gap-3 px-6 pt-6">
                 <div>
                   <p className="text-sm font-semibold text-foreground">Images in this run</p>
-                  <p className="mt-1 text-sm text-muted">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Retry failed scans or open any child scan for details.
                   </p>
                 </div>
@@ -527,13 +527,13 @@ export default function PublicHelmRunDetailPage() {
                                 {scan.image_name}
                               </Link>
                             </Table.Cell>
-                            <Table.Cell className="font-mono text-xs text-muted">
+                            <Table.Cell className="font-mono text-xs text-muted-foreground">
                               {scan.image_tag || 'latest'}
                             </Table.Cell>
-                            <Table.Cell className="max-w-[320px] truncate text-xs text-muted">
+                            <Table.Cell className="max-w-[320px] truncate text-xs text-muted-foreground">
                               <span title={scan.helm_source_path ?? ''}>{scan.helm_source_path || '—'}</span>
                             </Table.Cell>
-                            <Table.Cell className="text-xs text-muted">{item.attempt_count}</Table.Cell>
+                            <Table.Cell className="text-xs text-muted-foreground">{item.attempt_count}</Table.Cell>
                             <Table.Cell>
                               <StatusBadge status={scan.status} />
                             </Table.Cell>

@@ -4,8 +4,8 @@ import { FormField } from '@/components/ui/form-field';
 import {
   fieldDescriptionClassName,
   fieldLabelClassName,
-  heroFieldClassName,
-  heroSelectTriggerClassName,
+  fieldInputClassName,
+  fieldSelectTriggerClassName,
 } from '@/components/ui/form-styles';
 import type { ConditionOption, ConditionValue } from '@/components/notifications/condition-catalog';
 import {
@@ -16,8 +16,8 @@ import {
   mergeConditionOptions,
   normalizeConditionValue,
 } from '@/components/notifications/condition-catalog';
-import { ComboBox, Input, Label, ListBox, Select, Tag, TagGroup } from '@heroui/react';
-import type { Key } from '@heroui/react';
+import { ComboBox, Input, Label, ListBox, Select, Tag, TagGroup } from '@/components/ui';
+import type { Key } from '@/components/ui';
 import { useEffect, useMemo, useState } from 'react';
 
 type ConditionValueControlProps = {
@@ -39,11 +39,11 @@ function optionText(option: ConditionOption) {
 function OptionContent({ option }: { option: ConditionOption }) {
   return (
     <div className="min-w-0">
-      <div className={option.legacy ? 'truncate text-warning' : 'truncate'}>
+      <div className={option.legacy ? 'truncate text-warning-foreground' : 'truncate'}>
         {optionText(option)}
       </div>
       {option.description ? (
-        <div className="truncate text-xs text-muted">{option.description}</div>
+        <div className="truncate text-xs text-muted-foreground">{option.description}</div>
       ) : null}
     </div>
   );
@@ -76,9 +76,9 @@ function StaticConditionValueControl({
       }}
       variant="primary"
     >
-      <Select.Trigger className={heroSelectTriggerClassName}>
+      <Select.Trigger className={fieldSelectTriggerClassName}>
         <span
-          className={selectedValues.length > 0 ? selectedLabelClassName : 'truncate text-muted'}
+          className={selectedValues.length > 0 ? selectedLabelClassName : 'truncate text-muted-foreground'}
         >
           {selectedValues.length > 0
             ? selectedValues.map((item) => conditionOptionLabel(field, item, options)).join(', ')
@@ -175,7 +175,7 @@ function DynamicSingleValueControl({
     >
       <Label className={fieldLabelClassName}>{definition.label}</Label>
       <ComboBox.InputGroup>
-        <Input className={heroFieldClassName} placeholder={definition.placeholder} />
+        <Input className={fieldInputClassName} placeholder={definition.placeholder} />
         <ComboBox.Trigger />
       </ComboBox.InputGroup>
       {definition.description ? (
@@ -189,7 +189,7 @@ function DynamicSingleValueControl({
       <ComboBox.Popover>
         <ListBox
           renderEmptyState={() => (
-            <div className="px-3 py-2 text-sm text-muted">No matching values.</div>
+            <div className="px-3 py-2 text-sm text-muted-foreground">No matching values.</div>
           )}
         >
           {options.map((option) => (
@@ -264,7 +264,7 @@ function DynamicMultiValueControl({
         <TagGroup.List
           items={tagItems}
           renderEmptyState={() => (
-            <span className="text-xs text-muted">No values selected yet.</span>
+            <span className="text-xs text-muted-foreground">No values selected yet.</span>
           )}
           className="gap-1.5"
         >
@@ -296,7 +296,7 @@ function DynamicMultiValueControl({
         <Label className="sr-only">Add {definition.label}</Label>
         <ComboBox.InputGroup>
           <Input
-            className={heroFieldClassName}
+            className={fieldInputClassName}
             placeholder={definition.placeholder ?? 'Search and add values'}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && allowsCustom && inputValue.trim()) {
@@ -316,7 +316,7 @@ function DynamicMultiValueControl({
         <ComboBox.Popover>
           <ListBox
             renderEmptyState={() => (
-              <div className="px-3 py-2 text-sm text-muted">No matching values.</div>
+              <div className="px-3 py-2 text-sm text-muted-foreground">No matching values.</div>
             )}
           >
             {availableOptions.map((option) => (

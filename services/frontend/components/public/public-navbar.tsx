@@ -1,7 +1,7 @@
 'use client';
 
 import { Logo } from '@/components/logo';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 import { Moon02Icon, PackageIcon, Sun01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { ReactNode } from 'react';
@@ -36,7 +36,7 @@ export function PublicNavbar({
       <Link href={homeHref} className="flex items-center gap-2.5">
         <Logo size={38} className="text-white" />
         <span
-          className="font-semibold text-[15px] tracking-tight"
+          className="font-semibold text-sm tracking-tight"
           style={{ color: 'var(--text-primary)' }}
         >
           JustScan

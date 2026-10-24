@@ -1,5 +1,5 @@
 'use client';
-import { Button, Card, Chip } from '@heroui/react';
+import { Button, Card, Chip } from '@/components/ui';
 import React from 'react';
 
 import { SurfaceIcon } from '@/components/ui/surface-icon';
@@ -25,7 +25,7 @@ export function EmptyState({
   action,
 }: EmptyStateProps) {
   return (
-    <Card className="surface-card rounded-3xl border border-divider/70">
+    <Card className="surface-card rounded-xl border border-divider/70">
       <Card.Content className="flex flex-col items-center gap-4 px-6 py-16 text-center">
         <SurfaceIcon icon={icon} tone={tone} size="lg" />
         <div className="space-y-2">
@@ -37,7 +37,7 @@ export function EmptyState({
             </div>
           ) : null}
           <p className="text-base font-semibold text-foreground">{title}</p>
-          <p className="mx-auto max-w-xl text-sm leading-relaxed text-foreground/60">
+          <p className="mx-auto max-w-xl text-sm leading-relaxed text-muted-foreground">
             {description}
           </p>
         </div>

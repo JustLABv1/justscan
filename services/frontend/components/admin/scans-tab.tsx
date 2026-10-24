@@ -21,7 +21,7 @@ import {
   Select,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Cancel01Icon,
   CopyLinkIcon,
@@ -330,7 +330,7 @@ export function ScansTab() {
               </Table.Header>
               <Table.Body
                 renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-zinc-500">
+                  <div className="py-10 text-center text-sm text-muted-foreground">
                     {loading ? 'Loading scans...' : 'No scans match your filters.'}
                   </div>
                 )}
@@ -350,13 +350,13 @@ export function ScansTab() {
                         {scan.status}
                       </Chip>
                     </Table.Cell>
-                    <Table.Cell className="font-mono text-xs text-red-400">{scan.critical_count || 0}</Table.Cell>
+                    <Table.Cell className="font-mono text-xs text-destructive">{scan.critical_count || 0}</Table.Cell>
                     <Table.Cell className="font-mono text-xs text-orange-400">{scan.high_count || 0}</Table.Cell>
-                    <Table.Cell className="font-mono text-xs text-yellow-400">{scan.medium_count || 0}</Table.Cell>
-                    <Table.Cell className="font-mono text-xs text-blue-400">{scan.low_count || 0}</Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">{scan.owner_email || 'anonymous'}</Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">{scan.share_token ? scan.share_visibility || 'shared' : 'private'}</Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">
+                    <Table.Cell className="font-mono text-xs text-warning-foreground">{scan.medium_count || 0}</Table.Cell>
+                    <Table.Cell className="font-mono text-xs text-info-foreground">{scan.low_count || 0}</Table.Cell>
+                    <Table.Cell className="text-xs text-muted-foreground">{scan.owner_email || 'anonymous'}</Table.Cell>
+                    <Table.Cell className="text-xs text-muted-foreground">{scan.share_token ? scan.share_visibility || 'shared' : 'private'}</Table.Cell>
+                    <Table.Cell className="text-xs text-muted-foreground">
                       <span title={fullDate(scan.created_at)}>{timeAgo(scan.created_at)}</span>
                     </Table.Cell>
                     <Table.Cell>
@@ -430,7 +430,7 @@ export function ScansTab() {
             </Table.Content>
           </Table.ScrollContainer>
           <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-            <span className="text-xs text-zinc-500 whitespace-nowrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               Showing {total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, total)} of {total}
             </span>
             <Pagination size="sm" className="justify-self-center">
@@ -488,13 +488,13 @@ export function ScansTab() {
               </Modal.Header>
               <Modal.Body>
                 <form id="add-tag-form" onSubmit={handleAddTag} className="space-y-4">
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-sm text-muted-foreground">
                     Assign a tag to {tagScan ? `${tagScan.image_name}:${tagScan.image_tag}` : 'this scan'}.
                   </p>
                   <Select value={selectedTagId} onChange={(value) => setSelectedTagId(String(value))} variant="secondary">
                     <Select.Trigger>
                       <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className="text-zinc-400 shrink-0">
+                        <span className="text-muted-foreground shrink-0">
                           <Tag01Icon size={15} />
                         </span>
                         <Select.Value />

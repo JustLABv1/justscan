@@ -93,7 +93,7 @@ function SeverityPill({
   if (count <= 0) return null;
 
   return (
-    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md" style={tone}>
+    <span className="text-xs font-mono px-1.5 py-0.5 rounded-md" style={tone}>
       {label}:{count}
     </span>
   );
@@ -122,9 +122,9 @@ export function RecentActivityRangePicker({
           style={
             value == null
               ? {
-                  background: 'color-mix(in srgb, var(--accent) 20%, transparent)',
-                  color: 'color-mix(in srgb, var(--accent) 78%, white)',
-                  border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)',
+                  background: 'color-mix(in srgb, var(--primary) 20%, transparent)',
+                  color: 'color-mix(in srgb, var(--primary) 78%, white)',
+                  border: '1px solid color-mix(in srgb, var(--primary) 28%, transparent)',
                 }
               : {
                   background: 'var(--row-hover)',
@@ -152,9 +152,9 @@ export function RecentActivityRangePicker({
             style={
               isActive
                 ? {
-                    background: 'color-mix(in srgb, var(--accent) 20%, transparent)',
-                    color: 'color-mix(in srgb, var(--accent) 78%, white)',
-                    border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)',
+                    background: 'color-mix(in srgb, var(--primary) 20%, transparent)',
+                    color: 'color-mix(in srgb, var(--primary) 78%, white)',
+                    border: '1px solid color-mix(in srgb, var(--primary) 28%, transparent)',
                   }
                 : {
                     background: 'var(--row-hover)',
@@ -185,22 +185,22 @@ export function RecentActivityRow({ scan }: { scan: Scan }) {
       onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate font-mono text-sm text-zinc-700 transition-colors group-hover:text-zinc-900 dark:text-zinc-300 dark:group-hover:text-white">
+        <p className="truncate font-mono text-sm text-foreground transition-colors group-hover:text-foreground dark:group-hover:text-white">
           {scan.image_name}:{scan.image_tag}
         </p>
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
           <StatusBadge
             status={scan.status}
             currentStep={scan.current_step}
             externalStatus={scan.external_status}
           />
-          <span className="text-zinc-500">{scanContextLabel(scan)}</span>
-          <span className="text-zinc-400" title={fullDate(eventTime)}>
+          <span className="text-muted-foreground">{scanContextLabel(scan)}</span>
+          <span className="text-muted-foreground" title={fullDate(eventTime)}>
             {timeAgo(eventTime)}
           </span>
         </div>
         {scan.error_message ? (
-          <p className="mt-1 line-clamp-2 text-[11px] text-red-400">{scan.error_message}</p>
+          <p className="mt-1 line-clamp-2 text-xs text-destructive">{scan.error_message}</p>
         ) : null}
       </div>
 

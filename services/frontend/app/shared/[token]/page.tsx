@@ -22,7 +22,7 @@ import {
   subscribeToAuth,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Button, Card, ListBox, Select, useOverlayState } from '@heroui/react';
+import { Button, Card, ListBox, Select, useOverlayState } from '@/components/ui';
 import { CpuIcon, FileExportIcon, GitCompareIcon, Refresh01Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -34,9 +34,9 @@ import { isAbortError } from '@/lib/utils';
 const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   CRITICAL: {
     label: 'Critical',
-    color: 'text-red-500 dark:text-red-400',
-    bg: 'bg-red-500/10',
-    border: 'border-red-500/20',
+    color: 'text-destructive dark:text-destructive',
+    bg: 'bg-destructive/10',
+    border: 'border-destructive/20',
   },
   HIGH: {
     label: 'High',
@@ -46,21 +46,21 @@ const SEV_CONFIG: Record<string, { label: string; color: string; bg: string; bor
   },
   MEDIUM: {
     label: 'Medium',
-    color: 'text-yellow-600 dark:text-yellow-400',
-    bg: 'bg-yellow-500/10',
-    border: 'border-yellow-500/20',
+    color: 'text-warning-foreground dark:text-warning-foreground',
+    bg: 'bg-warning/10',
+    border: 'border-warning/20',
   },
   LOW: {
     label: 'Low',
-    color: 'text-blue-500 dark:text-blue-400',
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/20',
+    color: 'text-info-foreground dark:text-info-foreground',
+    bg: 'bg-info/10',
+    border: 'border-info/20',
   },
   UNKNOWN: {
     label: 'Unknown',
-    color: 'text-zinc-500',
-    bg: 'bg-zinc-500/10',
-    border: 'border-zinc-500/20',
+    color: 'text-muted-foreground',
+    bg: 'bg-muted/10',
+    border: 'border-border/20',
   },
 };
 
@@ -82,7 +82,7 @@ function SourceBadge({ source }: { source?: string }) {
   const label = isOSV ? 'OSV.dev' : isXray ? 'Xray' : source?.trim() || 'Trivy';
   return (
     <span
-      className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
+      className="text-xs font-semibold px-1.5 py-0.5 rounded-md shrink-0"
       style={
         isOSV
           ? {
@@ -97,9 +97,9 @@ function SourceBadge({ source }: { source?: string }) {
                 border: '1px solid rgba(245,158,11,0.22)',
               }
             : {
-                background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-                color: 'color-mix(in srgb, var(--accent) 78%, white)',
-                border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
+                background: 'color-mix(in srgb, var(--primary) 12%, transparent)',
+                color: 'color-mix(in srgb, var(--primary) 78%, white)',
+                border: '1px solid color-mix(in srgb, var(--primary) 22%, transparent)',
               }
       }
       title={
@@ -481,10 +481,10 @@ export default function SharedScanPage() {
         style={{ background: 'var(--app-bg)' }}
       >
         <div className="text-center space-y-3">
-          <p role="alert" className="text-red-500 dark:text-red-400 text-sm">
+          <p role="alert" className="text-destructive dark:text-destructive text-sm">
             {error}
           </p>
-          <Link href="/" className="text-accent dark:text-accent text-sm hover:underline">
+          <Link href="/" className="text-primary dark:text-primary text-sm hover:underline">
             ← Back to home
           </Link>
         </div>
@@ -517,7 +517,7 @@ export default function SharedScanPage() {
       <main className="max-w-[1500px] mx-auto px-4 py-8 space-y-6">
         {actionError && (
           <div
-            className="rounded-2xl px-4 py-3 text-sm"
+            className="rounded-xl px-4 py-3 text-sm"
             style={{
               background: 'rgba(239,68,68,0.08)',
               border: '1px solid rgba(239,68,68,0.18)',
@@ -534,9 +534,9 @@ export default function SharedScanPage() {
               <span
                 className="text-xs px-2 py-0.5 rounded-full font-medium"
                 style={{
-                  background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
-                  color: 'color-mix(in srgb, var(--accent) 78%, white)',
-                  border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                  background: 'color-mix(in srgb, var(--primary) 10%, transparent)',
+                  color: 'color-mix(in srgb, var(--primary) 78%, white)',
+                  border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)',
                 }}
               >
                 Shared scan
@@ -594,7 +594,7 @@ export default function SharedScanPage() {
                   variant="primary"
                 >
                   {reScanning ? (
-                    <span className="size-3.5 border-2 border-accent-400/30 border-t-accent-400 rounded-full animate-spin" />
+                    <span className="size-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                   ) : (
                     <Refresh01Icon size={15} />
                   )}
@@ -609,7 +609,7 @@ export default function SharedScanPage() {
                   variant="secondary"
                 >
                   {comparingPrev ? (
-                    <span className="size-3.5 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
+                    <span className="size-3.5 border-2 border-border/30 border-t-zinc-400 rounded-full animate-spin" />
                   ) : (
                     <GitCompareIcon size={15} />
                   )}
@@ -662,7 +662,7 @@ export default function SharedScanPage() {
 
         {isBlockedByXrayPolicy && activeTab === 'overview' && (
           <div
-            className="rounded-2xl px-6 py-5"
+            className="rounded-xl px-6 py-5"
             style={{
               background: 'rgba(245,158,11,0.10)',
               border: '1px solid rgba(245,158,11,0.22)',
@@ -720,7 +720,7 @@ export default function SharedScanPage() {
               ].map(({ label, count, color, border }) => (
                 <Card
                   key={label}
-                  className={`rounded-2xl border ${border} p-4 cursor-pointer transition-all hover:scale-105`}
+                  className={`rounded-xl border ${border} p-4 cursor-pointer transition-all hover:scale-105`}
                   variant="default"
                   onClick={() => {
                     setSeverityFilter((f) =>
@@ -891,7 +891,7 @@ export default function SharedScanPage() {
                   <div
                     role="alert"
                     aria-live="assertive"
-                    className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300"
+                    className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive dark:text-destructive"
                   >
                     <span>
                       {vulns.length > 0
@@ -940,7 +940,7 @@ export default function SharedScanPage() {
                         watchCount > 0 ||
                         !!vulnerability.xray_is_blocking;
                       if (!hasDetails) {
-                        return <span className="text-xs text-zinc-400">-</span>;
+                        return <span className="text-xs text-muted-foreground">-</span>;
                       }
 
                       const total = policyMatches.length || watchCount;
@@ -961,8 +961,8 @@ export default function SharedScanPage() {
                           <span
                             className={`font-semibold text-xs rounded-full px-1.5 py-0.5 ${
                               isBlocking
-                                ? 'bg-red-500/20 text-red-400'
-                                : 'bg-zinc-500/20 text-zinc-300 dark:text-zinc-200'
+                                ? 'bg-destructive/20 text-destructive'
+                                : 'bg-muted/20 text-foreground'
                             }`}
                           >
                             {total}

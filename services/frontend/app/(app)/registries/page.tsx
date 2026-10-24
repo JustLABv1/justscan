@@ -9,7 +9,8 @@ import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
-import { PageHeader } from '@/components/ui/page-header';
+import { StatCard } from '@/components/ui/stat-card';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useClientAuth } from '@/hooks/use-client-auth';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -46,6 +47,8 @@ import {
   SearchField,
   Select,
   Table,
+  Tabs,
+  Label,
   useOverlayState,
 } from '@/components/ui';
 import {
@@ -67,84 +70,22 @@ const AUTH_TYPE_LABEL: Record<string, string> = {
   token: 'Token',
   aws_ecr: 'AWS ECR',
 };
-const AUTH_TYPE_STYLE: Record<string, React.CSSProperties> = {
-  none: {
-    color: '#a1a1aa',
-    background: 'rgba(161,161,170,0.08)',
-    border: '1px solid rgba(161,161,170,0.15)',
-  },
-  basic: {
-    color: '#60a5fa',
-    background: 'rgba(59,130,246,0.1)',
-    border: '1px solid rgba(59,130,246,0.2)',
-  },
-  token: {
-    color: 'color-mix(in srgb, var(--primary) 78%, white)',
-    background: 'color-mix(in srgb, var(--primary) 10%, transparent)',
-    border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)',
-  },
-  aws_ecr: {
-    color: '#fb923c',
-    background: 'rgba(249,115,22,0.1)',
-    border: '1px solid rgba(249,115,22,0.2)',
-  },
-};
-
 const PROVIDER_LABEL: Record<string, string> = {
   trivy: 'Trivy',
   artifactory_xray: 'Artifactory Xray',
 };
 
-const PROVIDER_STYLE: Record<string, React.CSSProperties> = {
-  trivy: {
-    color: '#22c55e',
-    background: 'rgba(34,197,94,0.1)',
-    border: '1px solid rgba(34,197,94,0.2)',
-  },
-  artifactory_xray: {
-    color: '#f59e0b',
-    background: 'rgba(245,158,11,0.1)',
-    border: '1px solid rgba(245,158,11,0.2)',
-  },
-};
-
 function HealthBadge({ status, message }: { status: string; message: string }) {
-  const cfg = (
-    {
-      healthy: {
-        color: '#34d399',
-        bg: 'rgba(16,185,129,0.1)',
-        border: 'rgba(16,185,129,0.2)',
-        label: 'Healthy',
-      },
-      unhealthy: {
-        color: '#f87171',
-        bg: 'rgba(239,68,68,0.1)',
-        border: 'rgba(239,68,68,0.2)',
-        label: 'Unhealthy',
-      },
-      unknown: {
-        color: '#a1a1aa',
-        bg: 'rgba(161,161,170,0.08)',
-        border: 'rgba(161,161,170,0.15)',
-        label: 'Unknown',
-      },
-    } as Record<string, { color: string; bg: string; border: string; label: string }>
-  )[status] ?? {
-    color: '#a1a1aa',
-    bg: 'rgba(161,161,170,0.08)',
-    border: 'rgba(161,161,170,0.15)',
-    label: status,
-  };
   return (
-    <span
-      className="flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full"
-      style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}
+    <Chip
+      size="sm"
+      variant="soft"
+      color={status === 'healthy' ? 'success' : status === 'unhealthy' ? 'danger' : 'default'}
       title={message}
     >
-      <span className="size-1.5 rounded-full" style={{ background: cfg.color }} />
-      {cfg.label}
-    </span>
+      <span aria-hidden className="size-1.5 rounded-full bg-current" />
+      {status === 'healthy' ? 'Healthy' : status === 'unhealthy' ? 'Unhealthy' : 'Unknown'}
+    </Chip>
   );
 }
 
@@ -493,7 +434,7 @@ export default function RegistriesPage() {
   }, [providerFilter, registries, searchQuery]);
 
   return (
-    <div className="p-6 space-y-5">
+    <PageContainer>
       <PageHeader
         title="Registries"
         description="Configure private Docker registries and choose the scan provider per registry."
@@ -511,6 +452,32 @@ export default function RegistriesPage() {
           </div>
         }
       />
+
+      {!loading && registries.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <StatCard
+            label="Registries"
+            value={registries.length}
+            hint="Available in this workspace"
+          />
+          <StatCard
+            label="Trivy"
+            value={registries.filter((item) => (item.scan_provider ?? 'trivy') === 'trivy').length}
+            hint="Built-in image scanning"
+          />
+          <StatCard
+            label="Artifactory Xray"
+            value={registries.filter((item) => item.scan_provider === 'artifactory_xray').length}
+            hint="External image scanning"
+          />
+          <StatCard
+            label="Unhealthy connections"
+            value={registries.filter((item) => item.health_status === 'unhealthy').length}
+            hint="Last recorded health check"
+            tone="danger"
+          />
+        </div>
+      ) : null}
 
       <LoadableCollectionState
         emptyState={
@@ -534,52 +501,54 @@ export default function RegistriesPage() {
           </div>
         }
       >
-        <Card className="space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <SearchField
-              name="registries-search"
-              variant="secondary"
-              className="w-full sm:max-w-sm"
-            >
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  aria-label="Search registries"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search registry, URL, or username..."
-                />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-            <Select
-              aria-label="Filter registries by scan provider"
-              value={providerFilter}
-              onChange={(value) =>
-                setProviderFilter(
-                  value === 'artifactory_xray'
-                    ? 'artifactory_xray'
-                    : value === 'trivy'
-                      ? 'trivy'
-                      : 'all'
-                )
+        <Card className="gap-0 overflow-hidden py-0">
+          <Card.Header className="space-y-3 border-b p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Card.Title>Registry connections</Card.Title>
+              <span className="text-xs text-muted-foreground">
+                {filteredRegistries.length} of {registries.length} registries
+              </span>
+            </div>
+            <Tabs
+              selectedKey={providerFilter}
+              onSelectionChange={(key) =>
+                setProviderFilter(String(key) as 'all' | 'trivy' | 'artifactory_xray')
               }
-              className="w-full sm:w-[180px]"
               variant="secondary"
             >
-              <Select.Trigger className={selectTriggerCls}>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="all">All providers</ListBox.Item>
-                  <ListBox.Item id="trivy">Trivy</ListBox.Item>
-                  <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
+              <Tabs.ListContainer className="overflow-x-auto">
+                <Tabs.List aria-label="Registry scan provider" className="min-w-max">
+                  {[
+                    { id: 'all', label: 'All providers' },
+                    { id: 'trivy', label: 'Trivy' },
+                    { id: 'artifactory_xray', label: 'Artifactory Xray' },
+                  ].map((option) => (
+                    <Tabs.Tab id={option.id} key={option.id}>
+                      {option.label}
+                      <Tabs.Indicator />
+                    </Tabs.Tab>
+                  ))}
+                </Tabs.List>
+              </Tabs.ListContainer>
+              {['all', 'trivy', 'artifactory_xray'].map((key) => (
+                <Tabs.Panel id={key} key={key} className="hidden" />
+              ))}
+            </Tabs>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <SearchField name="registries-search" variant="secondary" className="w-full">
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    aria-label="Search registries"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search registry, URL, or username..."
+                  />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+            </div>
+          </Card.Header>
           {filteredRegistries.length === 0 ? (
             <EmptyState
               icon={<ServerStack01Icon size={28} />}
@@ -595,13 +564,18 @@ export default function RegistriesPage() {
             />
           ) : (
             <Table variant="secondary">
-              <Table.ScrollContainer>
-                <Table.Content aria-label="Configured registries" className="md:min-w-[800px]">
+              <Table.ScrollContainer className="rounded-none border-0">
+                <Table.Content
+                  aria-label="Configured registries"
+                  className="min-w-[960px] [&_td]:py-3"
+                >
                   <Table.Header>
                     <Table.Column isRowHeader>Name</Table.Column>
-                    <Table.Column className="hidden md:table-cell">Connection</Table.Column>
-                    <Table.Column className="hidden md:table-cell">Health</Table.Column>
-                    <Table.Column className="flex justify-end">Actions</Table.Column>
+                    <Table.Column className="min-w-56">Connection</Table.Column>
+                    <Table.Column className="min-w-56">Health</Table.Column>
+                    <Table.Column className="w-px whitespace-nowrap text-right">
+                      Actions
+                    </Table.Column>
                   </Table.Header>
                   <Table.Body>
                     {filteredRegistries.map((r) => (
@@ -632,38 +606,27 @@ export default function RegistriesPage() {
                               ownerOrgId={r.owner_org_id}
                               orgNamesById={orgNamesById}
                             />
-                            <p className="truncate text-xs text-muted-foreground md:hidden">{r.url}</p>
-                            <div className="md:hidden">
-                              <HealthBadge
-                                status={r.health_status ?? 'unknown'}
-                                message={r.health_message ?? ''}
-                              />
-                            </div>
                           </div>
                         </Table.Cell>
-                        <Table.Cell className="hidden md:table-cell">
+                        <Table.Cell className="min-w-56">
                           <div className="space-y-1.5">
-                            <p className="font-mono text-xs text-muted-foreground">{r.url}</p>
+                            <p className="max-w-md break-all font-mono text-xs text-muted-foreground">
+                              {r.url}
+                            </p>
                             <div className="flex flex-wrap gap-1.5">
-                              <span
-                                className="text-xs font-medium px-2 py-0.5 rounded-md"
-                                style={PROVIDER_STYLE[r.scan_provider ?? 'trivy']}
-                              >
+                              <Chip size="sm" variant="soft">
                                 {PROVIDER_LABEL[r.scan_provider ?? 'trivy']}
-                              </span>
-                              <span
-                                className="text-xs font-medium px-2 py-0.5 rounded-md"
-                                style={AUTH_TYPE_STYLE[r.auth_type ?? 'none']}
-                              >
+                              </Chip>
+                              <Chip size="sm" variant="soft">
                                 {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
-                              </span>
+                              </Chip>
                               {r.username ? (
                                 <span className="text-xs text-muted-foreground">{r.username}</span>
                               ) : null}
                             </div>
                           </div>
                         </Table.Cell>
-                        <Table.Cell className="hidden md:table-cell">
+                        <Table.Cell className="min-w-56">
                           <div className="flex flex-col gap-1">
                             <HealthBadge
                               status={r.health_status ?? 'unknown'}
@@ -776,8 +739,8 @@ export default function RegistriesPage() {
 
       <Modal state={modal}>
         <Modal.Backdrop isDismissable={false}>
-          <Modal.Container className="px-3 sm:px-6" size="lg" placement="center" scroll="inside">
-            <Modal.Dialog className="max-w-3xl">
+          <Modal.Container size="lg" placement="center" scroll="inside">
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header className="border-b border-border px-5 py-4 sm:px-6">
                 <div className="min-w-0">
                   <Modal.Heading>{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
@@ -817,7 +780,6 @@ export default function RegistriesPage() {
                         variant="secondary"
                       />
                       <div className="space-y-1.5 md:col-span-2">
-                        <label className="text-sm font-medium">Scan Provider</label>
                         <Select
                           aria-label="Scan provider"
                           variant="secondary"
@@ -826,6 +788,7 @@ export default function RegistriesPage() {
                             setScanProvider(value as 'trivy' | 'artifactory_xray')
                           }
                         >
+                          <Label>Scan provider</Label>
                           <Select.Trigger className={selectTriggerCls}>
                             <div className="flex min-w-0 flex-1 items-center gap-2">
                               <span className="shrink-0 text-muted-foreground">
@@ -916,7 +879,6 @@ export default function RegistriesPage() {
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Auth Type</label>
                         <Select
                           aria-label="Registry authentication type"
                           variant="secondary"
@@ -925,6 +887,7 @@ export default function RegistriesPage() {
                             setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')
                           }
                         >
+                          <Label>Authentication</Label>
                           <Select.Trigger className={selectTriggerCls}>
                             <div className="flex min-w-0 flex-1 items-center gap-2">
                               <span className="shrink-0 text-muted-foreground">
@@ -953,7 +916,7 @@ export default function RegistriesPage() {
                       />
                       <FormField
                         autoComplete="off"
-                        className="md:col-span-2"
+                        containerClassName="md:col-span-2"
                         description={
                           editing
                             ? 'Leave blank to keep the stored password unchanged.'
@@ -992,7 +955,7 @@ export default function RegistriesPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog className="surface-modal overflow-hidden">
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header
                 className="px-6 py-4"
                 style={{ borderBottom: '1px solid var(--border-subtle)' }}
@@ -1007,16 +970,8 @@ export default function RegistriesPage() {
                   <FormAlert description={shareError} title="Access update failed" />
                 ) : null}
                 {shareTarget ? (
-                  <div
-                    className="rounded-xl px-4 py-3"
-                    style={{
-                      background: 'var(--row-hover)',
-                      border: '1px solid var(--surface-border)',
-                    }}
-                  >
-                    <p className="text-sm font-medium text-foreground">
-                      {shareTarget.name}
-                    </p>
+                  <div className="rounded-lg border bg-muted/30 px-4 py-3">
+                    <p className="text-sm font-medium text-foreground">{shareTarget.name}</p>
                     <div className="mt-2">
                       <OwnershipBadge
                         ownerType={shareTarget.owner_type}
@@ -1029,9 +984,7 @@ export default function RegistriesPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Current access
-                    </h3>
+                    <h3 className="text-sm font-semibold text-foreground">Current access</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Organizations listed here can use this registry.
                     </p>
@@ -1054,15 +1007,15 @@ export default function RegistriesPage() {
                           }}
                         >
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground">
-                              {share.org_name}
-                            </p>
+                            <p className="text-sm font-medium text-foreground">{share.org_name}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
                               {share.is_owner ? 'Owner workspace' : 'Shared access'}
                             </p>
                           </div>
                           {share.is_owner ? (
-                            <span className="text-xs font-medium text-muted-foreground">Locked</span>
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Locked
+                            </span>
                           ) : (
                             <Button
                               type="button"
@@ -1086,9 +1039,7 @@ export default function RegistriesPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Grant access
-                    </h3>
+                    <h3 className="text-sm font-semibold text-foreground">Grant access</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Share this registry with another organization you manage.
                     </p>
@@ -1164,6 +1115,6 @@ export default function RegistriesPage() {
         </Modal.Backdrop>
       </Modal>
       {confirmDialog}
-    </div>
+    </PageContainer>
   );
 }

@@ -26,21 +26,15 @@ import {
   Chip,
   Drawer,
   ListBox,
-  Popover,
   SearchField,
   Select,
   Skeleton,
   Table,
+  Tabs,
   Tooltip,
   useOverlayState,
 } from '@/components/ui';
-import {
-  ArrowRight01Icon,
-  Cancel01Icon,
-  FilterIcon,
-  PackageIcon,
-  Shield01Icon,
-} from 'hugeicons-react';
+import { ArrowRight01Icon, PackageIcon, Shield01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
@@ -431,7 +425,7 @@ function RecentScanStrip({
     return (
       <div className="flex items-end gap-1" aria-label="Loading 14 day scan history">
         {Array.from({ length: RECENT_SCAN_SEGMENTS }, (_, index) => (
-          <Skeleton key={`scan-history-skeleton-${index}`} className="h-10 w-3 rounded-sm" />
+          <Skeleton key={`scan-history-skeleton-${index}`} className="h-8 w-2.5 rounded-sm" />
         ))}
       </div>
     );
@@ -442,10 +436,7 @@ function RecentScanStrip({
       {historyDays.map((day) => {
         const meta = day.scan ? getScanHistoryMeta(day.scan) : null;
         const content = (
-          <span
-            className="flex h-10 w-3 shrink-0 items-end rounded-sm bg-surface-secondary p-px"
-            aria-hidden
-          >
+          <span className="flex h-8 w-2.5 shrink-0 items-end rounded-sm bg-muted p-px" aria-hidden>
             <span
               className="h-full w-full rounded-[2px] transition-colors duration-150"
               style={{
@@ -565,7 +556,7 @@ function MobileImageStatusCard({
           <div className="min-w-0">
             <Link
               href={`/scans/details/${item.latest_scan_id}`}
-              className="block break-words text-left text-sm font-semibold text-foreground hover:underline"
+              className="block max-w-sm break-words text-left text-sm font-medium text-foreground hover:underline [overflow-wrap:anywhere]"
             >
               {item.image_name}
             </Link>
@@ -590,22 +581,6 @@ function MobileImageStatusCard({
         <ImageStatusChips item={item} />
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-        <div>
-          <p className="text-muted-foreground">Critical</p>
-          <p className="mt-0.5 font-semibold tabular-nums text-danger">{item.critical_count}</p>
-        </div>
-        <div>
-          <p className="text-muted-foreground">High</p>
-          <p className="mt-0.5 font-semibold tabular-nums text-warning-foreground">
-            {item.high_count}
-          </p>
-        </div>
-        <div>
-          <p className="text-muted-foreground">All findings</p>
-          <p className="mt-0.5 font-semibold tabular-nums text-foreground">{totalFindings}</p>
-        </div>
-      </div>
       <FindingsSummary item={item} />
 
       <div className="mt-4 border-t border-divider/70 pt-3">
@@ -1294,15 +1269,6 @@ export default function PublicStatusPage() {
 
   const hasImageFilters =
     searchQuery.trim().length > 0 || statusFilter !== '__all__' || decisionFilter !== '__all__';
-  const selectedImageFilterCount =
-    Number(statusFilter !== '__all__') + Number(decisionFilter !== '__all__');
-  const statusFilterLabel = IMAGE_STATUS_FILTER_OPTIONS.find(
-    (option) => option.key === statusFilter
-  )?.label;
-  const decisionFilterLabel = DECISION_FILTER_OPTIONS.find(
-    (option) => option.key === decisionFilter
-  )?.label;
-
   function clearImageFilters() {
     setSearchQuery('');
     setStatusFilter('__all__');
@@ -1322,15 +1288,6 @@ export default function PublicStatusPage() {
     setDecisionFilter('__all__');
     setStatusFilter(statusFilter === nextStatus ? '__all__' : nextStatus);
   }
-
-  const activeMetricKey =
-    searchQuery.trim().length > 0
-      ? undefined
-      : decisionFilter !== '__all__' && statusFilter === '__all__'
-        ? `decision:${decisionFilter}`
-        : statusFilter !== '__all__' && decisionFilter === '__all__'
-          ? `status:${statusFilter}`
-          : undefined;
 
   const decisionSummary = useMemo(() => {
     return trackedItems.reduce(
@@ -1476,7 +1433,6 @@ export default function PublicStatusPage() {
         />
 
         <StatusMetrics
-          activeKey={activeMetricKey}
           metrics={[
             {
               key: 'decision:passed',
@@ -1508,217 +1464,128 @@ export default function PublicStatusPage() {
         />
 
         {(data.git_repository_sources?.length ?? 0) > 0 ? (
-          <Card className="gap-3 p-4" variant="secondary">
-            <div className="flex items-center gap-2">
-              <Shield01Icon size={16} className="text-muted-foreground" aria-hidden />
-              <h2 className="text-sm font-semibold text-foreground">Git repository health</h2>
-            </div>
-            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {data.git_repository_sources?.map((source) => (
-                <div
-                  key={source.repository_id}
-                  className="rounded-xl border border-divider/70 bg-surface-secondary/50 p-3"
+          <Card className="gap-0 overflow-hidden py-0">
+            <Card.Header className="border-b p-4">
+              <Card.Title>Repository sources</Card.Title>
+              <Card.Description>Discovery health for the image inventory.</Card.Description>
+            </Card.Header>
+            <Table variant="secondary">
+              <Table.ScrollContainer className="rounded-none border-0">
+                <Table.Content
+                  aria-label="Repository discovery health"
+                  className="min-w-[720px] [&_td]:py-3"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="min-w-0 truncate text-sm font-medium text-foreground">
-                      {source.repository_name}
-                    </p>
-                    <StatusBadge status={source.status} />
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {source.image_count} current image{source.image_count === 1 ? '' : 's'} ·{' '}
-                    {source.completed_at
-                      ? `last good run ${timeAgo(source.completed_at)}`
-                      : 'No successful run yet'}
-                  </p>
-                  {source.commit_sha ? (
-                    <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                      {source.commit_sha}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
+                  <Table.Header>
+                    <Table.Column isRowHeader>Repository</Table.Column>
+                    <Table.Column>Discovery</Table.Column>
+                    <Table.Column>Images</Table.Column>
+                    <Table.Column>Last successful run</Table.Column>
+                    <Table.Column>Commit</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {data.git_repository_sources?.map((source) => (
+                      <Table.Row key={source.repository_id} id={source.repository_id}>
+                        <Table.Cell className="font-medium">{source.repository_name}</Table.Cell>
+                        <Table.Cell>
+                          <StatusBadge status={source.status} />
+                        </Table.Cell>
+                        <Table.Cell className="tabular-nums">{source.image_count}</Table.Cell>
+                        <Table.Cell className="text-xs text-muted-foreground">
+                          {source.completed_at
+                            ? timeAgo(source.completed_at)
+                            : 'No successful run yet'}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <code
+                            title={source.commit_sha || undefined}
+                            className="text-xs text-muted-foreground"
+                          >
+                            {source.commit_sha?.slice(0, 8) || '—'}
+                          </code>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
           </Card>
         ) : null}
 
         <ActiveStatusUpdates updates={activeUpdates} />
 
-        <Card
-          className="overflow-hidden border border-divider/70 bg-surface/70 p-0 shadow-sm"
-          variant="secondary"
-        >
-          <div className="border-b border-divider/70 p-4 sm:p-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <Card className="gap-0 overflow-hidden py-0" variant="secondary">
+          <Card.Header className="space-y-4 border-b p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="flex items-center gap-2">
-                  <PackageIcon size={17} className="text-muted-foreground" aria-hidden />
-                  <h2 className="text-base font-semibold text-foreground">Scanned images</h2>
-                  <Chip size="sm" variant="secondary">
-                    <Chip.Label>
-                      {filteredTrackedItems.length}
-                      {filteredTrackedItems.length !== trackedItems.length
-                        ? ` of ${trackedItems.length}`
-                        : ''}
-                    </Chip.Label>
-                  </Chip>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Current health, policy failures, findings, and a 14-day scan history.
-                </p>
+                <Card.Title>Image health</Card.Title>
+                <Card.Description>
+                  Current policy results, findings, and scan history.
+                </Card.Description>
               </div>
-
-              <div className="flex w-full gap-2 xl:w-auto xl:min-w-[420px]">
-                <SearchField
-                  aria-label="Search images"
-                  className="min-w-0 flex-1"
-                  value={searchQuery}
-                  variant="secondary"
-                  onChange={setSearchQuery}
-                >
-                  <SearchField.Group>
-                    <SearchField.SearchIcon />
-                    <SearchField.Input placeholder="Search image or tag..." />
-                    <SearchField.ClearButton />
-                  </SearchField.Group>
-                </SearchField>
-                <Popover>
-                  <Popover.Trigger>
-                    <Button variant={selectedImageFilterCount > 0 ? 'secondary' : 'tertiary'}>
-                      <FilterIcon size={16} aria-hidden />
-                      Filters{selectedImageFilterCount > 0 ? ` (${selectedImageFilterCount})` : ''}
-                    </Button>
-                  </Popover.Trigger>
-                  <Popover.Content
-                    className="w-[min(22rem,calc(100vw-2rem))]"
-                    placement="bottom end"
-                  >
-                    <Popover.Arrow />
-                    <Popover.Dialog className="space-y-4 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <Popover.Heading className="text-sm font-semibold text-foreground">
-                            Filter images
-                          </Popover.Heading>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Refine the currently shown images.
-                          </p>
-                        </div>
-                        <Button
-                          isDisabled={!hasImageFilters}
-                          size="sm"
-                          variant="tertiary"
-                          onPress={clearImageFilters}
-                        >
-                          Clear all
-                        </Button>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-medium text-muted-foreground">Image state</p>
-                          <Select
-                            aria-label="Filter images by state"
-                            variant="secondary"
-                            value={statusFilter}
-                            onChange={(value) =>
-                              setStatusFilter(String(value) as ImageStatusFilter)
-                            }
-                          >
-                            <Select.Trigger>
-                              <Select.Value />
-                              <Select.Indicator />
-                            </Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                {IMAGE_STATUS_FILTER_OPTIONS.map((option) => (
-                                  <ListBox.Item
-                                    id={option.key}
-                                    key={option.key}
-                                    textValue={option.label}
-                                  >
-                                    {option.label}
-                                    <ListBox.ItemIndicator />
-                                  </ListBox.Item>
-                                ))}
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Organization policy
-                          </p>
-                          <Select
-                            aria-label="Filter images by organization policy result"
-                            variant="secondary"
-                            value={decisionFilter}
-                            onChange={(value) => setDecisionFilter(String(value) as DecisionFilter)}
-                          >
-                            <Select.Trigger>
-                              <Select.Value />
-                              <Select.Indicator />
-                            </Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                {DECISION_FILTER_OPTIONS.map((option) => (
-                                  <ListBox.Item
-                                    id={option.key}
-                                    key={option.key}
-                                    textValue={option.label}
-                                  >
-                                    {option.label}
-                                    <ListBox.ItemIndicator />
-                                  </ListBox.Item>
-                                ))}
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
-                        </div>
-                      </div>
-                    </Popover.Dialog>
-                  </Popover.Content>
-                </Popover>
-              </div>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {filteredTrackedItems.length} of {trackedItems.length} images
+              </span>
             </div>
-            {hasImageFilters ? (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-medium text-muted-foreground">Active filters</span>
-                {searchQuery.trim() ? (
-                  <Button
-                    className=" "
-                    size="sm"
-                    variant="secondary"
-                    onPress={() => setSearchQuery('')}
-                  >
-                    Search: {searchQuery.trim()}
-                    <Cancel01Icon size={13} aria-hidden />
-                  </Button>
-                ) : null}
-                {statusFilter !== '__all__' ? (
-                  <Button
-                    className=" "
-                    size="sm"
-                    variant="secondary"
-                    onPress={() => setStatusFilter('__all__')}
-                  >
-                    {statusFilterLabel}
-                    <Cancel01Icon size={13} aria-hidden />
-                  </Button>
-                ) : null}
-                {decisionFilter !== '__all__' ? (
-                  <Button
-                    className=" "
-                    size="sm"
-                    variant="secondary"
-                    onPress={() => setDecisionFilter('__all__')}
-                  >
-                    {decisionFilterLabel}
-                    <Cancel01Icon size={13} aria-hidden />
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+            <Tabs
+              selectedKey={statusFilter}
+              onSelectionChange={(key) => setStatusFilter(String(key) as ImageStatusFilter)}
+              variant="secondary"
+            >
+              <Tabs.ListContainer className="overflow-x-auto">
+                <Tabs.List aria-label="Filter status page images" className="min-w-max">
+                  {IMAGE_STATUS_FILTER_OPTIONS.map((option) => (
+                    <Tabs.Tab id={option.key} key={option.key}>
+                      {option.key === '__all__' ? 'All images' : option.label}
+                      <Tabs.Indicator />
+                    </Tabs.Tab>
+                  ))}
+                </Tabs.List>
+              </Tabs.ListContainer>
+              {IMAGE_STATUS_FILTER_OPTIONS.map((option) => (
+                <Tabs.Panel id={option.key} key={option.key} className="hidden" />
+              ))}
+            </Tabs>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <SearchField
+                aria-label="Search images"
+                className="min-w-0 flex-1"
+                value={searchQuery}
+                onChange={setSearchQuery}
+              >
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder="Search image or tag…" />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+              <Select
+                aria-label="Filter images by organization policy result"
+                className="w-full sm:w-48"
+                value={decisionFilter}
+                onChange={(value) => setDecisionFilter(String(value) as DecisionFilter)}
+              >
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    {DECISION_FILTER_OPTIONS.map((option) => (
+                      <ListBox.Item key={option.key} id={option.key}>
+                        {option.label}
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+              {hasImageFilters ? (
+                <Button variant="tertiary" onPress={clearImageFilters}>
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
+          </Card.Header>
 
           <div className="space-y-3 p-3 md:hidden">
             {filteredTrackedItems.length === 0 ? (
@@ -1740,14 +1607,19 @@ export default function PublicStatusPage() {
 
           <div className="hidden md:block">
             <Table variant="secondary">
-              <Table.ScrollContainer>
-                <Table.Content aria-label="Image policy status table" className="min-w-[840px]">
+              <Table.ScrollContainer className="rounded-none border-0">
+                <Table.Content
+                  aria-label="Image policy status table"
+                  className="min-w-[1080px] [&_td]:py-3"
+                >
                   <Table.Header>
-                    <Table.Column isRowHeader>Image</Table.Column>
-                    <Table.Column>State</Table.Column>
-                    <Table.Column>Findings</Table.Column>
-                    <Table.Column>14 days</Table.Column>
-                    <Table.Column>Last scan</Table.Column>
+                    <Table.Column isRowHeader className="min-w-64">
+                      Image
+                    </Table.Column>
+                    <Table.Column className="min-w-40">State</Table.Column>
+                    <Table.Column className="min-w-48">Findings</Table.Column>
+                    <Table.Column className="w-64">14-day history</Table.Column>
+                    <Table.Column className="w-32 whitespace-nowrap">Last scan</Table.Column>
                   </Table.Header>
                   <Table.Body>
                     {filteredTrackedItems.length === 0 ? (
@@ -1765,18 +1637,18 @@ export default function PublicStatusPage() {
                         <Table.Row
                           key={`${item.image_name}:${item.image_tag}`}
                           id={`${item.image_name}:${item.image_tag}`}
-                          className="hover:bg-surface-secondary"
+                          className="hover:bg-muted/50"
                         >
                           <Table.Cell>
                             <div className="flex max-w-[40rem] items-start gap-3">
-                              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted-foreground">
+                              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground">
                                 <PackageIcon size={15} aria-hidden />
                               </span>
                               <div className="min-w-0">
                                 {item.latest_scan_id ? (
                                   <Link
                                     href={`/scans/details/${item.latest_scan_id}`}
-                                    className="block break-words text-left text-sm font-semibold text-foreground hover:underline"
+                                    className="block max-w-sm break-words text-left text-sm font-medium text-foreground hover:underline [overflow-wrap:anywhere]"
                                   >
                                     {item.image_name}
                                   </Link>

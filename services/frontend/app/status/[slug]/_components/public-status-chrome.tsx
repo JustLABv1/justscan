@@ -60,14 +60,14 @@ export function PublicStatusHeader({
   onToggleTheme: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-divider/70 bg-background/85 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-divider bg-surface-secondary">
+          <div className="flex size-8 shrink-0 items-center justify-center">
             <Logo size={20} />
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-medium text-muted-foreground">JustScan Status</p>
+            <p className="text-xs text-muted-foreground">JustScan Status</p>
             <h1 className="truncate text-sm font-semibold text-foreground" title={pageName}>
               {pageName}
             </h1>
@@ -177,11 +177,9 @@ export function OverallStatusBanner({
 
 export function StatusMetrics({
   metrics,
-  activeKey,
   onSelect,
 }: {
   metrics: StatusMetric[];
-  activeKey?: string;
   onSelect?: (key: string) => void;
 }) {
   return (
@@ -190,9 +188,10 @@ export function StatusMetrics({
         <StatCard
           key={metric.key}
           label={metric.label}
+          className="min-h-0 gap-1 py-2.5"
+          valueClassName="text-xl"
           value={metric.value.toLocaleString()}
           tone={metric.color ?? 'default'}
-          selected={activeKey === metric.key}
           onPress={onSelect ? () => onSelect(metric.key) : undefined}
         />
       ))}

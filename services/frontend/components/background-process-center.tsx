@@ -15,7 +15,7 @@ import type { BackgroundJob } from '@/lib/api/types/background-jobs';
 import { timeAgo } from '@/lib/time';
 import { useToast } from '@/components/toast';
 import { useWorkScope } from '@/hooks/use-work-scope';
-import { Button, ButtonGroup, Chip, Drawer, ProgressBar, Spinner } from '@/components/ui';
+import { Button, Chip, Drawer, ProgressBar, Spinner } from '@/components/ui';
 import {
   Activity01Icon,
   Alert02Icon,
@@ -154,17 +154,17 @@ function BackgroundJobCard({
   return (
     <article
       aria-label={`${job.title}, ${jobStatusLabel(job.status)}`}
-      className="overflow-hidden rounded-xl border border-border bg-surface-secondary/60"
+      className="min-w-0 border-b border-border last:border-b-0"
     >
-      <div className="space-y-3 p-3">
+      <div className="space-y-3 p-4">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-foreground">{job.title}</p>
+            <p className="break-words text-sm font-medium text-foreground">{job.title}</p>
             {job.description ? (
               <p className="mt-1 text-xs leading-5 text-muted-foreground">{job.description}</p>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 flex-wrap justify-end gap-1">
             <Chip color={color} size="sm" variant="soft">
               <span className="inline-flex items-center gap-1.5">
                 {active ? (
@@ -216,9 +216,14 @@ function BackgroundJobCard({
         ) : null}
 
         {job.status === 'failed' && job.error ? (
-          <p className="rounded-lg bg-danger/10 px-2.5 py-2 text-xs leading-5 text-danger">
-            {job.error}
-          </p>
+          <details className="group rounded-lg border border-destructive/20">
+            <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              Error details
+            </summary>
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words border-t border-destructive/20 bg-muted/30 p-3 font-mono text-xs leading-5 text-muted-foreground">
+              {job.error}
+            </pre>
+          </details>
         ) : null}
         {!active ? (
           <p className="text-xs text-muted-foreground">
@@ -230,45 +235,27 @@ function BackgroundJobCard({
       </div>
 
       {scanHref || !active ? (
-        <div className="border-t border-border bg-surface-tertiary/30 p-2.5">
-          {scanHref && !active ? (
-            <ButtonGroup fullWidth size="sm" variant="secondary">
-              <Button asChild>
-                <a href={scanHref}>
-                  View scan
-                  <ArrowRight01Icon aria-hidden size={15} />
-                </a>
-              </Button>
-              <Button
-                aria-label={`Remove ${job.title || 'background process'} from the process center`}
-                isPending={isDismissing}
-                onPress={() => onDismiss(job.id)}
-              >
-                <ButtonGroup.Separator />
-                <Cancel01Icon aria-hidden size={15} />
-                Remove
-              </Button>
-            </ButtonGroup>
-          ) : scanHref ? (
-            <Button fullWidth asChild size="sm" variant="secondary">
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-4">
+          {scanHref ? (
+            <Button asChild size="sm" variant="outline">
               <a href={scanHref}>
                 View scan
                 <ArrowRight01Icon aria-hidden size={15} />
               </a>
             </Button>
-          ) : (
+          ) : null}
+          {!active ? (
             <Button
               aria-label={`Remove ${job.title || 'background process'} from the process center`}
-              fullWidth
               isPending={isDismissing}
               onPress={() => onDismiss(job.id)}
               size="sm"
-              variant="tertiary"
+              variant="ghost"
             >
               <Cancel01Icon aria-hidden size={15} />
               Remove
             </Button>
-          )}
+          ) : null}
         </div>
       ) : null}
     </article>
@@ -512,8 +499,8 @@ export function BackgroundProcessCenter({ collapsed = false }: { collapsed?: boo
       />
 
       <Drawer.Backdrop isOpen={isOpen} onOpenChange={setIsOpen} variant="blur">
-        <Drawer.Content placement="right">
-          <Drawer.Dialog className="flex h-full w-full max-w-[30rem] flex-col border-l border-border">
+        <Drawer.Content placement="right" className="max-w-[30rem]">
+          <Drawer.Dialog className="flex h-full w-full flex-col border-l border-border">
             <Drawer.Header className="flex items-start justify-between gap-4 border-b border-border p-5">
               <div className="min-w-0">
                 <Drawer.Heading>Background processes</Drawer.Heading>
@@ -525,7 +512,7 @@ export function BackgroundProcessCenter({ collapsed = false }: { collapsed?: boo
               </div>
               <Drawer.CloseTrigger />
             </Drawer.Header>
-            <Drawer.Body className="space-y-3 p-5">
+            <Drawer.Body className="min-h-0 flex-1 space-y-0 p-0">
               <div aria-atomic="true" aria-live="polite" className="sr-only" role="status">
                 {announcement}
               </div>
@@ -563,7 +550,7 @@ export function BackgroundProcessCenter({ collapsed = false }: { collapsed?: boo
                       Updates paused: {scopedError}
                     </p>
                   ) : null}
-                  <div className="space-y-3">
+                  <div className="divide-y divide-border">
                     {scopedJobs.map((job) => (
                       <BackgroundJobCard
                         isDismissing={dismissingJobIDs.has(job.id)}
@@ -576,20 +563,20 @@ export function BackgroundProcessCenter({ collapsed = false }: { collapsed?: boo
                 </>
               )}
             </Drawer.Body>
-            <Drawer.Footer className="flex flex-col gap-2 border-t border-border p-4">
+            <Drawer.Footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border p-4">
               {finishedJobs.length > 0 ? (
                 <Button
-                  className="w-full"
+                  size="sm"
                   isDisabled={dismissingJobIDs.size > 0}
                   isPending={dismissingJobIDs.size === finishedJobs.length}
                   onPress={() => void dismissJobs(finishedJobs.map((job) => job.id))}
                   variant="tertiary"
                 >
                   <Cancel01Icon aria-hidden size={15} />
-                  Remove completed &amp; failed ({finishedJobs.length})
+                  Clear finished ({finishedJobs.length})
                 </Button>
               ) : null}
-              <Button slot="close" className="w-full" variant="secondary">
+              <Button slot="close" size="sm" variant="outline">
                 Close
               </Button>
             </Drawer.Footer>

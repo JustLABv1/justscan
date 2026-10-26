@@ -29,9 +29,10 @@ WORKDIR /app
 # Alpine 3.24 still packages Expat 2.8.5, affected by CVE-2026-77214.
 # Temporarily install only the fixed Expat package from edge; keep the base and
 # all other packages on 3.24. Remove this once 3.24 ships Expat >= 2.9.0.
+# Require fixed libcurl for CVE-2026-92392, including Git's HTTP transport.
 RUN apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
     libexpat=2.9.0-r0 \
-    && apk add --upgrade --no-cache ca-certificates git tzdata libcrypto3 libssl3
+    && apk add --upgrade --no-cache ca-certificates git "libcurl>=8.23.0-r0" tzdata libcrypto3 libssl3
 
 COPY --from=builder /app/backend/justscan-backend /app/
 COPY --from=builder /app/backend/justscan-mcp /app/
@@ -74,7 +75,7 @@ RUN go mod download github.com/aquasecurity/trivy@${TRIVY_VERSION} \
     && cp -a /go/pkg/mod/github.com/aquasecurity/trivy@${TRIVY_VERSION} /src \
     && chmod -R u+w /src
 WORKDIR /src
-RUN go get github.com/go-jose/go-jose/v4@v4.1.6 oras.land/oras-go/v2@v2.6.4-0.20261015110029-8883c8588eb5 \
+RUN go get github.com/go-jose/go-jose/v4@v4.1.6 oras.land/oras-go/v2@v2.6.4 \
     && CGO_ENABLED=0 go build -trimpath \
     -ldflags="-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=${TRIVY_VERSION#v}" \
     -o /usr/local/bin/trivy ./cmd/trivy

@@ -267,7 +267,7 @@ jobs:
       - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7
         with:
           distribution: goreleaser
-          version: 'v2.18.3'
+          version: 'v2.19.0'
           args: release --clean --skip=publish
 
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4

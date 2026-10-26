@@ -3,7 +3,7 @@
 import { FormAlert } from '@/components/ui/form-alert';
 import { PageHeader } from '@/components/ui/page-header';
 import { acceptOrgInviteByToken } from '@/lib/api';
-import { Button, Card, buttonVariants } from '@heroui/react';
+import { Button, Card, buttonVariants } from '@/components/ui';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -42,7 +42,7 @@ export default function AcceptOrgInvitePage() {
         <Card.Content className="space-y-4 p-6">
         {accepted ? (
           <>
-            <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            <p className="text-sm text-muted-foreground dark:text-foreground">
               You joined {accepted.orgName || 'the organization'} as {accepted.role}.
             </p>
             <div className="flex gap-3">
@@ -54,7 +54,7 @@ export default function AcceptOrgInvitePage() {
           </>
         ) : (
           <>
-            <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            <p className="text-sm text-muted-foreground dark:text-foreground">
               This action will attach the invite to the currently signed-in user. You can also review pending invites from the Organizations page.
             </p>
             <div className="flex gap-3">

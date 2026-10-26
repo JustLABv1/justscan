@@ -7,6 +7,10 @@ Open a scan to review vulnerability severity, package and fixed-version data, sc
 
 From a completed scan you can export evidence, download available SBOM data, compare scans, add comments or manual findings, rescan an image, and share a result or grant an organization access.
 
+The summary controls above the findings table are shortcuts: **Vulnerabilities** clears the finding filters, **Critical + high** focuses urgent findings, **Fixable** toggles findings with a reported fix, and **Policy blockers** opens compliance. Use **Filter & sort** for CVE, intelligence, CVSS, and policy filters; **Saved view** manages your default view. Select a CVE to open its evidence or an affected package to investigate it in the SBOM.
+
+The **Compliance** tab groups each violation with its policy, organization, affected package, and remediation. Organization assignment and re-evaluation stay in that panel. **Timeline** lists execution stages beside the selected stage's recorded output. **Details** separates scan context and scanner evidence from image configuration; expand environment, labels, or raw JSON only when needed.
+
 ## Package investigation
 
 The **Packages & SBOM** view keeps the original CycloneDX document alongside a searchable package inventory and its dependency relationships. Select a package to see its package URL, supplier, license evidence, direct dependencies, reverse dependencies, and the vulnerabilities linked to that package. This is the quickest way to answer “which package introduced this CVE?” without relying on a package-name guess in the UI.

@@ -1,7 +1,7 @@
 'use client';
 
 import { StatusAlert } from '@/components/ui/form-alert';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import {
   CVSS_OPTIONS,
   PUBLISHED_OPTIONS,
@@ -11,7 +11,7 @@ import {
 import { VulnerabilityKBTable } from '@/components/vulnkb/vulnerability-kb-table';
 import { listKBEntries, type VulnKBEntry } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Spinner } from '@heroui/react';
+import { Card, Spinner } from '@/components/ui';
 import { InformationCircleIcon } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
@@ -30,7 +30,6 @@ type VulnKBState = {
   minCvss: string;
   exploitOnly: boolean;
   publishedRange: string;
-  showFilters: boolean;
 };
 
 type VulnKBAction =
@@ -44,7 +43,6 @@ type VulnKBAction =
   | { type: 'set-exploit'; value: boolean }
   | { type: 'set-published-range'; value: string }
   | { type: 'set-page'; value: number }
-  | { type: 'set-show-filters'; value: boolean }
   | { type: 'clear-filters' };
 
 function vulnKBReducer(state: VulnKBState, action: VulnKBAction): VulnKBState {
@@ -69,8 +67,6 @@ function vulnKBReducer(state: VulnKBState, action: VulnKBAction): VulnKBState {
       return { ...state, publishedRange: action.value, page: 1 };
     case 'set-page':
       return { ...state, page: action.value };
-    case 'set-show-filters':
-      return { ...state, showFilters: action.value };
     case 'clear-filters':
       return {
         ...state,
@@ -124,7 +120,6 @@ function VulnKBPageContent() {
     minCvss: searchParams.get('min_cvss') ?? '0',
     exploitOnly: searchParams.get('exploit') === 'true',
     publishedRange: searchParams.get('published') ?? '',
-    showFilters: false,
   });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const totalPages = Math.max(1, Math.ceil(state.total / LIMIT));
@@ -256,53 +251,59 @@ function VulnKBPageContent() {
   };
 
   return (
-    <div className="space-y-5 p-6">
+    <PageContainer>
       <PageHeader
         title="Vulnerability Knowledge Base"
         description="Explore CVE records, source changes, and the exposure that is visible in your scans."
       />
 
-      <VulnerabilityKBFilters
-        queryInput={state.queryInput}
-        severity={state.severity}
-        minCvss={state.minCvss}
-        exploitOnly={state.exploitOnly}
-        publishedRange={state.publishedRange}
-        showFilters={state.showFilters}
-        activeFilters={activeFilters}
-        onQueryInputChange={handleQueryInputChange}
-        onSeverityChange={handleSeverityChange}
-        onMinCvssChange={handleMinCvssChange}
-        onExploitChange={handleExploitChange}
-        onPublishedRangeChange={handlePublishedRangeChange}
-        onShowFiltersChange={(value) => dispatch({ type: 'set-show-filters', value })}
-        onClearFilters={clearFilters}
-      />
+      <Card className="gap-0 overflow-hidden py-0">
+        <Card.Header className="space-y-3 border-b p-4">
+          <div className="flex items-center justify-between gap-3">
+            <Card.Title>CVE intelligence</Card.Title>
+            <span className="text-xs text-muted-foreground">
+              {state.total.toLocaleString()} matching records
+            </span>
+          </div>
+          <VulnerabilityKBFilters
+            queryInput={state.queryInput}
+            severity={state.severity}
+            minCvss={state.minCvss}
+            exploitOnly={state.exploitOnly}
+            publishedRange={state.publishedRange}
+            activeFilters={activeFilters}
+            onQueryInputChange={handleQueryInputChange}
+            onSeverityChange={handleSeverityChange}
+            onMinCvssChange={handleMinCvssChange}
+            onExploitChange={handleExploitChange}
+            onPublishedRangeChange={handlePublishedRangeChange}
+            onClearFilters={clearFilters}
+          />
+        </Card.Header>
+        {state.error ? (
+          <StatusAlert
+            status="danger"
+            title="Vulnerability knowledge base failed to load"
+            description={state.error}
+          />
+        ) : null}
 
-      {state.error ? (
-        <StatusAlert
-          status="danger"
-          title="Vulnerability knowledge base failed to load"
-          description={state.error}
+        <VulnerabilityKBTable
+          entries={state.entries}
+          loading={state.loading}
+          total={state.total}
+          page={state.page}
+          totalPages={totalPages}
+          paginationItems={paginationItems}
+          onRowOpen={(vulnId) => router.push(`/vulnkb/${encodeURIComponent(vulnId)}`)}
+          onPageChange={goToPage}
         />
-      ) : null}
-
-      <VulnerabilityKBTable
-        entries={state.entries}
-        loading={state.loading}
-        total={state.total}
-        page={state.page}
-        totalPages={totalPages}
-        paginationItems={paginationItems}
-        onRowOpen={(vulnId) => router.push(`/vulnkb/${encodeURIComponent(vulnId)}`)}
-        onPageChange={goToPage}
-      />
-
-      <p className="flex items-center gap-1.5 text-xs text-zinc-400">
+      </Card>
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <InformationCircleIcon size={13} />
         Select a CVE to view its source timeline, references, and authorized scan exposure.
       </p>
-    </div>
+    </PageContainer>
   );
 }
 

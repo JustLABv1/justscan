@@ -1,9 +1,10 @@
 'use client';
 
+import { StatCard } from '@/components/ui/stat-card';
 import { Logo } from '@/components/logo';
 import type { StatusPageUpdate } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip } from '@heroui/react';
+import { Alert, Button, Card, Chip } from '@/components/ui';
 import {
   Clock01Icon,
   Globe02Icon,
@@ -18,14 +19,6 @@ type StatusTone = {
   label: string;
   color: string;
   description: string;
-};
-
-const METRIC_VALUE_CLASS = {
-  success: 'text-success',
-  warning: 'text-warning',
-  danger: 'text-danger',
-  accent: 'text-accent',
-  default: 'text-foreground',
 };
 
 export type StatusMetric = {
@@ -67,15 +60,17 @@ export function PublicStatusHeader({
   onToggleTheme: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-divider/70 bg-background/85 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-divider bg-surface-secondary">
+          <div className="flex size-8 shrink-0 items-center justify-center">
             <Logo size={20} />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-muted">JustScan Status</p>
-            <p className="truncate text-sm font-semibold text-foreground">{pageName}</p>
+            <p className="text-xs text-muted-foreground">JustScan Status</p>
+            <h1 className="truncate text-sm font-semibold text-foreground" title={pageName}>
+              {pageName}
+            </h1>
           </div>
         </div>
 
@@ -139,7 +134,7 @@ export function OverallStatusBanner({
   staleAfterHours: number;
 }) {
   return (
-    <Card className="overflow-hidden border border-divider/70 bg-surface/70 p-0 shadow-sm">
+    <Card className="gap-0 overflow-hidden py-0">
       <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span
@@ -150,10 +145,10 @@ export function OverallStatusBanner({
           </span>
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-foreground">{tone.label}</h2>
-            <p className="mt-0.5 text-sm leading-6 text-muted">{tone.description}</p>
+            <p className="mt-0.5 text-sm leading-6 text-muted-foreground">{tone.description}</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted lg:justify-end">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground lg:justify-end">
           <span>
             <strong className="font-semibold text-foreground">{healthyCount}</strong> healthy
           </span>
@@ -182,37 +177,23 @@ export function OverallStatusBanner({
 
 export function StatusMetrics({
   metrics,
-  activeKey,
   onSelect,
 }: {
   metrics: StatusMetric[];
-  activeKey?: string;
   onSelect?: (key: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       {metrics.map((metric) => (
-        <Card
+        <StatCard
           key={metric.key}
-          className={`border bg-surface/60 p-0 shadow-sm transition-colors ${
-            activeKey === metric.key ? 'border-accent' : 'border-divider/70'
-          }`}
-          variant="secondary"
-        >
-          <button
-            type="button"
-            aria-pressed={activeKey === metric.key}
-            className="w-full rounded-[inherit] p-3 text-left outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-accent sm:p-4"
-            onClick={() => onSelect?.(metric.key)}
-          >
-            <p
-              className={`text-xl font-semibold tabular-nums ${METRIC_VALUE_CLASS[metric.color ?? 'default']}`}
-            >
-              {metric.value.toLocaleString()}
-            </p>
-            <p className="mt-0.5 text-xs font-medium text-muted">{metric.label}</p>
-          </button>
-        </Card>
+          label={metric.label}
+          className="min-h-0 gap-1 py-2.5"
+          valueClassName="text-xl"
+          value={metric.value.toLocaleString()}
+          tone={metric.color ?? 'default'}
+          onPress={onSelect ? () => onSelect(metric.key) : undefined}
+        />
       ))}
     </div>
   );
@@ -227,7 +208,7 @@ export function ActiveStatusUpdates({ updates }: { updates: StatusPageUpdate[] }
         <h2 id="status-updates-heading" className="text-sm font-semibold text-foreground">
           Active updates
         </h2>
-        <span className="text-xs text-muted">
+        <span className="text-xs text-muted-foreground">
           {updates.length} active {updates.length === 1 ? 'notice' : 'notices'}
         </span>
       </div>
@@ -241,7 +222,7 @@ export function ActiveStatusUpdates({ updates }: { updates: StatusPageUpdate[] }
             <Alert.Content>
               <Alert.Title>{update.title}</Alert.Title>
               {update.body ? <Alert.Description>{update.body}</Alert.Description> : null}
-              <p className="mt-1 text-[11px] text-muted">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {update.created_at || update.updated_at
                   ? `Posted ${timeAgo(update.created_at ?? update.updated_at ?? '')}`
                   : 'Recently posted'}

@@ -184,7 +184,7 @@ require (
 	k8s.io/kubectl v0.37.1 // indirect
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
 	mellium.im/sasl v0.3.2 // indirect
-	oras.land/oras-go/v2 v2.6.4-0.20261015110029-8883c8588eb5 // indirect
+	oras.land/oras-go/v2 v2.6.4 // indirect
 	sigs.k8s.io/controller-runtime v0.25.2 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect

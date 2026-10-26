@@ -12,7 +12,7 @@ import {
   Pagination,
   SearchField,
   Table,
-} from '@heroui/react';
+} from '@/components/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const PAGE_SIZE = 20;
@@ -208,22 +208,22 @@ export function AuditTab() {
               </Table.Header>
               <Table.Body
                 renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-zinc-500">
+                  <div className="py-10 text-center text-sm text-muted-foreground">
                     {loading ? 'Loading audit events...' : 'No audit events match your filters.'}
                   </div>
                 )}
               >
                 {logs.map((log) => (
                   <Table.Row key={log.id} id={log.id} className="hover:bg-[var(--row-hover)]">
-                    <Table.Cell className="text-xs text-zinc-500">
+                    <Table.Cell className="text-xs text-muted-foreground">
                       <span title={fullDate(log.created_at)}>{timeAgo(log.created_at)}</span>
                     </Table.Cell>
                     <Table.Cell className="font-medium">{log.username ?? log.user_id.slice(0, 8)}</Table.Cell>
-                    <Table.Cell className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+                    <Table.Cell className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                       {log.role ?? 'n/a'}
                     </Table.Cell>
                     <Table.Cell className="font-mono text-xs">{log.operation}</Table.Cell>
-                    <Table.Cell className="max-w-[520px] text-sm text-zinc-500">
+                    <Table.Cell className="max-w-[520px] text-sm text-muted-foreground">
                       <div className="line-clamp-2 whitespace-pre-wrap break-words">{log.details || 'No details recorded.'}</div>
                     </Table.Cell>
                   </Table.Row>
@@ -232,7 +232,7 @@ export function AuditTab() {
             </Table.Content>
           </Table.ScrollContainer>
           <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3">
-            <span className="text-xs text-zinc-500 whitespace-nowrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               Showing {total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, total)} of {total}
             </span>
             <Pagination size="sm" className="justify-self-center">

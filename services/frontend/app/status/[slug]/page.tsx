@@ -26,21 +26,15 @@ import {
   Chip,
   Drawer,
   ListBox,
-  Popover,
   SearchField,
   Select,
   Skeleton,
   Table,
+  Tabs,
   Tooltip,
   useOverlayState,
-} from '@heroui/react';
-import {
-  ArrowRight01Icon,
-  Cancel01Icon,
-  FilterIcon,
-  PackageIcon,
-  Shield01Icon,
-} from 'hugeicons-react';
+} from '@/components/ui';
+import { ArrowRight01Icon, PackageIcon, Shield01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
@@ -72,7 +66,7 @@ const STATUS_COLOR: Record<string, string> = {
   stale: '#eab308',
   failed: '#ef4444',
   blocked_by_xray_policy: '#f59e0b',
-  pending: 'color-mix(in srgb, var(--accent) 78%, white)',
+  pending: 'color-mix(in srgb, var(--primary) 78%, white)',
   running: '#60a5fa',
   cancelled: '#52525b',
   waiting_for_xray: '#f59e0b',
@@ -243,7 +237,7 @@ function StatusDot({ status }: { status: string }) {
   const color = STATUS_COLOR[status] ?? STATUS_COLOR.pending;
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium capitalize"
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium capitalize"
       style={{
         color: 'var(--text-secondary)',
         background: 'var(--status-pill-bg)',
@@ -431,7 +425,7 @@ function RecentScanStrip({
     return (
       <div className="flex items-end gap-1" aria-label="Loading 14 day scan history">
         {Array.from({ length: RECENT_SCAN_SEGMENTS }, (_, index) => (
-          <Skeleton key={`scan-history-skeleton-${index}`} className="h-10 w-3 rounded-sm" />
+          <Skeleton key={`scan-history-skeleton-${index}`} className="h-8 w-2.5 rounded-sm" />
         ))}
       </div>
     );
@@ -442,10 +436,7 @@ function RecentScanStrip({
       {historyDays.map((day) => {
         const meta = day.scan ? getScanHistoryMeta(day.scan) : null;
         const content = (
-          <span
-            className="flex h-10 w-3 shrink-0 items-end rounded-sm bg-surface-secondary p-px"
-            aria-hidden
-          >
+          <span className="flex h-8 w-2.5 shrink-0 items-end rounded-sm bg-muted p-px" aria-hidden>
             <span
               className="h-full w-full rounded-[2px] transition-colors duration-150"
               style={{
@@ -471,7 +462,7 @@ function RecentScanStrip({
               <Link
                 href={`/scans/details/${day.scan.scan_id}`}
                 aria-label={label}
-                className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {content}
               </Link>
@@ -525,19 +516,19 @@ function FindingsSummary({ item }: { item: StatusPageItem }) {
     <div className="space-y-1.5 tabular-nums">
       <div className="flex items-baseline gap-1.5">
         <span className="text-base font-semibold text-foreground">{totalFindings}</span>
-        <span className="text-xs text-muted">findings</span>
+        <span className="text-xs text-muted-foreground">findings</span>
       </div>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
         <span className="text-xs text-danger">{item.critical_count} critical</span>
-        <span className="text-xs text-warning">{item.high_count} high</span>
+        <span className="text-xs text-warning-foreground">{item.high_count} high</span>
       </div>
       <p
         className={
           totalDelta > 0
-            ? 'text-[11px] text-danger'
+            ? 'text-xs text-danger'
             : totalDelta < 0
-              ? 'text-[11px] text-success'
-              : 'text-[11px] text-muted'
+              ? 'text-xs text-success-foreground'
+              : 'text-xs text-muted-foreground'
         }
       >
         {trendLabel}
@@ -556,20 +547,22 @@ function MobileImageStatusCard({
   const totalFindings = getFindingTotal(item);
 
   return (
-    <Card className="border border-divider/70 bg-surface/70 p-4 shadow-sm" variant="secondary">
+    <Card className="gap-3 p-4" variant="secondary">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted-foreground">
             <PackageIcon size={17} aria-hidden />
           </span>
           <div className="min-w-0">
             <Link
               href={`/scans/details/${item.latest_scan_id}`}
-              className="block break-words text-left text-sm font-semibold text-foreground hover:underline"
+              className="block max-w-sm break-words text-left text-sm font-medium text-foreground hover:underline [overflow-wrap:anywhere]"
             >
               {item.image_name}
             </Link>
-            <p className="mt-0.5 truncate font-mono text-[11px] text-muted">{item.image_tag}</p>
+            <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+              {item.image_tag}
+            </p>
           </div>
         </div>
         <Link href={`/scans/details/${item.latest_scan_id}`}>
@@ -588,25 +581,11 @@ function MobileImageStatusCard({
         <ImageStatusChips item={item} />
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-        <div>
-          <p className="text-muted">Critical</p>
-          <p className="mt-0.5 font-semibold tabular-nums text-danger">{item.critical_count}</p>
-        </div>
-        <div>
-          <p className="text-muted">High</p>
-          <p className="mt-0.5 font-semibold tabular-nums text-warning">{item.high_count}</p>
-        </div>
-        <div>
-          <p className="text-muted">All findings</p>
-          <p className="mt-0.5 font-semibold tabular-nums text-foreground">{totalFindings}</p>
-        </div>
-      </div>
       <FindingsSummary item={item} />
 
       <div className="mt-4 border-t border-divider/70 pt-3">
         <RecentScanStrip item={item} scans={scans} />
-        <p className="mt-3 text-[11px] text-muted">Scanned {timeAgo(item.observed_at)}</p>
+        <p className="mt-3 text-xs text-muted-foreground">Scanned {timeAgo(item.observed_at)}</p>
       </div>
     </Card>
   );
@@ -638,13 +617,13 @@ function ScanTimeline({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span
-          className="text-[10px] font-medium uppercase tracking-widest"
+          className="text-xs font-medium uppercase tracking-widest"
           style={{ color: 'var(--text-faint)' }}
         >
           Older
         </span>
         <span
-          className="text-[10px] font-medium uppercase tracking-widest"
+          className="text-xs font-medium uppercase tracking-widest"
           style={{ color: 'var(--text-faint)' }}
         >
           Latest
@@ -691,7 +670,7 @@ function ScanTimeline({
                       onBlur={() => setHoveredId(null)}
                       onMouseEnter={() => setHoveredId(scan.scan_id)}
                       onMouseLeave={() => setHoveredId(null)}
-                      className="relative flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                      className="relative flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                     >
                       <span
                         className="relative flex size-4 shrink-0 items-center justify-center rounded-full transition-all duration-200"
@@ -732,7 +711,7 @@ function ScanTimeline({
           const { color } = getScanHistoryMeta(infoScan);
           return (
             <div
-              className="flex items-center gap-2 text-[12px]"
+              className="flex items-center gap-2 text-xs"
               style={{ color: 'var(--text-secondary)' }}
             >
               <span className="size-2 shrink-0 rounded-full" style={{ background: color }} />
@@ -870,22 +849,24 @@ function StatusItemHistoryModal({
     <Drawer state={state}>
       <Drawer.Backdrop variant="blur">
         <Drawer.Content placement="right">
-          <Drawer.Dialog className="flex h-full w-full max-w-xl flex-col border-l border-divider bg-surface shadow-2xl">
+          <Drawer.Dialog className="flex h-full w-full max-w-xl flex-col border-l border-border bg-background">
             <Drawer.Header className="border-b border-divider/70 p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted-foreground">
                     <PackageIcon size={18} aria-hidden />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                       Scan history
                     </p>
                     <Drawer.Heading className="mt-1 break-words font-mono text-sm font-semibold text-foreground sm:text-base">
                       {item?.image_name ?? 'Loading image'}
                     </Drawer.Heading>
                     {item ? (
-                      <p className="mt-1 truncate font-mono text-xs text-muted">{item.image_tag}</p>
+                      <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+                        {item.image_tag}
+                      </p>
                     ) : null}
                   </div>
                 </div>
@@ -919,9 +900,9 @@ function StatusItemHistoryModal({
                 />
               ) : null}
 
-              <Card className="border border-divider/70 p-4" variant="secondary">
+              <Card className="gap-2 p-4" variant="secondary">
                 <p className="text-xs font-semibold text-foreground">14-day scan history</p>
-                <p className="mt-1 text-xs text-muted">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Choose a completed scan to compare its findings.
                 </p>
                 <div className="mt-4">
@@ -941,7 +922,7 @@ function StatusItemHistoryModal({
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-medium text-muted">
+                      <p className="text-xs font-medium text-muted-foreground">
                         {selectedScan?.is_latest === false ? 'Previous scan' : 'Latest scan'}
                       </p>
                       <p className="mt-1 text-sm font-semibold text-foreground">
@@ -959,16 +940,24 @@ function StatusItemHistoryModal({
                         value: displayedScan.critical_count,
                         color: 'text-danger',
                       },
-                      { label: 'High', value: displayedScan.high_count, color: 'text-warning' },
+                      {
+                        label: 'High',
+                        value: displayedScan.high_count,
+                        color: 'text-warning-foreground',
+                      },
                       {
                         label: 'Medium',
                         value: displayedScan.medium_count,
-                        color: 'text-warning',
+                        color: 'text-warning-foreground',
                       },
-                      { label: 'Low', value: displayedScan.low_count, color: 'text-muted' },
+                      {
+                        label: 'Low',
+                        value: displayedScan.low_count,
+                        color: 'text-muted-foreground',
+                      },
                     ].map((metric) => (
                       <div key={metric.label} className="rounded-xl bg-surface p-3">
-                        <p className="text-[11px] font-medium text-muted">{metric.label}</p>
+                        <p className="text-xs font-medium text-muted-foreground">{metric.label}</p>
                         <p className={`mt-1 text-lg font-semibold tabular-nums ${metric.color}`}>
                           {metric.value}
                         </p>
@@ -979,7 +968,7 @@ function StatusItemHistoryModal({
               ) : null}
 
               {scanAccess === 'denied' ? (
-                <p className="text-xs leading-5 text-muted">
+                <p className="text-xs leading-5 text-muted-foreground">
                   Scan details are only available when your JustScan account has access to this
                   scan.
                 </p>
@@ -1030,13 +1019,13 @@ function PublicStatusPageSkeleton() {
           <Skeleton className="h-3 w-36 rounded" />
           <Skeleton className="h-8 w-64 rounded-lg" />
         </div>
-        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="h-24 w-full rounded-xl" />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 5 }, (_, index) => (
-            <Skeleton key={index} className="h-20 rounded-2xl" />
+            <Skeleton key={index} className="h-20 rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-96 w-full rounded-2xl" />
+        <Skeleton className="h-96 w-full rounded-xl" />
       </main>
     </div>
   );
@@ -1280,15 +1269,6 @@ export default function PublicStatusPage() {
 
   const hasImageFilters =
     searchQuery.trim().length > 0 || statusFilter !== '__all__' || decisionFilter !== '__all__';
-  const selectedImageFilterCount =
-    Number(statusFilter !== '__all__') + Number(decisionFilter !== '__all__');
-  const statusFilterLabel = IMAGE_STATUS_FILTER_OPTIONS.find(
-    (option) => option.key === statusFilter
-  )?.label;
-  const decisionFilterLabel = DECISION_FILTER_OPTIONS.find(
-    (option) => option.key === decisionFilter
-  )?.label;
-
   function clearImageFilters() {
     setSearchQuery('');
     setStatusFilter('__all__');
@@ -1308,15 +1288,6 @@ export default function PublicStatusPage() {
     setDecisionFilter('__all__');
     setStatusFilter(statusFilter === nextStatus ? '__all__' : nextStatus);
   }
-
-  const activeMetricKey =
-    searchQuery.trim().length > 0
-      ? undefined
-      : decisionFilter !== '__all__' && statusFilter === '__all__'
-        ? `decision:${decisionFilter}`
-        : statusFilter !== '__all__' && decisionFilter === '__all__'
-          ? `status:${statusFilter}`
-          : undefined;
 
   const decisionSummary = useMemo(() => {
     return trackedItems.reduce(
@@ -1345,15 +1316,15 @@ export default function PublicStatusPage() {
   if (!data) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-6">
-        <div className="rounded-2xl border border-divider bg-content1 p-8 max-w-md text-center space-y-4">
-          <div className="size-11 rounded-2xl mx-auto flex items-center justify-center bg-content2">
+        <div className="rounded-xl border border-divider bg-content1 p-8 max-w-md text-center space-y-4">
+          <div className="size-11 rounded-xl mx-auto flex items-center justify-center bg-content2">
             <Logo size={18} className="text-foreground" />
           </div>
           <div>
             <h1 className="text-lg font-semibold text-foreground">
               {needsAuth ? 'Authentication Required' : 'Status Page Unavailable'}
             </h1>
-            <p className="text-sm text-default-500 mt-1.5">{error}</p>
+            <p className="text-sm text-muted-foreground mt-1.5">{error}</p>
           </div>
           {needsAuth && (
             <Link
@@ -1433,22 +1404,6 @@ export default function PublicStatusPage() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.38] dark:opacity-[0.24]"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 22%, transparent) 1px, transparent 0)',
-          backgroundSize: '24px 24px',
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(circle at 12% 4%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 24%), radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 22%)',
-        }}
-      />
-
       <PublicStatusHeader
         isDark={isDark}
         latestObservedAt={latestObservedAt}
@@ -1461,30 +1416,9 @@ export default function PublicStatusPage() {
       />
 
       <main className="relative z-10 mx-auto w-full max-w-[1600px] space-y-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted">
-              <Shield01Icon size={15} aria-hidden />
-              Container image status
-            </div>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              {data.page.name}
-            </h1>
-            {showHeaderDescription ? (
-              <p className="mt-1.5 max-w-3xl text-sm leading-6 text-muted">{headerDescription}</p>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <Chip className="capitalize sm:hidden" size="sm" variant="secondary">
-              <Chip.Label>{data.page.visibility}</Chip.Label>
-            </Chip>
-            <Chip className="lg:hidden" size="sm" variant="secondary">
-              <Chip.Label>
-                Updated {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
-              </Chip.Label>
-            </Chip>
-          </div>
-        </section>
+        {showHeaderDescription ? (
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{headerDescription}</p>
+        ) : null}
 
         <OverallStatusBanner
           autoRefreshPaused={!isPageVisible}
@@ -1499,7 +1433,6 @@ export default function PublicStatusPage() {
         />
 
         <StatusMetrics
-          activeKey={activeMetricKey}
           metrics={[
             {
               key: 'decision:passed',
@@ -1531,222 +1464,132 @@ export default function PublicStatusPage() {
         />
 
         {(data.git_repository_sources?.length ?? 0) > 0 ? (
-          <Card
-            className="border border-divider/70 bg-surface/70 p-4 shadow-sm"
-            variant="secondary"
-          >
-            <div className="flex items-center gap-2">
-              <Shield01Icon size={16} className="text-muted" aria-hidden />
-              <h2 className="text-sm font-semibold text-foreground">Git repository health</h2>
-            </div>
-            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {data.git_repository_sources?.map((source) => (
-                <div
-                  key={source.repository_id}
-                  className="rounded-xl border border-divider/70 bg-surface-secondary/50 p-3"
+          <Card className="gap-0 overflow-hidden py-0">
+            <Card.Header className="border-b p-4">
+              <Card.Title>Repository sources</Card.Title>
+              <Card.Description>Discovery health for the image inventory.</Card.Description>
+            </Card.Header>
+            <Table variant="secondary">
+              <Table.ScrollContainer className="rounded-none border-0">
+                <Table.Content
+                  aria-label="Repository discovery health"
+                  className="min-w-[720px] [&_td]:py-3"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="min-w-0 truncate text-sm font-medium text-foreground">
-                      {source.repository_name}
-                    </p>
-                    <StatusBadge status={source.status} />
-                  </div>
-                  <p className="mt-2 text-xs text-muted">
-                    {source.image_count} current image{source.image_count === 1 ? '' : 's'} ·{' '}
-                    {source.completed_at
-                      ? `last good run ${timeAgo(source.completed_at)}`
-                      : 'No successful run yet'}
-                  </p>
-                  {source.commit_sha ? (
-                    <p className="mt-1 truncate font-mono text-[11px] text-muted">
-                      {source.commit_sha}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
+                  <Table.Header>
+                    <Table.Column isRowHeader>Repository</Table.Column>
+                    <Table.Column>Discovery</Table.Column>
+                    <Table.Column>Images</Table.Column>
+                    <Table.Column>Last successful run</Table.Column>
+                    <Table.Column>Commit</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {data.git_repository_sources?.map((source) => (
+                      <Table.Row key={source.repository_id} id={source.repository_id}>
+                        <Table.Cell className="font-medium">{source.repository_name}</Table.Cell>
+                        <Table.Cell>
+                          <StatusBadge status={source.status} />
+                        </Table.Cell>
+                        <Table.Cell className="tabular-nums">{source.image_count}</Table.Cell>
+                        <Table.Cell className="text-xs text-muted-foreground">
+                          {source.completed_at
+                            ? timeAgo(source.completed_at)
+                            : 'No successful run yet'}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <code
+                            title={source.commit_sha || undefined}
+                            className="text-xs text-muted-foreground"
+                          >
+                            {source.commit_sha?.slice(0, 8) || '—'}
+                          </code>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
           </Card>
         ) : null}
 
         <ActiveStatusUpdates updates={activeUpdates} />
 
-        <Card
-          className="overflow-hidden border border-divider/70 bg-surface/70 p-0 shadow-sm"
-          variant="secondary"
-        >
-          <div className="border-b border-divider/70 p-4 sm:p-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <Card className="gap-0 overflow-hidden py-0" variant="secondary">
+          <Card.Header className="space-y-4 border-b p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="flex items-center gap-2">
-                  <PackageIcon size={17} className="text-muted" aria-hidden />
-                  <h2 className="text-base font-semibold text-foreground">Scanned images</h2>
-                  <Chip size="sm" variant="secondary">
-                    <Chip.Label>
-                      {filteredTrackedItems.length}
-                      {filteredTrackedItems.length !== trackedItems.length
-                        ? ` of ${trackedItems.length}`
-                        : ''}
-                    </Chip.Label>
-                  </Chip>
-                </div>
-                <p className="mt-1 text-xs text-muted">
-                  Current health, policy failures, findings, and a 14-day scan history.
-                </p>
+                <Card.Title>Image health</Card.Title>
+                <Card.Description>
+                  Current policy results, findings, and scan history.
+                </Card.Description>
               </div>
-
-              <div className="flex w-full gap-2 xl:w-auto xl:min-w-[420px]">
-                <SearchField
-                  aria-label="Search images"
-                  className="min-w-0 flex-1"
-                  value={searchQuery}
-                  variant="secondary"
-                  onChange={setSearchQuery}
-                >
-                  <SearchField.Group>
-                    <SearchField.SearchIcon />
-                    <SearchField.Input placeholder="Search image or tag..." />
-                    <SearchField.ClearButton />
-                  </SearchField.Group>
-                </SearchField>
-                <Popover>
-                  <Popover.Trigger>
-                    <Button variant={selectedImageFilterCount > 0 ? 'secondary' : 'tertiary'}>
-                      <FilterIcon size={16} aria-hidden />
-                      Filters{selectedImageFilterCount > 0 ? ` (${selectedImageFilterCount})` : ''}
-                    </Button>
-                  </Popover.Trigger>
-                  <Popover.Content
-                    className="w-[min(22rem,calc(100vw-2rem))]"
-                    placement="bottom end"
-                  >
-                    <Popover.Arrow />
-                    <Popover.Dialog className="space-y-4 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <Popover.Heading className="text-sm font-semibold text-foreground">
-                            Filter images
-                          </Popover.Heading>
-                          <p className="mt-1 text-xs text-muted">
-                            Refine the currently shown images.
-                          </p>
-                        </div>
-                        <Button
-                          isDisabled={!hasImageFilters}
-                          size="sm"
-                          variant="tertiary"
-                          onPress={clearImageFilters}
-                        >
-                          Clear all
-                        </Button>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-medium text-muted">Image state</p>
-                          <Select
-                            aria-label="Filter images by state"
-                            variant="secondary"
-                            value={statusFilter}
-                            onChange={(value) =>
-                              setStatusFilter(String(value) as ImageStatusFilter)
-                            }
-                          >
-                            <Select.Trigger>
-                              <Select.Value />
-                              <Select.Indicator />
-                            </Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                {IMAGE_STATUS_FILTER_OPTIONS.map((option) => (
-                                  <ListBox.Item
-                                    id={option.key}
-                                    key={option.key}
-                                    textValue={option.label}
-                                  >
-                                    {option.label}
-                                    <ListBox.ItemIndicator />
-                                  </ListBox.Item>
-                                ))}
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-medium text-muted">Organization policy</p>
-                          <Select
-                            aria-label="Filter images by organization policy result"
-                            variant="secondary"
-                            value={decisionFilter}
-                            onChange={(value) => setDecisionFilter(String(value) as DecisionFilter)}
-                          >
-                            <Select.Trigger>
-                              <Select.Value />
-                              <Select.Indicator />
-                            </Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                {DECISION_FILTER_OPTIONS.map((option) => (
-                                  <ListBox.Item
-                                    id={option.key}
-                                    key={option.key}
-                                    textValue={option.label}
-                                  >
-                                    {option.label}
-                                    <ListBox.ItemIndicator />
-                                  </ListBox.Item>
-                                ))}
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
-                        </div>
-                      </div>
-                    </Popover.Dialog>
-                  </Popover.Content>
-                </Popover>
-              </div>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {filteredTrackedItems.length} of {trackedItems.length} images
+              </span>
             </div>
-            {hasImageFilters ? (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-medium text-muted">Active filters</span>
-                {searchQuery.trim() ? (
-                  <Button
-                    className="h-7 px-2 text-[11px]"
-                    size="sm"
-                    variant="secondary"
-                    onPress={() => setSearchQuery('')}
-                  >
-                    Search: {searchQuery.trim()}
-                    <Cancel01Icon size={13} aria-hidden />
-                  </Button>
-                ) : null}
-                {statusFilter !== '__all__' ? (
-                  <Button
-                    className="h-7 px-2 text-[11px]"
-                    size="sm"
-                    variant="secondary"
-                    onPress={() => setStatusFilter('__all__')}
-                  >
-                    {statusFilterLabel}
-                    <Cancel01Icon size={13} aria-hidden />
-                  </Button>
-                ) : null}
-                {decisionFilter !== '__all__' ? (
-                  <Button
-                    className="h-7 px-2 text-[11px]"
-                    size="sm"
-                    variant="secondary"
-                    onPress={() => setDecisionFilter('__all__')}
-                  >
-                    {decisionFilterLabel}
-                    <Cancel01Icon size={13} aria-hidden />
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+            <Tabs
+              selectedKey={statusFilter}
+              onSelectionChange={(key) => setStatusFilter(String(key) as ImageStatusFilter)}
+              variant="secondary"
+            >
+              <Tabs.ListContainer className="overflow-x-auto">
+                <Tabs.List aria-label="Filter status page images" className="min-w-max">
+                  {IMAGE_STATUS_FILTER_OPTIONS.map((option) => (
+                    <Tabs.Tab id={option.key} key={option.key}>
+                      {option.key === '__all__' ? 'All images' : option.label}
+                      <Tabs.Indicator />
+                    </Tabs.Tab>
+                  ))}
+                </Tabs.List>
+              </Tabs.ListContainer>
+              {IMAGE_STATUS_FILTER_OPTIONS.map((option) => (
+                <Tabs.Panel id={option.key} key={option.key} className="hidden" />
+              ))}
+            </Tabs>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <SearchField
+                aria-label="Search images"
+                className="min-w-0 flex-1"
+                value={searchQuery}
+                onChange={setSearchQuery}
+              >
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder="Search image or tag…" />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+              <Select
+                aria-label="Filter images by organization policy result"
+                className="w-full sm:w-48"
+                value={decisionFilter}
+                onChange={(value) => setDecisionFilter(String(value) as DecisionFilter)}
+              >
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    {DECISION_FILTER_OPTIONS.map((option) => (
+                      <ListBox.Item key={option.key} id={option.key}>
+                        {option.label}
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+              {hasImageFilters ? (
+                <Button variant="tertiary" onPress={clearImageFilters}>
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
+          </Card.Header>
 
           <div className="space-y-3 p-3 md:hidden">
             {filteredTrackedItems.length === 0 ? (
-              <div className="py-12 text-center text-sm text-muted">
+              <div className="py-12 text-center text-sm text-muted-foreground">
                 {trackedItems.length === 0
                   ? 'No images are currently tracked.'
                   : 'No images match the current filters.'}
@@ -1764,20 +1607,25 @@ export default function PublicStatusPage() {
 
           <div className="hidden md:block">
             <Table variant="secondary">
-              <Table.ScrollContainer>
-                <Table.Content aria-label="Image policy status table" className="min-w-[840px]">
+              <Table.ScrollContainer className="rounded-none border-0">
+                <Table.Content
+                  aria-label="Image policy status table"
+                  className="min-w-[1080px] [&_td]:py-3"
+                >
                   <Table.Header>
-                    <Table.Column isRowHeader>Image</Table.Column>
-                    <Table.Column>State</Table.Column>
-                    <Table.Column>Findings</Table.Column>
-                    <Table.Column>14 days</Table.Column>
-                    <Table.Column>Last scan</Table.Column>
+                    <Table.Column isRowHeader className="min-w-64">
+                      Image
+                    </Table.Column>
+                    <Table.Column className="min-w-40">State</Table.Column>
+                    <Table.Column className="min-w-48">Findings</Table.Column>
+                    <Table.Column className="w-64">14-day history</Table.Column>
+                    <Table.Column className="w-32 whitespace-nowrap">Last scan</Table.Column>
                   </Table.Header>
                   <Table.Body>
                     {filteredTrackedItems.length === 0 ? (
                       <Table.Row id="empty">
                         <Table.Cell colSpan={5}>
-                          <div className="py-12 text-center text-sm text-muted">
+                          <div className="py-12 text-center text-sm text-muted-foreground">
                             {trackedItems.length === 0
                               ? 'No images are currently tracked.'
                               : 'No images match the current filters.'}
@@ -1789,18 +1637,18 @@ export default function PublicStatusPage() {
                         <Table.Row
                           key={`${item.image_name}:${item.image_tag}`}
                           id={`${item.image_name}:${item.image_tag}`}
-                          className="hover:bg-surface-secondary"
+                          className="hover:bg-muted/50"
                         >
                           <Table.Cell>
                             <div className="flex max-w-[40rem] items-start gap-3">
-                              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+                              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground">
                                 <PackageIcon size={15} aria-hidden />
                               </span>
                               <div className="min-w-0">
                                 {item.latest_scan_id ? (
                                   <Link
                                     href={`/scans/details/${item.latest_scan_id}`}
-                                    className="block break-words text-left text-sm font-semibold text-foreground hover:underline"
+                                    className="block max-w-sm break-words text-left text-sm font-medium text-foreground hover:underline [overflow-wrap:anywhere]"
                                   >
                                     {item.image_name}
                                   </Link>
@@ -1809,11 +1657,11 @@ export default function PublicStatusPage() {
                                     {item.image_name}
                                   </p>
                                 )}
-                                <p className="mt-0.5 truncate font-mono text-[11px] text-muted">
+                                <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
                                   {item.image_tag}
                                 </p>
                                 {item.source_repository_name ? (
-                                  <p className="mt-1 truncate text-[11px] text-muted">
+                                  <p className="mt-1 truncate text-xs text-muted-foreground">
                                     {item.source_repository_name}
                                   </p>
                                 ) : null}
@@ -1833,7 +1681,9 @@ export default function PublicStatusPage() {
                             />
                           </Table.Cell>
                           <Table.Cell>
-                            <span className="text-xs text-muted">{timeAgo(item.observed_at)}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {timeAgo(item.observed_at)}
+                            </span>
                           </Table.Cell>
                         </Table.Row>
                       ))

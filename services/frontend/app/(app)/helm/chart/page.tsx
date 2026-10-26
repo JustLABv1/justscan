@@ -1,7 +1,7 @@
 'use client';
 import { listHelmScanRuns } from '@/lib/api';
 import { PageHeader } from '@/components/ui/page-header';
-import { Card, Spinner, buttonVariants } from '@heroui/react';
+import { Card, Spinner, buttonVariants } from '@/components/ui';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
@@ -37,7 +37,7 @@ function HelmChartRedirectContent() {
       <div className="space-y-5 px-4 py-6 md:px-6 xl:py-7">
         <PageHeader title="Resolve Helm run" description="Find the latest run for the requested chart." />
         <Card>
-          <Card.Content className="space-y-3 p-6 text-center text-sm text-muted">
+          <Card.Content className="space-y-3 p-6 text-center text-sm text-muted-foreground">
             <p>{requestError}</p>
             <Link className={buttonVariants({ variant: 'secondary' })} href="/helm">
               Back to Helm runs
@@ -53,7 +53,7 @@ function HelmChartRedirectContent() {
       <div className="space-y-5 px-4 py-6 md:px-6 xl:py-7">
         <PageHeader title="Resolve Helm run" description="Find the latest run for the requested chart." />
         <Card>
-          <Card.Content className="space-y-3 p-6 text-center text-sm text-muted">
+          <Card.Content className="space-y-3 p-6 text-center text-sm text-muted-foreground">
             <p>{error}</p>
             <Link className={buttonVariants({ variant: 'secondary' })} href="/helm">
               Back to Helm runs
@@ -68,7 +68,7 @@ function HelmChartRedirectContent() {
     <div className="space-y-5 px-4 py-6 md:px-6 xl:py-7">
       <PageHeader title="Resolve Helm run" description="Find the latest run for the requested chart." />
       <Card>
-        <Card.Content className="flex items-center justify-center gap-3 p-6 text-sm text-muted">
+        <Card.Content className="flex items-center justify-center gap-3 p-6 text-sm text-muted-foreground">
           <Spinner size="sm" />
           Resolving latest Helm run…
         </Card.Content>
@@ -84,7 +84,7 @@ export default function HelmChartRedirectPage() {
         <div className="space-y-5 px-4 py-6 md:px-6 xl:py-7">
           <PageHeader title="Resolve Helm run" description="Find the latest run for the requested chart." />
           <Card>
-            <Card.Content className="flex items-center justify-center gap-3 p-6 text-sm text-muted">
+            <Card.Content className="flex items-center justify-center gap-3 p-6 text-sm text-muted-foreground">
               <Spinner size="sm" />
               Resolving latest Helm run…
             </Card.Content>

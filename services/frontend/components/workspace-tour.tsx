@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 
-import { Button, Card, Chip, Label, ProgressBar, Typography } from '@heroui/react';
+import { Button, Card, Chip, Label, ProgressBar, Typography } from '@/components/ui';
 import {
   AiContentGenerator01Icon,
   Building04Icon,
@@ -187,19 +187,19 @@ function HeroTourCard({
   return (
     <div className="flex w-[min(22rem,calc(100vw-1.5rem))] flex-col items-stretch gap-3">
       <Card
-        className="max-h-[calc(100vh-1.5rem)] overflow-y-auto rounded-3xl border border-border/70 shadow-2xl shadow-black/10"
+        className="max-h-[calc(100vh-1.5rem)] overflow-y-auto rounded-xl border border-border/70 shadow-2xl shadow-black/10"
         variant="default"
       >
         <Card.Header className="flex flex-col items-start gap-4">
           <div className="flex w-full items-center gap-3">
             {step.icon ? (
               <div
-                className="flex size-10 shrink-0 items-center justify-center rounded-2xl"
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl"
                 style={{
                   background:
-                    'linear-gradient(135deg, color-mix(in oklab, var(--accent) 18%, transparent) 0%, color-mix(in oklab, var(--accent) 10%, transparent) 100%)',
+                    'linear-gradient(135deg, color-mix(in oklab, var(--primary) 18%, transparent) 0%, color-mix(in oklab, var(--primary) 10%, transparent) 100%)',
                   color: 'var(--accent-soft-foreground)',
-                  border: '1px solid color-mix(in oklab, var(--accent) 20%, transparent)',
+                  border: '1px solid color-mix(in oklab, var(--primary) 20%, transparent)',
                 }}
               >
                 {step.icon}
@@ -226,10 +226,10 @@ function HeroTourCard({
             value={progressValue}
           >
             <div className="flex items-center justify-between gap-3">
-              <Label className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+              <Label className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                 Tour progress
               </Label>
-              <ProgressBar.Output className="text-xs text-muted" />
+              <ProgressBar.Output className="text-xs text-muted-foreground" />
             </div>
             <ProgressBar.Track>
               <ProgressBar.Fill />

@@ -7,6 +7,8 @@ description: Configure image registry access and select Trivy, Grype, or Xray an
 
 Create registries in **Workspace setup → Registries**. Credentials are encrypted at rest with the configured encryption key. Test a registry connection before relying on it in a scheduled or CI workflow. For Xray registries, the health check verifies both the Xray ping and Artifactory Docker-repository visibility; it does not submit a scan or test the Full-mode mutation permission. Use **Set as workspace default** to choose the default registry for the active workspace. Organization editors set this for every workspace member; a personal workspace is naturally private. System registries are admin-managed but available as read-only scan sources. An organization editor can hide or show individual system registries for the whole workspace from each registry's action menu. Hidden entries stay visible but dimmed on this management page so they can be restored, while normal scan pickers omit them.
 
+Use the provider tabs and search to find registry connections. Summary cards describe the registries available in the current workspace; health reflects the last recorded connection check. On smaller screens, scroll the table to see connection and health details.
+
 ## Xray modes
 
 - **Limited** reads an existing Xray result after warming the image through Artifactory. It is suitable for consumer credentials and does not trigger a rescan.

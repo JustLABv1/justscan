@@ -1,6 +1,6 @@
 {
   "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "radix-lyra",
+  "style": "radix-nova",
   "rsc": true,
   "tsx": true,
   "tailwind": {
@@ -10,7 +10,7 @@
     "cssVariables": true,
     "prefix": ""
   },
-  "iconLibrary": "phosphor",
+  "iconLibrary": "lucide",
   "rtl": false,
   "menuColor": "default",
   "menuAccent": "subtle",
@@ -29,6 +29,7 @@
       }
     },
     "@react-bits": "https://reactbits.dev/r/{name}.json",
-    "@evilcharts": "https://evilcharts.com/r/{name}.json"
+    "@evilcharts": "https://evilcharts.com/r/{name}.json",
+    "@reui": "https://reui.io/r/{style}/{name}.json"
   }
 }

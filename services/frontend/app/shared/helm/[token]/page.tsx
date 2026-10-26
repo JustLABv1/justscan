@@ -10,10 +10,10 @@ import { Suspense, useEffect, useState } from 'react';
 // ── Severity / status helpers ────────────────────────────────────────
 
 const SEV: Record<string, string> = {
-  critical: 'text-red-400 font-bold',
+  critical: 'text-destructive font-bold',
   high: 'text-orange-400',
-  medium: 'text-yellow-400',
-  low: 'text-blue-400',
+  medium: 'text-warning-foreground',
+  low: 'text-info-foreground',
 };
 
 const STATUS_STYLE: Record<string, { color: string; bg: string; border: string; label?: string }> = {
@@ -39,7 +39,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function SevCount({ count, cls }: { count: number; cls: string }) {
   return (
-    <span className={`font-mono text-sm tabular-nums ${count ? cls : 'text-zinc-400 dark:text-zinc-600'}`}>
+    <span className={`font-mono text-sm tabular-nums ${count ? cls : 'text-muted-foreground'}`}>
       {count || '—'}
     </span>
   );
@@ -166,7 +166,7 @@ function HelmGroupContent() {
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
       <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-        <span className="size-4 rounded-full border-2 border-accent-400/30 border-t-accent-400 animate-spin" />
+        <span className="size-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
         Loading helm chart scan…
       </div>
     </div>
@@ -175,8 +175,8 @@ function HelmGroupContent() {
   if (error) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
       <div className="text-center space-y-3">
-        <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>
-        <Link href="/" className="text-accent dark:text-accent text-sm hover:underline">← Back to home</Link>
+        <p className="text-destructive dark:text-destructive text-sm">{error}</p>
+        <Link href="/" className="text-primary dark:text-primary text-sm hover:underline">← Back to home</Link>
       </div>
     </div>
   );
@@ -189,7 +189,7 @@ function HelmGroupContent() {
         style={{ background: 'var(--nav-bg)', borderBottom: '1px solid var(--border-subtle)', backdropFilter: 'blur(12px)' }}
       >
         <Link href="/" className="flex items-center gap-2.5 select-none">
-          <Logo size={22} className="text-[color-mix(in srgb, var(--accent) 78%, white)]" />
+          <Logo size={22} className="text-[color-mix(in srgb, var(--primary) 78%, white)]" />
           <span className="font-semibold text-sm tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</span>
         </Link>
         <div className="flex items-center gap-2">
@@ -221,7 +221,7 @@ function HelmGroupContent() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2.5 flex-wrap">
                 {/* Helm package icon */}
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="color-mix(in srgb, var(--accent) 78%, white)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="color-mix(in srgb, var(--primary) 78%, white)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                   <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
                 </svg>
                 <h1 className="text-xl font-semibold truncate" style={{ color: 'var(--text-primary)' }} title={chartUrl}>
@@ -231,9 +231,9 @@ function HelmGroupContent() {
                   <span
                     className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium"
                     style={{
-                      background: isOCI ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'rgba(59,130,246,0.1)',
-                      color: isOCI ? 'color-mix(in srgb, var(--accent) 78%, white)' : '#60a5fa',
-                      border: `1px solid ${isOCI ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'rgba(59,130,246,0.2)'}`,
+                      background: isOCI ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'rgba(59,130,246,0.1)',
+                      color: isOCI ? 'color-mix(in srgb, var(--primary) 78%, white)' : '#60a5fa',
+                      border: `1px solid ${isOCI ? 'color-mix(in srgb, var(--primary) 20%, transparent)' : 'rgba(59,130,246,0.2)'}`,
                     }}
                   >
                     {isOCI ? 'OCI' : 'HTTP'}
@@ -252,7 +252,7 @@ function HelmGroupContent() {
             <button
               onClick={handleCopyLink}
               className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl font-medium transition-all shrink-0"
-              style={{ background: copied ? 'rgba(34,197,94,0.12)' : 'color-mix(in srgb, var(--accent) 10%, transparent)', border: `1px solid ${copied ? 'rgba(34,197,94,0.25)' : 'color-mix(in srgb, var(--accent) 20%, transparent)'}`, color: copied ? '#4ade80' : 'color-mix(in srgb, var(--accent) 78%, white)' }}
+              style={{ background: copied ? 'rgba(34,197,94,0.12)' : 'color-mix(in srgb, var(--primary) 10%, transparent)', border: `1px solid ${copied ? 'rgba(34,197,94,0.25)' : 'color-mix(in srgb, var(--primary) 20%, transparent)'}`, color: copied ? '#4ade80' : 'color-mix(in srgb, var(--primary) 78%, white)' }}
             >
               {copied ? (
                 <>
@@ -300,17 +300,17 @@ function HelmGroupContent() {
         {/* Stats row */}
         <div className="flex gap-3 flex-wrap">
           <StatBox label="Images" value={totalImages} />
-          <StatBox label="Completed" value={completed} color="text-emerald-400" />
-          {pending > 0 && <StatBox label="Running" value={pending} color="text-blue-400" />}
-          {failed > 0  && <StatBox label="Failed"  value={failed}  color="text-red-400" />}
-          {totalCritical > 0 && <StatBox label="Critical" value={totalCritical} color="text-red-400" />}
+          <StatBox label="Completed" value={completed} color="text-success-foreground" />
+          {pending > 0 && <StatBox label="Running" value={pending} color="text-info-foreground" />}
+          {failed > 0  && <StatBox label="Failed"  value={failed}  color="text-destructive" />}
+          {totalCritical > 0 && <StatBox label="Critical" value={totalCritical} color="text-destructive" />}
           {totalHigh > 0     && <StatBox label="High"     value={totalHigh}     color="text-orange-400" />}
-          {totalMedium > 0   && <StatBox label="Medium"   value={totalMedium}   color="text-yellow-400" />}
-          {totalLow > 0      && <StatBox label="Low"      value={totalLow}      color="text-blue-400" />}
+          {totalMedium > 0   && <StatBox label="Medium"   value={totalMedium}   color="text-warning-foreground" />}
+          {totalLow > 0      && <StatBox label="Low"      value={totalLow}      color="text-info-foreground" />}
         </div>
 
         {/* Image list */}
-        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
+        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
           {/* Table header */}
           <div
             className="px-4 py-2.5 text-xs font-medium uppercase tracking-wide hidden sm:grid"
@@ -341,7 +341,7 @@ function HelmGroupContent() {
                 key={scan.id}
                 // @ts-expect-error — href only passed to Link
                 href={isLinkable ? href : undefined}
-                className={`flex flex-col sm:grid items-center px-4 py-3 gap-2 transition-colors ${isLinkable ? 'hover:bg-accent-500/5 cursor-pointer group' : ''}`}
+                className={`flex flex-col sm:grid items-center px-4 py-3 gap-2 transition-colors ${isLinkable ? 'hover:bg-primary/5 cursor-pointer group' : ''}`}
                 style={{
                   gridTemplateColumns: '1fr 120px 1fr 60px 60px 60px 60px 110px',
                   borderBottom: i < scans.length - 1 ? '1px solid var(--border-subtle)' : 'none',
@@ -352,7 +352,7 @@ function HelmGroupContent() {
                 <span className="sm:hidden text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Image</span>
 
                 <span
-                  className={`text-sm font-mono truncate transition-colors ${isLinkable ? 'group-hover:text-accent' : ''}`}
+                  className={`text-sm font-mono truncate transition-colors ${isLinkable ? 'group-hover:text-primary' : ''}`}
                   style={{ color: 'var(--text-primary)' }}
                   title={scan.image_name}
                 >
@@ -396,7 +396,7 @@ export default function SharedHelmGroupPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
-        <span className="size-5 rounded-full border-2 border-accent-400/30 border-t-accent-400 animate-spin" />
+        <span className="size-5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
       </div>
     }>
       <HelmGroupContent />

@@ -1,7 +1,7 @@
 'use client';
 
 import type { Vulnerability } from '@/lib/api';
-import { Pagination, Table } from '@heroui/react';
+import { Pagination, Table } from '@/components/ui';
 import type { ReactNode } from 'react';
 
 type VulnerabilitySortKey =
@@ -92,7 +92,7 @@ export function VulnerabilitiesTable({
                 <Table.Cell colSpan={renderXrayPolicyCell ? 7 : 6}>
                   <div className="py-12 text-center">
                     <div className="flex justify-center">
-                      <div className="size-6 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent animate-spin" />
+                      <div className="size-6 rounded-full border-2 border-border dark:border-border border-t-accent animate-spin" />
                     </div>
                   </div>
                 </Table.Cell>
@@ -100,7 +100,7 @@ export function VulnerabilitiesTable({
             ) : vulns.length === 0 ? (
               <Table.Row key="empty-row" id="empty">
                 <Table.Cell colSpan={renderXrayPolicyCell ? 7 : 6}>
-                  <div className="py-12 text-center text-zinc-500 text-sm">
+                  <div className="py-12 text-center text-muted-foreground text-sm">
                     {vulnTotal === 0 ? 'No vulnerabilities found.' : 'No results match your filters.'}
                   </div>
                 </Table.Cell>
@@ -114,23 +114,23 @@ export function VulnerabilitiesTable({
                         <button
                           type="button"
                           onClick={() => onOpenVulnerability(v)}
-                          className="text-xs text-accent hover:text-accent/80 hover:underline transition-colors"
+                          className="text-xs text-primary hover:text-primary/80 hover:underline transition-colors"
                         >
                           {v.vuln_id}
                         </button>
                         {renderSourceBadge(v.data_source)}
                       </div>
                     ) : (
-                      <span className="text-zinc-400 dark:text-zinc-600">-</span>
+                      <span className="text-muted-foreground">-</span>
                     )}
                   </Table.Cell>
-                  <Table.Cell className="text-xs text-zinc-700 dark:text-zinc-300">{v.pkg_name}</Table.Cell>
-                  <Table.Cell className="text-xs text-zinc-500">{v.installed_version}</Table.Cell>
-                  <Table.Cell className="text-xs text-emerald-500">
-                    {v.fixed_version || <span className="text-zinc-400 dark:text-zinc-700">-</span>}
+                  <Table.Cell className="text-xs text-foreground">{v.pkg_name}</Table.Cell>
+                  <Table.Cell className="text-xs text-muted-foreground">{v.installed_version}</Table.Cell>
+                  <Table.Cell className="text-xs text-success-foreground">
+                    {v.fixed_version || <span className="text-muted-foreground dark:text-foreground">-</span>}
                   </Table.Cell>
                   <Table.Cell>{renderSeverityBadge(v.severity)}</Table.Cell>
-                  <Table.Cell className="text-right text-xs text-zinc-500">
+                  <Table.Cell className="text-right text-xs text-muted-foreground">
                     {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
                   </Table.Cell>
                   {renderXrayPolicyCell && <Table.Cell>{renderXrayPolicyCell(v)}</Table.Cell>}
@@ -142,7 +142,7 @@ export function VulnerabilitiesTable({
       </Table.ScrollContainer>
       {onPageChange && totalPages > 1 && (
         <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3">
-          <span className="text-xs text-zinc-500 whitespace-nowrap">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
             Showing {vulnTotal === 0 ? 0 : (page - 1) * pageSize + 1}-
             {Math.min(page * pageSize, vulnTotal)} of {vulnTotal}
           </span>

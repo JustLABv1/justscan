@@ -1,9 +1,6 @@
 'use client';
-import {
-  ToastProvider as HeroUIToastProvider,
-  toast as heroToast,
-  toastQueue,
-} from '@heroui/react';
+import { Toaster, toast } from 'sonner';
+import { useTheme } from 'next-themes';
 import type { ReactNode } from 'react';
 import { createContext, use, useCallback, useMemo } from 'react';
 
@@ -24,31 +21,32 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-function toHeroToastOptions(options?: ToastOptions) {
+function toToastOptions(options?: ToastOptions) {
   if (!options) return undefined;
   return {
     description: options.description,
-    timeout: options.timeout,
-    actionProps: options.action
+    duration: options.timeout,
+    action: options.action
       ? {
-          children: options.action.label,
-          onPress: options.action.onPress,
+          label: options.action.label,
+          onClick: options.action.onPress,
         }
       : undefined,
   };
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { resolvedTheme } = useTheme();
   const success = useCallback((message: string, options?: ToastOptions) => {
-    heroToast.success(message, toHeroToastOptions(options));
+    toast.success(message, toToastOptions(options));
   }, []);
 
   const error = useCallback((message: string, options?: ToastOptions) => {
-    heroToast.danger(message, toHeroToastOptions(options));
+    toast.error(message, toToastOptions(options));
   }, []);
 
   const info = useCallback((message: string, options?: ToastOptions) => {
-    heroToast.info(message, toHeroToastOptions(options));
+    toast.info(message, toToastOptions(options));
   }, []);
 
   const value = useMemo<ToastContextValue>(
@@ -59,12 +57,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <HeroUIToastProvider
+      <Toaster
+        theme={resolvedTheme === 'dark' ? 'dark' : 'light'}
         className="print:hidden"
-        maxVisibleToasts={3}
-        placement="bottom end"
-        queue={toastQueue}
-        width={360}
+        visibleToasts={3}
+        position="bottom-right"
+        richColors
+        closeButton
       />
     </ToastContext.Provider>
   );

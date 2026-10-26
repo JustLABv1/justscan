@@ -3,7 +3,7 @@ import { AuthCard } from '@/components/auth-card';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { getOIDCAvailability, register } from '@/lib/api';
-import { Button, Form } from '@heroui/react';
+import { Button, Form } from '@/components/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -43,15 +43,14 @@ export default function RegisterPage() {
 
   return (
     <AuthCard
-      eyebrow="Start scanning"
-      title="Make risk visible."
-      subtitle="Create a workspace for the images your team ships every day."
+      title="Create your account"
+      subtitle="Start securing the images your team ships."
       footer={
         <>
           Already have an account?{' '}
           <Link
             href="/login"
-            className="font-medium text-accent transition-colors hover:opacity-80"
+            className="font-medium text-primary transition-colors hover:opacity-80"
           >
             Sign In
           </Link>
@@ -88,7 +87,7 @@ export default function RegisterPage() {
             />
             <FormField
               autoComplete="new-password"
-              description="Use at least 8 characters so the account is valid on first submission."
+              description="Use at least 8 characters."
               label="Password"
               minLength={8}
               onChange={(e) => setPassword(e.target.value)}
@@ -98,7 +97,7 @@ export default function RegisterPage() {
               value={password}
             />
             <Button className="auth-card-submit" fullWidth isPending={loading} type="submit">
-              {({ isPending }) => (isPending ? 'Creating Account…' : 'Create Account')}
+              {loading ? 'Creating Account…' : 'Create Account'}
             </Button>
           </Form>
         </>

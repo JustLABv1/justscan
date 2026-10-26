@@ -15,7 +15,7 @@ import type { BackgroundJob } from '@/lib/api/types/background-jobs';
 import { timeAgo } from '@/lib/time';
 import { useToast } from '@/components/toast';
 import { useWorkScope } from '@/hooks/use-work-scope';
-import { Badge, Button, ButtonGroup, Chip, Drawer, ProgressBar, Spinner } from '@heroui/react';
+import { Button, Chip, Drawer, ProgressBar, Spinner } from '@/components/ui';
 import {
   Activity01Icon,
   Alert02Icon,
@@ -154,17 +154,17 @@ function BackgroundJobCard({
   return (
     <article
       aria-label={`${job.title}, ${jobStatusLabel(job.status)}`}
-      className="overflow-hidden rounded-xl border border-border bg-surface-secondary/60"
+      className="min-w-0 border-b border-border last:border-b-0"
     >
-      <div className="space-y-3 p-3">
+      <div className="space-y-3 p-4">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-foreground">{job.title}</p>
+            <p className="break-words text-sm font-medium text-foreground">{job.title}</p>
             {job.description ? (
-              <p className="mt-1 text-xs leading-5 text-muted">{job.description}</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{job.description}</p>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 flex-wrap justify-end gap-1">
             <Chip color={color} size="sm" variant="soft">
               <span className="inline-flex items-center gap-1.5">
                 {active ? (
@@ -198,8 +198,10 @@ function BackgroundJobCard({
                 <ProgressBar.Fill />
               </ProgressBar.Track>
             </ProgressBar>
-            <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
-              <span>{formatPhase(job.phase) || (active ? 'Working…' : jobStatusLabel(job.status))}</span>
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>
+                {formatPhase(job.phase) || (active ? 'Working…' : jobStatusLabel(job.status))}
+              </span>
               <span className="tabular-nums">
                 {progressCurrent.toLocaleString()} / {progressTotal.toLocaleString()} (
                 {Math.round(progressPercent)}%)
@@ -207,74 +209,111 @@ function BackgroundJobCard({
             </div>
           </div>
         ) : active ? (
-          <div className="flex items-center gap-2 text-xs text-muted">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Spinner aria-hidden size="sm" />
             <span>{formatPhase(job.phase) || 'Working in the background…'}</span>
           </div>
         ) : null}
 
         {job.status === 'failed' && job.error ? (
-          <p className="rounded-lg bg-danger/10 px-2.5 py-2 text-xs leading-5 text-danger">
-            {job.error}
-          </p>
+          <details className="group rounded-lg border border-destructive/20">
+            <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              Error details
+            </summary>
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words border-t border-destructive/20 bg-muted/30 p-3 font-mono text-xs leading-5 text-muted-foreground">
+              {job.error}
+            </pre>
+          </details>
         ) : null}
         {!active ? (
-          <p className="text-[11px] text-muted">
-            {job.finished_at ? `${jobStatusLabel(job.status)} ${timeAgo(job.finished_at)}` : 'Finished'}
+          <p className="text-xs text-muted-foreground">
+            {job.finished_at
+              ? `${jobStatusLabel(job.status)} ${timeAgo(job.finished_at)}`
+              : 'Finished'}
           </p>
         ) : null}
       </div>
 
       {scanHref || !active ? (
-        <div className="border-t border-border bg-surface-tertiary/30 p-2.5">
-          {scanHref && !active ? (
-            <ButtonGroup fullWidth size="sm" variant="secondary">
-              <Button
-                render={(props: any) => <a {...props} href={scanHref} />}
-              >
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-4">
+          {scanHref ? (
+            <Button asChild size="sm" variant="outline">
+              <a href={scanHref}>
                 View scan
                 <ArrowRight01Icon aria-hidden size={15} />
-              </Button>
-              <Button
-                aria-label={`Remove ${job.title || 'background process'} from the process center`}
-                isPending={isDismissing}
-                onPress={() => onDismiss(job.id)}
-              >
-                <ButtonGroup.Separator />
-                <Cancel01Icon aria-hidden size={15} />
-                Remove
-              </Button>
-            </ButtonGroup>
-          ) : scanHref ? (
-            <Button
-              fullWidth
-              render={(props: any) => <a {...props} href={scanHref} />}
-              size="sm"
-              variant="secondary"
-            >
-              View scan
-              <ArrowRight01Icon aria-hidden size={15} />
+              </a>
             </Button>
-          ) : (
+          ) : null}
+          {!active ? (
             <Button
               aria-label={`Remove ${job.title || 'background process'} from the process center`}
-              fullWidth
               isPending={isDismissing}
               onPress={() => onDismiss(job.id)}
               size="sm"
-              variant="tertiary"
+              variant="ghost"
             >
               <Cancel01Icon aria-hidden size={15} />
               Remove
             </Button>
-          )}
+          ) : null}
         </div>
       ) : null}
     </article>
   );
 }
 
-export function BackgroundProcessCenter() {
+function ActivityTrigger({
+  collapsed,
+  activeCount,
+  onPress,
+}: {
+  collapsed: boolean;
+  activeCount: number;
+  onPress: () => void;
+}) {
+  return (
+    <div className="relative w-full">
+      <Button
+        aria-label={
+          activeCount > 0
+            ? `Background processes, ${activeCount} active`
+            : 'Background processes, no active jobs'
+        }
+        className={
+          collapsed
+            ? 'relative w-full text-muted-foreground'
+            : 'w-full justify-start gap-2 text-muted-foreground hover:text-foreground'
+        }
+        isIconOnly={collapsed}
+        size="default"
+        onPress={onPress}
+        variant="ghost"
+      >
+        {activeCount > 0 ? (
+          <Spinner size="sm" aria-hidden />
+        ) : (
+          <Activity01Icon aria-hidden size={17} />
+        )}
+        {!collapsed ? (
+          <>
+            <span className="flex-1 text-left">Activity</span>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {activeCount > 0 ? `${activeCount} running` : 'Idle'}
+            </span>
+          </>
+        ) : null}
+      </Button>
+      {collapsed && activeCount > 0 ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export function BackgroundProcessCenter({ collapsed = false }: { collapsed?: boolean }) {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
@@ -396,7 +435,9 @@ export function BackgroundProcessCenter() {
       const job = (event as CustomEvent<{ job?: BackgroundJob }>).detail?.job;
       if (!job) return;
       previousStatusesRef.current.set(job.id, job.status);
-      setJobs((current) => mergeJobs(current, [job, ...current.filter((item) => item.id !== job.id)]));
+      setJobs((current) =>
+        mergeJobs(current, [job, ...current.filter((item) => item.id !== job.id)])
+      );
       setJobsScopeKey(scopeKey);
       jobsScopeKeyRef.current = scopeKey;
       void loadJobs();
@@ -448,37 +489,22 @@ export function BackgroundProcessCenter() {
 
   return (
     <>
-      <Badge.Anchor className="shrink-0">
-        <Button
-          aria-label={
-            activeCount > 0
-              ? `Background processes, ${activeCount} active`
-              : 'Background processes, no active jobs'
-          }
-          className="justify-center rounded-full text-zinc-700 dark:text-zinc-200"
-          isIconOnly
-          onPress={() => {
-            setIsOpen(true);
-            void loadJobs();
-          }}
-          variant="tertiary"
-        >
-          <Activity01Icon aria-hidden size={17} />
-        </Button>
-        {activeCount > 0 ? (
-          <Badge color="accent" size="sm">
-            {activeCount > 99 ? '99+' : activeCount}
-          </Badge>
-        ) : null}
-      </Badge.Anchor>
+      <ActivityTrigger
+        collapsed={collapsed}
+        activeCount={activeCount}
+        onPress={() => {
+          setIsOpen(true);
+          void loadJobs();
+        }}
+      />
 
       <Drawer.Backdrop isOpen={isOpen} onOpenChange={setIsOpen} variant="blur">
-        <Drawer.Content placement="right">
-          <Drawer.Dialog className="flex h-full w-full max-w-[30rem] flex-col border-l border-border">
+        <Drawer.Content placement="right" className="max-w-[30rem]">
+          <Drawer.Dialog className="flex h-full w-full flex-col border-l border-border">
             <Drawer.Header className="flex items-start justify-between gap-4 border-b border-border p-5">
               <div className="min-w-0">
                 <Drawer.Heading>Background processes</Drawer.Heading>
-                <p className="mt-1 text-sm text-muted">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {activeCount > 0
                     ? `${activeCount} process${activeCount === 1 ? '' : 'es'} running or queued`
                     : 'No processes are running'}
@@ -486,12 +512,12 @@ export function BackgroundProcessCenter() {
               </div>
               <Drawer.CloseTrigger />
             </Drawer.Header>
-            <Drawer.Body className="space-y-3 p-5">
+            <Drawer.Body className="min-h-0 flex-1 space-y-0 p-0">
               <div aria-atomic="true" aria-live="polite" className="sr-only" role="status">
                 {announcement}
               </div>
               {loading && scopedJobs.length === 0 ? (
-                <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted">
+                <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
                   <Spinner aria-label="Loading background processes" />
                   Loading processes…
                 </div>
@@ -501,7 +527,7 @@ export function BackgroundProcessCenter() {
                     <Alert02Icon aria-hidden className="mt-0.5 shrink-0 text-danger" size={18} />
                     <div>
                       <p className="text-sm font-medium">Couldn’t load processes</p>
-                      <p className="mt-1 text-xs leading-5 text-muted">{scopedError}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{scopedError}</p>
                     </div>
                   </div>
                   <Button onPress={() => void loadJobs()} size="sm" variant="secondary">
@@ -511,9 +537,9 @@ export function BackgroundProcessCenter() {
                 </div>
               ) : scopedJobs.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border px-4 py-12 text-center">
-                  <Activity01Icon aria-hidden className="mx-auto text-muted" size={26} />
+                  <Activity01Icon aria-hidden className="mx-auto text-muted-foreground" size={26} />
                   <p className="mt-3 text-sm font-medium">Nothing to track yet</p>
-                  <p className="mt-1 text-xs leading-5 text-muted">
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     Long-running scans and cleanup tasks will appear here while they work.
                   </p>
                 </div>
@@ -524,7 +550,7 @@ export function BackgroundProcessCenter() {
                       Updates paused: {scopedError}
                     </p>
                   ) : null}
-                  <div className="space-y-3">
+                  <div className="divide-y divide-border">
                     {scopedJobs.map((job) => (
                       <BackgroundJobCard
                         isDismissing={dismissingJobIDs.has(job.id)}
@@ -537,20 +563,20 @@ export function BackgroundProcessCenter() {
                 </>
               )}
             </Drawer.Body>
-            <Drawer.Footer className="flex flex-col gap-2 border-t border-border p-4">
+            <Drawer.Footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border p-4">
               {finishedJobs.length > 0 ? (
                 <Button
-                  className="w-full"
+                  size="sm"
                   isDisabled={dismissingJobIDs.size > 0}
                   isPending={dismissingJobIDs.size === finishedJobs.length}
                   onPress={() => void dismissJobs(finishedJobs.map((job) => job.id))}
                   variant="tertiary"
                 >
                   <Cancel01Icon aria-hidden size={15} />
-                  Remove completed &amp; failed ({finishedJobs.length})
+                  Clear finished ({finishedJobs.length})
                 </Button>
               ) : null}
-              <Button slot="close" className="w-full" variant="secondary">
+              <Button slot="close" size="sm" variant="outline">
                 Close
               </Button>
             </Drawer.Footer>

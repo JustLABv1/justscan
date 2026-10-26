@@ -14,7 +14,7 @@ import {
 } from '@/lib/api/admin';
 import type { Registry, RegistryWithHealth, ScanProvider, XrayMode } from '@/lib/api/types/registries';
 import { deferEffect } from '@/lib/defer-effect';
-import { Button, Card, Chip, Input, ListBox, Modal, SearchField, Select, Table, useOverlayState } from '@heroui/react';
+import { Button, Card, Chip, Input, ListBox, Modal, SearchField, Select, Table, useOverlayState } from '@/components/ui';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -252,7 +252,7 @@ export function RegistriesTab() {
               </Table.Header>
               <Table.Body
                 renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-zinc-500">
+                  <div className="py-10 text-center text-sm text-muted-foreground">
                     {loading ? 'Loading registries...' : 'No registries found.'}
                   </div>
                 )}
@@ -261,13 +261,13 @@ export function RegistriesTab() {
                   <Table.Row key={registry.id} id={registry.id}>
                     <Table.Cell>
                       <p className="font-medium">{registry.name}</p>
-                      <p className="text-xs text-zinc-500">{registry.id}</p>
+                      <p className="text-xs text-muted-foreground">{registry.id}</p>
                     </Table.Cell>
-                    <Table.Cell className="font-mono text-xs text-zinc-500">{registry.url}</Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">
+                    <Table.Cell className="font-mono text-xs text-muted-foreground">{registry.url}</Table.Cell>
+                    <Table.Cell className="text-xs text-muted-foreground">
                       {registry.scan_provider === 'artifactory_xray' ? 'Artifactory Xray' : 'Trivy'}
                     </Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500 uppercase tracking-[0.1em]">{registry.auth_type}</Table.Cell>
+                    <Table.Cell className="text-xs text-muted-foreground uppercase tracking-[0.1em]">{registry.auth_type}</Table.Cell>
                     <Table.Cell>
                       <Chip
                         size="sm"
@@ -281,7 +281,7 @@ export function RegistriesTab() {
                       {registry.is_default ? (
                         <Chip size="sm" variant="soft" color="accent">Default</Chip>
                       ) : (
-                        <span className="text-xs text-zinc-500">—</span>
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </Table.Cell>
                     <Table.Cell>
@@ -334,7 +334,7 @@ export function RegistriesTab() {
               </Modal.Header>
               <Modal.Body>
                 <div className="space-y-4">
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-sm text-muted-foreground">
                     Configure global registry connectivity in three guided steps.
                   </p>
                   <div className="grid grid-cols-3 gap-2">
@@ -347,8 +347,8 @@ export function RegistriesTab() {
 
                   {registryStep === 0 && (
                     <div className="grid gap-3 md:grid-cols-2">
-                      <div className="space-y-1 min-w-0"><p className="text-xs text-zinc-500">{requiredLabel('Registry Name')}</p><Input className="w-full" variant="secondary" placeholder="Production Docker Hub Mirror" value={name} onChange={(event) => setName(event.target.value)} required /></div>
-                      <div className="space-y-1 min-w-0"><p className="text-xs text-zinc-500">{requiredLabel('Registry URL')}</p><Input className="w-full" variant="secondary" placeholder="https://registry.example.com" value={url} onChange={(event) => setUrl(event.target.value)} required /></div>
+                      <div className="space-y-1 min-w-0"><p className="text-xs text-muted-foreground">{requiredLabel('Registry Name')}</p><Input className="w-full" variant="secondary" placeholder="Production Docker Hub Mirror" value={name} onChange={(event) => setName(event.target.value)} required /></div>
+                      <div className="space-y-1 min-w-0"><p className="text-xs text-muted-foreground">{requiredLabel('Registry URL')}</p><Input className="w-full" variant="secondary" placeholder="https://registry.example.com" value={url} onChange={(event) => setUrl(event.target.value)} required /></div>
                     </div>
                   )}
 
@@ -356,7 +356,7 @@ export function RegistriesTab() {
                     <div className="space-y-3">
                       <div className="grid gap-3 md:grid-cols-2">
                         <div className="space-y-1 min-w-0">
-                          <p className="text-xs text-zinc-500">Scan Provider</p>
+                          <p className="text-xs text-muted-foreground">Scan Provider</p>
                           <Select className="w-full" value={scanProvider} onChange={(value) => setScanProvider(value as ScanProvider)} variant="secondary">
                             <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                             <Select.Popover>
@@ -368,7 +368,7 @@ export function RegistriesTab() {
                           </Select>
                         </div>
                         <div className="space-y-1 min-w-0">
-                          <p className="text-xs text-zinc-500">Authentication Type</p>
+                          <p className="text-xs text-muted-foreground">Authentication Type</p>
                           <Select className="w-full" value={authType} onChange={(value) => setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')} variant="secondary">
                             <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                             <Select.Popover>
@@ -384,9 +384,9 @@ export function RegistriesTab() {
                       </div>
                       {scanProvider === 'artifactory_xray' && (
                         <div className="grid gap-3 md:grid-cols-2">
-                          <div className="space-y-1 min-w-0 md:col-span-2"><p className="text-xs text-zinc-500">{requiredLabel('Xray URL')}</p><Input className="w-full" variant="secondary" placeholder="https://xray.example.com" value={xrayUrl} onChange={(event) => setXrayUrl(event.target.value)} required /></div>
-                          <div className="space-y-1 min-w-0"><p className="text-xs text-zinc-500">Artifactory ID</p><Input className="w-full" variant="secondary" placeholder="default" value={xrayArtifactoryId} onChange={(event) => setXrayArtifactoryId(event.target.value)} /></div>
-                          <div className="space-y-1 min-w-0"><p className="text-xs text-zinc-500">Repository Key</p><Input className="w-full" variant="secondary" placeholder="docker-remote" value={xrayRepository} onChange={(event) => setXrayRepository(event.target.value)} /></div>
+                          <div className="space-y-1 min-w-0 md:col-span-2"><p className="text-xs text-muted-foreground">{requiredLabel('Xray URL')}</p><Input className="w-full" variant="secondary" placeholder="https://xray.example.com" value={xrayUrl} onChange={(event) => setXrayUrl(event.target.value)} required /></div>
+                          <div className="space-y-1 min-w-0"><p className="text-xs text-muted-foreground">Artifactory ID</p><Input className="w-full" variant="secondary" placeholder="default" value={xrayArtifactoryId} onChange={(event) => setXrayArtifactoryId(event.target.value)} /></div>
+                          <div className="space-y-1 min-w-0"><p className="text-xs text-muted-foreground">Repository Key</p><Input className="w-full" variant="secondary" placeholder="docker-remote" value={xrayRepository} onChange={(event) => setXrayRepository(event.target.value)} /></div>
                           <div className="md:col-span-2"><XrayModeSelector value={xrayMode} onChange={setXrayMode} /></div>
                         </div>
                       )}
@@ -396,7 +396,7 @@ export function RegistriesTab() {
                   {registryStep === 2 && (
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="space-y-1 min-w-0">
-                        <p className="text-xs text-zinc-500">Username</p>
+                        <p className="text-xs text-muted-foreground">Username</p>
                         <Input
                           className="w-full"
                           variant="secondary"
@@ -406,7 +406,7 @@ export function RegistriesTab() {
                         />
                       </div>
                       <div className="space-y-1 min-w-0">
-                        <p className="text-xs text-zinc-500">{editingRegistry ? 'Password / Token' : requiredLabel('Password / Token')}</p>
+                        <p className="text-xs text-muted-foreground">{editingRegistry ? 'Password / Token' : requiredLabel('Password / Token')}</p>
                         <Input
                           className="w-full"
                           type="password"

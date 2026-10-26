@@ -1,6 +1,6 @@
 'use client';
 
-import { ToggleButton, ToggleButtonGroup } from '@heroui/react';
+import { ToggleButton, ToggleButtonGroup } from '@/components/ui';
 import type { CSSProperties, ReactNode } from 'react';
 
 type SegmentOption<T extends string> = {

@@ -3,7 +3,7 @@
 import { useToast } from '@/components/toast';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { adminUpdateAuthSettings, getAdminSettings } from '@/lib/api/admin';
-import { Button, Card, Description, Label, Switch } from '@heroui/react';
+import { Button, Card, Description, Label, Switch } from '@/components/ui';
 import { useEffect, useState } from 'react';
 
 interface LocalAuthPanelProps {

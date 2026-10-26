@@ -7,12 +7,9 @@ import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { StatusAlert } from '@/components/ui/form-alert';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
-import {
-  filterDisclosureBodyClassName,
-  FilterDisclosureTrigger,
-} from '@/components/ui/filter-toolbar';
-import { PageHeader } from '@/components/ui/page-header';
+import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
+import { StatCard } from '@/components/ui/stat-card';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -55,7 +52,6 @@ import {
   Card,
   Checkbox,
   Chip,
-  Disclosure,
   Dropdown,
   Label,
   ListBox,
@@ -65,9 +61,10 @@ import {
   Spinner,
   Switch,
   Table,
+  Tabs,
   TextArea,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   BiometricAccessIcon,
   Clock01Icon,
@@ -82,7 +79,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 const TIMEZONE_OPTIONS =
   typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : ['UTC'];
 
@@ -226,7 +223,9 @@ function LastScanState({
   hourCycle: HourCyclePreference;
 }) {
   if (!item.last_scan_id) {
-    return <span className="text-xs text-zinc-400 dark:text-zinc-700">Never scanned</span>;
+    return (
+      <span className="text-xs text-muted-foreground dark:text-foreground">Never scanned</span>
+    );
   }
 
   const timestamp =
@@ -234,7 +233,7 @@ function LastScanState({
   return (
     <Link
       href={`/scans/details/${item.last_scan_id}`}
-      className="inline-flex max-w-fit flex-col gap-1.5 px-2 py-1 transition-colors hover:bg-zinc-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 dark:hover:bg-zinc-800/60"
+      className="inline-flex max-w-fit flex-col gap-1.5 px-2 py-1 transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 dark:hover:bg-muted/60"
       title={fullDate(timestamp, {
         hourCycle,
         timeZone: item.timezone,
@@ -254,7 +253,7 @@ function LastScanState({
           Unknown
         </Chip>
       )}
-      <span className="text-xs text-zinc-500">
+      <span className="text-xs text-muted-foreground">
         {timeAgo(timestamp, {
           hourCycle,
           timeZone: item.timezone,
@@ -281,7 +280,7 @@ function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item:
       <Chip color={postureChipColor[posture.tone]} variant="soft" size="sm">
         {posture.label}
       </Chip>
-      <p className="truncate text-xs text-zinc-500" title={policyTitle}>
+      <p className="truncate text-xs text-muted-foreground" title={policyTitle}>
         {posture.description}
       </p>
       {posture.kind !== 'intelligence_pending' ? (
@@ -342,7 +341,6 @@ export default function WatchlistPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const focusFilter = parseWatchlistFocus(searchParams.get('focus'));
-  const [showFilters, setShowFilters] = useState(false);
   const [postureNow] = useState(() => Date.now());
   const modal = useOverlayState();
   const bulkModal = useOverlayState();
@@ -822,7 +820,7 @@ export default function WatchlistPage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <PageContainer>
       <PageHeader
         title="Watchlist"
         description="Recurring image monitoring, freshness tracking, and policy follow-up for your active workspace."
@@ -872,12 +870,58 @@ export default function WatchlistPage() {
         }
       />
 
-      {items.length > 0 ? (
-        <StatusAlert
-          status={overviewSummary.tone === 'neutral' ? 'default' : overviewSummary.tone}
-          title={overviewSummary.title}
-          description={overviewSummary.description}
-        />
+      {!loading && items.length > 0 ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            {[
+              {
+                label: 'Active schedules',
+                value: activeItems.length,
+                hint: `${items.length} images watched`,
+                filter: 'all',
+                tone: 'default',
+              },
+              {
+                label: 'Needs attention',
+                value: attentionItems.length,
+                hint: 'Policy or scan failures',
+                filter: 'attention',
+                tone: 'danger',
+              },
+              {
+                label: 'CVE confirmation',
+                value: intelligencePendingItems.length,
+                hint: 'Intelligence changed',
+                filter: 'intelligence',
+                tone: 'warning',
+              },
+              {
+                label: 'Stale images',
+                value: staleCount,
+                hint: `${neverScannedCount} not yet scanned`,
+                filter: 'stale',
+                tone: 'warning',
+              },
+            ].map((metric) => (
+              <StatCard
+                key={metric.label}
+                label={metric.label}
+                value={metric.value}
+                hint={metric.hint}
+                tone={metric.tone as 'default' | 'danger' | 'warning'}
+                selected={metric.filter !== 'all' && focusFilter === metric.filter}
+                onPress={() => {
+                  updateFocusFilter(parseWatchlistFocus(metric.filter));
+                  setStatusFilter(metric.filter === 'all' ? 'active' : 'all');
+                }}
+              />
+            ))}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{overviewSummary.title}.</span>{' '}
+            {overviewSummary.description}
+          </p>
+        </>
       ) : null}
 
       {error ? (
@@ -923,108 +967,98 @@ export default function WatchlistPage() {
         />
       ) : error ? null : (
         <>
-          <Card className="p-3">
-            <Disclosure
-              isExpanded={showFilters}
-              onExpandedChange={setShowFilters}
-              className="contents"
-            >
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <Card className="gap-0 overflow-hidden py-0">
+            <Card.Header className="space-y-3 border-b p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Card.Title>Monitored images</Card.Title>
+                <span className="text-xs text-muted-foreground">
+                  {filteredItems.length} of {items.length} images
+                </span>
+              </div>
+              <Tabs
+                selectedKey={focusFilter}
+                onSelectionChange={(key) => updateFocusFilter(parseWatchlistFocus(String(key)))}
+                variant="secondary"
+              >
+                <Tabs.ListContainer className="overflow-x-auto">
+                  <Tabs.List aria-label="Watchlist focus" className="min-w-max">
+                    {[
+                      { id: 'all', label: 'All' },
+                      { id: 'attention', label: 'Attention' },
+                      { id: 'intelligence', label: 'CVE confirmation' },
+                      { id: 'stale', label: 'Stale' },
+                      { id: 'never_scanned', label: 'Never scanned' },
+                      { id: 'healthy', label: 'Healthy' },
+                    ].map((option) => (
+                      <Tabs.Tab id={option.id} key={option.id}>
+                        {option.label}
+                        <span className="ml-1 text-xs tabular-nums text-muted-foreground">
+                          {focusCounts[option.id as WatchlistFocus]}
+                        </span>
+                        <Tabs.Indicator />
+                      </Tabs.Tab>
+                    ))}
+                  </Tabs.List>
+                </Tabs.ListContainer>
+                {['all', 'attention', 'intelligence', 'stale', 'never_scanned', 'healthy'].map(
+                  (key) => (
+                    <Tabs.Panel id={key} key={key} className="hidden" />
+                  )
+                )}
+              </Tabs>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <SearchField
                   name="watchlist-search"
                   aria-label="Search watchlist images"
-                  variant="secondary"
+                  value={searchQuery}
+                  onChange={setSearchQuery}
                   className="min-w-0 flex-1"
                 >
                   <SearchField.Group>
                     <SearchField.SearchIcon />
-                    <SearchField.Input
-                      value={searchQuery}
-                      onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder="Search image or tag..."
-                    />
+                    <SearchField.Input placeholder="Search image or tag…" />
                     <SearchField.ClearButton />
                   </SearchField.Group>
                 </SearchField>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Select
-                    aria-label="Watchlist focus"
-                    value={focusFilter}
-                    onChange={(value) =>
-                      updateFocusFilter(parseWatchlistFocus(String(value ?? 'all')))
-                    }
-                    variant="secondary"
-                    className="min-w-[180px]"
+                <Select
+                  aria-label="Watchlist status"
+                  value={statusFilter}
+                  onChange={(value) =>
+                    setStatusFilter(
+                      value === 'disabled' ? 'disabled' : value === 'active' ? 'active' : 'all'
+                    )
+                  }
+                  className="w-full sm:w-40"
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="all">All schedules</ListBox.Item>
+                      <ListBox.Item id="active">Active</ListBox.Item>
+                      <ListBox.Item id="disabled">Paused</ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                {hasFilters ? (
+                  <Button
+                    variant="tertiary"
+                    onPress={() => {
+                      setSearchQuery('');
+                      setStatusFilter('all');
+                      updateFocusFilter('all');
+                    }}
                   >
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {[
-                          { id: 'all', label: 'All' },
-                          { id: 'attention', label: 'Attention' },
-                          { id: 'intelligence', label: 'CVE confirmation' },
-                          { id: 'stale', label: 'Stale' },
-                          { id: 'never_scanned', label: 'Never scanned' },
-                          { id: 'healthy', label: 'Healthy' },
-                        ].map((option) => (
-                          <ListBox.Item key={option.id} id={option.id}>
-                            {option.label} ({focusCounts[option.id as WatchlistFocus]})
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                  <FilterDisclosureTrigger activeCount={statusFilter === 'all' ? 0 : 1} />
-                  {hasFilters ? (
-                    <Button
-                      variant="tertiary"
-                      onPress={() => {
-                        setSearchQuery('');
-                        setStatusFilter('all');
-                        updateFocusFilter('all');
-                      }}
-                    >
-                      Clear filters
-                    </Button>
-                  ) : null}
-                </div>
+                    Clear filters
+                  </Button>
+                ) : null}
               </div>
-              <Disclosure.Content>
-                <Disclosure.Body className="mt-2 grid grid-cols-1 gap-2 border-t border-divider pt-2 sm:grid-cols-[minmax(0,14rem)]">
-                  <Select
-                    aria-label="Watchlist status"
-                    value={statusFilter}
-                    onChange={(value) =>
-                      setStatusFilter(
-                        value === 'disabled' ? 'disabled' : value === 'active' ? 'active' : 'all'
-                      )
-                    }
-                    variant="secondary"
-                  >
-                    <Select.Trigger className={selectTriggerCls}>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        <ListBox.Item id="all">All statuses</ListBox.Item>
-                        <ListBox.Item id="active">Active</ListBox.Item>
-                        <ListBox.Item id="disabled">Disabled</ListBox.Item>
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                </Disclosure.Body>
-              </Disclosure.Content>
-            </Disclosure>
-          </Card>
-
-          <Card className="overflow-hidden">
+            </Card.Header>
             {selectedIds.size > 0 ? (
               <div className="flex flex-wrap items-center gap-2 border-b border-divider px-3 py-2">
-                <span className="text-sm text-muted">{selectedIds.size} selected</span>
+                <span className="text-sm text-muted-foreground">{selectedIds.size} selected</span>
                 <Button
                   size="sm"
                   variant="secondary"
@@ -1084,10 +1118,10 @@ export default function WatchlistPage() {
               </div>
             ) : null}
             <Table variant="secondary">
-              <Table.ScrollContainer>
+              <Table.ScrollContainer className="rounded-none border-0">
                 <Table.Content
                   aria-label="Watchlist images"
-                  className="min-w-[900px]"
+                  className="min-w-[1040px] [&_td]:py-3"
                   disabledKeys={nonMutableItemIds}
                   selectedKeys={selectedIds}
                   selectionMode="multiple"
@@ -1109,11 +1143,13 @@ export default function WatchlistPage() {
                         </Checkbox.Content>
                       </Checkbox>
                     </Table.Column>
-                    <Table.Column isRowHeader>Image</Table.Column>
-                    <Table.Column className="hidden md:table-cell">Schedule</Table.Column>
-                    <Table.Column>Latest scan</Table.Column>
-                    <Table.Column className="hidden lg:table-cell">Coverage</Table.Column>
-                    <Table.Column className="flex justify-end">Actions</Table.Column>
+                    <Table.Column isRowHeader className="min-w-60">
+                      Image
+                    </Table.Column>
+                    <Table.Column className="min-w-44">Schedule</Table.Column>
+                    <Table.Column className="min-w-36">Latest scan</Table.Column>
+                    <Table.Column className="min-w-48">Coverage</Table.Column>
+                    <Table.Column className="w-px whitespace-nowrap text-right">Actions</Table.Column>
                   </Table.Header>
                   <Table.Body
                     items={filteredItems}
@@ -1215,10 +1251,10 @@ export default function WatchlistPage() {
                           </Table.Cell>
                           <Table.Cell>
                             <div className="space-y-1.5">
-                              <p className="font-mono text-xs text-zinc-700 dark:text-zinc-200">
+                              <p className="max-w-sm break-words font-mono text-xs text-foreground [overflow-wrap:anywhere]">
                                 {item.image_name}:{item.image_tag}
                               </p>
-                              <p className="text-xs text-muted">
+                              <p className="text-xs text-muted-foreground">
                                 {reg?.name ?? 'Direct image source'}
                               </p>
                               <OwnershipBadge
@@ -1228,16 +1264,16 @@ export default function WatchlistPage() {
                               />
                             </div>
                           </Table.Cell>
-                          <Table.Cell className="hidden md:table-cell">
+                          <Table.Cell>
                             <div className="space-y-1.5" title={item.schedule}>
-                              <div className="flex items-center gap-1.5 text-xs text-accent">
+                              <div className="flex items-center gap-1.5 text-xs text-primary">
                                 <Clock01Icon size={12} className="shrink-0" />
                                 {cronToHuman(item.schedule ?? '', {
                                   timezone: item.timezone,
                                   hourCycle,
                                 })}
                               </div>
-                              <p className="font-mono text-xs text-muted">
+                              <p className="font-mono text-xs text-muted-foreground">
                                 {item.timezone || 'UTC'}
                               </p>
                             </div>
@@ -1245,7 +1281,7 @@ export default function WatchlistPage() {
                           <Table.Cell>
                             <LastScanState item={item} hourCycle={hourCycle} />
                           </Table.Cell>
-                          <Table.Cell className="hidden lg:table-cell">
+                          <Table.Cell>
                             <div className="space-y-2">
                               <Chip
                                 color={item.enabled ? 'success' : 'default'}
@@ -1278,7 +1314,7 @@ export default function WatchlistPage() {
                                   items={actions}
                                 />
                               ) : (
-                                <span className="text-xs text-zinc-400">No actions</span>
+                                <span className="text-xs text-muted-foreground">No actions</span>
                               )}
                             </div>
                           </Table.Cell>
@@ -1300,7 +1336,9 @@ export default function WatchlistPage() {
               <Modal.Header>
                 <div className="flex min-w-0 items-center gap-3">
                   <Modal.Icon
-                    className={editing ? 'bg-default text-foreground' : 'bg-accent/10 text-accent'}
+                    className={
+                      editing ? 'bg-default text-foreground' : 'bg-primary/10 text-primary'
+                    }
                   >
                     {editing ? <PencilEdit01Icon size={18} /> : <PlusSignIcon size={18} />}
                   </Modal.Icon>
@@ -1350,7 +1388,7 @@ export default function WatchlistPage() {
                   />
                   <p
                     className="text-xs font-medium"
-                    style={{ color: 'color-mix(in srgb, var(--accent) 88%, transparent)' }}
+                    style={{ color: 'color-mix(in srgb, var(--primary) 88%, transparent)' }}
                   >
                     Preview: {schedulePreview}
                   </p>
@@ -1369,11 +1407,10 @@ export default function WatchlistPage() {
                         <option key={zone} value={zone} />
                       ))}
                     </datalist>
-                    <p className="text-xs text-zinc-500">
-                      Use an IANA timezone like{' '}
-                      <code className="text-zinc-400 dark:text-zinc-500">UTC</code>,{' '}
-                      <code className="text-zinc-400 dark:text-zinc-500">Europe/Berlin</code>, or{' '}
-                      <code className="text-zinc-400 dark:text-zinc-500">America/New_York</code>.
+                    <p className="text-xs text-muted-foreground">
+                      Use an IANA timezone like <code className="text-muted-foreground">UTC</code>,{' '}
+                      <code className="text-muted-foreground">Europe/Berlin</code>, or{' '}
+                      <code className="text-muted-foreground">America/New_York</code>.
                     </p>
                   </div>
                   {registryOptions.length > 0 && (
@@ -1389,11 +1426,9 @@ export default function WatchlistPage() {
                       >
                         <Label className="text-sm font-medium">
                           Registry{' '}
-                          <span className="text-zinc-400 dark:text-zinc-600 font-normal">
-                            (optional)
-                          </span>
+                          <span className="text-muted-foreground font-normal">(optional)</span>
                         </Label>
-                        <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                        <Select.Trigger className={selectTriggerCls + ' '}>
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -1478,20 +1513,20 @@ export default function WatchlistPage() {
                       id="watchlist-import"
                       variant="secondary"
                       rows={8}
-                      className="min-h-40 w-full font-mono"
+                      className=" w-full font-mono"
                       value={bulkInput}
                       onChange={(event) => setBulkInput(event.target.value)}
                       placeholder={'nginx:latest\nregistry.example.com/team/api:1.2.3'}
                     />
-                    <p className="text-xs text-muted">
+                    <p className="text-xs text-muted-foreground">
                       Paste one image per line, or CSV/TXT content. A CSV header is ignored and tags
                       default to latest.
                     </p>
                   </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-surface-border bg-surface-secondary px-3 py-3">
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-surface-secondary px-3 py-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">Import a file</p>
-                      <p className="truncate text-xs text-muted">
+                      <p className="truncate text-xs text-muted-foreground">
                         {importedFileName || 'Choose a .txt or .csv file'}
                       </p>
                     </div>
@@ -1558,7 +1593,7 @@ export default function WatchlistPage() {
                     className="bg-surface-secondary"
                     description="This schedule and timezone will replace the values on every selected item."
                   />
-                  <p className="text-xs font-medium text-accent">
+                  <p className="text-xs font-medium text-primary">
                     Preview: {cronToHuman(bulkSchedule, { timezone: bulkTimezone, hourCycle })}
                   </p>
                   <div className="space-y-2">
@@ -1606,7 +1641,7 @@ export default function WatchlistPage() {
                   </Modal.Icon>
                   <Modal.Heading className="font-semibold">Manage Watchlist Access</Modal.Heading>
                 </div>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
               </Modal.Header>
               <Modal.Body className="py-5 space-y-4">
                 {shareError ? (
@@ -1618,7 +1653,7 @@ export default function WatchlistPage() {
                 ) : null}
                 {shareTarget ? (
                   <div className="bg-surface-secondary rounded-xl px-4 py-3">
-                    <p className="font-mono text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                    <p className="font-mono text-sm font-medium text-foreground">
                       {shareTarget.image_name}:{shareTarget.image_tag}
                     </p>
                     <div className="mt-2">
@@ -1634,16 +1669,16 @@ export default function WatchlistPage() {
                 <div className="space-y-2">
                   <div>
                     <h3 className="text-sm font-semibold">Current access</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Organizations listed here can trigger or manage this watchlist item.
                     </p>
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                    <p className="text-sm text-muted-foreground">No organization grants yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
@@ -1697,7 +1732,7 @@ export default function WatchlistPage() {
                         }
                         className="flex-1"
                       >
-                        <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                        <Select.Trigger className={selectTriggerCls + ' '}>
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -1752,6 +1787,6 @@ export default function WatchlistPage() {
         </Modal.Backdrop>
       </Modal>
       {confirmDialog}
-    </div>
+    </PageContainer>
   );
 }

@@ -6,9 +6,9 @@ import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useClientAuth } from '@/hooks/use-client-auth';
@@ -47,7 +47,7 @@ import {
   type SortDescriptor,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   Delete01Icon,
   PencilEdit01Icon,
@@ -58,7 +58,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const DEFAULT_TAG_COLOR = '#6366f1';
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 
 export default function TagsPage() {
   const workScope = useWorkScope();
@@ -370,7 +370,7 @@ export default function TagsPage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <PageContainer>
       <PageHeader
         title="Tags"
         description={
@@ -408,7 +408,7 @@ export default function TagsPage() {
         retry={() => void load()}
         loadingFallback={
           <Card className="space-y-4" role="status">
-            <SearchField name="tags-search" variant="secondary" className="w-full xl:max-w-md">
+            <SearchField name="tags-search" variant="secondary" className="w-full">
               <SearchField.Group>
                 <SearchField.SearchIcon />
                 <SearchField.Input
@@ -423,7 +423,7 @@ export default function TagsPage() {
                 <SearchField.ClearButton />
               </SearchField.Group>
             </SearchField>
-            <div className="surface-panel rounded-2xl overflow-hidden">
+            <div className="surface-panel rounded-xl overflow-hidden">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={i}
@@ -442,27 +442,33 @@ export default function TagsPage() {
           </Card>
         }
       >
-        <Card className="space-y-4">
-          <SearchField name="tags-search" variant="secondary" className="w-full xl:max-w-md">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                aria-label="Filter tags"
-                placeholder="Filter tags by name, owner, or color..."
-                value={filterQuery}
-                onChange={(event) => {
-                  setFilterQuery(event.target.value);
-                  setPage(1);
-                }}
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
+        <Card className="gap-0 overflow-hidden py-0">
+          <Card.Header className="space-y-3 border-b p-4">
+            <div className="flex items-center justify-between gap-3">
+              <Card.Title>Scan tags</Card.Title>
+              <span className="text-xs text-muted-foreground">{tags.length} tags</span>
+            </div>
+            <SearchField name="tags-search" variant="secondary" className="w-full">
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
+                  aria-label="Filter tags"
+                  placeholder="Filter tags by name, owner, or color..."
+                  value={filterQuery}
+                  onChange={(event) => {
+                    setFilterQuery(event.target.value);
+                    setPage(1);
+                  }}
+                />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
+          </Card.Header>
           <Table variant="secondary">
-            <Table.ScrollContainer>
+            <Table.ScrollContainer className="rounded-none border-0">
               <Table.Content
                 aria-label="Tags table"
-                className="min-w-[720px]"
+                className="min-w-[640px] [&_td]:py-3"
                 sortDescriptor={sortDescriptor}
                 onSortChange={setSortDescriptor}
               >
@@ -481,12 +487,12 @@ export default function TagsPage() {
                       </Table.SortableColumnHeader>
                     )}
                   </Table.Column>
-                  <Table.Column className="text-right">Actions</Table.Column>
+                  <Table.Column className="w-px whitespace-nowrap text-right">Actions</Table.Column>
                 </Table.Header>
                 <Table.Body
                   items={pagedTags}
                   renderEmptyState={() => (
-                    <div className="py-10 text-center text-sm text-zinc-500">
+                    <div className="py-10 text-center text-sm text-muted-foreground">
                       No tags match your filter.
                     </div>
                   )}
@@ -501,7 +507,9 @@ export default function TagsPage() {
                             aria-hidden="true"
                           />
                           <span className="truncate text-sm font-medium">{tag.name}</span>
-                          <span className="font-mono text-xs text-muted">{tag.color}</span>
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {tag.color}
+                          </span>
                         </div>
                       </Table.Cell>
                       <Table.Cell>
@@ -551,7 +559,7 @@ export default function TagsPage() {
                               ]}
                             />
                           ) : (
-                            <span className="text-xs text-zinc-500">Read only</span>
+                            <span className="text-xs text-muted-foreground">Read only</span>
                           )}
                         </div>
                       </Table.Cell>
@@ -560,8 +568,8 @@ export default function TagsPage() {
                 </Table.Body>
               </Table.Content>
             </Table.ScrollContainer>
-            <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-              <span className="text-xs text-zinc-500 whitespace-nowrap">
+            <Table.Footer className="flex flex-wrap items-center justify-between px-4 py-3 gap-3">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
                 Showing {visibleTags.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
                 {Math.min(effectivePage * PAGE_SIZE, visibleTags.length)} of {visibleTags.length}
               </span>
@@ -612,7 +620,7 @@ export default function TagsPage() {
       <Modal state={modal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading>{editing ? 'Edit Tag' : 'New Tag'}</Modal.Heading>
                 <Modal.CloseTrigger />
@@ -626,20 +634,22 @@ export default function TagsPage() {
                     placeholder="production"
                     required
                     value={name}
-                    className="bg-surface-secondary"
                   />
                   <div className="space-y-2.5 flex flex-col">
-                    <Label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                    <Label className="text-sm font-medium text-muted-foreground dark:text-foreground">
                       Color
                     </Label>
                     <ColorPicker
                       value={parsedColor}
                       onChange={(nextColor) => setColor(nextColor.toString('hex'))}
                     >
-                      <ColorPicker.Trigger className="flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5">
+                      <ColorPicker.Trigger
+                        aria-label="Choose tag color"
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5"
+                      >
                         <div className="flex items-center gap-2.5">
                           <ColorSwatch size="md" />
-                          <span className="text-xs font-mono text-zinc-500">{color}</span>
+                          <span className="text-xs font-mono text-muted-foreground">{color}</span>
                         </div>
                         <span
                           className="text-xs px-2 py-0.5 rounded-full font-medium"
@@ -705,7 +715,7 @@ export default function TagsPage() {
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading>Manage Tag Access</Modal.Heading>
                 <Modal.CloseTrigger />
@@ -725,9 +735,7 @@ export default function TagsPage() {
                             boxShadow: `0 0 8px ${shareTarget.color}88`,
                           }}
                         />
-                        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                          {shareTarget.name}
-                        </p>
+                        <p className="text-sm font-medium text-foreground">{shareTarget.name}</p>
                       </div>
                       <OwnershipBadge
                         ownerType={shareTarget.owner_type}
@@ -740,19 +748,17 @@ export default function TagsPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-                      Current access
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <h3 className="text-sm font-semibold text-foreground">Current access</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Organizations listed here can apply this tag to scans they manage.
                     </p>
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No organization grants yet.</p>
+                    <p className="text-sm text-muted-foreground">No organization grants yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {shares.map((share) => (
@@ -762,15 +768,17 @@ export default function TagsPage() {
                         >
                           <div className="flex flex-wrap items-center justify-between w-full">
                             <div className="flex flex-col">
-                              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                              <p className="text-sm font-medium text-foreground">
                                 {share.org_name}
                               </p>
-                              <p className="text-xs text-zinc-500 mt-0.5">
+                              <p className="text-xs text-muted-foreground mt-0.5">
                                 {share.is_owner ? 'Owner workspace' : 'Shared access'}
                               </p>
                             </div>
                             {share.is_owner ? (
-                              <span className="text-xs font-medium text-zinc-500">Locked</span>
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Locked
+                              </span>
                             ) : (
                               <Button
                                 onPress={() => {
@@ -793,15 +801,13 @@ export default function TagsPage() {
 
                 <div className="space-y-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-                      Grant access
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <h3 className="text-sm font-semibold text-foreground">Grant access</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Share this tag with another organization you manage.
                     </p>
                   </div>
                   {availableShareTargets.length === 0 ? (
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm text-muted-foreground">
                       No additional organizations are available for sharing.
                     </p>
                   ) : (
@@ -814,7 +820,7 @@ export default function TagsPage() {
                         }
                         className="flex-1"
                       >
-                        <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                        <Select.Trigger className={selectTriggerCls + ' '}>
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
@@ -863,6 +869,6 @@ export default function TagsPage() {
         </Modal.Backdrop>
       </Modal>
       {confirmDialog}
-    </div>
+    </PageContainer>
   );
 }

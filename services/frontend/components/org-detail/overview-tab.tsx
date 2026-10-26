@@ -1,5 +1,5 @@
 import { OrgRiskScore, TrendPoint } from '@/lib/api';
-import { Card, Chip, Link } from '@heroui/react';
+import { Card, Chip, Link } from '@/components/ui';
 
 import { StatCard } from '@/components/ui/stat-card';
 
@@ -22,15 +22,7 @@ function SummaryMetric({
   detail: string;
   color?: 'default' | 'danger' | 'warning' | 'success';
 }) {
-  return (
-    <StatCard
-      label={label}
-      value={value}
-      hint={<Chip color={color} size="sm" variant="soft">{detail}</Chip>}
-      tone={color}
-      variant="stacked"
-    />
-  );
+  return <StatCard label={label} value={value} hint={detail} tone={color} />;
 }
 
 export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabProps) {
@@ -80,7 +72,7 @@ export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabPro
           <h2 id="attention-heading" className="text-base font-semibold">
             Needs attention
           </h2>
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted-foreground">
             The signals that should guide the next remediation decision.
           </p>
         </div>
@@ -119,7 +111,7 @@ export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabPro
                 Pass and fail evaluations across the last 30 days.
               </Card.Description>
             </div>
-            <div className="flex items-center gap-3 text-xs text-muted">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <span className="size-2 rounded-sm bg-success" />
                 Pass
@@ -144,7 +136,7 @@ export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabPro
           </Card.Header>
           <Card.Content className="gap-2">
             {failingPolicies.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-divider p-5 text-sm text-muted">
+              <div className="rounded-xl border border-dashed border-divider p-5 text-sm text-muted-foreground">
                 No recent failed policy evaluations.
               </div>
             ) : (
@@ -155,14 +147,14 @@ export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabPro
                   className="group block rounded-xl border border-divider p-3 no-underline transition-colors hover:bg-surface-secondary"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <p className="truncate text-sm font-medium text-foreground group-hover:text-accent">
+                    <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">
                       {item.policyName || 'Unnamed policy'}
                     </p>
                     <Chip color="danger" size="sm" variant="soft">
                       {item.count} {item.count === 1 ? 'failure' : 'failures'}
                     </Chip>
                   </div>
-                  <p className="mt-1 truncate font-mono text-xs text-muted">
+                  <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
                     Latest: {item.imageRef}
                   </p>
                 </Link>

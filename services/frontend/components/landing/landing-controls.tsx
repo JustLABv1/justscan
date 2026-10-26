@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, buttonVariants } from '@heroui/react';
+import { Button, buttonVariants } from '@/components/ui';
 import { ArrowRight01Icon, Moon02Icon, Sun01Icon } from 'hugeicons-react';
 import NextLink from 'next/link';
 import { useTheme } from 'next-themes';

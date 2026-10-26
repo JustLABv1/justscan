@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert } from '@heroui/react';
+import { Alert } from '@/components/ui';
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
@@ -21,7 +21,7 @@ export function StatusAlert({
   className,
 }: StatusAlertProps) {
   return (
-    <Alert className={cn('rounded-2xl', className)} status={status}>
+    <Alert className={cn('rounded-xl', className)} status={status}>
       <Alert.Indicator />
       <Alert.Content>
         {title ? <Alert.Title>{title}</Alert.Title> : null}

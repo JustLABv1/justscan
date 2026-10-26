@@ -3,19 +3,19 @@
 import { PublicNavbar } from '@/components/public/public-navbar';
 import { StatCard } from '@/components/ui/stat-card';
 import {
-    createPublicHelmScans,
-    extractPublicHelmImages,
-    getPublicHelmScanRun,
-    getToken,
-    HelmRunItem,
-    HelmScanRunDetail,
-    reScanPublic,
+  createPublicHelmScans,
+  extractPublicHelmImages,
+  getPublicHelmScanRun,
+  getToken,
+  HelmRunItem,
+  HelmScanRunDetail,
+  reScanPublic,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { getHelmImageSourceLabel } from '@/lib/helm-image-overrides';
 import { PublicHelmRunHistoryEntry, updateHelmPublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip, Spinner, Table } from '@heroui/react';
+import { Alert, Button, Card, Chip, Spinner, Table, Tabs, SearchField } from '@/components/ui';
 import {
   AlertCircleIcon,
   ArrowReloadHorizontalIcon,
@@ -97,6 +97,8 @@ export default function PublicHelmRunDetailPage() {
   const [rescanningChart, setRescanningChart] = useState(false);
   const [retryingScanId, setRetryingScanId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
+  const [imageSearch, setImageSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [isLoggedIn] = useState(() => !!getToken());
 
   const loadRun = useCallback(
@@ -128,6 +130,21 @@ export default function PublicHelmRunDetailPage() {
   }, [loadRun]);
 
   const items = useMemo(() => detail?.items ?? [], [detail]);
+  const filteredItems = items.filter((item) => {
+    const scan = item.latest_scan;
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active'
+        ? scan.status !== 'completed' && scan.status !== 'failed' && scan.status !== 'cancelled'
+        : scan.status === statusFilter);
+    return (
+      matchesStatus &&
+      `${scan.image_name} ${scan.image_tag} ${scan.helm_source_path ?? ''}`
+        .toLowerCase()
+        .includes(imageSearch.trim().toLowerCase())
+    );
+  });
+
   const latestScans = items.map((item) => item.latest_scan);
   const latestRun = detail?.run;
   const chartUrl = latestRun?.chart_url ?? '';
@@ -143,8 +160,6 @@ export default function PublicHelmRunDetailPage() {
   const totalHigh = latestScans.reduce((sum, scan) => sum + (scan.high_count ?? 0), 0);
   const totalMedium = latestScans.reduce((sum, scan) => sum + (scan.medium_count ?? 0), 0);
   const totalLow = latestScans.reduce((sum, scan) => sum + (scan.low_count ?? 0), 0);
-  const statCardClassName = 'border border-divider/60 bg-surface/50 shadow-sm backdrop-blur';
-  const statValueClassName = 'text-lg font-semibold text-zinc-900 dark:text-white';
 
   useEffect(() => {
     if (
@@ -235,337 +250,257 @@ export default function PublicHelmRunDetailPage() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background: isDark
-            ? 'linear-gradient(180deg, color-mix(in srgb, var(--background) 92%, #07111b) 0%, var(--background) 42%, color-mix(in srgb, var(--background) 96%, #05070c) 100%)'
-            : 'linear-gradient(180deg, color-mix(in srgb, var(--background) 88%, #f4f8fd) 0%, var(--background) 42%, color-mix(in srgb, var(--background) 94%, #eef4fa) 100%)',
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.55] dark:opacity-[0.42]"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 34%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px)',
-          backgroundPosition: 'center top, center top, center top',
-          backgroundSize: '24px 24px, 24px 24px, 24px 24px',
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background: isDark
-            ? 'radial-gradient(circle at 50% 10%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 26%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 24%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 22%)'
-            : 'radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 22%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 18%)',
-        }}
-      />
-      <section className="relative z-10 overflow-hidden">
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background: isDark
-              ? 'linear-gradient(180deg, color-mix(in srgb, var(--background) 82%, #05111c) 0%, color-mix(in srgb, var(--background) 50%, transparent) 72%, transparent 100%)'
-              : 'linear-gradient(180deg, color-mix(in srgb, var(--background) 76%, #edf7ff) 0%, color-mix(in srgb, var(--background) 44%, transparent) 72%, transparent 100%)',
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0 opacity-45"
-          style={{
-            background:
-              'radial-gradient(circle at 64% 48%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 28%)',
-          }}
-        />
+      <section>
         <div className="sticky top-0 z-20">
-        <PublicNavbar
-          isDark={isDark}
-          isLoggedIn={isLoggedIn}
-          onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
-          homeHref="/public/scan/helm"
-          leadingActions={
-            <>
-              <Button onPress={() => loadRun(true)} isDisabled={refreshing} variant="secondary">
-                {refreshing ? 'Refreshing…' : 'Refresh'}
-              </Button>
-              <Button
-                onPress={handleRescanChart}
-                isDisabled={rescanningChart || !latestRun}
-                variant="secondary"
-                isPending={rescanningChart}
-              >
-                <ArrowReloadHorizontalIcon size={15} />
-                Re-scan chart
-              </Button>
-            </>
-          }
-        />
-      </div>
+          <PublicNavbar
+            isDark={isDark}
+            isLoggedIn={isLoggedIn}
+            onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
+            homeHref="/public/scan/helm"
+            title={latestRun?.chart_name || displayUrl || 'Helm run'}
+            leadingActions={
+              <>
+                <Button variant="secondary" onPress={() => router.push('/public/scan/helm')}>
+                  New chart scan
+                </Button>
+                <Button onPress={() => loadRun(true)} isDisabled={refreshing} variant="secondary">
+                  {refreshing ? 'Refreshing…' : 'Refresh'}
+                </Button>
+                <Button
+                  onPress={handleRescanChart}
+                  isDisabled={rescanningChart || !latestRun}
+                  variant="secondary"
+                  isPending={rescanningChart}
+                >
+                  <ArrowReloadHorizontalIcon size={15} />
+                  Re-scan chart
+                </Button>
+              </>
+            }
+          />
+        </div>
 
-      <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-6 pb-16 pt-8">
-        {actionError ? (
-          <Alert status="danger">
-            <Alert.Indicator />
-            <Alert.Content>
-              <Alert.Title>Helm run action failed</Alert.Title>
-              <Alert.Description>{actionError}</Alert.Description>
-            </Alert.Content>
-          </Alert>
-        ) : null}
+        <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-6 pb-16 pt-8">
+          {actionError ? (
+            <Alert status="danger">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Helm run action failed</Alert.Title>
+                <Alert.Description>{actionError}</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          ) : null}
 
-        <Card className="border border-divider/60 bg-surface/50 shadow-sm backdrop-blur">
-          <Card.Content className="gap-6 px-6 py-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 space-y-4">
-                <div className="flex items-start gap-3">
-                  <PackageIcon size={20} className="mt-1 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h1
-                        className="min-w-0 flex-1 truncate text-2xl font-semibold text-foreground"
-                        title={latestRun?.chart_name || chartUrl}
-                      >
-                        {latestRun?.chart_name || displayUrl || 'Helm run'}
-                      </h1>
-                      <Chip color={isOCI ? 'accent' : 'default'} size="sm" variant="soft">
-                        {isOCI ? 'OCI' : 'HTTP'}
-                      </Chip>
-                    </div>
-                    <p className="mt-1 truncate font-mono text-xs text-muted" title={chartUrl}>
-                      {displayUrl}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+            <span>{isOCI ? 'OCI chart' : 'HTTP repository'}</span>
+            {latestRun?.chart_version ? <span>v{latestRun.chart_version}</span> : null}
+            {latestRun?.platform ? <span>{latestRun.platform}</span> : null}
+            {latestRun?.created_at ? (
+              <span title={fullDate(latestRun.created_at)}>
+                Started {timeAgo(latestRun.created_at)}
+              </span>
+            ) : null}
+            <code title={chartUrl} className="min-w-0 max-w-full truncate sm:ml-auto sm:max-w-md">
+              {displayUrl}
+            </code>
+          </div>
+
+          {!loading && latestScans.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+              {[
+                {
+                  label: 'Images',
+                  value: totalImages,
+                  hint: 'Latest scans in this run',
+                  tone: 'default',
+                },
+                {
+                  label: 'Completed',
+                  value: completed,
+                  hint: 'Finished successfully',
+                  tone: 'success',
+                },
+                { label: 'Active', value: pending, hint: 'Queued or scanning', tone: 'default' },
+                { label: 'Failed', value: failed, hint: 'Needs attention', tone: 'danger' },
+                {
+                  label: 'Critical',
+                  value: totalCritical,
+                  hint: 'Findings across images',
+                  tone: 'danger',
+                },
+                {
+                  label: 'High',
+                  value: totalHigh,
+                  hint: 'Findings across images',
+                  tone: 'warning',
+                },
+                {
+                  label: 'Medium',
+                  value: totalMedium,
+                  hint: 'Findings across images',
+                  tone: 'warning',
+                },
+                { label: 'Low', value: totalLow, hint: 'Findings across images', tone: 'default' },
+              ].map((metric) => (
+                <StatCard
+                  key={metric.label}
+                  label={metric.label}
+                  value={metric.value}
+                  hint={metric.hint}
+                  tone={metric.tone as 'default' | 'success' | 'danger' | 'warning'}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {loading ? (
+            <Card className="gap-0 overflow-hidden py-0">
+              <Card.Content className="flex items-center justify-center gap-3 px-6 py-10 text-sm text-muted-foreground">
+                <Spinner size="sm" />
+                Loading Helm run…
+              </Card.Content>
+            </Card>
+          ) : null}
+
+          {!loading && items.length === 0 ? (
+            <Card className="gap-0 overflow-hidden py-0">
+              <Card.Content className="px-6 py-10 text-center text-sm text-muted-foreground">
+                No scans found for this Helm run.
+              </Card.Content>
+            </Card>
+          ) : null}
+
+          {!loading && items.length > 0 ? (
+            <Card className="gap-0 overflow-hidden py-0">
+              <Card.Content className="space-y-4 p-0">
+                <div className="space-y-4 border-b p-4">
+                  <div>
+                    <p className="text-sm font-semibold">Images in this run</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Open a scan for findings, or retry a failed attempt.
                     </p>
                   </div>
+                  <Tabs
+                    selectedKey={statusFilter}
+                    onSelectionChange={(key) => setStatusFilter(String(key))}
+                    variant="secondary"
+                  >
+                    <Tabs.ListContainer className="overflow-x-auto">
+                      <Tabs.List aria-label="Filter Helm scans by status" className="min-w-max">
+                        {['all', 'active', 'completed', 'failed'].map((key) => (
+                          <Tabs.Tab id={key} key={key}>
+                            {key === 'all'
+                              ? 'All images'
+                              : key === 'active'
+                                ? 'Active'
+                                : key === 'completed'
+                                  ? 'Completed'
+                                  : 'Failed'}
+                            <Tabs.Indicator />
+                          </Tabs.Tab>
+                        ))}
+                      </Tabs.List>
+                    </Tabs.ListContainer>
+                    {['all', 'active', 'completed', 'failed'].map((key) => (
+                      <Tabs.Panel className="hidden" id={key} key={key} />
+                    ))}
+                  </Tabs>
+                  <SearchField
+                    aria-label="Search Helm run images"
+                    value={imageSearch}
+                    onChange={setImageSearch}
+                  >
+                    <SearchField.Group>
+                      <SearchField.SearchIcon />
+                      <SearchField.Input placeholder="Search image, tag, or source…" />
+                      <SearchField.ClearButton />
+                    </SearchField.Group>
+                  </SearchField>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {latestRun?.chart_version ? (
-                    <Chip size="sm" variant="secondary">
-                      v{latestRun.chart_version}
-                    </Chip>
-                  ) : null}
-                  {latestRun?.platform ? (
-                    <Chip color="accent" size="sm" variant="soft">
-                      {latestRun.platform}
-                    </Chip>
-                  ) : null}
-                  {latestRun?.created_at ? (
-                    <Chip size="sm" variant="secondary">
-                      {timeAgo(latestRun.created_at)}
-                    </Chip>
-                  ) : null}
-                  {latestRun ? (
-                    <Chip size="sm" variant="secondary">
-                      Run {latestRun.id.slice(0, 8)}
-                    </Chip>
-                  ) : null}
-                </div>
-              </div>
-
-              {latestRun?.created_at ? (
-                <div className="text-sm text-muted">
-                  <p>Started</p>
-                  <p className="font-mono text-xs text-foreground" title={fullDate(latestRun.created_at)}>
-                    {fullDate(latestRun.created_at)}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          </Card.Content>
-        </Card>
-
-        {!loading && latestScans.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label="Images"
-              value={totalImages}
-              icon={<PackageIcon size={16} />}
-              iconTone="accent"
-              hint="Latest child scans in this Helm run."
-              className={statCardClassName}
-              valueClassName={statValueClassName}
-            />
-            <StatCard
-              label="Completed"
-              value={completed}
-              icon={<CheckmarkCircle02Icon size={16} />}
-              iconTone="success"
-              hint="Finished successfully."
-              className={statCardClassName}
-              valueClassName={`${statValueClassName} text-emerald-600 dark:text-emerald-400`}
-            />
-            <StatCard
-              label="Running"
-              value={pending}
-              icon={<Refresh01Icon size={16} />}
-              iconTone="accent"
-              hint="Queued or currently scanning."
-              className={statCardClassName}
-              valueClassName={
-                pending > 0
-                  ? `${statValueClassName} text-sky-600 dark:text-sky-400`
-                  : statValueClassName
-              }
-            />
-            <StatCard
-              label="Failed"
-              value={failed}
-              icon={<AlertCircleIcon size={16} />}
-              iconTone="danger"
-              hint="Latest attempts that need attention."
-              className={statCardClassName}
-              valueClassName={
-                failed > 0
-                  ? `${statValueClassName} text-red-600 dark:text-red-400`
-                  : statValueClassName
-              }
-            />
-            <StatCard
-              label="Critical"
-              value={totalCritical}
-              icon={<Bug02Icon size={16} />}
-              iconTone="danger"
-              hint="Critical findings across latest scans."
-              className={statCardClassName}
-              valueClassName={
-                totalCritical > 0
-                  ? `${statValueClassName} text-red-600 dark:text-red-400`
-                  : statValueClassName
-              }
-            />
-            <StatCard
-              label="High"
-              value={totalHigh}
-              icon={<Bug02Icon size={16} />}
-              iconTone="warning"
-              hint="High severity findings."
-              className={statCardClassName}
-              valueClassName={
-                totalHigh > 0
-                  ? `${statValueClassName} text-orange-600 dark:text-orange-400`
-                  : statValueClassName
-              }
-            />
-            <StatCard
-              label="Medium"
-              value={totalMedium}
-              icon={<Bug02Icon size={16} />}
-              iconTone="accent"
-              hint="Medium severity findings."
-              className={statCardClassName}
-              valueClassName={
-                totalMedium > 0
-                  ? `${statValueClassName} text-yellow-600 dark:text-yellow-400`
-                  : statValueClassName
-              }
-            />
-            <StatCard
-              label="Low"
-              value={totalLow}
-              icon={<Bug02Icon size={16} />}
-              hint="Low severity findings."
-              className={statCardClassName}
-              valueClassName={statValueClassName}
-            />
-          </div>
-        ) : null}
-
-        {loading ? (
-          <Card className="border border-divider/60 bg-surface/50 shadow-sm backdrop-blur">
-            <Card.Content className="flex items-center justify-center gap-3 px-6 py-10 text-sm text-muted">
-              <Spinner size="sm" />
-              Loading Helm run…
-            </Card.Content>
-          </Card>
-        ) : null}
-
-        {!loading && items.length === 0 ? (
-          <Card className="border border-divider/60 bg-surface/50 shadow-sm backdrop-blur">
-            <Card.Content className="px-6 py-10 text-center text-sm text-muted">
-              No scans found for this Helm run.
-            </Card.Content>
-          </Card>
-        ) : null}
-
-        {!loading && items.length > 0 ? (
-          <Card className="border border-divider/60 bg-surface/50 shadow-sm backdrop-blur">
-            <Card.Content className="gap-4 px-0 py-0">
-              <div className="flex items-center justify-between gap-3 px-6 pt-6">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Images in this run</p>
-                  <p className="mt-1 text-sm text-muted">
-                    Retry failed scans or open any child scan for details.
-                  </p>
-                </div>
-                <Button onPress={() => loadRun(true)} isDisabled={refreshing} size="sm" variant="secondary">
-                  <Refresh01Icon size={15} className={refreshing ? 'animate-spin' : ''} />
-                  Refresh
-                </Button>
-              </div>
-
-              <Table variant="secondary">
-                <Table.ScrollContainer>
-                  <Table.Content aria-label="Helm run scans" className="min-w-[980px]">
-                    <Table.Header>
-                      <Table.Column isRowHeader>Image</Table.Column>
-                      <Table.Column>Tag</Table.Column>
-                      <Table.Column>Source</Table.Column>
-                      <Table.Column>Attempts</Table.Column>
-                      <Table.Column>Status</Table.Column>
-                      <Table.Column className="text-right">Action</Table.Column>
-                    </Table.Header>
-                    <Table.Body>
-                      {items.map((item: HelmRunItem) => {
-                        const scan = item.latest_scan;
-                        const retrying = retryingScanId === scan.id;
-                        return (
-                          <Table.Row key={item.key} id={scan.id}>
-                            <Table.Cell className="min-w-[260px]">
-                              <Link
-                                href={`/public/scan/${scan.id}`}
-                                className="block truncate font-mono text-sm text-foreground"
-                                title={scan.image_name}
-                              >
-                                {scan.image_name}
-                              </Link>
-                            </Table.Cell>
-                            <Table.Cell className="font-mono text-xs text-muted">
-                              {scan.image_tag || 'latest'}
-                            </Table.Cell>
-                            <Table.Cell className="max-w-[320px] truncate text-xs text-muted">
-                              <span title={scan.helm_source_path ?? ''}>{scan.helm_source_path || '—'}</span>
-                            </Table.Cell>
-                            <Table.Cell className="text-xs text-muted">{item.attempt_count}</Table.Cell>
-                            <Table.Cell>
-                              <StatusBadge status={scan.status} />
-                            </Table.Cell>
-                            <Table.Cell className="text-right">
-                              {scan.status === 'failed' ? (
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  isPending={retrying}
-                                  onPress={() => handleRetryScan(scan.id)}
-                                >
-                                  Retry failed
-                                </Button>
-                              ) : (
-                                <Link href={`/public/scan/${scan.id}`}>
-                                  <Button size="sm" variant="tertiary">
-                                    View scan
-                                  </Button>
-                                </Link>
-                              )}
+                <Table variant="secondary">
+                  <Table.ScrollContainer className="rounded-none border-0">
+                    <Table.Content
+                      aria-label="Helm run scans"
+                      className="min-w-[1000px] table-fixed [&_td]:px-3 [&_th]:px-3 [&_td]:py-3"
+                    >
+                      <Table.Header>
+                        <Table.Column isRowHeader className="w-auto">
+                          Image
+                        </Table.Column>
+                        <Table.Column className="w-[140px]">Tag</Table.Column>
+                        <Table.Column className="w-[220px]">Source</Table.Column>
+                        <Table.Column className="w-[90px]">Attempts</Table.Column>
+                        <Table.Column className="w-[120px]">Status</Table.Column>
+                        <Table.Column className="w-[120px] text-right">Action</Table.Column>
+                      </Table.Header>
+                      <Table.Body>
+                        {filteredItems.length === 0 ? (
+                          <Table.Row id="empty">
+                            <Table.Cell colSpan={6}>
+                              <p className="py-10 text-center text-sm text-muted-foreground">
+                                No images match these filters.
+                              </p>
                             </Table.Cell>
                           </Table.Row>
-                        );
-                      })}
-                    </Table.Body>
-                  </Table.Content>
-                </Table.ScrollContainer>
-              </Table>
-            </Card.Content>
-          </Card>
-        ) : null}
-      </main>
+                        ) : null}
+                        {filteredItems.map((item: HelmRunItem) => {
+                          const scan = item.latest_scan;
+                          const retrying = retryingScanId === scan.id;
+                          return (
+                            <Table.Row key={item.key} id={scan.id}>
+                              <Table.Cell className="min-w-[260px]">
+                                <Link
+                                  href={`/public/scan/${scan.id}`}
+                                  className="block truncate font-mono text-sm text-foreground"
+                                  title={scan.image_name}
+                                >
+                                  {scan.image_name}
+                                </Link>
+                              </Table.Cell>
+                              <Table.Cell className="font-mono text-xs text-muted-foreground">
+                                {scan.image_tag || 'latest'}
+                              </Table.Cell>
+                              <Table.Cell className="max-w-[320px] truncate text-xs text-muted-foreground">
+                                <span title={scan.helm_source_path ?? ''}>
+                                  {scan.helm_source_path || '—'}
+                                </span>
+                              </Table.Cell>
+                              <Table.Cell className="text-xs text-muted-foreground">
+                                {item.attempt_count}
+                              </Table.Cell>
+                              <Table.Cell>
+                                <StatusBadge status={scan.status} />
+                              </Table.Cell>
+                              <Table.Cell className="text-right">
+                                {scan.status === 'failed' ? (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    isPending={retrying}
+                                    onPress={() => handleRetryScan(scan.id)}
+                                  >
+                                    Retry failed
+                                  </Button>
+                                ) : (
+                                  <Link href={`/public/scan/${scan.id}`}>
+                                    <Button size="sm" variant="tertiary">
+                                      View scan
+                                    </Button>
+                                  </Link>
+                                )}
+                              </Table.Cell>
+                            </Table.Row>
+                          );
+                        })}
+                      </Table.Body>
+                    </Table.Content>
+                  </Table.ScrollContainer>
+                </Table>
+              </Card.Content>
+            </Card>
+          ) : null}
+        </main>
       </section>
     </div>
   );

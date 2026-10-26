@@ -11,8 +11,8 @@ import { OrgVulnerabilityDefaults } from '@/components/org-detail/vulnerability-
 import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
-import { heroSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
-import { PageHeader } from '@/components/ui/page-header';
+import { fieldSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RouteLoadingState } from '@/components/route-state';
 import {
   createOrgInvite,
@@ -55,13 +55,13 @@ import {
   Switch,
   Tabs,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import { ArrowLeft01Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 
 const inputCls = nativeFieldClassName;
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 
 const RULE_TYPE_LABELS: Record<string, string> = {
   max_cvss: 'Max CVSS Score',
@@ -485,7 +485,7 @@ function OrgDetailContent() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="size-7 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+        <div className="size-7 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
       </div>
     );
   }
@@ -525,7 +525,7 @@ function OrgDetailContent() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <PageContainer>
       <PageHeader
         title={org.name}
         description={
@@ -541,6 +541,7 @@ function OrgDetailContent() {
 
       <div className="space-y-3">
         <Tabs
+          variant="primary"
           className="w-full"
           selectedKey={activeTab}
           onSelectionChange={(key) => handleTabChange(String(key) as OrgTabId)}
@@ -564,15 +565,6 @@ function OrgDetailContent() {
             </Tabs.Panel>
           ))}
         </Tabs>
-
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            {ORG_TABS.find((tab) => tab.id === activeTab)?.label}
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            {ORG_TABS.find((tab) => tab.id === activeTab)?.description}
-          </p>
-        </div>
       </div>
 
       <div>
@@ -659,28 +651,19 @@ function OrgDetailContent() {
       <Modal state={policyModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading>{editingPolicy ? 'Edit Policy' : 'New Policy'}</Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
               <Modal.Body className="py-5 max-h-[60vh] overflow-y-auto">
                 <form id="policy-form" onSubmit={handleSavePolicy} className="space-y-5">
-                  {policyError && (
-                    <div
-                      className="rounded-xl px-3 py-2.5 text-sm"
-                      style={{
-                        background: 'rgba(239,68,68,0.1)',
-                        border: '1px solid rgba(239,68,68,0.2)',
-                        color: '#f87171',
-                      }}
-                    >
-                      {policyError}
-                    </div>
-                  )}
+                  {policyError ? (
+                    <FormAlert title="Policy could not be saved" description={policyError} />
+                  ) : null}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium" htmlFor="policy-name">
-                      Policy Name <span className="text-red-400">*</span>
+                      Policy Name <span className="text-destructive">*</span>
                     </label>
                     <Input
                       id="policy-name"
@@ -702,10 +685,10 @@ function OrgDetailContent() {
                         <Switch.Control>
                           <Switch.Thumb />
                         </Switch.Control>
-                        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                        <span className="text-sm font-medium text-foreground">
                           Count suppressed vulnerabilities in policy evaluation
                         </span>
-                        <p className="text-xs text-zinc-500">
+                        <p className="text-xs text-muted-foreground">
                           Turn off to ignore effectively suppressed vulnerabilities for this policy.
                         </p>
                       </Switch.Content>
@@ -714,7 +697,7 @@ function OrgDetailContent() {
 
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                      <label className="text-sm font-medium text-muted-foreground dark:text-foreground">
                         Rules
                       </label>
                       <Button type="button" onPress={addRule} size="sm" variant="secondary">
@@ -772,7 +755,7 @@ function OrgDetailContent() {
                               onChange={(e) =>
                                 setRuleField(idx, 'value', parseFloat(e.target.value))
                               }
-                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
+                              className="w-full text-sm outline-none transition-colors focus:ring-1 focus:ring-primary/40"
                             />
                           </div>
                         )}
@@ -780,7 +763,7 @@ function OrgDetailContent() {
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                               <label
-                                className="text-xs text-zinc-500"
+                                className="text-xs text-muted-foreground"
                                 htmlFor={`policy-rule-${idx}-severity`}
                               >
                                 Severity
@@ -808,7 +791,7 @@ function OrgDetailContent() {
                             </div>
                             <div className="space-y-1">
                               <label
-                                className="text-xs text-zinc-500"
+                                className="text-xs text-muted-foreground"
                                 htmlFor={`policy-rule-${idx}-max-count`}
                               >
                                 Max count
@@ -822,7 +805,7 @@ function OrgDetailContent() {
                                 onChange={(e) =>
                                   setRuleField(idx, 'value', parseInt(e.target.value))
                                 }
-                                className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
+                                className="w-full text-sm outline-none transition-colors focus:ring-1 focus:ring-primary/40"
                               />
                             </div>
                           </div>
@@ -830,7 +813,7 @@ function OrgDetailContent() {
                         {rule.type === 'max_total' && (
                           <div className="space-y-1">
                             <label
-                              className="text-xs text-zinc-500"
+                              className="text-xs text-muted-foreground"
                               htmlFor={`policy-rule-${idx}-max-total`}
                             >
                               Max total vulnerabilities
@@ -842,14 +825,14 @@ function OrgDetailContent() {
                               min={0}
                               value={rule.value ?? 0}
                               onChange={(e) => setRuleField(idx, 'value', parseInt(e.target.value))}
-                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
+                              className="w-full text-sm outline-none transition-colors focus:ring-1 focus:ring-primary/40"
                             />
                           </div>
                         )}
                         {rule.type === 'require_fix' && (
                           <div className="space-y-1">
                             <label
-                              className="text-xs text-zinc-500"
+                              className="text-xs text-muted-foreground"
                               htmlFor={`policy-rule-${idx}-require-fix`}
                             >
                               Require fix for severity
@@ -879,7 +862,7 @@ function OrgDetailContent() {
                         {rule.type === 'blocked_cve' && (
                           <div className="space-y-1">
                             <label
-                              className="text-xs text-zinc-500"
+                              className="text-xs text-muted-foreground"
                               htmlFor={`policy-rule-${idx}-cve`}
                             >
                               CVE ID
@@ -891,19 +874,19 @@ function OrgDetailContent() {
                               value={rule.cve_id ?? ''}
                               onChange={(e) => setRuleField(idx, 'cve_id', e.target.value)}
                               placeholder="CVE-2024-12345"
-                              className="w-full rounded-xl bg-surface px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40"
+                              className="w-full text-sm outline-none transition-colors focus:ring-1 focus:ring-primary/40"
                             />
                           </div>
                         )}
                         {rule.type === 'xray_policy_block' && (
                           <div className="space-y-1">
                             <label
-                              className="text-xs text-zinc-500"
+                              className="text-xs text-muted-foreground"
                               htmlFor={`policy-rule-${idx}-xray`}
                             >
                               Xray policy blocking
                             </label>
-                            <p className="text-xs text-zinc-500">
+                            <p className="text-xs text-muted-foreground">
                               Fails when any vulnerability has an active Xray blocking policy match.
                             </p>
                           </div>
@@ -912,7 +895,7 @@ function OrgDetailContent() {
                     ))}
 
                     {policyRules.length === 0 && (
-                      <p className="text-xs text-zinc-500 text-center py-2">
+                      <p className="text-xs text-muted-foreground text-center py-2">
                         No rules. Add at least one rule.
                       </p>
                     )}
@@ -935,7 +918,7 @@ function OrgDetailContent() {
       <Modal state={inviteModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
+            <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading>Invite Member</Modal.Heading>
                 <Modal.CloseTrigger />
@@ -955,9 +938,7 @@ function OrgDetailContent() {
                     className="bg-surface-secondary"
                   />
                   <div className="flex flex-col gap-1">
-                    <Label className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                      Role
-                    </Label>
+                    <Label className="text-sm font-medium text-muted-foreground">Role</Label>
                     <Select
                       aria-label="Invite member role"
                       value={inviteRole}
@@ -965,7 +946,7 @@ function OrgDetailContent() {
                         setInviteRole(value as Extract<OrgRole, 'admin' | 'editor' | 'viewer'>)
                       }
                     >
-                      <Select.Trigger className={selectTriggerCls + ' bg-surface-secondary'}>
+                      <Select.Trigger className={selectTriggerCls + ' '}>
                         <Select.Value />
                         <Select.Indicator />
                       </Select.Trigger>
@@ -993,6 +974,6 @@ function OrgDetailContent() {
         </Modal.Backdrop>
       </Modal>
       {confirmDialog}
-    </div>
+    </PageContainer>
   );
 }

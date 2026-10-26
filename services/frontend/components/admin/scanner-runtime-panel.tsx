@@ -3,7 +3,7 @@
 import { useToast } from '@/components/toast';
 import { adminUpdateScannerSettings, getAdminSettings } from '@/lib/api/admin';
 import type { ScannerSettings } from '@/lib/api/types/registries';
-import { Button, Card, Description, Input, Label, Switch, TextField } from '@heroui/react';
+import { Button, Card, Description, Input, Label, Switch, TextField } from '@/components/ui';
 import { useEffect, useState } from 'react';
 
 export function ScannerRuntimePanel() {
@@ -58,7 +58,7 @@ export function ScannerRuntimePanel() {
     <Card className="space-y-4">
       <div>
         <h2 className="text-base font-semibold">Scanner runtime</h2>
-        <p className="text-sm text-zinc-500">Tune engines, throughput, and database freshness.</p>
+        <p className="text-sm text-muted-foreground">Tune engines, throughput, and database freshness.</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

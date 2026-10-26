@@ -1,15 +1,17 @@
 export const nativeFieldClassName =
-  'w-full rounded-xl bg-surface-secondary px-3 py-2.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-accent-500/40';
+  'w-full h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30';
 
-export const heroFieldClassName = 'surface-input w-full min-h-11 rounded-xl px-3 text-sm';
+export const fieldInputClassName =
+  'surface-input w-full h-8 rounded-lg px-2.5 text-base md:text-sm';
 
-export const heroTextAreaClassName = 'surface-input w-full min-h-28 rounded-xl px-3 py-2.5 text-sm resize-y';
+export const fieldTextAreaClassName =
+  'surface-input w-full min-h-16 rounded-lg px-2.5 py-1 text-sm resize-y';
 
-export const heroSelectTriggerClassName = heroFieldClassName;
+export const fieldSelectTriggerClassName = fieldInputClassName;
 
-export const fieldLabelClassName = 'block text-sm font-medium text-foreground/72';
+export const fieldLabelClassName = 'block text-sm font-medium text-foreground';
 
-export const fieldDescriptionClassName = 'text-xs text-foreground/56';
+export const fieldDescriptionClassName = 'text-xs text-muted-foreground';
 
 export const fieldErrorClassName = 'text-xs font-medium text-danger';
 

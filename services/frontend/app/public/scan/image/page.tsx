@@ -1,5 +1,4 @@
 'use client';
-import { Logo } from '@/components/logo';
 import { PublicNavbar } from '@/components/public/public-navbar';
 import {
   createPublicScan,
@@ -18,22 +17,9 @@ import {
   timeAgo,
   updatePublicHistoryEntry,
 } from '@/lib/publicScanHistory';
-import {
-  Button,
-  Card,
-  Chip,
-  Disclosure,
-  Input,
-  ToggleButton,
-  ToggleButtonGroup,
-  type Key,
-} from '@heroui/react';
-import {
-  ArrowRight01Icon,
-  Clock01Icon,
-  IrisScanIcon,
-  PackageIcon,
-} from 'hugeicons-react';
+import { Button, Card, Chip, Input, Label, Select, ListBox } from '@/components/ui';
+import { ArrowRight01Icon, Clock01Icon, IrisScanIcon, PackageIcon } from 'hugeicons-react';
+import { FormAlert } from '@/components/ui/form-alert';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -49,9 +35,10 @@ const PLATFORMS = [
 const AUTO_PLATFORM_KEY = '__auto_platform__';
 const HISTORY_DISPLAY_LIMIT = 6;
 
-function statusStyle(
-  status: string
-): { color: 'success' | 'danger' | 'accent' | 'warning'; label: string } {
+function statusStyle(status: string): {
+  color: 'success' | 'danger' | 'accent' | 'warning';
+  label: string;
+} {
   switch (status) {
     case 'completed':
       return { color: 'success', label: 'Completed' };
@@ -69,7 +56,7 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
   const st = statusStyle(record.status);
   const isActive = record.status === 'running' || record.status === 'pending';
   return (
-    <Card className="border border-divider/50 bg-background/55 transition-colors hover:border-accent/30 hover:bg-background/75">
+    <div className="transition-colors hover:bg-muted/50">
       <button
         type="button"
         onClick={() => router.push(`/public/scan/${record.id}`)}
@@ -132,13 +119,13 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 text-xs text-muted">
+        <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
           <Clock01Icon aria-hidden size={14} />
           <span>{timeAgo(record.created_at)}</span>
           <ArrowRight01Icon aria-hidden size={14} className="hidden sm:block" />
         </div>
       </button>
-    </Card>
+    </div>
   );
 }
 
@@ -150,47 +137,21 @@ function HistoryDisclosure({
   onClear: () => void;
 }) {
   return (
-    <Card className="border border-divider/60 bg-surface/40 p-2 shadow-sm backdrop-blur">
-      <Disclosure className="rounded-[1.5rem]">
-        <Disclosure.Heading>
-          <Disclosure.Trigger className="flex w-full items-center justify-between gap-4 rounded-[1.25rem] px-4 py-3 text-left transition-colors hover:bg-background/45">
-            <div>
-              <p className="text-sm font-semibold text-foreground">Recent scans on this device</p>
-              <p className="mt-1 text-xs text-muted">
-                {history.length} saved locally. Older and stale entries are cleaned up
-                automatically.
-              </p>
-            </div>
-            <Disclosure.Indicator />
-          </Disclosure.Trigger>
-        </Disclosure.Heading>
-        <Disclosure.Content>
-          <Disclosure.Body className="space-y-3 px-2 pb-2 pt-3">
-            <div className="grid gap-3">
-              {history.slice(0, HISTORY_DISPLAY_LIMIT).map((record) => (
-                <HistoryRow key={record.id} record={record} />
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-3 rounded-[1.25rem] border border-divider/50 bg-background/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-muted">
-                Local history is temporary. Sign in when you want permanent scan history and
-                shared workflows.
-              </p>
-              <div className="flex items-center gap-2">
-                <Link href="/login">
-                  <Button size="sm" variant="secondary">
-                    Sign in
-                  </Button>
-                </Link>
-                <Button onPress={onClear} size="sm" variant="tertiary">
-                  Clear history
-                </Button>
-              </div>
-            </div>
-          </Disclosure.Body>
-        </Disclosure.Content>
-      </Disclosure>
+    <Card className="gap-0 py-0">
+      <Card.Header className="flex flex-row items-center justify-between gap-3 border-b p-4">
+        <div>
+          <Card.Title>Recent scans</Card.Title>
+          <Card.Description>Saved on this device only.</Card.Description>
+        </div>
+        <Button onPress={onClear} size="sm" variant="tertiary">
+          Clear history
+        </Button>
+      </Card.Header>
+      <Card.Content className="divide-y p-0">
+        {history.slice(0, HISTORY_DISPLAY_LIMIT).map((record) => (
+          <HistoryRow key={record.id} record={record} />
+        ))}
+      </Card.Content>
     </Card>
   );
 }
@@ -329,221 +290,123 @@ export default function PublicImageScanPage() {
   const selectedPlatformKey = platform || AUTO_PLATFORM_KEY;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background: isDark
-            ? 'linear-gradient(180deg, color-mix(in srgb, var(--background) 92%, #07111b) 0%, var(--background) 42%, color-mix(in srgb, var(--background) 96%, #05070c) 100%)'
-            : 'linear-gradient(180deg, color-mix(in srgb, var(--background) 88%, #f4f8fd) 0%, var(--background) 42%, color-mix(in srgb, var(--background) 94%, #eef4fa) 100%)',
+    <div className="min-h-screen bg-background text-foreground">
+      <PublicNavbar
+        title="Scan a container image"
+        isDark={isDark}
+        isLoggedIn={isLoggedIn}
+        onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
+        alternateAction={{
+          href: '/public/scan/helm',
+          label: 'Scan Helm',
+          icon: <PackageIcon size={16} />,
+          hideOnMobile: true,
         }}
       />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.55] dark:opacity-[0.42]"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 34%, transparent) 1.15px, transparent 0), linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--foreground) 4%, transparent) 1px, transparent 1px)',
-          backgroundPosition: 'center top, center top, center top',
-          backgroundSize: '24px 24px, 24px 24px, 24px 24px',
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background: isDark
-            ? 'radial-gradient(circle at 50% 10%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 26%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 24%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 22%)'
-            : 'radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 22%), radial-gradient(circle at 50% 54%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 20%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 18%)',
-        }}
-      />
-      <section className="relative z-10 overflow-hidden">
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background: isDark
-              ? 'linear-gradient(180deg, color-mix(in srgb, var(--background) 82%, #05111c) 0%, color-mix(in srgb, var(--background) 50%, transparent) 72%, transparent 100%)'
-              : 'linear-gradient(180deg, color-mix(in srgb, var(--background) 76%, #edf7ff) 0%, color-mix(in srgb, var(--background) 44%, transparent) 72%, transparent 100%)',
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0 opacity-45"
-          style={{
-            background:
-              'radial-gradient(circle at 64% 48%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 28%)',
-          }}
-        />
-
-        <PublicNavbar
-          isDark={isDark}
-          isLoggedIn={isLoggedIn}
-          onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
-          alternateAction={{
-            href: '/public/scan/helm',
-            label: 'Scan Helm',
-            icon: <PackageIcon size={16} />,
-          }}
-        />
-
-        <main className="relative z-10 mx-auto flex min-h-[calc(100svh-76px)] max-w-5xl items-center px-6 pb-16 pt-8">
-          <div className="w-full space-y-8">
-            <div className="mx-auto max-w-2xl text-center">
-              <div className="flex justify-center">
-                <Logo size={40} />
-              </div>
-
-              <div className="mt-5">
-                <Chip color="accent" variant="soft">
-                  Public image scanning
-                </Chip>
-              </div>
-
-              <div className="mt-5 space-y-4">
-                <h1 className="text-4xl font-semibold leading-tight tracking-normal text-foreground sm:text-5xl">
-                  Scan a Docker image instantly.
-                </h1>
-                <p className="mx-auto max-w-xl text-sm leading-7 text-muted sm:text-base">
-                  No account needed. Start with a public scan now, then sign in later if you want
-                  saved history, exports, and team workflows.
-                </p>
-              </div>
-
-              <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-muted">
-                <span>{settings?.rate_limit_per_hour ?? 5} free scans per hour</span>
-                <span>Platform-aware scanning</span>
-                <span>Local recent history</span>
-              </div>
-            </div>
-
-            <div className="mx-auto w-full max-w-3xl">
-              <Card className="overflow-hidden rounded-[2rem] border border-divider/60 bg-surface/50 px-5 py-5 shadow-sm backdrop-blur sm:px-6 sm:py-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">Scan Docker image</p>
-                      <p className="mt-1 text-sm text-muted">
-                        Fast public scans without the signup wall.
-                      </p>
-                    </div>
-                    <Link href="/public/scan/helm" className="hidden sm:block">
-                      <Button size="sm" variant="tertiary">
-                        <PackageIcon size={16} />
-                        Scan Helm
-                      </Button>
-                    </Link>
+      <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+          <Card className="gap-0 py-0">
+            <Card.Header className="border-b p-5 sm:p-6">
+              <Card.Title>New image scan</Card.Title>
+              <Card.Description>Enter an image reference and choose its platform.</Card.Description>
+            </Card.Header>
+            <Card.Content className="p-5 sm:p-6">
+              {isDisabled ? (
+                <FormAlert title="Public scanning is unavailable" description={disabledMessage} />
+              ) : (
+                <form onSubmit={handleScan} className="space-y-5">
+                  <div className="space-y-2">
+                    <label htmlFor="public-image-reference" className="text-sm font-medium">
+                      Image reference
+                    </label>
+                    <Input
+                      id="public-image-reference"
+                      ref={inputRef}
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="nginx:latest"
+                      disabled={loading}
+                      required
+                      aria-describedby="public-image-hint"
+                      variant="secondary"
+                      className="w-full font-mono"
+                    />
+                    <p id="public-image-hint" className="text-xs text-muted-foreground">
+                      Include a tag, such as ubuntu:22.04. Defaults to latest.
+                    </p>
                   </div>
-
-                  {isDisabled ? (
-                    <div
-                      className="rounded-[1.25rem] px-5 py-4"
-                      style={{
-                        background: 'rgba(239,68,68,0.08)',
-                        border: '1px solid rgba(239,68,68,0.2)',
-                      }}
-                    >
-                      <p className="font-medium text-red-500 dark:text-red-400">
-                        Public scanning is temporarily disabled
-                      </p>
-                      <p className="mt-1 text-sm text-muted">{disabledMessage}</p>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleScan} className="space-y-4">
-                      <div className="flex flex-col gap-3 rounded-[1.25rem] border border-divider/60 px-4 py-4 sm:flex-row sm:items-center">
-                        <div className="flex items-center gap-3 text-muted">
-                          <IrisScanIcon size={20} />
-                          <span className="text-xs font-medium uppercase tracking-[0.18em]">
-                            Image
-                          </span>
-                        </div>
-                        <Input
-                          ref={inputRef}
-                          type="text"
-                          value={input}
-                          onChange={(e) => setInput(e.target.value)}
-                          placeholder="nginx:latest  or  ubuntu:22.04"
-                          disabled={loading}
-                          aria-label="Docker image"
-                          variant="secondary"
-                          className="flex-1 font-mono text-base"
-                        />
-                        <Button
-                          type="submit"
-                          isDisabled={loading || !input.trim()}
-                          isPending={loading}
-                          size="lg"
-                        >
-                          {loading ? 'Starting scan…' : 'Scan now'}
-                        </Button>
-                      </div>
-
-                      <div className="space-y-2 border-t border-divider/50 pt-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted">
-                            Platform
-                          </span>
-                          <span className="text-xs text-muted">Optional</span>
-                        </div>
-                        <ToggleButtonGroup
-                          selectionMode="single"
-                          selectedKeys={[selectedPlatformKey]}
-                          disallowEmptySelection
-                          onSelectionChange={(keys) => {
-                            const key = Array.from(keys)[0] as Key | undefined;
-                            const next = key ? String(key) : AUTO_PLATFORM_KEY;
-                            setPlatform(next === AUTO_PLATFORM_KEY ? '' : next);
-                          }}
-                          size="sm"
-                          className="font-mono"
-                        >
-                          {PLATFORMS.map((p, i) => (
-                            <ToggleButton
-                              key={p.value || AUTO_PLATFORM_KEY}
-                              id={p.value || AUTO_PLATFORM_KEY}
-                              className="text-xs"
-                            >
-                              {i > 0 ? <ToggleButtonGroup.Separator /> : null}
-                              {p.label}
-                            </ToggleButton>
-                          ))}
-                        </ToggleButtonGroup>
-                      </div>
-
-                      {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
-
-                      <div className="flex flex-col gap-3 border-t border-divider/50 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-sm text-muted">
-                          Sign in later if you want saved history, SBOM exports, and shared workflows.
-                        </p>
-                        <Link href="/login">
-                          <Button size="sm" variant="secondary">
-                            Sign in
-                          </Button>
-                        </Link>
-                      </div>
-                    </form>
-                  )}
-
-                  {history.length > 0 ? (
-                    <div className="border-t border-divider/50 pt-4">
-                      <HistoryDisclosure history={history} onClear={handleClearHistory} />
-                    </div>
-                  ) : null}
-                </div>
+                  <Select
+                    aria-label="Image platform"
+                    value={selectedPlatformKey}
+                    onChange={(value) =>
+                      setPlatform(value === AUTO_PLATFORM_KEY ? '' : String(value ?? ''))
+                    }
+                    isDisabled={loading}
+                  >
+                    <Label>Platform</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {PLATFORMS.map((item) => (
+                          <ListBox.Item
+                            key={item.value || AUTO_PLATFORM_KEY}
+                            id={item.value || AUTO_PLATFORM_KEY}
+                          >
+                            {item.label}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                  {error ? <FormAlert title="Couldn’t start scan" description={error} /> : null}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5">
+                    <p className="text-xs text-muted-foreground">
+                      {settings?.rate_limit_per_hour ?? 5} free scans per hour
+                    </p>
+                    <Button type="submit" isDisabled={loading || !input.trim()} isPending={loading}>
+                      <IrisScanIcon size={16} aria-hidden />
+                      {loading ? 'Starting scan…' : 'Scan image'}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </Card.Content>
+          </Card>
+          <section aria-label="Recent public scans" className="min-w-0">
+            {history.length > 0 ? (
+              <HistoryDisclosure history={history} onClear={handleClearHistory} />
+            ) : (
+              <Card className="gap-0 py-0">
+                <Card.Header className="border-b p-4">
+                  <Card.Title>Recent scans</Card.Title>
+                  <Card.Description>Saved on this device only.</Card.Description>
+                </Card.Header>
+                <Card.Content className="flex min-h-64 flex-col items-center justify-center gap-2 p-6 text-center">
+                  <Clock01Icon size={24} aria-hidden className="mb-2 text-muted-foreground" />
+                  <p className="text-sm font-medium">No scans yet</p>
+                  <p className="max-w-xs text-sm text-muted-foreground">
+                    Start an image scan to see its status and findings here.
+                  </p>
+                </Card.Content>
               </Card>
-            </div>
-          </div>
-        </main>
-      </section>
-
-      <footer className="relative z-10 px-6 pb-10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 rounded-[2rem] border border-divider/50 bg-surface/35 px-6 py-5 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>JustScan keeps the public path fast, then grows with you when scans need to be shared.</p>
-          <Link href={isLoggedIn ? '/scans' : '/login'}>
-            <Button variant="secondary">
-              {isLoggedIn ? 'Open dashboard' : 'Create workspace'}
-              <ArrowRight01Icon aria-hidden size={16} />
-            </Button>
+            )}
+          </section>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-sm">
+          <p className="text-muted-foreground">Need saved history, exports, and team workflows?</p>
+          <Link
+            href={isLoggedIn ? '/scans' : '/login'}
+            className="inline-flex items-center gap-1 font-medium hover:underline"
+          >
+            {isLoggedIn ? 'Open dashboard' : 'Sign in'}
+            <ArrowRight01Icon size={14} aria-hidden />
           </Link>
         </div>
-      </footer>
+      </main>
     </div>
   );
 }

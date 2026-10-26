@@ -1,12 +1,12 @@
 'use client';
 
-import { heroFieldClassName, joinClassNames } from '@/components/ui/form-styles';
+import { fieldInputClassName, joinClassNames } from '@/components/ui/form-styles';
 import {
   fieldDescriptionClassName,
   fieldErrorClassName,
   fieldLabelClassName,
 } from '@/components/ui/form-styles';
-import { Description, FieldError, Input, Label, TextField } from '@heroui/react';
+import { Description, FieldError, Input, Label, TextField } from '@/components/ui';
 import type { ComponentProps } from 'react';
 import { useId } from 'react';
 
@@ -58,10 +58,7 @@ export function FormField({
       </Label>
       <Input
         {...props}
-        className={joinClassNames(
-          heroFieldClassName,
-          className,
-        )}
+        className={joinClassNames(fieldInputClassName, className)}
         variant={variant}
         disabled={disabled}
         id={fieldId}
@@ -71,9 +68,7 @@ export function FormField({
         type={type}
       />
       {description ? (
-        <Description className={fieldDescriptionClassName}>
-          {description}
-        </Description>
+        <Description className={fieldDescriptionClassName}>{description}</Description>
       ) : null}
       {error ? <FieldError className={fieldErrorClassName}>{error}</FieldError> : null}
     </TextField>

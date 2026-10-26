@@ -1,4 +1,8 @@
-import { Breadcrumbs, Typography } from '@heroui/react';
+'use client';
+
+import { createPortal } from 'react-dom';
+import { usePageHeaderSlots } from './page-header-slots';
+import { Breadcrumbs, Typography } from '@/components/ui';
 import type { ReactNode } from 'react';
 
 import { SurfaceIcon } from '@/components/ui/surface-icon';
@@ -10,13 +14,53 @@ export type BreadcrumbItem = {
 
 export interface PageTitleProps {
   title: string;
-  /** A compact status element, for example a HeroUI Chip. */
+  /** A compact status element, for example a status Chip. */
   status?: ReactNode;
   icon?: ReactNode;
   description?: string;
   meta?: ReactNode;
   actions?: ReactNode;
   breadcrumbs?: BreadcrumbItem[];
+}
+
+function ShellPageTitle({ title, status, meta, actions, breadcrumbs }: PageTitleProps) {
+  const slots = usePageHeaderSlots();
+  if (!slots) return null;
+  return (
+    <>
+      {slots.heading
+        ? createPortal(
+            <div id="tour-page-header" className="flex min-w-0 items-center gap-2">
+              {breadcrumbs && breadcrumbs.length > 1 ? (
+                <Breadcrumbs className="min-w-0 overflow-hidden text-sm">
+                  {breadcrumbs.map((item, index) => (
+                    <Breadcrumbs.Item
+                      key={`${item.href ?? 'current'}:${item.label}`}
+                      href={index === breadcrumbs.length - 1 ? undefined : item.href}
+                    >
+                      {item.label}
+                    </Breadcrumbs.Item>
+                  ))}
+                </Breadcrumbs>
+              ) : (
+                <span aria-current="page" className="truncate font-medium">
+                  {title}
+                </span>
+              )}
+            </div>,
+            slots.heading
+          )
+        : null}
+      {slots.actions && actions ? createPortal(actions, slots.actions) : null}
+      <h1 className="sr-only">{title}</h1>
+      {status || meta ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {status}
+          {meta}
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 export function PageTitle({
@@ -28,6 +72,8 @@ export function PageTitle({
   actions,
   breadcrumbs,
 }: PageTitleProps) {
+  const slots = usePageHeaderSlots();
+  if (slots) return <ShellPageTitle {...{ title, status, meta, actions, breadcrumbs }} />;
   return (
     <header
       id="tour-page-header"
@@ -56,7 +102,10 @@ export function PageTitle({
         </div>
         {meta ? <div className="mt-2">{meta}</div> : null}
         {description ? (
-          <Typography.Paragraph className="mt-1 max-w-3xl text-sm leading-6" color="muted">
+          <Typography.Paragraph
+            className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground"
+            color="muted"
+          >
             {description}
           </Typography.Paragraph>
         ) : null}
@@ -75,9 +124,7 @@ export function PageContainer({
   children: ReactNode;
   className?: string;
 }) {
-  return (
-    <div className={`w-full space-y-5 px-4 py-6 md:px-6 xl:py-7 ${className}`}>{children}</div>
-  );
+  return <div className={`w-full space-y-4 p-4 md:p-5 ${className}`}>{children}</div>;
 }
 
 /** @deprecated Use PageTitle. Kept temporarily so route migrations stay source-compatible. */

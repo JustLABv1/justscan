@@ -2,7 +2,7 @@
 
 import { AdminPageShell } from '@/components/admin/admin-page-shell';
 import { OverviewTab } from '@/components/admin/overview-tab';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 import { useState } from 'react';
 
 export default function AdminPage() {

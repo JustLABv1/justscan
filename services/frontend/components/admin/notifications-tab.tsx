@@ -18,7 +18,7 @@ import {
   SearchField,
   Select,
   Table,
-} from '@heroui/react';
+} from '@/components/ui';
 import { Delete01Icon, Notification01Icon, Refresh01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RowActionsMenu } from '../ui/row-actions-menu';
@@ -247,7 +247,7 @@ export function NotificationsTab() {
               </Table.Header>
               <Table.Body
                 renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-zinc-500">
+                  <div className="py-10 text-center text-sm text-muted-foreground">
                     {loading ? 'Loading notification channels...' : 'No channels match your filters.'}
                   </div>
                 )}
@@ -269,7 +269,7 @@ export function NotificationsTab() {
                         ))}
                       </div>
                     </Table.Cell>
-                    <Table.Cell className="text-xs text-zinc-500">
+                    <Table.Cell className="text-xs text-muted-foreground">
                       <div className="space-y-1">
                         <p>{channel.org_ids.length > 0 ? `${channel.org_ids.length} org filters` : 'All orgs'}</p>
                         <p>
@@ -324,7 +324,7 @@ export function NotificationsTab() {
             </Table.Content>
           </Table.ScrollContainer>
           <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-            <span className="text-xs text-zinc-500 whitespace-nowrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               Showing {filteredChannels.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
               {Math.min(effectivePage * PAGE_SIZE, filteredChannels.length)} of {filteredChannels.length}
             </span>

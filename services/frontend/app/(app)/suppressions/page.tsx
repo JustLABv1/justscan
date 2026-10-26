@@ -4,9 +4,10 @@ import { ManageSuppressionAccessModal } from '@/components/suppressions/manage-s
 import { useToast } from '@/components/toast';
 import { OwnershipBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
-import { heroSelectTriggerClassName } from '@/components/ui/form-styles';
+import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
-import { PageHeader } from '@/components/ui/page-header';
+import { StatCard } from '@/components/ui/stat-card';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useClientAuth } from '@/hooks/use-client-auth';
 import { useClientNow } from '@/hooks/use-client-now';
@@ -38,8 +39,9 @@ import {
   Select,
   Separator,
   Table,
+  Tabs,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import { Delete01Icon, SecurityLockIcon, Shield01Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -68,7 +70,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 const LIMIT = 50;
-const selectTriggerCls = heroSelectTriggerClassName;
+const selectTriggerCls = fieldSelectTriggerClassName;
 
 export default function SuppressionsPage() {
   const router = useRouter();
@@ -321,7 +323,7 @@ export default function SuppressionsPage() {
       : [];
 
   return (
-    <div className="p-6 space-y-5">
+    <PageContainer>
       <PageHeader
         title="Suppressions"
         description={
@@ -332,13 +334,60 @@ export default function SuppressionsPage() {
       />
 
       <>
-        <Card className="p-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <SearchField
-              name="suppressions-search"
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <StatCard label="Matching suppressions" value={total} hint="Current filter scope" />
+          <StatCard
+            label="Accepted risk"
+            value={suppressions.filter((item) => item.status === 'accepted').length}
+            hint="On this page"
+          />
+          <StatCard
+            label="False positives"
+            value={suppressions.filter((item) => item.status === 'false_positive').length}
+            hint="On this page"
+          />
+          <StatCard
+            label="Expired"
+            value={
+              suppressions.filter(
+                (item) => item.expires_at && now !== null && new Date(item.expires_at) < now
+              ).length
+            }
+            hint="On this page"
+            tone="warning"
+          />
+        </div>
+        <Card className="gap-0 overflow-hidden py-0">
+          <Card.Header className="space-y-3 border-b p-4">
+            <Card.Title>Suppression rules</Card.Title>
+            <Tabs
+              selectedKey={statusFilter || 'all'}
+              onSelectionChange={(key) => {
+                const value = key === 'all' ? '' : String(key);
+                setStatusFilter(value);
+                setPage(1);
+                void load(1, value, searchQuery);
+              }}
               variant="secondary"
-              className="w-full sm:max-w-sm"
             >
+              <Tabs.ListContainer className="overflow-x-auto">
+                <Tabs.List aria-label="Filter suppressions by status" className="min-w-max">
+                  {[
+                    { id: 'all', label: 'All' },
+                    ...Object.entries(STATUS_LABEL).map(([id, label]) => ({ id, label })),
+                  ].map((option) => (
+                    <Tabs.Tab id={option.id} key={option.id}>
+                      {option.label}
+                      <Tabs.Indicator />
+                    </Tabs.Tab>
+                  ))}
+                </Tabs.List>
+              </Tabs.ListContainer>
+              {['all', ...Object.keys(STATUS_LABEL)].map((key) => (
+                <Tabs.Panel id={key} key={key} className="hidden" />
+              ))}
+            </Tabs>
+            <SearchField name="suppressions-search" variant="secondary" className="w-full">
               <SearchField.Group>
                 <SearchField.SearchIcon />
                 <SearchField.Input
@@ -358,241 +407,228 @@ export default function SuppressionsPage() {
                 <SearchField.ClearButton />
               </SearchField.Group>
             </SearchField>
-            <Select
-              aria-label="Filter suppressions by status"
-              value={statusFilter || '__all__'}
-              onChange={(value) => {
-                const v = String(value === '__all__' ? '' : (value ?? ''));
-                setStatusFilter(v);
-                setPage(1);
-                load(1, v, searchQuery);
-              }}
-              className="w-full sm:w-44"
-              variant="secondary"
-            >
-              <Select.Trigger className="h-10">
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="__all__">All Statuses</ListBox.Item>
-                  <ListBox.Item id="accepted">Accepted Risk</ListBox.Item>
-                  <ListBox.Item id="wont_fix">Won&apos;t Fix</ListBox.Item>
-                  <ListBox.Item id="false_positive">False Positive</ListBox.Item>
-                  <ListBox.Item id="xray_ignore">Xray Ignore</ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-        </Card>
-        <LoadableCollectionState
-          emptyState={
-            <Card className="overflow-hidden">
-              <div className="flex flex-col items-center gap-3 py-16 text-center">
-                <SecurityLockIcon size={32} className="text-zinc-400 dark:text-zinc-600" />
-                <p className="text-sm text-zinc-500">
-                  {searchQuery || statusFilter
-                    ? 'No suppressions match your filters.'
-                    : 'No suppressions found.'}
-                </p>
-                {!searchQuery && !statusFilter && (
-                  <p className="text-xs text-zinc-400">
-                    Suppressions allow you to acknowledge known vulnerabilities in a scan.
+          </Card.Header>
+          <LoadableCollectionState
+            emptyState={
+              <Card className="overflow-hidden">
+                <div className="flex flex-col items-center gap-3 py-16 text-center">
+                  <SecurityLockIcon size={32} className="text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    {searchQuery || statusFilter
+                      ? 'No suppressions match your filters.'
+                      : 'No suppressions found.'}
                   </p>
-                )}
-              </div>
-            </Card>
-          }
-          error={error || undefined}
-          errorTitle="Suppressions loading failed"
-          isEmpty={suppressions.length === 0}
-          loading={loading}
-          loadingFallback={
-            <Card className="overflow-hidden">
-              <div className="flex justify-center py-16" role="status">
-                <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
-                <span className="sr-only">Loading suppressions</span>
-              </div>
-            </Card>
-          }
-          retry={() => void load(page, statusFilter, searchQuery)}
-        >
-          <Card className="overflow-hidden">
-            <Table variant="secondary">
-              <Table.ScrollContainer>
-                <Table.Content aria-label="Suppressions" className="min-w-[840px]">
-                  <Table.Header>
-                    <Table.Column isRowHeader>Vulnerability</Table.Column>
-                    <Table.Column>Status</Table.Column>
-                    <Table.Column>Reason</Table.Column>
-                    <Table.Column>Ownership</Table.Column>
-                    <Table.Column className="flex justify-end">Actions</Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {suppressions.map((s) => (
-                      <Table.Row id={s.id} key={s.id} className="hover:bg-[var(--row-hover)]">
-                        <Table.Cell>
-                          <div className="space-y-1.5">
-                            <a
-                              href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-mono text-xs text-accent hover:underline"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {s.vuln_id}
-                            </a>
-                            <p className="font-mono text-xs text-muted" title={s.image_digest}>
-                              {s.image_digest.length > 28
-                                ? `${s.image_digest.slice(0, 28)}…`
-                                : s.image_digest}
-                            </p>
-                            <Button
-                              variant="tertiary"
-                              onPress={() => openAppliesImagesModal(s)}
-                              size="sm"
-                            >
-                              {(s.applies_image_count ?? 0).toLocaleString()} matching image
-                              {(s.applies_image_count ?? 0) === 1 ? '' : 's'}
-                            </Button>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="space-y-1.5">
-                            <StatusBadge status={s.status} />
-                            <SuppressionSourceBadge source={s.source} />
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="text-xs text-zinc-500 max-w-xs">
-                            <span className="line-clamp-2">{s.justification || '—'}</span>
-                            {(s.xray_policy_name || s.xray_watch_name) && (
-                              <p className="mt-1 text-[11px] text-zinc-400">
-                                {[s.xray_policy_name, s.xray_watch_name]
-                                  .filter(Boolean)
-                                  .join(' · ')}
-                              </p>
-                            )}
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="space-y-1">
-                            <p className="text-xs text-zinc-500">{s.username || '—'}</p>
-                            <OwnershipBadge
-                              ownerType={s.owner_type}
-                              ownerOrgId={s.owner_org_id}
-                              orgNamesById={orgNamesById}
-                            />
-                            <p className="text-xs text-muted" title={fullDate(s.created_at)}>
-                              Created {timeAgo(s.created_at)}
-                            </p>
-                            {s.expires_at ? (
-                              <span
-                                className={
-                                  now !== null && new Date(s.expires_at) < now
-                                    ? 'text-red-400'
-                                    : 'text-zinc-500'
-                                }
-                                title={fullDate(s.expires_at)}
+                  {!searchQuery && !statusFilter && (
+                    <p className="text-xs text-muted-foreground">
+                      Suppressions allow you to acknowledge known vulnerabilities in a scan.
+                    </p>
+                  )}
+                </div>
+              </Card>
+            }
+            error={error || undefined}
+            errorTitle="Suppressions loading failed"
+            isEmpty={suppressions.length === 0}
+            loading={loading}
+            loadingFallback={
+              <Card className="overflow-hidden">
+                <div className="flex justify-center py-16" role="status">
+                  <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+                  <span className="sr-only">Loading suppressions</span>
+                </div>
+              </Card>
+            }
+            retry={() => void load(page, statusFilter, searchQuery)}
+          >
+            <div>
+              <Table variant="secondary">
+                <Table.ScrollContainer className="rounded-none border-0">
+                  <Table.Content aria-label="Suppressions" className="min-w-[1040px] [&_td]:py-3">
+                    <Table.Header>
+                      <Table.Column isRowHeader>Vulnerability</Table.Column>
+                      <Table.Column>Status</Table.Column>
+                      <Table.Column>Reason</Table.Column>
+                      <Table.Column>Ownership</Table.Column>
+                      <Table.Column className="w-px whitespace-nowrap text-right">
+                        Actions
+                      </Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {suppressions.map((s) => (
+                        <Table.Row id={s.id} key={s.id} className="hover:bg-[var(--row-hover)]">
+                          <Table.Cell>
+                            <div className="space-y-1.5">
+                              <a
+                                href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-mono text-xs text-primary hover:underline"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                {formatDateOnly(s.expires_at)}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted">Never expires</span>
-                            )}
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          {canManageAccess(s) || canMutateSuppression(s) ? (
-                            <div className="flex items-center justify-end">
-                              <RowActionsMenu
-                                label={`Actions for ${s.vuln_id}`}
-                                items={[
-                                  ...(canManageAccess(s)
-                                    ? [
-                                        {
-                                          id: 'manage-access',
-                                          label: 'Manage access',
-                                          icon: <Shield01Icon size={14} />,
-                                          onAction: () => openShareModal(s),
-                                        },
-                                      ]
-                                    : []),
-                                  ...(canMutateSuppression(s)
-                                    ? [
-                                        {
-                                          id: 'remove',
-                                          label: 'Remove suppression',
-                                          icon: <Delete01Icon size={14} />,
-                                          variant: 'danger' as const,
-                                          pending: deletingId === s.id,
-                                          disabled: deletingId !== null && deletingId !== s.id,
-                                          onAction: () => {
-                                            void handleDelete(s);
-                                          },
-                                        },
-                                      ]
-                                    : []),
-                                ]}
-                              />
+                                {s.vuln_id}
+                              </a>
+                              <p
+                                className="font-mono text-xs text-muted-foreground"
+                                title={s.image_digest}
+                              >
+                                {s.image_digest.length > 28
+                                  ? `${s.image_digest.slice(0, 28)}…`
+                                  : s.image_digest}
+                              </p>
+                              <Button
+                                variant="tertiary"
+                                onPress={() => openAppliesImagesModal(s)}
+                                size="sm"
+                              >
+                                {(s.applies_image_count ?? 0).toLocaleString()} matching image
+                                {(s.applies_image_count ?? 0) === 1 ? '' : 's'}
+                              </Button>
                             </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="space-y-1.5">
+                              <StatusBadge status={s.status} />
+                              <SuppressionSourceBadge source={s.source} />
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="min-w-48 max-w-sm text-sm text-muted-foreground">
+                              <span className="line-clamp-2">{s.justification || '—'}</span>
+                              {(s.xray_policy_name || s.xray_watch_name) && (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {[s.xray_policy_name, s.xray_watch_name]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </p>
+                              )}
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">{s.username || '—'}</p>
+                              <OwnershipBadge
+                                ownerType={s.owner_type}
+                                ownerOrgId={s.owner_org_id}
+                                orgNamesById={orgNamesById}
+                              />
+                              <p
+                                className="text-xs text-muted-foreground"
+                                title={fullDate(s.created_at)}
+                              >
+                                Created {timeAgo(s.created_at)}
+                              </p>
+                              {s.expires_at ? (
+                                <span
+                                  className={
+                                    now !== null && new Date(s.expires_at) < now
+                                      ? 'text-destructive'
+                                      : 'text-muted-foreground'
+                                  }
+                                  title={fullDate(s.expires_at)}
+                                >
+                                  {formatDateOnly(s.expires_at)}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Never expires</span>
+                              )}
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            {canManageAccess(s) || canMutateSuppression(s) ? (
+                              <div className="flex items-center justify-end">
+                                <RowActionsMenu
+                                  label={`Actions for ${s.vuln_id}`}
+                                  items={[
+                                    ...(canManageAccess(s)
+                                      ? [
+                                          {
+                                            id: 'manage-access',
+                                            label: 'Manage access',
+                                            icon: <Shield01Icon size={14} />,
+                                            onAction: () => openShareModal(s),
+                                          },
+                                        ]
+                                      : []),
+                                    ...(canMutateSuppression(s)
+                                      ? [
+                                          {
+                                            id: 'remove',
+                                            label: 'Remove suppression',
+                                            icon: <Delete01Icon size={14} />,
+                                            variant: 'danger' as const,
+                                            pending: deletingId === s.id,
+                                            disabled: deletingId !== null && deletingId !== s.id,
+                                            onAction: () => {
+                                              void handleDelete(s);
+                                            },
+                                          },
+                                        ]
+                                      : []),
+                                  ]}
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Read only</span>
+                            )}
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+                {totalPages > 1 ? (
+                  <Table.Footer className="flex flex-wrap items-center justify-between px-4 py-3 gap-3">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      Showing {total === 0 ? 0 : (page - 1) * LIMIT + 1}-
+                      {Math.min(page * LIMIT, total)} of {total}
+                    </span>
+                    <Pagination size="sm" className="justify-self-center">
+                      <Pagination.Content>
+                        <Pagination.Item>
+                          <Pagination.Previous
+                            isDisabled={page === 1}
+                            onPress={() => setPage((previous) => Math.max(1, previous - 1))}
+                          >
+                            <Pagination.PreviousIcon />
+                            <span>Previous</span>
+                          </Pagination.Previous>
+                        </Pagination.Item>
+                        {paginationItems.map((item, index) =>
+                          item === 'ellipsis' ? (
+                            <Pagination.Item key={`suppressions-ellipsis-${index}`}>
+                              <Pagination.Ellipsis />
+                            </Pagination.Item>
                           ) : (
-                            <span className="text-[11px] text-zinc-400">Read only</span>
-                          )}
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-              {totalPages > 1 ? (
-                <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-                  <span className="text-xs text-zinc-500 whitespace-nowrap">
-                    Showing {total === 0 ? 0 : (page - 1) * LIMIT + 1}-
-                    {Math.min(page * LIMIT, total)} of {total}
-                  </span>
-                  <Pagination size="sm" className="justify-self-center">
-                    <Pagination.Content>
-                      <Pagination.Item>
-                        <Pagination.Previous
-                          isDisabled={page === 1}
-                          onPress={() => setPage((previous) => Math.max(1, previous - 1))}
-                        >
-                          <Pagination.PreviousIcon />
-                          <span>Previous</span>
-                        </Pagination.Previous>
-                      </Pagination.Item>
-                      {paginationItems.map((item, index) =>
-                        item === 'ellipsis' ? (
-                          <Pagination.Item key={`suppressions-ellipsis-${index}`}>
-                            <Pagination.Ellipsis />
-                          </Pagination.Item>
-                        ) : (
-                          <Pagination.Item key={`suppressions-page-${item}`}>
-                            <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
-                              {item}
-                            </Pagination.Link>
-                          </Pagination.Item>
-                        )
-                      )}
-                      <Pagination.Item>
-                        <Pagination.Next
-                          isDisabled={page === totalPages}
-                          onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-                        >
-                          <span>Next</span>
-                          <Pagination.NextIcon />
-                        </Pagination.Next>
-                      </Pagination.Item>
-                    </Pagination.Content>
-                  </Pagination>
-                  <div />
-                </Table.Footer>
-              ) : null}
-            </Table>
-          </Card>
-        </LoadableCollectionState>
+                            <Pagination.Item key={`suppressions-page-${item}`}>
+                              <Pagination.Link
+                                isActive={item === page}
+                                onPress={() => setPage(item)}
+                              >
+                                {item}
+                              </Pagination.Link>
+                            </Pagination.Item>
+                          )
+                        )}
+                        <Pagination.Item>
+                          <Pagination.Next
+                            isDisabled={page === totalPages}
+                            onPress={() =>
+                              setPage((previous) => Math.min(totalPages, previous + 1))
+                            }
+                          >
+                            <span>Next</span>
+                            <Pagination.NextIcon />
+                          </Pagination.Next>
+                        </Pagination.Item>
+                      </Pagination.Content>
+                    </Pagination>
+                    <div />
+                  </Table.Footer>
+                ) : null}
+              </Table>
+            </div>
+          </LoadableCollectionState>
+        </Card>
       </>
 
       <ManageSuppressionAccessModal
@@ -621,12 +657,12 @@ export default function SuppressionsPage() {
       <Modal state={imagesModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="surface-modal rounded-2xl overflow-hidden">
+            <Modal.Dialog className="surface-modal overflow-hidden">
               <Modal.Header>
-                <Modal.Heading className="text-zinc-900 dark:text-white font-semibold">
+                <Modal.Heading className="text-foreground font-semibold">
                   Applies to Images
                 </Modal.Heading>
-                <Modal.CloseTrigger className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" />
+                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
               </Modal.Header>
               <Modal.Body className="py-5 space-y-4">
                 {imagesError ? (
@@ -634,24 +670,22 @@ export default function SuppressionsPage() {
                 ) : null}
                 <div className="flex flex-col gap-2">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                       Suppression
                     </p>
                   </div>
                   {imagesTarget ? (
                     <Card variant="secondary" className="py-3">
-                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                        {imagesTarget.vuln_id}
-                      </p>
+                      <p className="text-sm font-medium text-foreground">{imagesTarget.vuln_id}</p>
                       <p
-                        className="font-mono text-xs text-zinc-500"
+                        className="font-mono text-xs text-muted-foreground"
                         title={imagesTarget.image_digest}
                       >
                         {imagesTarget.image_digest.length > 64
                           ? `${imagesTarget.image_digest.slice(0, 64)}…`
                           : imagesTarget.image_digest}
                       </p>
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-xs text-muted-foreground">
                         {imagesTotal.toLocaleString()} matching image
                         {imagesTotal === 1 ? '' : 's'} in current workspace
                       </p>
@@ -663,21 +697,23 @@ export default function SuppressionsPage() {
 
                 <div className="flex flex-col gap-2">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                       Matching Images
                     </p>
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-xs text-muted-foreground">
                       Images currently visible in this workspace for the suppression digest.
                     </p>
                   </div>
 
                   {imagesLoading ? (
                     <div className="flex justify-center py-8">
-                      <div className="size-5 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-accent-500 animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
                     </div>
                   ) : imagesError ? (
                     <div className="flex flex-col items-center gap-3 py-8 text-center">
-                      <p className="text-sm text-zinc-500">Could not load matching images.</p>
+                      <p className="text-sm text-muted-foreground">
+                        Could not load matching images.
+                      </p>
                       <Button
                         variant="secondary"
                         isPending={imagesLoading}
@@ -689,7 +725,7 @@ export default function SuppressionsPage() {
                       </Button>
                     </div>
                   ) : appliedImages.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No matching images were found.</p>
+                    <p className="text-sm text-muted-foreground">No matching images were found.</p>
                   ) : (
                     <div className="max-h-[320px] overflow-y-auto flex flex-col gap-3">
                       {appliedImages.map((image) => (
@@ -699,11 +735,11 @@ export default function SuppressionsPage() {
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                              <p className="text-sm font-medium text-foreground">
                                 {image.image_name}:{image.image_tag}
                               </p>
                               <p
-                                className="font-mono text-xs text-zinc-500 truncate"
+                                className="font-mono text-xs text-muted-foreground truncate"
                                 title={image.image_digest}
                               >
                                 {image.image_digest.length > 64
@@ -711,7 +747,7 @@ export default function SuppressionsPage() {
                                   : image.image_digest}
                               </p>
                               <p
-                                className="text-[11px] text-zinc-400"
+                                className="text-xs text-muted-foreground"
                                 title={fullDate(image.latest_seen_at)}
                               >
                                 Last seen: {timeAgo(image.latest_seen_at)}
@@ -748,6 +784,6 @@ export default function SuppressionsPage() {
       </Modal>
 
       {confirmDialog}
-    </div>
+    </PageContainer>
   );
 }

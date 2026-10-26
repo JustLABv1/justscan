@@ -5,7 +5,7 @@ RUN go mod download github.com/aquasecurity/trivy@${TRIVY_VERSION} \
     && cp -a /go/pkg/mod/github.com/aquasecurity/trivy@${TRIVY_VERSION} /src \
     && chmod -R u+w /src
 WORKDIR /src
-RUN go get github.com/go-jose/go-jose/v4@v4.1.6 oras.land/oras-go/v2@v2.6.4-0.20261015110029-8883c8588eb5 \
+RUN go get github.com/go-jose/go-jose/v4@v4.1.6 oras.land/oras-go/v2@v2.6.4 \
     && CGO_ENABLED=0 go build -trimpath \
     -ldflags="-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=${TRIVY_VERSION#v}" \
     -o /usr/local/bin/trivy ./cmd/trivy
@@ -68,12 +68,14 @@ FROM alpine:3.24 AS runner
 COPY --from=frontend-builder /usr/local/bin/node /usr/local/bin/node
 WORKDIR /app
 
+# Require the fixed curl release for CVE-2026-92392 (pulled in by Git).
 # Install necessary packages
 RUN apk add --upgrade --no-cache \
     ca-certificates \
     libstdc++ \
     libatomic \
     git \
+    "libcurl>=8.23.0-r0" \
     tini \
     postgresql-client \
     tzdata \

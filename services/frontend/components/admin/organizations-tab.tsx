@@ -30,7 +30,7 @@ import {
   Switch,
   Table,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export function OrganizationsTab() {
@@ -236,7 +236,7 @@ export function OrganizationsTab() {
               ) : orgs.length === 0 ? (
                 <Table.Row id="empty">
                   <Table.Cell colSpan={6}>
-                    <div className="py-6 text-center text-sm text-zinc-500">
+                    <div className="py-6 text-center text-sm text-muted-foreground">
                       No organizations found.
                     </div>
                   </Table.Cell>
@@ -247,7 +247,7 @@ export function OrganizationsTab() {
                     <Table.Cell>
                       <div>
                         <p className="font-medium">{org.name}</p>
-                        <p className="text-xs text-zinc-500">Created {timeAgo(org.created_at)}</p>
+                        <p className="text-xs text-muted-foreground">Created {timeAgo(org.created_at)}</p>
                       </div>
                     </Table.Cell>
                     <Table.Cell>{org.member_count}</Table.Cell>
@@ -288,7 +288,7 @@ export function OrganizationsTab() {
               <Modal.Body className="space-y-5 max-h-[75vh] overflow-y-auto">
                 {activeOrg ? (
                   <>
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-xs text-muted-foreground">
                       {activeOrg.description || 'No description'} · Updated{' '}
                       {fullDate(activeOrg.updated_at)}
                     </p>
@@ -396,7 +396,7 @@ export function OrganizationsTab() {
                                       {member.username || member.email || member.user_id}
                                     </p>
                                     {member.email && (
-                                      <p className="text-xs text-zinc-500">{member.email}</p>
+                                      <p className="text-xs text-muted-foreground">{member.email}</p>
                                     )}
                                   </div>
                                 </Table.Cell>
@@ -465,14 +465,14 @@ export function OrganizationsTab() {
                         <h3 className="mb-2 text-sm font-semibold">Invites</h3>
                         <div className="space-y-2">
                           {invites.length === 0 && (
-                            <p className="text-xs text-zinc-500">No active invites.</p>
+                            <p className="text-xs text-muted-foreground">No active invites.</p>
                           )}
                           {invites.map((invite) => (
                             <Card key={invite.id} className="bg-surface-secondary">
                               <div className="flex items-center justify-between gap-2">
                                 <div>
                                   <p className="text-xs font-medium">{invite.email}</p>
-                                  <p className="text-[11px] text-zinc-500">{invite.role}</p>
+                                  <p className="text-xs text-muted-foreground">{invite.role}</p>
                                 </div>
                                 <Button
                                   size="sm"
@@ -501,14 +501,14 @@ export function OrganizationsTab() {
                         </div>
                         <div className="space-y-2">
                           {tokens.length === 0 && (
-                            <p className="text-xs text-zinc-500">No active tokens.</p>
+                            <p className="text-xs text-muted-foreground">No active tokens.</p>
                           )}
                           {tokens.map((token) => (
                             <Card key={token.id} className="bg-surface-secondary">
                               <div className="flex items-center justify-between gap-2">
                                 <div>
                                   <p className="text-xs font-medium">{token.description}</p>
-                                  <p className="text-[11px] text-zinc-500">
+                                  <p className="text-xs text-muted-foreground">
                                     {token.scope === 'pipeline_scan' ? 'Pipeline scan' : 'Org admin'} · Expires {timeAgo(token.expires_at)}
                                   </p>
                                 </div>
@@ -527,7 +527,7 @@ export function OrganizationsTab() {
                     </div>
                   </>
                 ) : (
-                  <div className="py-4 text-sm text-zinc-500">No organization selected.</div>
+                  <div className="py-4 text-sm text-muted-foreground">No organization selected.</div>
                 )}
               </Modal.Body>
             </Modal.Dialog>

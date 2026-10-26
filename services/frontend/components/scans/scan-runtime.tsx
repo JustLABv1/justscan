@@ -3,32 +3,9 @@
 import { getScanXrayRequestLogs } from '@/lib/api/scans';
 import type { ScanStepLog, XRayRequestLog } from '@/lib/api/types/scans';
 import { fullDate, timeAgo } from '@/lib/time';
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Chip,
-  Modal,
-  ProgressBar,
-  ScrollShadow,
-  useOverlayState,
-} from '@heroui/react';
-import {
-  Clock01Icon,
-  CloudUploadIcon,
-  DatabaseSyncIcon,
-  FileSearchIcon,
-  FileValidationIcon,
-  FileVerifiedIcon,
-  FolderFileStorageIcon,
-  PackageIcon,
-  Search01Icon,
-  ServerStack01Icon,
-  Shield01Icon,
-} from 'hugeicons-react';
-import type { ComponentType, ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { Alert, Button, Card, Chip, Modal, ProgressBar, useOverlayState } from '@/components/ui';
+import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 
 type ProgressStepState = 'pending' | 'active' | 'complete';
 
@@ -42,12 +19,6 @@ type StepDefinition = {
 type StepView = StepDefinition & {
   state: ProgressStepState;
 };
-
-type StepIconComponent = ComponentType<{
-  'aria-hidden'?: boolean;
-  className?: string;
-  size?: number;
-}>;
 
 type ProgressModel = {
   activeKey: string;
@@ -226,22 +197,6 @@ const STEP_DEFINITION_MAP = new Map<string, StepDefinition>(
   ])
 );
 
-const STEP_IDENTITY_ICONS: Record<string, StepIconComponent> = {
-  cancelled: Clock01Icon,
-  completed: FileVerifiedIcon,
-  failed: Shield01Icon,
-  finalizing_report: FileValidationIcon,
-  importing_results: DatabaseSyncIcon,
-  indexing_artifact: FolderFileStorageIcon,
-  preparing_image: PackageIcon,
-  processing_results: DatabaseSyncIcon,
-  queued: Clock01Icon,
-  queued_in_xray: ServerStack01Icon,
-  scanning_image: Search01Icon,
-  waiting_for_xray: Clock01Icon,
-  warming_cache: CloudUploadIcon,
-};
-
 function formatElapsed(elapsedSeconds: number): string {
   const mins = Math.floor(elapsedSeconds / 60);
   const secs = elapsedSeconds % 60;
@@ -308,16 +263,6 @@ function providerLabel(scanProvider?: string | null, stepLogs?: ScanStepLog[] | 
     return PROVIDER_LABELS.artifactory_xray;
   }
   return PROVIDER_LABELS.trivy;
-}
-
-function compactImageLabel(image?: string | null): string | null {
-  if (!image) {
-    return null;
-  }
-  if (image.length <= 64) {
-    return image;
-  }
-  return `${image.slice(0, 28)}...${image.slice(-24)}`;
 }
 
 function isBlockedXrayPolicy(
@@ -531,15 +476,15 @@ export function ScannerDatabaseCard({
   return (
     <Card className="p-4">
       <Card.Content className="p-0">
-        <p className="mb-1 text-xs text-zinc-500">{label}</p>
+        <p className="mb-1 text-xs text-muted-foreground">{label}</p>
         <p
-          className="text-sm font-medium text-zinc-900 dark:text-white"
+          className="text-sm font-medium text-foreground"
           title={updatedAt ? fullDate(updatedAt) : ''}
         >
           {updatedAt ? `${timeAgo(updatedAt)} (${fullDate(updatedAt)})` : 'Unknown'}
         </p>
         <p
-          className="mt-1 text-xs text-zinc-500"
+          className="mt-1 text-xs text-muted-foreground"
           title={downloadedAt ? fullDate(downloadedAt) : ''}
         >
           Downloaded {downloadedAt ? timeAgo(downloadedAt) : 'unknown'}
@@ -582,20 +527,20 @@ function stepStateTone(state: ProgressStepState): {
     return {
       color: 'success',
       label: 'Done',
-      rowClassName: 'bg-success/5 text-success',
+      rowClassName: 'bg-success/5 text-success-foreground',
     };
   }
   if (state === 'active') {
     return {
       color: 'accent',
       label: 'Running',
-      rowClassName: 'bg-accent/5 text-accent',
+      rowClassName: 'bg-primary/5 text-primary',
     };
   }
   return {
     color: 'default',
     label: 'Waiting',
-    rowClassName: 'bg-default/40 text-muted',
+    rowClassName: 'bg-default/40 text-muted-foreground',
   };
 }
 
@@ -626,7 +571,7 @@ function StepStatusIcon({ state, title }: { state: ProgressStepState; title: str
     return (
       <span
         aria-label={`${title} running`}
-        className="flex size-5 items-center justify-center rounded-full border-2 border-accent/25 border-t-accent motion-safe:animate-spin"
+        className="flex size-5 items-center justify-center rounded-full border-2 border-primary/25 border-t-accent motion-safe:animate-spin"
       />
     );
   }
@@ -638,52 +583,6 @@ function StepStatusIcon({ state, title }: { state: ProgressStepState; title: str
     >
       <span aria-hidden className="size-1.5 rounded-full bg-muted" />
     </span>
-  );
-}
-
-function StepIdentityIcon({ state, stepKey }: { state: ProgressStepState; stepKey: string }) {
-  const Icon = STEP_IDENTITY_ICONS[stepKey] ?? FileSearchIcon;
-  const iconClassName =
-    state === 'pending' ? 'text-muted' : state === 'active' ? 'text-accent' : 'text-success';
-
-  return <Icon aria-hidden className={iconClassName} size={20} />;
-}
-
-function StepStatusBadge({ state, title }: { state: ProgressStepState; title: string }) {
-  if (state === 'complete') {
-    return (
-      <Badge
-        aria-label={`${title} completed successfully`}
-        color="success"
-        placement="bottom-right"
-        size="sm"
-      >
-        <svg
-          aria-hidden
-          className="size-2.5"
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="3"
-          viewBox="0 0 24 24"
-        >
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      </Badge>
-    );
-  }
-
-  if (state === 'active') {
-    return (
-      <Badge aria-label={`${title} is running`} color="accent" placement="bottom-right" size="sm">
-        <span aria-hidden className="size-2 rounded-full bg-current motion-safe:animate-pulse" />
-      </Badge>
-    );
-  }
-
-  return (
-    <Badge aria-label={`${title} is waiting`} color="default" placement="bottom-right" size="sm" />
   );
 }
 
@@ -795,71 +694,6 @@ function resolveTimelinePipelineSteps({
   });
 }
 
-function PipelineStepOverview({ steps }: { steps: PipelineStepRuntime[] }) {
-  const activeStepId = steps.find((step) => step.state === 'active')?.runtimeId ?? null;
-  const activeStepRef = useRef<HTMLLIElement | null>(null);
-
-  useEffect(() => {
-    if (!activeStepId) {
-      return;
-    }
-
-    activeStepRef.current?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-      inline: 'center',
-    });
-  }, [activeStepId]);
-
-  return (
-    <div className="rounded-3xl mt-4">
-      <ScrollShadow
-        className="-mx-1 px-1 pb-2"
-        orientation="horizontal"
-        size={32}
-        visibility="auto"
-      >
-        <ol className="flex min-w-full gap-3">
-          {steps.map((step, index) => {
-            const isActive = step.state === 'active';
-
-            return (
-              <li
-                key={`${step.key}-${index}`}
-                ref={step.runtimeId === activeStepId ? activeStepRef : undefined}
-                className={`relative min-w-[17rem] shrink-0 overflow-hidden rounded-2xl border p-px sm:min-w-[19rem] ${
-                  isActive
-                    ? 'border-accent/20 bg-accent/15 shadow-[0_0_20px_color-mix(in_srgb,var(--accent)_8%,transparent)]'
-                    : 'border-divider bg-surface-secondary'
-                }`}
-              >
-                {isActive ? (
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute -inset-24 bg-[conic-gradient(from_90deg,transparent_0_68%,color-mix(in_srgb,var(--accent)_20%,transparent)_74%,var(--accent)_80%,color-mix(in_srgb,var(--accent)_20%,transparent)_86%,transparent_92%)] opacity-80 motion-safe:animate-spin motion-reduce:hidden"
-                  />
-                ) : null}
-                <div className="relative flex items-start gap-3 rounded-[calc(1rem-1px)] bg-surface-secondary px-4 py-3">
-                  <Badge.Anchor className="shrink-0">
-                    <span className="flex size-10 items-center justify-center rounded-2xl bg-surface">
-                      <StepIdentityIcon state={step.state} stepKey={step.key} />
-                    </span>
-                    <StepStatusBadge state={step.state} title={step.title} />
-                  </Badge.Anchor>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">{step.title}</p>
-                    <p className="mt-1 font-mono text-xs text-muted">{step.durationLabel}</p>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      </ScrollShadow>
-    </div>
-  );
-}
-
 function PipelineDurationList({
   steps,
   selectedStepId,
@@ -870,21 +704,23 @@ function PipelineDurationList({
   onStepSelect?: (stepId: string) => void;
 }) {
   return (
-    <div className="rounded-3xl bg-surface-secondary p-3 sm:p-4">
+    <div>
       <ol className="space-y-1.5">
         {steps.map((step, index) => {
           const tone = stepStateTone(step.state);
           const isSelected = selectedStepId === step.runtimeId;
-          const rowClassName = `flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left ${
-            step.state === 'active' ? 'bg-accent/5' : ''
-          } ${isSelected ? 'ring-1 ring-accent/25' : ''}`;
+          const rowClassName = `flex h-auto w-full items-center justify-start gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-left ${
+            step.state === 'active' ? 'bg-primary/5' : ''
+          } ${isSelected ? 'ring-1 ring-primary/25' : ''}`;
           const rowContent = (
             <>
               <StepStatusIcon state={step.state} title={step.title} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{step.title}</p>
                 {step.startedAt ? (
-                  <p className="mt-0.5 text-xs text-muted">Started {timeAgo(step.startedAt)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Started {timeAgo(step.startedAt)}
+                  </p>
                 ) : null}
               </div>
               <span className={`rounded-full px-2.5 py-1 font-mono text-xs ${tone.rowClassName}`}>
@@ -896,13 +732,14 @@ function PipelineDurationList({
           return (
             <li key={`${step.runtimeId}-duration-${index}`}>
               {onStepSelect ? (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  aria-pressed={isSelected}
                   className={rowClassName}
-                  onClick={() => onStepSelect(step.runtimeId)}
+                  onPress={() => onStepSelect(step.runtimeId)}
                 >
                   {rowContent}
-                </button>
+                </Button>
               ) : (
                 <div className={rowClassName}>{rowContent}</div>
               )}
@@ -917,22 +754,26 @@ function PipelineDurationList({
 function PipelineLiveLogs({
   activeStep,
   detailMessage,
+  history = false,
 }: {
   activeStep: PipelineStepRuntime | null;
   detailMessage: string;
+  history?: boolean;
 }) {
   const visibleLogs =
     activeStep && activeStep.output.length > 0
       ? activeStep.output.slice(-7)
-      : [
-          `$ justscan scan --step ${activeStep?.key ?? 'queued'}`,
-          `-> ${detailMessage}`,
-          '-> waiting for the next backend update',
-        ];
+      : history
+        ? ['No output was recorded for this stage.']
+        : [
+            `$ justscan scan --step ${activeStep?.key ?? 'queued'}`,
+            `-> ${detailMessage}`,
+            '-> waiting for the next backend update',
+          ];
 
   return (
-    <div className="rounded-3xl bg-surface-secondary p-4 shadow-surface sm:p-5">
-      <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-2xl font-mono text-xs text-foreground">
+    <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-lg font-mono text-xs text-foreground">
         {visibleLogs
           .map((line) => (line.startsWith('$') ? line : `-> ${line.replace(/^->\s?/, '')}`))
           .join('\n')}
@@ -941,9 +782,80 @@ function PipelineLiveLogs({
   );
 }
 
+function PipelineHistoryCard({
+  status,
+  subtitle,
+  providerName,
+  elapsed,
+  runtimeSteps,
+  activeStep,
+  detailMessage,
+  selectedStepId,
+  onStepSelect,
+  actions,
+}: Pick<
+  Parameters<typeof ScanPipelineCard>[0],
+  | 'status'
+  | 'subtitle'
+  | 'providerName'
+  | 'elapsed'
+  | 'runtimeSteps'
+  | 'activeStep'
+  | 'detailMessage'
+  | 'selectedStepId'
+  | 'onStepSelect'
+  | 'actions'
+>) {
+  return (
+    <Card className="overflow-hidden gap-0 py-0">
+      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3 p-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Card.Title className="text-sm font-medium">Execution timeline</Card.Title>
+            <Chip size="sm" variant="soft">
+              {providerName}
+            </Chip>
+            <Chip color={pipelineStatusColor(status)} size="sm" variant="soft">
+              {scanStatusLabel(status)}
+            </Chip>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+        {actions}
+      </Card.Header>
+      <div className="grid border-y border-border lg:grid-cols-[minmax(240px,1fr)_minmax(0,2fr)]">
+        <div className="min-w-0 border-b border-border p-3 lg:border-r lg:border-b-0">
+          <PipelineDurationList
+            onStepSelect={onStepSelect}
+            selectedStepId={selectedStepId}
+            steps={runtimeSteps}
+          />
+        </div>
+        <div className="min-w-0 space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-medium">{activeStep?.title ?? 'Step output'}</h3>
+            <span className="font-mono text-xs text-muted-foreground">
+              {activeStep?.durationLabel}
+            </span>
+          </div>
+          {activeStep?.startedAt ? (
+            <p className="text-xs text-muted-foreground">
+              Started {fullDate(activeStep.startedAt)}
+            </p>
+          ) : null}
+          <PipelineLiveLogs history activeStep={activeStep} detailMessage={detailMessage} />
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-muted-foreground">
+        <span>{formatElapsed(elapsed)} elapsed</span>
+        <span>{runtimeSteps.length} stages</span>
+      </div>
+    </Card>
+  );
+}
+
 function ScanPipelineCard({
   status,
-  image,
   subtitle,
   providerName,
   progress,
@@ -955,6 +867,7 @@ function ScanPipelineCard({
   selectedStepId,
   onStepSelect,
   actions,
+  history = false,
 }: {
   status: string;
   image?: string;
@@ -969,70 +882,68 @@ function ScanPipelineCard({
   selectedStepId?: string | null;
   onStepSelect?: (stepId: string) => void;
   actions?: ReactNode;
+  history?: boolean;
 }) {
-  const compactImage = compactImageLabel(image);
-  const description = image || compactImage || subtitle || progress.note;
-
+  if (history)
+    return (
+      <PipelineHistoryCard
+        {...{
+          status,
+          subtitle,
+          providerName,
+          elapsed,
+          runtimeSteps,
+          activeStep,
+          detailMessage,
+          selectedStepId,
+          onStepSelect,
+          actions,
+        }}
+      />
+    );
   return (
-    <Card className="overflow-hidden p-0">
-      <ProgressBar
-        aria-label="Running scan progress"
-        color={pipelineStatusColor(status)}
-        size="sm"
-        value={progressPercent}
-        isIndeterminate={status === 'pending' || status === 'running'}
-      >
-        <ProgressBar.Track className="rounded-none">
-          <ProgressBar.Fill className="rounded-none" />
-        </ProgressBar.Track>
-      </ProgressBar>
-
-      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3 px-5 pt-5 sm:px-6">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Card.Title className="text-lg">Scan pipeline</Card.Title>
-            <Chip size="sm" variant="secondary">
-              {providerName}
-            </Chip>
-          </div>
-          <Card.Description
-            className="mt-2 max-w-2xl font-mono text-xs"
-            title={image || compactImage || undefined}
-          >
-            {description}
+    <Card className="gap-0 overflow-hidden py-0">
+      <Card.Header className="flex flex-row flex-wrap items-center justify-between gap-3 border-b p-4">
+        <div className="space-y-1">
+          <Card.Title>{status === 'pending' ? 'Waiting to scan' : 'Scan in progress'}</Card.Title>
+          <Card.Description>
+            {providerName} · {formatElapsed(elapsed)} elapsed
           </Card.Description>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Chip color={pipelineStatusColor(status)} size="sm" variant="soft">
-            {status === 'pending'
-              ? progress.title
-              : `${scanStatusLabel(status)} · ${progress.title}`}
-          </Chip>
-          {actions}
-        </div>
+        {actions}
       </Card.Header>
-
-      <Card.Content className="gap-4 px-5 pb-5 sm:px-6 sm:pb-6">
-        <PipelineStepOverview steps={runtimeSteps} />
+      <Card.Content className="space-y-4 p-4">
+        <div
+          className="flex items-center justify-between gap-3 text-xs text-muted-foreground"
+          role="status"
+        >
+          <span>{progress.title}</span>
+          <span className="shrink-0">{progress.eyebrow}</span>
+        </div>
+        <ProgressBar
+          aria-label="Scan activity"
+          size="sm"
+          value={progressPercent}
+          isIndeterminate={status === 'pending' || status === 'running'}
+        >
+          <ProgressBar.Track>
+            <ProgressBar.Fill />
+          </ProgressBar.Track>
+        </ProgressBar>
         <PipelineDurationList
           onStepSelect={onStepSelect}
           selectedStepId={selectedStepId}
           steps={runtimeSteps}
         />
-        <PipelineLiveLogs activeStep={activeStep} detailMessage={detailMessage} />
       </Card.Content>
-
-      <Card.Footer className="flex-row flex-wrap items-center justify-between gap-3 px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
-        <p className="font-mono text-sm text-muted">
-          {formatElapsed(elapsed)} elapsed ·{' '}
-          {status === 'pending' || status === 'running'
-            ? progress.eyebrow
-            : scanStatusLabel(status)}
-        </p>
-        <Chip color={pipelineStatusColor(status)} size="sm" variant="soft">
-          {activeStep ? `${activeStep.title}...` : progress.eyebrow}
-        </Chip>
-      </Card.Footer>
+      <details className="border-t">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium marker:text-muted-foreground">
+          Scanner output
+        </summary>
+        <div className="px-4 pb-4">
+          <PipelineLiveLogs activeStep={activeStep} detailMessage={detailMessage} />
+        </div>
+      </details>
     </Card>
   );
 }
@@ -1040,7 +951,7 @@ function ScanPipelineCard({
 function QueuePositionNote({ status, position }: { status: string; position?: number }) {
   if (status !== 'pending' || position == null) return null;
   return (
-    <p className="text-xs text-muted">
+    <p className="text-xs text-muted-foreground">
       Approximate position among visible queued scans for this provider in the selected workspace.
       Start order can change.
     </p>
@@ -1268,6 +1179,7 @@ export function ScanStepTimeline({
   return (
     <section className="space-y-4">
       <ScanPipelineCard
+        history
         actions={
           canShowXrayDebug ? (
             <Button
@@ -1317,7 +1229,7 @@ export function ScanStepTimeline({
           <Modal.Container size="full" placement="center">
             <Modal.Dialog className="max-h-[85vh] overflow-hidden">
               <Modal.Header>
-                <Modal.Heading className="text-base font-semibold text-zinc-900 dark:text-white">
+                <Modal.Heading className="text-base font-semibold text-foreground">
                   Xray request timeline debug
                 </Modal.Heading>
                 <Modal.CloseTrigger />
@@ -1329,7 +1241,7 @@ export function ScanStepTimeline({
                     style={{ borderColor: 'var(--separator-secondary)' }}
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                         Requests ({xrayLogs.length})
                       </p>
                       <Button
@@ -1344,7 +1256,7 @@ export function ScanStepTimeline({
                       </Button>
                     </div>
                     {xrayLogsError && (
-                      <p className="mb-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-2 text-xs text-red-500">
+                      <p className="mb-2 rounded-lg border border-destructive/20 bg-destructive/10 px-2.5 py-2 text-xs text-destructive">
                         {xrayLogsError}
                       </p>
                     )}
@@ -1366,13 +1278,13 @@ export function ScanStepTimeline({
                             }}
                             onClick={() => setSelectedXrayLogID(entry.id)}
                           >
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                               #{index + 1} - {entry.method}
                             </p>
-                            <p className="mt-0.5 line-clamp-2 text-xs font-medium text-zinc-900 dark:text-white">
+                            <p className="mt-0.5 line-clamp-2 text-xs font-medium text-foreground">
                               {entry.endpoint}
                             </p>
-                            <p className="mt-1 text-[11px] text-zinc-500">
+                            <p className="mt-1 text-xs text-muted-foreground">
                               {entry.status_code} - {entry.duration_ms}ms -{' '}
                               {timeAgo(entry.created_at)}
                             </p>
@@ -1381,7 +1293,7 @@ export function ScanStepTimeline({
                       })}
                       {!xrayLogsLoading && xrayLogs.length === 0 && (
                         <p
-                          className="rounded-lg border px-3 py-2 text-xs text-zinc-500"
+                          className="rounded-lg border px-3 py-2 text-xs text-muted-foreground"
                           style={{ borderColor: 'var(--surface-border)' }}
                         >
                           No Xray requests were logged for this scan yet.
@@ -1394,16 +1306,16 @@ export function ScanStepTimeline({
                     {selectedXrayLog ? (
                       <div className="space-y-3">
                         <Card variant="secondary">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Request
                           </p>
-                          <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                          <p className="text-sm font-semibold text-foreground">
                             {selectedXrayLog.method} {selectedXrayLog.endpoint}
                           </p>
-                          <p className="text-xs text-zinc-500">
+                          <p className="text-xs text-muted-foreground">
                             URL: {selectedXrayLog.request_url || selectedXrayLog.endpoint}
                           </p>
-                          <p className="text-xs text-zinc-500">
+                          <p className="text-xs text-muted-foreground">
                             {fullDate(selectedXrayLog.created_at)} - {selectedXrayLog.duration_ms}ms
                             - Status {selectedXrayLog.status_code}
                           </p>
@@ -1419,7 +1331,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Request headers
                           </p>
                           <pre
@@ -1431,7 +1343,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Request body
                           </p>
                           <pre
@@ -1443,7 +1355,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Response headers
                           </p>
                           <pre
@@ -1455,7 +1367,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Response body
                           </p>
                           <pre
@@ -1467,7 +1379,7 @@ export function ScanStepTimeline({
                         </Card>
                       </div>
                     ) : (
-                      <p className="text-sm text-zinc-500">
+                      <p className="text-sm text-muted-foreground">
                         Select a request to inspect full debug details.
                       </p>
                     )}

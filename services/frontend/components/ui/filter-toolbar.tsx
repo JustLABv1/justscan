@@ -1,6 +1,6 @@
 'use client';
 
-import { Chip, Disclosure, Toolbar } from '@heroui/react';
+import { Chip, Disclosure, Toolbar, buttonVariants } from '@/components/ui';
 import { FilterIcon } from 'hugeicons-react';
 import type { ReactNode } from 'react';
 
@@ -28,7 +28,12 @@ export function FilterDisclosureTrigger({
 }: FilterDisclosureTriggerProps) {
   return (
     <Disclosure.Heading>
-      <Disclosure.Trigger className="inline-flex h-10 items-center gap-2 rounded-xl border border-transparent bg-surface-secondary px-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+      <Disclosure.Trigger
+        className={cn(
+          buttonVariants({ variant: 'outline' }),
+          'w-auto justify-center py-0 hover:no-underline'
+        )}
+      >
         <FilterIcon size={15} aria-hidden />
         {label}
         {activeCount > 0 ? (

@@ -7,7 +7,7 @@ import {
   SearchField,
   Switch,
   useOverlayState,
-} from '@heroui/react';
+} from '@/components/ui';
 import { getToken, req, type ApiRequestOptions, subscribeToAuth } from '@/lib/api';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
@@ -618,11 +618,11 @@ function ReportFilterControls({
     onChange({ ...f, severities: sevs });
   }
   return (
-    <div className="text-sm text-zinc-900" style={{ colorScheme: 'light' }}>
+    <div className="text-sm text-foreground" style={{ colorScheme: 'light' }}>
       {showHeading && (
         <>
-          <p className="mb-1 font-semibold text-zinc-900">Report filters</p>
-          <p className="mb-4 text-xs text-zinc-500">
+          <p className="mb-1 font-semibold text-foreground">Report filters</p>
+          <p className="mb-4 text-xs text-muted-foreground">
             Changes apply immediately to the printable report.
           </p>
         </>
@@ -633,11 +633,11 @@ function ReportFilterControls({
         value={f.search}
         onChange={(search) => onChange({ ...f, search })}
       >
-        <Label className="text-xs font-semibold text-zinc-700">CVE, package, or title</Label>
-        <SearchField.Group className="border-zinc-200 bg-white text-zinc-900">
+        <Label className="text-xs font-semibold text-foreground">CVE, package, or title</Label>
+        <SearchField.Group className="border-border bg-white ">
           <SearchField.SearchIcon />
           <SearchField.Input
-            className="text-zinc-900 placeholder:text-zinc-400"
+            className="text-foreground placeholder:text-muted-foreground"
             placeholder="Search findings"
           />
           <SearchField.ClearButton />
@@ -652,9 +652,9 @@ function ReportFilterControls({
         value={f.minCvss}
         onChange={(minCvss) => onChange({ ...f, minCvss })}
       >
-        <Label className="text-xs font-semibold text-zinc-700">Minimum CVSS</Label>
-        <NumberField.Group className="border-zinc-200 bg-white text-zinc-900">
-          <NumberField.DecrementButton className="text-zinc-700 hover:bg-zinc-100">
+        <Label className="text-xs font-semibold text-foreground">Minimum CVSS</Label>
+        <NumberField.Group className="border-border bg-white text-foreground">
+          <NumberField.DecrementButton className="text-foreground hover:bg-muted">
             <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16">
               <path
                 d="M3 8h10"
@@ -665,8 +665,8 @@ function ReportFilterControls({
               />
             </svg>
           </NumberField.DecrementButton>
-          <NumberField.Input className="text-zinc-900" />
-          <NumberField.IncrementButton className="text-zinc-700 hover:bg-zinc-100">
+          <NumberField.Input className="text-foreground" />
+          <NumberField.IncrementButton className="text-foreground hover:bg-muted">
             <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16">
               <path
                 d="M3 8h10M8 3v10"
@@ -680,11 +680,11 @@ function ReportFilterControls({
         </NumberField.Group>
       </NumberField>
 
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Severity</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Severity</p>
       {SEVS.map((s) => (
         <label
           key={s}
-          className="mb-1 flex cursor-pointer items-center gap-2 text-xs text-zinc-800"
+          className="mb-1 flex cursor-pointer items-center gap-2 text-xs text-foreground"
         >
           <input
             className="accent-blue-600"
@@ -710,8 +710,8 @@ function ReportFilterControls({
       ))}
 
       {FILTER_TOGGLE_GROUPS.map((group) => (
-        <div key={group.label} className="mt-4 border-t border-zinc-200 pt-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+        <div key={group.label} className="mt-4 border-t border-border pt-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {group.label}
           </p>
           <div className="space-y-2.5">
@@ -725,12 +725,12 @@ function ReportFilterControls({
                 {({ isSelected }) => (
                   <>
                     <Switch.Control
-                      className={`shrink-0 ${isSelected ? 'bg-blue-600' : 'bg-zinc-200'}`}
+                      className={`shrink-0 ${isSelected ? 'bg-info' : 'bg-muted'}`}
                     >
                       <Switch.Thumb className="bg-white" />
                     </Switch.Control>
                     <Switch.Content className="min-w-0">
-                      <Label className="block text-xs leading-4 text-zinc-800">{label}</Label>
+                      <Label className="block text-xs leading-4 text-foreground">{label}</Label>
                     </Switch.Content>
                   </>
                 )}
@@ -741,7 +741,7 @@ function ReportFilterControls({
       ))}
 
       <Button
-        className="mt-5 w-full bg-blue-600 text-white hover:bg-blue-700"
+        className="mt-5 w-full "
         variant="primary"
         onPress={() => window.print()}
       >
@@ -756,12 +756,12 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
 
   return (
     <>
-      <aside className="report-filter-panel print:hidden rounded-xl border border-zinc-200 bg-white p-4 shadow-lg">
+      <aside className="report-filter-panel print:hidden rounded-xl border border-border bg-white p-4 shadow-lg">
         <ReportFilterControls f={f} onChange={onChange} />
       </aside>
 
       <div className="report-filter-trigger print:hidden">
-        <Button className="shadow-lg" variant="primary" onPress={drawer.open}>
+        <Button className="" variant="primary" onPress={drawer.open}>
           Filters
         </Button>
       </div>
@@ -777,16 +777,16 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
             aria-label="Report filters"
             className="flex h-full w-[min(92vw,22rem)] flex-col bg-white"
           >
-            <Drawer.Header className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
+            <Drawer.Header className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
-                <Drawer.Heading className="font-semibold text-zinc-900">
+                <Drawer.Heading className="font-semibold text-foreground">
                   Report filters
                 </Drawer.Heading>
-                <p className="mt-1 text-xs text-zinc-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Changes apply immediately to the printable report.
                 </p>
               </div>
-              <Drawer.CloseTrigger className="text-zinc-500 hover:text-zinc-700" />
+              <Drawer.CloseTrigger className="text-muted-foreground hover:text-foreground" />
             </Drawer.Header>
             <Drawer.Body className="flex-1 px-5 py-4">
               <ReportFilterControls f={f} onChange={onChange} showHeading={false} />
@@ -815,7 +815,7 @@ function ReportVulnerabilitySection({
           marginBottom: 10,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
-          borderBottom: '2px solid var(--accent)',
+          borderBottom: '2px solid var(--primary)',
           paddingBottom: 6,
           display: 'inline-block',
         }}
@@ -882,7 +882,7 @@ function ReportVulnerabilitySection({
                           border: '1px solid #e5e7eb',
                           fontFamily: 'monospace',
                           fontSize: 12,
-                          color: 'var(--accent)',
+                          color: 'var(--primary)',
                           fontWeight: 600,
                           overflowWrap: 'anywhere',
                         }}
@@ -983,7 +983,7 @@ function ReportVulnerabilitySection({
                           {filters.showReferences && vulnerability.references?.length > 0 && (
                             <span
                               style={{
-                                color: 'var(--accent)',
+                                color: 'var(--primary)',
                                 marginLeft: 8,
                                 fontSize: 12,
                                 overflowWrap: 'anywhere',
@@ -1111,7 +1111,7 @@ function ScanSection({
   const filteredVulns = filterVulns(vulns, filters, policyFailures);
   const suppressedVulns = filteredVulns.filter((v) => v.suppression);
   const ws = worstSeverity(scan);
-  const accentColor = SEV_COLORS[ws]?.bg ?? 'var(--accent)';
+  const accentColor = SEV_COLORS[ws]?.bg ?? 'var(--primary)';
   const imageRef = `${scan.image_name}:${scan.image_tag}`;
   const displayStatus = reportStatus(scan);
   const statusColors = statusChipColors(displayStatus);
@@ -1734,7 +1734,7 @@ function ScanSection({
               marginBottom: 10,
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
-              borderBottom: '2px solid var(--accent)',
+              borderBottom: '2px solid var(--primary)',
               paddingBottom: 6,
               display: 'inline-block',
             }}
@@ -1746,7 +1746,7 @@ function ScanSection({
               key={f.id}
               style={{
                 border: '1px solid #e5e7eb',
-                borderLeft: '4px solid var(--accent)',
+                borderLeft: '4px solid var(--primary)',
                 borderRadius: 4,
                 padding: '10px 12px',
                 marginBottom: 8,
@@ -1790,8 +1790,8 @@ function ScanSection({
                 <span
                   style={{
                     display: 'inline-block',
-                    background: 'color-mix(in srgb, var(--accent) 18%, white)',
-                    color: 'color-mix(in srgb, var(--accent) 82%, black)',
+                    background: 'color-mix(in srgb, var(--primary) 18%, white)',
+                    color: 'color-mix(in srgb, var(--primary) 82%, black)',
                     fontSize: '0.75rem',
                     fontWeight: 700,
                     padding: '2px 6px',
@@ -1828,9 +1828,9 @@ function ScanSection({
                 <div
                   style={{
                     marginTop: 6,
-                    background: 'color-mix(in srgb, var(--accent) 18%, white)',
-                    border: '1px solid color-mix(in srgb, var(--accent) 62%, white)',
-                    borderLeft: '3px solid var(--accent)',
+                    background: 'color-mix(in srgb, var(--primary) 18%, white)',
+                    border: '1px solid color-mix(in srgb, var(--primary) 62%, white)',
+                    borderLeft: '3px solid var(--primary)',
                     borderRadius: 3,
                     padding: '6px 8px',
                   }}
@@ -1865,7 +1865,7 @@ function ScanSection({
           aria-controls={`manual-finding-form-${scan.id}`}
           onClick={() => setShowAddFinding((v) => !v)}
           style={{
-            background: showAddFinding ? '#f3f4f6' : 'var(--accent)',
+            background: showAddFinding ? '#f3f4f6' : 'var(--primary)',
             color: showAddFinding ? '#374151' : '#fff',
             border: 'none',
             borderRadius: 6,
@@ -2028,7 +2028,7 @@ function ScanSection({
                 disabled={!newFinding.vuln_id || manualSaving}
                 aria-busy={manualSaving}
                 style={{
-                  background: newFinding.vuln_id ? 'var(--accent)' : '#e5e7eb',
+                  background: newFinding.vuln_id ? 'var(--primary)' : '#e5e7eb',
                   color: newFinding.vuln_id ? '#fff' : '#9ca3af',
                   border: 'none',
                   borderRadius: 6,
@@ -2301,7 +2301,7 @@ function PrintReport() {
             width: 20,
             height: 20,
             border: '2px solid #e5e7eb',
-            borderTopColor: 'var(--accent)',
+            borderTopColor: 'var(--primary)',
             borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
           }}
@@ -2401,7 +2401,7 @@ function PrintReport() {
                     </a>
                   </div>
                 </div>
-                <div style={{ borderLeft: '5px solid var(--accent)', paddingLeft: 16 }}>
+                <div style={{ borderLeft: '5px solid var(--primary)', paddingLeft: 16 }}>
                   <h1
                     style={{
                       fontSize: 26,
@@ -2442,13 +2442,13 @@ function PrintReport() {
                 {resolvedHelmChart && (
                   <span
                     style={{
-                      background: 'color-mix(in srgb, var(--accent) 18%, white)',
-                      color: 'var(--accent)',
+                      background: 'color-mix(in srgb, var(--primary) 18%, white)',
+                      color: 'var(--primary)',
                       fontWeight: 700,
                       fontSize: 13,
                       padding: '4px 12px',
                       borderRadius: 999,
-                      border: '1px solid color-mix(in srgb, var(--accent) 62%, white)',
+                      border: '1px solid color-mix(in srgb, var(--primary) 62%, white)',
                     }}
                   >
                     Helm chart
@@ -2456,13 +2456,13 @@ function PrintReport() {
                 )}
                 <span
                   style={{
-                    background: 'color-mix(in srgb, var(--accent) 18%, white)',
-                    color: 'var(--accent)',
+                    background: 'color-mix(in srgb, var(--primary) 18%, white)',
+                    color: 'var(--primary)',
                     fontWeight: 700,
                     fontSize: 13,
                     padding: '4px 12px',
                     borderRadius: 999,
-                    border: '1px solid color-mix(in srgb, var(--accent) 62%, white)',
+                    border: '1px solid color-mix(in srgb, var(--primary) 62%, white)',
                   }}
                 >
                   {data.length} image{data.length !== 1 ? 's' : ''}
@@ -2494,7 +2494,7 @@ function PrintReport() {
                     marginBottom: 10,
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
-                    borderBottom: '2px solid var(--accent)',
+                    borderBottom: '2px solid var(--primary)',
                     paddingBottom: 6,
                     display: 'inline-block',
                   }}
@@ -2547,7 +2547,7 @@ function PrintReport() {
                             <a
                               href={`#scan-${scan.id}`}
                               style={{
-                                color: 'var(--accent)',
+                                color: 'var(--primary)',
                                 textDecoration: 'none',
                                 wordBreak: 'break-all',
                                 overflowWrap: 'anywhere',

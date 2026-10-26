@@ -498,14 +498,12 @@ function ScanOverviewMetric({
   icon,
   tone = 'default',
   onPress,
-  active = false,
 }: {
   label: string;
   value: number;
   icon: ReactNode;
   tone?: 'default' | 'danger' | 'success';
   onPress?: () => void;
-  active?: boolean;
 }) {
   return (
     <StatCard
@@ -514,7 +512,6 @@ function ScanOverviewMetric({
       icon={icon}
       tone={tone}
       onPress={onPress}
-      selected={onPress ? active : undefined}
     />
   );
 }
@@ -756,7 +753,7 @@ function ScanDetailContent() {
 
   const loadScan = useCallback(async () => {
     const currentRequest = loadScanInFlightRef.current;
-    if (currentRequest?.id === id) {
+    if (currentRequest?.id === id && !currentRequest.controller.signal.aborted) {
       return currentRequest.promise;
     }
 
@@ -765,7 +762,7 @@ function ScanDetailContent() {
     const controller = new AbortController();
     const request = getScan(id, { signal: controller.signal })
       .then((nextScan) => {
-        if (loadVersion === loadVersionRef.current) {
+        if (loadVersion === loadVersionRef.current && !controller.signal.aborted) {
           setScan(nextScan);
         }
         return nextScan;
@@ -905,6 +902,7 @@ function ScanDetailContent() {
       cancelled = true;
       if (loadScanInFlightRef.current?.id === id) {
         loadScanInFlightRef.current.controller.abort();
+        loadScanInFlightRef.current = null;
       }
       if (complianceRequestRef.current?.id === id) {
         complianceRequestVersionRef.current += 1;
@@ -1951,13 +1949,13 @@ function ScanDetailContent() {
 
   if (loading) return <ScanDetailSkeleton />;
 
-  if (error)
+  if (error || !scan)
     return (
       <div className="p-6">
         <StatusAlert
           status="danger"
           title="Scan unavailable"
-          description={error}
+          description={error || 'No scan data was returned. Please retry loading this scan.'}
           action={
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="secondary" onPress={() => router.push('/scans')}>
@@ -1986,7 +1984,6 @@ function ScanDetailContent() {
       </div>
     );
 
-  if (!scan) return null;
   const effectiveScanStatus = resolveDisplayStatus(scan.status, scan.external_status);
   const isScanInProgress = ACTIVE_SCAN_STATUSES.has(effectiveScanStatus);
 
@@ -2525,7 +2522,6 @@ function ScanDetailContent() {
             <ScanOverviewMetric
               label="Vulnerabilities"
               value={scanVulnerabilityTotal}
-              active={activeTab === 'vulns' && !severityFilter && !hasFix}
               onPress={() => {
                 setActiveTab('vulns');
                 clearVulnerabilityFilters();
@@ -2535,7 +2531,6 @@ function ScanDetailContent() {
             <ScanOverviewMetric
               label="Critical + high"
               value={scanCriticalAndHigh}
-              active={activeTab === 'vulns' && severityFilter === 'CRITICAL,HIGH'}
               onPress={() => {
                 setActiveTab('vulns');
                 setSeverityFilter(severityFilter === 'CRITICAL,HIGH' ? '' : 'CRITICAL,HIGH');
@@ -2547,7 +2542,6 @@ function ScanDetailContent() {
             <ScanOverviewMetric
               label="Fixable"
               value={vulnerabilitiesWithFix}
-              active={activeTab === 'vulns' && hasFix}
               onPress={() => {
                 setActiveTab('vulns');
                 setHasFix(!hasFix);
@@ -2560,7 +2554,6 @@ function ScanDetailContent() {
               label="Policy blockers"
               value={policyBlockerCount}
               onPress={() => setActiveTab('compliance')}
-              active={activeTab === 'compliance'}
               icon={<ShieldKeyIcon size={17} />}
               tone="danger"
             />
@@ -3023,7 +3016,7 @@ function ScanDetailContent() {
               <Table.Content
                 aria-label="Scan vulnerabilities"
                 aria-busy={vulnLoading}
-                className="min-w-[1120px] table-fixed [&_td]:px-3 [&_th]:px-3 [&_td]:py-3"
+                className="min-w-[1120px] table-auto [&_td]:px-4 [&_th]:px-4 [&_td]:py-3 [&_td]:align-top [&_td]:whitespace-normal [&_td]:[overflow-wrap:anywhere]"
                 sortDescriptor={{
                   column: sortBy,
                   direction: sortDir === 'asc' ? 'ascending' : 'descending',
@@ -3056,7 +3049,7 @@ function ScanDetailContent() {
                         key={key}
                         allowsSorting
                         isRowHeader={key === 'vuln_id'}
-                        className={`${key === 'vuln_id' ? 'w-[220px]' : key === 'pkg_name' ? 'w-auto' : key === 'severity' ? 'w-[160px]' : 'w-[220px]'} ${align === 'right' ? 'text-right' : 'text-left'}`}
+                        className={`${key === 'vuln_id' ? 'w-[220px]' : key === 'pkg_name' ? 'min-w-[240px]' : key === 'severity' ? 'w-[160px]' : 'w-[220px]'} ${align === 'right' ? 'text-right' : 'text-left'}`}
                         style={{ color: active ? 'var(--foreground)' : undefined }}
                       >
                         {({ sortDirection }) => (
@@ -3067,7 +3060,7 @@ function ScanDetailContent() {
                       </Table.Column>
                     );
                   })}
-                  <Table.Column className="w-[180px] text-left">Signals & notes</Table.Column>
+                  <Table.Column className="min-w-[220px] text-left">Signals & notes</Table.Column>
                 </Table.Header>
                 <Table.Body>
                   {vulnError && vulns.length === 0 ? null : vulns.length === 0 ? (
@@ -3183,8 +3176,8 @@ function ScanDetailContent() {
                               )}
                             </Table.Cell>
                             <Table.Cell className="align-top">
-                              <div className="flex min-w-0 items-start gap-2">
-                                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                              <div className="flex min-w-0 flex-col items-start gap-2">
+                                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                                   <IntelligenceStatusChip posture={v.current_posture} />
                                   <FirstSeenBadge firstSeenAt={v.first_seen_at} />
                                   {hasPolicyFailure ? (
@@ -3809,14 +3802,14 @@ function ScanDetailContent() {
               <Table.ScrollContainer className="rounded-none border-0">
                 <Table.Content
                   aria-label="Compliance violations"
-                  className="min-w-[1120px] table-fixed [&_td]:px-3 [&_td]:py-3 [&_td]:align-top [&_th]:px-3"
+                  className="min-w-[1200px] table-auto [&_td]:px-4 [&_td]:py-3 [&_td]:align-top [&_td]:whitespace-normal [&_td]:[overflow-wrap:anywhere] [&_th]:px-4"
                 >
                   <Table.Header>
                     <Table.Column isRowHeader className="w-[200px]">
                       Policy / organization
                     </Table.Column>
-                    <Table.Column className="w-auto">Finding / package</Table.Column>
-                    <Table.Column className="w-[230px]">Violation</Table.Column>
+                    <Table.Column className="min-w-[240px]">Finding / package</Table.Column>
+                    <Table.Column className="min-w-[260px]">Violation</Table.Column>
                     <Table.Column className="w-[180px]">Remediation</Table.Column>
                     <Table.Column className="w-[130px]">Evaluated</Table.Column>
                     <Table.Column className="w-[90px]">
@@ -3882,7 +3875,7 @@ function ScanDetailContent() {
                                 {row.ruleType || 'Policy rule'}
                               </span>
                             </div>
-                            <p className="break-words text-xs leading-5 text-muted-foreground">
+                            <p className="max-w-sm whitespace-normal text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
                               {row.message}
                             </p>
                           </Table.Cell>

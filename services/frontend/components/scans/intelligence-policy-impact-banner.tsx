@@ -97,15 +97,20 @@ export function IntelligencePolicyImpactBanner({
   );
 
   return (
-    <Alert className="items-start gap-3 py-4" status={meta.status}>
+    <Alert
+      className="items-start gap-3 border-border bg-card py-4 text-foreground"
+      status="default"
+    >
       <Alert.Indicator>
-        <ShieldKeyIcon size={18} />
+        <ShieldKeyIcon className="text-warning-foreground" size={18} />
       </Alert.Indicator>
-      <Alert.Content className="min-w-0 flex-1 gap-4">
+      <Alert.Content className="flex min-w-0 flex-1 flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <Alert.Title>Policy result pending confirmation</Alert.Title>
-            <Alert.Description className="mt-1 max-w-4xl">{meta.description}</Alert.Description>
+            <Alert.Description className="mt-1 max-w-4xl leading-6 text-muted-foreground opacity-100">
+              {meta.description}
+            </Alert.Description>
           </div>
           {canRescan ? (
             <Button
@@ -135,10 +140,13 @@ export function IntelligencePolicyImpactBanner({
           <span className="text-xs text-muted-foreground">Stored result preserved</span>
         </div>
 
-        <Accordion className="w-full overflow-hidden rounded-lg border border-divider/70 bg-surface/40" hideSeparator>
+        <Accordion
+          className="w-full overflow-hidden rounded-lg border border-border bg-transparent"
+          hideSeparator
+        >
           <Accordion.Item id="policy-impact">
             <Accordion.Heading>
-              <Accordion.Trigger className="group flex min-h-10 w-full items-center gap-3 px-3 text-left hover:bg-surface-secondary/70">
+              <Accordion.Trigger className="group flex min-h-10 w-full items-center gap-3 px-3 text-left hover:bg-muted/50">
                 <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
                   Review policy impact
                 </span>
@@ -148,12 +156,12 @@ export function IntelligencePolicyImpactBanner({
                 <Accordion.Indicator className="shrink-0 text-muted-foreground group-hover:text-foreground [&>svg]:size-4" />
               </Accordion.Trigger>
             </Accordion.Heading>
-            <Accordion.Panel className="border-t border-divider/70">
+            <Accordion.Panel className="border-t border-border">
               <Accordion.Body className="space-y-3 px-3 pb-3 pt-3">
                 <div className="space-y-2">
                   {impact.policies.map((policy) => (
                     <div
-                      className="border-l-2 border-divider pl-3"
+                      className="border-l-2 border-border pl-3"
                       key={`${policy.org_id}-${policy.policy_id}`}
                     >
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
@@ -163,18 +171,20 @@ export function IntelligencePolicyImpactBanner({
                           {formatStatus(policy.current_status)}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">{policy.reason}</p>
+                      <p className="mt-2 max-h-32 overflow-auto whitespace-normal text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">
+                        {policy.reason}
+                      </p>
                     </div>
                   ))}
                 </div>
 
                 {cves.length > 0 ? (
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <div className="flex max-h-40 flex-wrap items-center gap-2 overflow-auto text-xs text-muted-foreground">
                     <span>Changed CVEs:</span>
                     {cves.map((cve) => (
                       <UiLink
                         key={cve}
-                        className="font-mono text-primary underline-offset-2"
+                        className="rounded-md bg-muted px-2 py-1 font-mono text-foreground underline-offset-2"
                         href={`/vulnkb/${encodeURIComponent(cve)}`}
                       >
                         {cve}

@@ -56,6 +56,7 @@ import {
   UnhappyIcon,
 } from 'hugeicons-react';
 import { useParams, useRouter } from 'next/navigation';
+import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 type MetricTone = 'neutral' | 'danger' | 'success';
@@ -162,6 +163,7 @@ export default function ImageScansPage() {
     () => new Map()
   );
   const [refreshKey, setRefreshKey] = useState(0);
+  const [pollTick, setPollTick] = useState(0);
   const toast = useToast();
   const bounds = useMemo(() => (range ? getRecentActivityBounds(range) : null), [range]);
   const filterCount = [policy, range].filter(Boolean).length;
@@ -294,6 +296,47 @@ export default function ImageScansPage() {
       status,
     ]
   );
+
+  // Quiet refresh: update the tag list and counts in place, without clearing them.
+  useEffect(() => {
+    if (pollTick === 0 || !imageName) return;
+    let cancelled = false;
+    void Promise.allSettled([
+      listScanArtifacts(
+        artifactPage,
+        ARTIFACT_PAGE_SIZE,
+        query || undefined,
+        status || undefined,
+        critical,
+        policy,
+        imageName,
+        bounds?.from,
+        bounds?.to
+      ),
+      getScanImageStats(imageName),
+    ]).then(([artifactResult, statsResult]) => {
+      if (cancelled) return;
+      if (artifactResult.status === 'fulfilled') {
+        setArtifacts(artifactResult.value.data ?? []);
+        setTotal(artifactResult.value.total);
+      }
+      if (statsResult.status === 'fulfilled') setStats(statsResult.value);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Only the tick drives this; the filters are read as they are when it fires.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pollTick]);
+
+  const hasActiveScans = artifacts.some((artifact) =>
+    ['pending', 'queued', 'running'].includes(artifact.latest_status)
+  );
+  const pollIfVisible = () => {
+    if (document.visibilityState === 'visible') setPollTick((current) => current + 1);
+  };
+  useConditionalInterval(pollIfVisible, hasActiveScans, 4000);
+  useConditionalInterval(pollIfVisible, !hasActiveScans, 30000);
 
   useEffect(
     () =>
@@ -710,6 +753,7 @@ export default function ImageScansPage() {
           childRefreshKey={{}}
           expanded={expanded}
           hasActiveFilters={hasFilters}
+          historyLiveToken={pollTick}
           historyRefreshKey={refreshKey}
           hideImageName
           loading={loading}

@@ -44,6 +44,8 @@ type ArtifactScansTableProps = {
   artifacts: ArtifactSummary[];
   childRefreshKey: Record<string, number>;
   historyRefreshKey?: number;
+  /** Bumps on each live refresh: reloads open history in place, keeping its page. */
+  historyLiveToken?: number;
   emptyState?: { description: string; title: string };
   expanded: Set<string>;
   hasActiveFilters: boolean;
@@ -157,7 +159,12 @@ function ScanSelectionCheckbox({
   );
 }
 
-function useArtifactHistory(imageName: string, imageTag: string, refreshToken: number) {
+function useArtifactHistory(
+  imageName: string,
+  imageTag: string,
+  refreshToken: number,
+  liveToken: number
+) {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const [page, setPage] = useState(1);
@@ -200,6 +207,15 @@ function useArtifactHistory(imageName: string, imageTag: string, refreshToken: n
     });
   }, [load, page, refreshToken, scopeKey]);
 
+  useEffect(() => {
+    if (liveToken === 0) return;
+    return deferEffect(() => {
+      void load(page);
+    });
+    // Only a new live token reloads; page and filters are read as they are then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveToken]);
+
   useConditionalInterval(
     () => {
       void load(page);
@@ -222,6 +238,7 @@ function ArtifactHistoryRows({
   allowMutationActions,
   artifact,
   refreshToken,
+  liveToken,
   onCancel,
   onDelete,
   onDeleteHistoryScan,
@@ -235,6 +252,7 @@ function ArtifactHistoryRows({
   allowMutationActions: boolean;
   artifact: ArtifactSummary;
   refreshToken: number;
+  liveToken: number;
   onCancel: (scanId: string) => void;
   onDelete: (scanId: string) => void;
   onDeleteHistoryScan?: (scan: Scan) => void;
@@ -248,7 +266,8 @@ function ArtifactHistoryRows({
   const { loading, page, scans, setPage, totalPages } = useArtifactHistory(
     artifact.image_name,
     artifact.image_tag,
-    refreshToken
+    refreshToken,
+    liveToken
   );
   type HistoryRow =
     | { id: string; kind: 'loading' | 'empty' | 'pagination'; scan?: never }
@@ -471,6 +490,7 @@ export function ArtifactScansTable({
   artifacts,
   childRefreshKey,
   historyRefreshKey,
+  historyLiveToken,
   emptyState,
   expanded,
   hasActiveFilters,
@@ -840,6 +860,7 @@ export function ArtifactScansTable({
                         allowMutationActions={allowMutationActions}
                         artifact={artifact}
                         refreshToken={childRefreshKey[key] ?? historyRefreshKey ?? 0}
+                        liveToken={historyLiveToken ?? 0}
                         onCancel={(scanId) => onCancel(scanId, key)}
                         onDelete={(scanId) => onDelete(scanId, key)}
                         onDeleteHistoryScan={onDeleteHistoryScan}

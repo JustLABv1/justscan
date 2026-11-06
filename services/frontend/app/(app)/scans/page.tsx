@@ -135,6 +135,7 @@ function ScansPageContent() {
     () => new Map()
   );
   const [refreshKey, setRefreshKey] = useState(0);
+  const [pollTick, setPollTick] = useState(0);
   const [page, setPage] = useState(() => Math.max(1, Number(searchParams.get('page') ?? '1')));
   const [filters, updateFilters] = useReducer(scanFiltersReducer, searchParams, initialScanFilters);
   const { query, status, critical, policy, intelligence, range, date, dateTo, sort } = filters;
@@ -239,6 +240,29 @@ function ScansPageContent() {
     },
   ];
 
+  const hasActiveScans = images.some((image) =>
+    ['pending', 'queued', 'running'].includes(image.latest_status)
+  );
+
+  // Keep the list current: quickly while something is running, slowly otherwise,
+  // and straight away when the tab comes back into view.
+  useEffect(() => {
+    const interval = window.setInterval(
+      () => {
+        if (document.visibilityState === 'visible') setPollTick((current) => current + 1);
+      },
+      hasActiveScans ? 4000 : 30000
+    );
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setPollTick((current) => current + 1);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [hasActiveScans]);
+
   const syncRoute = useCallback(() => {
     const params = new URLSearchParams();
     if (query) params.set('q', query);
@@ -308,6 +332,7 @@ function ScansPageContent() {
       policy,
       query,
       refreshKey,
+      pollTick,
       scopeKey,
       sort,
       status,
@@ -671,6 +696,7 @@ function ScansPageContent() {
           }
           key={JSON.stringify([page, refreshKey])}
           hasActiveFilters={activeFilters}
+          revision={pollTick}
           images={images}
           loading={loading && images.length === 0}
           onDeleteImage={setPendingDelete}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight, Container, Tag, ScanLine } from 'lucide-react';
 import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
@@ -21,6 +21,8 @@ import { Delete01Icon, Shield01Icon } from 'hugeicons-react';
 
 type Props = {
   toolbar?: ReactNode;
+  /** Bumps whenever the list is refreshed, so expanded branches reload with it. */
+  revision?: number;
   images: ImageOverview[];
   loading: boolean;
   hasActiveFilters: boolean;
@@ -70,12 +72,12 @@ function Findings({
   );
 }
 
-function useScanTreeData(images: ImageOverview[]) {
+function useScanTreeData(images: ImageOverview[], revision: number) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [tags, setTags] = useState<Record<string, Branch<ArtifactSummary>>>({});
   const [runs, setRuns] = useState<Record<string, Branch<Scan>>>({});
 
-  async function loadBranch(image: string, tag?: string, page = 1) {
+  async function loadBranch(image: string, tag?: string, page = 1, silent = false) {
     const key = tag === undefined ? imageKey(image) : tagKey(image, tag);
     const pending = <T,>(current: Record<string, Branch<T>>) => ({
       ...current,
@@ -87,8 +89,10 @@ function useScanTreeData(images: ImageOverview[]) {
         requestedPage: page,
       },
     });
-    if (tag === undefined) setTags(pending);
-    else setRuns(pending);
+    if (!silent) {
+      if (tag === undefined) setTags(pending);
+      else setRuns(pending);
+    }
     try {
       if (tag === undefined) {
         const result = await listScanArtifacts(
@@ -145,6 +149,16 @@ function useScanTreeData(images: ImageOverview[]) {
       else setRuns(failed);
     }
   }
+
+  useEffect(() => {
+    if (revision === 0) return;
+    // Keep what is already expanded current as the list refreshes.
+    for (const key of expanded) {
+      const [image, tag] = JSON.parse(key) as [string, string | undefined];
+      void loadBranch(image, tag, 1, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revision]);
 
   function toggle(image: string, tag?: string) {
     const key = tag === undefined ? imageKey(image) : tagKey(image, tag);
@@ -218,13 +232,14 @@ function buildRows(
 
 function ScanTreeTable({
   toolbar,
+  revision = 0,
   images,
   loading,
   hasActiveFilters,
   onDeleteImage,
   queuedImageNames,
 }: Props) {
-  const tree = useScanTreeData(images);
+  const tree = useScanTreeData(images, revision);
   const { expanded, setExpanded, rows } = tree;
   return (
     <div>

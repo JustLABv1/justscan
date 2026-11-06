@@ -99,6 +99,24 @@ function isWatchlistScanJob(job: BackgroundJob) {
   );
 }
 
+function isGitScanJob(job: BackgroundJob) {
+  return job.type === 'scan' && job.metadata?.trigger_source === 'git_repository';
+}
+
+/** Watchlist schedules and Git repository scans, as opposed to scans a person started. */
+function isAutomatedJob(job: BackgroundJob) {
+  return isWatchlistScanJob(job) || isGitScanJob(job);
+}
+
+/**
+ * Automated runs only earn a place here while they run or after they fail;
+ * a routine finished one is history that lives on its own page.
+ */
+function isVisibleJob(job: BackgroundJob) {
+  if (!isAutomatedJob(job)) return true;
+  return isBackgroundJobActive(job) || job.status === 'failed';
+}
+
 function mergeJobs(current: BackgroundJob[], incoming: BackgroundJob[]) {
   const nextById = new Map(incoming.map((job) => [job.id, job]));
 
@@ -153,7 +171,7 @@ function BackgroundJobRow({
           ? `${jobStatusLabel(job.status)} ${timeAgo(job.finished_at)}`
           : jobStatusLabel(job.status),
         job.description,
-        isWatchlistScanJob(job) ? 'Watchlist' : null,
+        isWatchlistScanJob(job) ? 'Watchlist' : isGitScanJob(job) ? 'Git repository' : null,
       ]
         .filter(Boolean)
         .join(' · ');
@@ -313,7 +331,7 @@ export function BackgroundProcessCenter({ collapsed = false }: { collapsed?: boo
   }, [toast]);
 
   const scopedJobs = useMemo(
-    () => (jobsScopeKey === scopeKey ? jobs : []),
+    () => (jobsScopeKey === scopeKey ? jobs : []).filter(isVisibleJob),
     [jobs, jobsScopeKey, scopeKey]
   );
   const scopedError = errorScopeKey === scopeKey ? error : '';
@@ -346,7 +364,10 @@ export function BackgroundProcessCenter({ collapsed = false }: { collapsed?: boo
               description: job.error || 'The process could not be completed.',
               action: { label: 'View progress', onPress: openBackgroundProcessCenter },
             });
-          } else if (job.status === 'succeeded' || job.status === 'completed') {
+          } else if (
+            (job.status === 'succeeded' || job.status === 'completed') &&
+            !isAutomatedJob(job)
+          ) {
             toastRef.current.success(`${job.title || 'Background process'} completed`, {
               description: job.description || undefined,
             });

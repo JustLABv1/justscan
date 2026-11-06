@@ -19,11 +19,14 @@ import (
 // tag participates in the image's health calculation; the most concerning one is
 // returned as the health scan so a newer clean tag cannot hide an older failure.
 type ImageOverview struct {
-	ImageName            string                      `json:"image_name"`
-	ScanCount            int                         `json:"scan_count"`
-	TagCount             int                         `json:"tag_count"`
-	LatestScanID         string                      `json:"latest_scan_id"`
-	LatestTag            string                      `json:"latest_tag"`
+	ImageName    string `json:"image_name"`
+	ScanCount    int    `json:"scan_count"`
+	TagCount     int    `json:"tag_count"`
+	LatestScanID string `json:"latest_scan_id"`
+	LatestTag    string `json:"latest_tag"`
+	// ActiveTags counts the tags whose latest scan is queued or running, so an
+	// image shows work in progress even when another tag has findings.
+	ActiveTags           int                         `json:"active_tags"`
 	LatestStatus         string                      `json:"latest_status"`
 	LatestExternalStatus string                      `json:"latest_external_status,omitempty"`
 	LatestScanAt         time.Time                   `json:"latest_scan_at"`
@@ -166,6 +169,8 @@ WITH visible AS (
         COUNT(*) OVER (PARTITION BY h.image_name) AS tag_count,
         MAX(CASE WHEN h.status IN ('pending', 'queued', 'running') THEN 1 ELSE 0 END)
             OVER (PARTITION BY h.image_name) AS active_rank,
+        SUM(CASE WHEN h.status IN ('pending', 'queued', 'running') THEN 1 ELSE 0 END)
+            OVER (PARTITION BY h.image_name) AS active_tags,
         MAX(h.health_rank) OVER (PARTITION BY h.image_name) AS health_rank,
         MAX(h.created_at) OVER (PARTITION BY h.image_name) AS latest_scan_at,
         MAX(h.scan_id::text) FILTER (WHERE h.latest_rank = 1) OVER (PARTITION BY h.image_name) AS latest_scan_id,
@@ -224,7 +229,7 @@ WITH visible AS (
 			return
 		}
 		dataArgs := append(append([]interface{}{}, args...), limit, offset)
-		rows, err := db.QueryContext(c.Request.Context(), baseQuery+`SELECT image_name, scan_count, tag_count, latest_scan_id::text, latest_tag, latest_status, latest_external_status, latest_scan_at, health_scan_id::text, health_tag, health_status, health_external_status, health_critical_count, health_high_count, health_medium_count, health_low_count, health_policy_failed FROM overview WHERE `+where+` ORDER BY `+imageOverviewOrder(c.Query("sort"))+` LIMIT ? OFFSET ?`, dataArgs...)
+		rows, err := db.QueryContext(c.Request.Context(), baseQuery+`SELECT image_name, scan_count, tag_count, active_tags, latest_scan_id::text, latest_tag, latest_status, latest_external_status, latest_scan_at, health_scan_id::text, health_tag, health_status, health_external_status, health_critical_count, health_high_count, health_medium_count, health_low_count, health_policy_failed FROM overview WHERE `+where+` ORDER BY `+imageOverviewOrder(c.Query("sort"))+` LIMIT ? OFFSET ?`, dataArgs...)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load scan images"})
 			return
@@ -233,7 +238,7 @@ WITH visible AS (
 		images := make([]ImageOverview, 0)
 		for rows.Next() {
 			var image ImageOverview
-			if err := rows.Scan(&image.ImageName, &image.ScanCount, &image.TagCount, &image.LatestScanID, &image.LatestTag, &image.LatestStatus, &image.LatestExternalStatus, &image.LatestScanAt, &image.HealthScanID, &image.HealthTag, &image.HealthStatus, &image.HealthExternalStatus, &image.HealthCriticalCount, &image.HealthHighCount, &image.HealthMediumCount, &image.HealthLowCount, &image.HealthPolicyFailed); err != nil {
+			if err := rows.Scan(&image.ImageName, &image.ScanCount, &image.TagCount, &image.ActiveTags, &image.LatestScanID, &image.LatestTag, &image.LatestStatus, &image.LatestExternalStatus, &image.LatestScanAt, &image.HealthScanID, &image.HealthTag, &image.HealthStatus, &image.HealthExternalStatus, &image.HealthCriticalCount, &image.HealthHighCount, &image.HealthMediumCount, &image.HealthLowCount, &image.HealthPolicyFailed); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read scan image"})
 				return
 			}

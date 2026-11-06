@@ -110,6 +110,7 @@ import {
   Popover,
   SearchField,
   Select,
+  Spinner,
   Table,
   Tabs,
   TextArea,
@@ -550,6 +551,10 @@ function ScanDetailContent() {
   const [hideSuppressed, setHideSuppressed] = useState(false);
   const [xrayPolicyFirst, setXrayPolicyFirst] = useState(false);
   const [policyFailedOnly, setPolicyFailedOnly] = useState(false);
+  // True for a short while after a scan finishes on this page, while organization
+  // policies are still being evaluated in the background.
+  const [policySettling, setPolicySettling] = useState(false);
+  const previousScanStatusRef = useRef<string | undefined>(undefined);
   const [sortBy, setSortBy] = useState<VulnerabilityViewSettings['sort_by']>('severity');
   const [sortDir, setSortDir] = useState<VulnerabilityViewSettings['sort_dir']>('asc');
   const [viewSettingsReady, setViewSettingsReady] = useState(false);
@@ -942,6 +947,43 @@ function ScanDetailContent() {
     3000
   );
 
+  // Policy evaluation, auto-tagging and the like run after a scan is marked
+  // completed, so a page that watched the scan finish would otherwise keep what
+  // it loaded in that instant. Keep refreshing for a short while afterwards.
+  useEffect(() => {
+    const previous = previousScanStatusRef.current;
+    previousScanStatusRef.current = scanStatus;
+    if (scanStatus !== 'completed' || (previous !== 'pending' && previous !== 'running')) {
+      return;
+    }
+
+    let ticks = 0;
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const finish = () => {
+      if (interval) clearInterval(interval);
+      interval = undefined;
+      setPolicySettling(false);
+    };
+    const cancelDeferred = deferEffect(() => {
+      setPolicySettling(true);
+      interval = setInterval(() => {
+        ticks += 1;
+        void loadScan().catch(() => {});
+        void loadComplianceForScan(id)
+          .then((results) => {
+            if ((results.length > 0 && ticks >= 2) || ticks >= 10) finish();
+          })
+          .catch(() => {
+            if (ticks >= 10) finish();
+          });
+      }, 2500);
+    });
+    return () => {
+      cancelDeferred();
+      if (interval) clearInterval(interval);
+    };
+  }, [id, loadComplianceForScan, loadScan, scanStatus]);
+
   useEffect(() => {
     if (pkgDebounceRef.current) clearTimeout(pkgDebounceRef.current);
     pkgDebounceRef.current = setTimeout(() => {
@@ -1154,7 +1196,10 @@ function ScanDetailContent() {
     ] as const;
 
     const normalizedCveFilter = cveFilter.trim().toUpperCase();
-    const policyFailedFilterActive = policyFailedOnly && workScope.kind === 'org';
+    // While policies are still being evaluated there is nothing to filter by, and
+    // filtering anyway would show an empty list for an image that has findings.
+    const policyFailedFilterActive =
+      policyFailedOnly && workScope.kind === 'org' && !policySettling;
     const policyFailedVulnIdSet = new Set<string>();
     if (policyFailedFilterActive) {
       for (const result of compliance) {
@@ -1270,6 +1315,7 @@ function ScanDetailContent() {
     intelligenceFilter,
     xrayPolicyFirst,
     policyFailedOnly,
+    policySettling,
     hideSuppressed,
     cveFilter,
     sortBy,
@@ -2677,6 +2723,12 @@ function ScanDetailContent() {
                   <span className="text-sm text-muted-foreground">
                     {vulnTotal.toLocaleString()} {vulnTotal === 1 ? 'finding' : 'findings'}
                   </span>
+                  {policySettling && workScope.kind === 'org' ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Spinner size="sm" aria-hidden />
+                      Evaluating organization policies…
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">

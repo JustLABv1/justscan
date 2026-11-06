@@ -6,7 +6,7 @@ import { useWorkScope } from '@/hooks/use-work-scope';
 import type { OwnerType } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-type BadgeTone = 'default' | 'accent' | 'success' | 'warning' | 'danger';
+type BadgeTone = 'default' | 'accent' | 'info' | 'success' | 'warning' | 'danger';
 
 type BadgeConfig = {
   tone: BadgeTone;
@@ -60,18 +60,18 @@ const STATUS_CONFIG: Record<string, BadgeConfig> = {
   completed: { tone: 'success' },
   completed_partial: { tone: 'warning', label: 'completed partially' },
   failed: { tone: 'danger' },
-  running: { tone: 'accent', animated: true },
+  running: { tone: 'info', animated: true },
   pending: { tone: 'default', label: 'queued in JustScan', animated: true },
   cancelled: { tone: 'warning' },
-  preparing_image: { tone: 'accent', label: 'preparing image', animated: true },
-  scanning_image: { tone: 'accent', label: 'scanning image', animated: true },
-  processing_results: { tone: 'accent', label: 'processing results', animated: true },
-  finalizing_report: { tone: 'accent', label: 'finalizing report', animated: true },
-  importing_results: { tone: 'accent', label: 'importing results', animated: true },
-  warming_cache: { tone: 'accent', label: 'warming cache', animated: true },
+  preparing_image: { tone: 'info', label: 'preparing image', animated: true },
+  scanning_image: { tone: 'info', label: 'scanning image', animated: true },
+  processing_results: { tone: 'info', label: 'processing results', animated: true },
+  finalizing_report: { tone: 'info', label: 'finalizing report', animated: true },
+  importing_results: { tone: 'info', label: 'importing results', animated: true },
+  warming_cache: { tone: 'info', label: 'warming cache', animated: true },
   indexing_artifact: { tone: 'warning', label: 'waiting for xray status', animated: true },
   queued_in_justscan: { tone: 'default', label: 'queued in JustScan', animated: true },
-  queued_in_xray: { tone: 'accent', label: 'requesting xray scan', animated: true },
+  queued_in_xray: { tone: 'info', label: 'requesting xray scan', animated: true },
   blocked_by_xray_policy: { tone: 'warning', label: 'blocked by xray policy' },
   waiting_for_xray: { tone: 'warning', label: 'waiting for xray', animated: true },
 };

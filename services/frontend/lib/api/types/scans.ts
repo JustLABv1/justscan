@@ -323,6 +323,8 @@ export interface ImageOverview {
   image_name: string;
   scan_count: number;
   tag_count: number;
+  /** Tags whose latest scan is queued or running. */
+  active_tags?: number;
   latest_scan_id: string;
   latest_tag: string;
   latest_status: string;

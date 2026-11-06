@@ -31,6 +31,9 @@ func LoadIntelligenceSummaries(
 		ChangedFindingCount  int        `bun:"changed_finding_count"`
 		NeedsValidationCount int        `bun:"needs_validation_count"`
 		FixAvailableCount    int        `bun:"fix_available_count"`
+		SeverityChanged      int        `bun:"severity_changed_count"`
+		NotAffected          int        `bun:"not_affected_count"`
+		DisputedRejected     int        `bun:"disputed_rejected_count"`
 		DetectedAt           *time.Time `bun:"detected_at"`
 	}
 
@@ -60,6 +63,18 @@ func LoadIntelligenceSummaries(
 			models.PostureStateFixAvailable,
 		).
 		ColumnExpr(
+			"COUNT(DISTINCT v.id) FILTER (WHERE p.state IN (?) AND "+postScanChange+") AS severity_changed_count",
+			bun.In([]string{models.PostureStateSeverityIncreased, models.PostureStateSeverityReduced}),
+		).
+		ColumnExpr(
+			"COUNT(DISTINCT v.id) FILTER (WHERE p.state = ? AND "+postScanChange+") AS not_affected_count",
+			models.PostureStateNotAffected,
+		).
+		ColumnExpr(
+			"COUNT(DISTINCT v.id) FILTER (WHERE p.state IN (?) AND "+postScanChange+") AS disputed_rejected_count",
+			bun.In([]string{models.PostureStateDisputed, models.PostureStateRejected}),
+		).
+		ColumnExpr(
 			"MAX(GREATEST(p.observed_at, p.updated_at)) FILTER (WHERE p.state IS NOT NULL AND p.state <> ? AND "+postScanChange+") AS detected_at",
 			models.PostureStateUnchanged,
 		).
@@ -81,12 +96,15 @@ func LoadIntelligenceSummaries(
 			state = models.IntelligenceSummaryStateConfirmationPending
 		}
 		summaries[row.ScanID] = &models.IntelligenceSummary{
-			State:                state,
-			ChangedCVECount:      row.ChangedCVECount,
-			ChangedFindingCount:  row.ChangedFindingCount,
-			NeedsValidationCount: row.NeedsValidationCount,
-			FixAvailableCount:    row.FixAvailableCount,
-			DetectedAt:           row.DetectedAt,
+			State:                 state,
+			ChangedCVECount:       row.ChangedCVECount,
+			ChangedFindingCount:   row.ChangedFindingCount,
+			NeedsValidationCount:  row.NeedsValidationCount,
+			FixAvailableCount:     row.FixAvailableCount,
+			SeverityChangedCount:  row.SeverityChanged,
+			NotAffectedCount:      row.NotAffected,
+			DisputedRejectedCount: row.DisputedRejected,
+			DetectedAt:            row.DetectedAt,
 		}
 	}
 

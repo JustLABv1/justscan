@@ -1147,8 +1147,14 @@ func cloneJSONObjectSlice(values []models.JSONObject) []models.JSONObject {
 	return result
 }
 
+// feedEvidenceRecordKey must not contain NUL bytes: PostgreSQL text cannot
+// store them and bun rejects the whole statement. A package-less record keeps
+// the historical "feed:<vuln>" key so existing rows still deduplicate.
 func feedEvidenceRecordKey(vulnID, packageName string) string {
-	return "feed:" + vulnID + "\x00" + packageName
+	if packageName == "" {
+		return "feed:" + vulnID
+	}
+	return "feed:" + vulnID + "\x1f" + packageName
 }
 
 // AttachVulnerabilityIntelligence adds the immutable scan-time evidence and

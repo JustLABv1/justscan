@@ -71,6 +71,9 @@ export interface IntelligenceSummary {
   changed_finding_count: number;
   needs_validation_count: number;
   fix_available_count: number;
+  severity_changed_count?: number;
+  not_affected_count?: number;
+  disputed_rejected_count?: number;
   detected_at?: string | null;
 }
 

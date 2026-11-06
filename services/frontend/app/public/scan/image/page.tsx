@@ -1,6 +1,7 @@
 'use client';
 import { StatusDot, type StatusDotTone } from '@/components/ui/status-dot';
 import { Select as PanelSelect } from '@/components/panelui/select';
+import { PublicBackdrop } from '@/components/public/public-backdrop';
 import { PublicNavbar } from '@/components/public/public-navbar';
 import {
   createPublicScan,
@@ -71,7 +72,7 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
       <button
         type="button"
         onClick={() => router.push(`/public/scan/${record.id}`)}
-        className="group flex w-full items-center gap-3 px-1 py-3 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/50 sm:px-3"
+        className="group flex w-full items-center gap-3 px-4 py-3.5 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
       >
         <StatusDot
           tone={statusTone(record.status)}
@@ -107,7 +108,10 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
             )}
           </span>
         </span>
-        <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(record.created_at)}</span>
+        <SeverityBar record={record} />
+        <span className="w-14 shrink-0 text-right text-xs text-muted-foreground">
+          {timeAgo(record.created_at)}
+        </span>
         <ArrowRight01Icon
           aria-hidden
           size={14}
@@ -118,10 +122,40 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
   );
 }
 
+function SeverityBar({ record }: { record: PublicScanRecord }) {
+  const parts = [
+    { count: record.critical_count, className: 'bg-destructive' },
+    { count: record.high_count, className: 'bg-warning' },
+    { count: record.medium_count, className: 'bg-info' },
+    { count: record.low_count, className: 'bg-muted-foreground/40' },
+  ];
+  const total = parts.reduce((sum, part) => sum + part.count, 0);
+  if (record.status !== 'completed' || total === 0) return null;
+  return (
+    <span
+      aria-hidden
+      className="hidden h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted sm:flex"
+    >
+      {parts
+        .filter((part) => part.count > 0)
+        .map((part) => (
+          <span
+            key={part.className}
+            className={part.className}
+            style={{ width: `${(part.count / total) * 100}%` }}
+          />
+        ))}
+    </span>
+  );
+}
+
 function HistoryList({ history, onClear }: { history: PublicScanRecord[]; onClear: () => void }) {
   return (
-    <section aria-label="Recent public scans">
-      <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+    <section
+      aria-label="Recent public scans"
+      className="overflow-hidden rounded-2xl border border-border bg-card/60 shadow-sm backdrop-blur"
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-medium">Recent scans</h2>
           <span className="text-xs text-muted-foreground">Saved on this device only</span>
@@ -277,7 +311,8 @@ export default function PublicImageScanPage() {
   const selectedPlatformKey = platform || AUTO_PLATFORM_KEY;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="relative isolate min-h-screen overflow-hidden bg-background text-foreground">
+      <PublicBackdrop />
       <PublicNavbar
         title="Scan a container image"
         isDark={isDark}
@@ -292,12 +327,16 @@ export default function PublicImageScanPage() {
       />
       <main className="mx-auto w-full max-w-2xl space-y-10 px-4 py-12 sm:py-20">
         <div className="space-y-6">
-          <div className="space-y-2 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          <div className="space-y-4 text-center">
+            <p className="mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
+              <StatusDot tone="success" className="size-1.5" />
+              Free to use · No account needed
+            </p>
+            <h1 className="bg-gradient-to-b from-foreground to-foreground/60 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-5xl">
               Find vulnerabilities in any public image
             </h1>
-            <p className="text-sm text-muted-foreground sm:text-base">
-              Enter an image and get its known vulnerabilities in a minute. No account needed.
+            <p className="mx-auto max-w-lg text-sm text-muted-foreground sm:text-base">
+              Enter an image and get its known vulnerabilities in a minute.
             </p>
           </div>
 
@@ -305,7 +344,7 @@ export default function PublicImageScanPage() {
             <FormAlert title="Public scanning is unavailable" description={disabledMessage} />
           ) : (
             <form onSubmit={handleScan} className="space-y-3">
-              <div className="flex items-center gap-2 rounded-xl border border-input bg-background p-1.5 shadow-sm transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30 dark:bg-input/30">
+              <div className="flex items-center gap-2 rounded-2xl border border-input bg-card/80 p-2 shadow-lg shadow-black/10 backdrop-blur transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30">
                 <Search01Icon
                   aria-hidden
                   size={18}
@@ -324,9 +363,14 @@ export default function PublicImageScanPage() {
                   required
                   autoComplete="off"
                   spellCheck={false}
-                  className="h-10 min-w-0 flex-1 bg-transparent px-1 font-mono text-base text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-60"
+                  className="h-12 min-w-0 flex-1 bg-transparent px-1 font-mono text-base sm:text-lg text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-60"
                 />
-                <Button type="submit" isDisabled={loading || !input.trim()} isPending={loading}>
+                <Button
+                  type="submit"
+                  className="h-11 px-5"
+                  isDisabled={loading || !input.trim()}
+                  isPending={loading}
+                >
                   <IrisScanIcon size={16} aria-hidden />
                   {loading ? 'Starting…' : 'Scan'}
                 </Button>

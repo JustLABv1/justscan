@@ -448,6 +448,12 @@ function renderTreeRow(
       </Table.Cell>
       <Table.Cell>
         <div className="flex flex-wrap items-center gap-1.5">
+          {image && (image.active_tags ?? 0) > 0 ? (
+            <Chip color="info" size="sm" variant="soft" className="gap-1.5 text-xs font-medium">
+              <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-current" />
+              {image.active_tags} in progress
+            </Chip>
+          ) : null}
           <StatusBadge
             status={status}
             externalStatus={

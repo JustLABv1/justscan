@@ -6,7 +6,7 @@ const toneClassName: Record<StatusDotTone, string> = {
   danger: 'bg-danger',
   warning: 'bg-warning',
   success: 'bg-success',
-  accent: 'bg-primary',
+  accent: 'bg-info',
   neutral: 'bg-muted-foreground',
   muted: 'bg-muted-foreground/30',
 };

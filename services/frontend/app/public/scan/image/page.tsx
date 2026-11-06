@@ -1,5 +1,6 @@
 'use client';
-import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
+import { StatusDot, type StatusDotTone } from '@/components/ui/status-dot';
+import { Select as PanelSelect } from '@/components/panelui/select';
 import { PublicNavbar } from '@/components/public/public-navbar';
 import {
   createPublicScan,
@@ -18,8 +19,8 @@ import {
   timeAgo,
   updatePublicHistoryEntry,
 } from '@/lib/publicScanHistory';
-import { Button, Card, Input, Label, Select, ListBox } from '@/components/ui';
-import { ArrowRight01Icon, Clock01Icon, IrisScanIcon, PackageIcon } from 'hugeicons-react';
+import { Button } from '@/components/ui';
+import { ArrowRight01Icon, IrisScanIcon, PackageIcon, Search01Icon } from 'hugeicons-react';
 import { FormAlert } from '@/components/ui/form-alert';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -36,106 +37,109 @@ const PLATFORMS = [
 const AUTO_PLATFORM_KEY = '__auto_platform__';
 const HISTORY_DISPLAY_LIMIT = 6;
 
-function statusStyle(status: string): {
-  color: 'success' | 'danger' | 'accent' | 'warning';
-  label: string;
-} {
+const EXAMPLE_IMAGES = ['nginx:latest', 'ubuntu:22.04', 'python:3.12', 'node:22-alpine'];
+
+function statusTone(status: string): StatusDotTone {
   switch (status) {
     case 'completed':
-      return { color: 'success', label: 'Completed' };
+      return 'success';
     case 'failed':
-      return { color: 'danger', label: 'Failed' };
+      return 'danger';
     case 'running':
-      return { color: 'accent', label: 'Running' };
+      return 'accent';
     default:
-      return { color: 'warning', label: 'Queued' };
+      return 'warning';
   }
 }
 
 function HistoryRow({ record }: { record: PublicScanRecord }) {
   const router = useRouter();
-  const st = statusStyle(record.status);
-  const isActive = record.status === 'running' || record.status === 'pending';
+  const active = record.status === 'running' || record.status === 'pending';
+  const findings = [
+    record.critical_count > 0
+      ? { text: `${record.critical_count} critical`, className: 'text-destructive' }
+      : null,
+    record.high_count > 0
+      ? { text: `${record.high_count} high`, className: 'text-warning-foreground' }
+      : null,
+    record.medium_count > 0 ? { text: `${record.medium_count} medium`, className: '' } : null,
+    record.low_count > 0 ? { text: `${record.low_count} low`, className: '' } : null,
+  ].filter((item): item is { text: string; className: string } => item !== null);
+
   return (
-    <div className="transition-colors hover:bg-muted/50">
+    <li>
       <button
         type="button"
         onClick={() => router.push(`/public/scan/${record.id}`)}
-        className="flex w-full items-start justify-between gap-3 p-4 text-left"
+        className="group flex w-full items-center gap-3 px-1 py-3 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/50 sm:px-3"
       >
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="min-w-0 flex-1 truncate font-mono text-sm font-medium text-foreground">
-              {record.image_name}:{record.image_tag}
-            </p>
-            {record.platform && <StatusTag tone="accent">{record.platform}</StatusTag>}
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-            <StatusTag tone={toneFromChipColor(st.color)}>
-              <span
-                className={`mr-1.5 inline-block size-1.5 rounded-full bg-current ${
-                  isActive ? 'animate-pulse' : ''
-                }`}
-              />
-              {st.label}
-            </StatusTag>
-
-            {record.status === 'completed' && (
-              <>
-                {record.critical_count > 0 && (
-                  <StatusTag tone="danger">{record.critical_count} critical</StatusTag>
-                )}
-                {record.high_count > 0 && (
-                  <StatusTag tone="warning">{record.high_count} high</StatusTag>
-                )}
-                {record.medium_count > 0 && (
-                  <StatusTag tone="accent">{record.medium_count} medium</StatusTag>
-                )}
-                {record.low_count > 0 && <StatusTag>{record.low_count} low</StatusTag>}
-                {record.critical_count === 0 &&
-                  record.high_count === 0 &&
-                  record.medium_count === 0 &&
-                  record.low_count === 0 && <StatusTag tone="success">Clean</StatusTag>}
-              </>
+        <StatusDot
+          tone={statusTone(record.status)}
+          className={active ? 'animate-pulse' : undefined}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-mono text-sm font-medium text-foreground">
+            {record.image_name}:{record.image_tag}
+            {record.platform ? (
+              <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">
+                {record.platform}
+              </span>
+            ) : null}
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {record.status === 'completed' ? (
+              findings.length > 0 ? (
+                findings.map((item, index) => (
+                  <span key={item.text} className={item.className}>
+                    {index > 0 ? ' · ' : ''}
+                    {item.text}
+                  </span>
+                ))
+              ) : (
+                <span className="text-success-foreground">No known vulnerabilities</span>
+              )
+            ) : record.status === 'failed' ? (
+              'Scan failed'
+            ) : record.status === 'running' ? (
+              'Scanning…'
+            ) : (
+              'Queued'
             )}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-          <Clock01Icon aria-hidden size={14} />
-          <span>{timeAgo(record.created_at)}</span>
-          <ArrowRight01Icon aria-hidden size={14} className="hidden sm:block" />
-        </div>
+          </span>
+        </span>
+        <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(record.created_at)}</span>
+        <ArrowRight01Icon
+          aria-hidden
+          size={14}
+          className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+        />
       </button>
-    </div>
+    </li>
   );
 }
 
-function HistoryDisclosure({
-  history,
-  onClear,
-}: {
-  history: PublicScanRecord[];
-  onClear: () => void;
-}) {
+function HistoryList({ history, onClear }: { history: PublicScanRecord[]; onClear: () => void }) {
   return (
-    <Card className="gap-0 py-0">
-      <Card.Header className="flex flex-row items-center justify-between gap-3 border-b p-4">
-        <div>
-          <Card.Title>Recent scans</Card.Title>
-          <Card.Description>Saved on this device only.</Card.Description>
+    <section aria-label="Recent public scans">
+      <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-sm font-medium">Recent scans</h2>
+          <span className="text-xs text-muted-foreground">Saved on this device only</span>
         </div>
-        <Button onPress={onClear} size="sm" variant="tertiary">
+        <button
+          type="button"
+          onClick={onClear}
+          className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
           Clear history
-        </Button>
-      </Card.Header>
-      <Card.Content className="divide-y p-0">
+        </button>
+      </div>
+      <ul className="divide-y divide-border">
         {history.slice(0, HISTORY_DISPLAY_LIMIT).map((record) => (
           <HistoryRow key={record.id} record={record} />
         ))}
-      </Card.Content>
-    </Card>
+      </ul>
+    </section>
   );
 }
 
@@ -286,100 +290,109 @@ export default function PublicImageScanPage() {
           hideOnMobile: true,
         }}
       />
-      <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6">
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-          <Card className="gap-0 py-0">
-            <Card.Header className="border-b p-5 sm:p-6">
-              <Card.Title>New image scan</Card.Title>
-              <Card.Description>Enter an image reference and choose its platform.</Card.Description>
-            </Card.Header>
-            <Card.Content className="p-5 sm:p-6">
-              {isDisabled ? (
-                <FormAlert title="Public scanning is unavailable" description={disabledMessage} />
-              ) : (
-                <form onSubmit={handleScan} className="space-y-5">
-                  <div className="space-y-2">
-                    <label htmlFor="public-image-reference" className="text-sm font-medium">
-                      Image reference
-                    </label>
-                    <Input
-                      id="public-image-reference"
-                      ref={inputRef}
-                      type="text"
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      placeholder="nginx:latest"
-                      disabled={loading}
-                      required
-                      aria-describedby="public-image-hint"
-                      variant="secondary"
-                      className="w-full font-mono"
-                    />
-                    <p id="public-image-hint" className="text-xs text-muted-foreground">
-                      Include a tag, such as ubuntu:22.04. Defaults to latest.
-                    </p>
-                  </div>
-                  <Select
-                    aria-label="Image platform"
+      <main className="mx-auto w-full max-w-2xl space-y-10 px-4 py-12 sm:py-20">
+        <div className="space-y-6">
+          <div className="space-y-2 text-center">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              Find vulnerabilities in any public image
+            </h1>
+            <p className="text-sm text-muted-foreground sm:text-base">
+              Enter an image and get its known vulnerabilities in a minute. No account needed.
+            </p>
+          </div>
+
+          {isDisabled ? (
+            <FormAlert title="Public scanning is unavailable" description={disabledMessage} />
+          ) : (
+            <form onSubmit={handleScan} className="space-y-3">
+              <div className="flex items-center gap-2 rounded-xl border border-input bg-background p-1.5 shadow-sm transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30 dark:bg-input/30">
+                <Search01Icon
+                  aria-hidden
+                  size={18}
+                  className="ml-2.5 shrink-0 text-muted-foreground"
+                />
+                <input
+                  id="public-image-reference"
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="nginx:latest"
+                  aria-label="Image reference"
+                  aria-describedby="public-image-hint"
+                  disabled={loading}
+                  required
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="h-10 min-w-0 flex-1 bg-transparent px-1 font-mono text-base text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-60"
+                />
+                <Button type="submit" isDisabled={loading || !input.trim()} isPending={loading}>
+                  <IrisScanIcon size={16} aria-hidden />
+                  {loading ? 'Starting…' : 'Scan'}
+                </Button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1">
+                  <span>Platform</span>
+                  <PanelSelect
+                    items={PLATFORMS.map((item) => ({
+                      value: item.value || AUTO_PLATFORM_KEY,
+                      label: item.label,
+                    }))}
                     value={selectedPlatformKey}
-                    onChange={(value) =>
+                    onValueChange={(value) =>
                       setPlatform(value === AUTO_PLATFORM_KEY ? '' : String(value ?? ''))
                     }
-                    isDisabled={loading}
+                    disabled={loading}
                   >
-                    <Label>Platform</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {PLATFORMS.map((item) => (
-                          <ListBox.Item
-                            key={item.value || AUTO_PLATFORM_KEY}
-                            id={item.value || AUTO_PLATFORM_KEY}
-                          >
-                            {item.label}
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                  {error ? <FormAlert title="Couldn’t start scan" description={error} /> : null}
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5">
-                    <p className="text-xs text-muted-foreground">
-                      {settings?.rate_limit_per_hour ?? 5} free scans per hour
-                    </p>
-                    <Button type="submit" isDisabled={loading || !input.trim()} isPending={loading}>
-                      <IrisScanIcon size={16} aria-hidden />
-                      {loading ? 'Starting scan…' : 'Scan image'}
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </Card.Content>
-          </Card>
-          <section aria-label="Recent public scans" className="min-w-0">
-            {history.length > 0 ? (
-              <HistoryDisclosure history={history} onClear={handleClearHistory} />
-            ) : (
-              <Card className="gap-0 py-0">
-                <Card.Header className="border-b p-4">
-                  <Card.Title>Recent scans</Card.Title>
-                  <Card.Description>Saved on this device only.</Card.Description>
-                </Card.Header>
-                <Card.Content className="flex min-h-64 flex-col items-center justify-center gap-2 p-6 text-center">
-                  <Clock01Icon size={24} aria-hidden className="mb-2 text-muted-foreground" />
-                  <p className="text-sm font-medium">No scans yet</p>
-                  <p className="max-w-xs text-sm text-muted-foreground">
-                    Start an image scan to see its status and findings here.
-                  </p>
-                </Card.Content>
-              </Card>
-            )}
-          </section>
+                    <PanelSelect.Trigger variant="ghost" size="sm" aria-label="Image platform">
+                      <PanelSelect.Value />
+                    </PanelSelect.Trigger>
+                    <PanelSelect.Content>
+                      {PLATFORMS.map((item) => (
+                        <PanelSelect.Item
+                          key={item.value || AUTO_PLATFORM_KEY}
+                          value={item.value || AUTO_PLATFORM_KEY}
+                        >
+                          {item.label}
+                        </PanelSelect.Item>
+                      ))}
+                    </PanelSelect.Content>
+                  </PanelSelect>
+                </div>
+                <p id="public-image-hint">
+                  Include a tag, such as ubuntu:22.04, or it defaults to latest ·{' '}
+                  {settings?.rate_limit_per_hour ?? 5} free scans per hour
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Try</span>
+                {EXAMPLE_IMAGES.map((example) => (
+                  <button
+                    key={example}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => {
+                      setInput(example);
+                      inputRef.current?.focus();
+                    }}
+                    className="rounded-md border border-border px-2 py-1 font-mono text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+
+              {error ? <FormAlert title="Couldn’t start scan" description={error} /> : null}
+            </form>
+          )}
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-sm">
+
+        {history.length > 0 ? <HistoryList history={history} onClear={handleClearHistory} /> : null}
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6 text-sm">
           <p className="text-muted-foreground">Need saved history, exports, and team workflows?</p>
           <Link
             href={isLoggedIn ? '/scans' : '/login'}

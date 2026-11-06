@@ -767,7 +767,7 @@ export default function StatusPagesPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Status Pages"
+        title="Status pages"
         description="Publish current image-tag health internally or externally."
         actions={
           <Button onPress={openCreate} isDisabled={!canMutateActiveScope}>

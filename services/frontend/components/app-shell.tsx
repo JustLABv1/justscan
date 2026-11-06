@@ -138,39 +138,37 @@ function workspaceColorFor(kind: 'personal' | 'org', name: string): WorkspaceAva
   return workspaceColors[nameHash % workspaceColors.length];
 }
 
-const navGroups = [
+type NavGroup = {
+  id: string;
+  /** Section heading. Omit for a flat, unlabeled list. */
+  label?: string;
+  /** Collapsible groups stay closed until opened, unless the current page lives inside. */
+  collapsible?: boolean;
+  items: { href: string; label: string; Icon: SidebarIcon }[];
+};
+
+const navGroups: NavGroup[] = [
   {
-    label: 'Overview',
-    items: [{ href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon }],
-  },
-  {
-    label: 'Scanning',
+    id: 'primary',
     items: [
+      { href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon },
       { href: '/scans', label: 'Scans', Icon: Shield01Icon },
-      { href: '/git-repositories', label: 'Git repositories', Icon: GitBranchIcon },
-      { href: '/helm', label: 'Helm', Icon: PackageIcon },
-    ],
-  },
-  {
-    label: 'Research & intelligence',
-    items: [
       { href: '/watchlist', label: 'Watchlist', Icon: Clock01Icon },
-      { href: '/vulnkb', label: 'Vuln KB', Icon: BookOpen01Icon },
+      { href: '/git-repositories', label: 'Git repositories', Icon: GitBranchIcon },
+      { href: '/helm', label: 'Helm charts', Icon: PackageIcon },
+      { href: '/vulnkb', label: 'Vulnerability KB', Icon: BookOpen01Icon },
     ],
   },
   {
-    label: 'Govern & share',
-    items: [
-      { href: '/suppressions', label: 'Suppressions', Icon: GridTableIcon },
-      { href: '/status', label: 'Status Pages', Icon: EyeIcon },
-    ],
-  },
-  {
-    label: 'Workspace setup',
+    id: 'manage',
+    label: 'Manage',
+    collapsible: true,
     items: [
       { href: '/registries', label: 'Registries', Icon: ServerStack01Icon },
       { href: '/helm-registry-credentials', label: 'Helm credentials', Icon: Key01Icon },
+      { href: '/suppressions', label: 'Suppressions', Icon: GridTableIcon },
       { href: '/tags', label: 'Tags', Icon: Tag01Icon },
+      { href: '/status', label: 'Status pages', Icon: EyeIcon },
       { href: '/orgs', label: 'Organizations', Icon: Building04Icon },
     ],
   },
@@ -195,7 +193,8 @@ const adminItemIcons: Record<AdminTab, SidebarIcon> = {
   settings: Settings01Icon,
 };
 
-const adminNavigationGroups = ADMIN_AREAS.map((area) => ({
+const adminNavigationGroups: NavGroup[] = ADMIN_AREAS.map((area) => ({
+  id: area.label,
   label: area.label,
   items: area.tabs.map((tab) => ({
     href: tab.href,
@@ -311,6 +310,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const [user, setUser] = useState(initialUser);
   const [collapsed, setCollapsed] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const collapsedRef = useRef(false);
   const [mounted, setMounted] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -356,6 +356,19 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     const closeAfterNavigation = window.setTimeout(() => setMobileNavOpen(false), 0);
     return () => window.clearTimeout(closeAfterNavigation);
   }, [pathname]);
+
+  useEffect(() => {
+    if (localStorage.getItem('sidebar_manage_open') === 'true') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setManageOpen(true);
+    }
+  }, []);
+
+  function toggleManage() {
+    const next = !manageOpen;
+    setManageOpen(next);
+    localStorage.setItem('sidebar_manage_open', String(next));
+  }
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
@@ -595,19 +608,23 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const workspaceAvatarClassName =
     workspaceAvatarClasses[workspaceColorFor(workScope.kind, scopeLabel)];
   const desktopCollapsed = collapsed;
-  const navigationGroups = isAdminRoute
+  const navigationGroups: NavGroup[] = isAdminRoute
     ? adminNavigationGroups
     : [
         ...navGroups,
         ...(user?.role === 'admin'
           ? [
               {
-                label: 'Admin',
+                id: 'admin',
                 items: [{ href: '/admin', label: 'Administration', Icon: Settings01Icon }],
               },
             ]
           : []),
       ];
+  const isGroupOpen = (group: NavGroup) =>
+    !group.collapsible ||
+    manageOpen ||
+    group.items.some((item) => isActiveRoute(pathname, item.href));
   const contentRailClass = 'px-4 md:px-5';
   const currentSection =
     navigationGroups
@@ -878,52 +895,77 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               aria-label="Primary navigation"
               className={`flex-1 overflow-y-auto overflow-x-hidden pb-3 pt-2 ${desktopCollapsed ? 'px-3' : 'px-4'}`}
             >
-              {navigationGroups.map(({ label, items }) => (
-                <div key={label} className={desktopCollapsed ? 'mb-2 last:mb-0' : 'mb-4 last:mb-0'}>
-                  {!desktopCollapsed && (
-                    <div className="px-2.5 pb-2 pt-2 text-xs font-medium text-muted-foreground">
-                      {label}
-                    </div>
-                  )}
-                  <div className="space-y-0.5">
-                    {items.map(({ href, label: itemLabel, Icon }) => {
-                      const active = isActiveRoute(pathname, href);
+              {navigationGroups.map((group) => {
+                const { id, label, items } = group;
+                const open = desktopCollapsed || isGroupOpen(group);
+                return (
+                  <div key={id} className={desktopCollapsed ? 'mb-2 last:mb-0' : 'mb-3 last:mb-0'}>
+                    {!desktopCollapsed && label ? (
+                      group.collapsible ? (
+                        <button
+                          type="button"
+                          aria-expanded={open}
+                          onClick={toggleManage}
+                          className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <span className="flex items-center gap-2">
+                            {label}
+                            {!open && pendingInviteCount > 0 ? (
+                              <Badge color="warning" size="sm" />
+                            ) : null}
+                          </span>
+                          <ArrowDown01Icon
+                            size={14}
+                            aria-hidden
+                            className={`transition-transform ${open ? '' : '-rotate-90'}`}
+                          />
+                        </button>
+                      ) : (
+                        <div className="px-2.5 pb-2 pt-2 text-xs font-medium text-muted-foreground">
+                          {label}
+                        </div>
+                      )
+                    ) : null}
+                    <div className={open ? 'space-y-0.5' : 'hidden'}>
+                      {items.map(({ href, label: itemLabel, Icon }) => {
+                        const active = isActiveRoute(pathname, href);
 
-                      if (desktopCollapsed) {
+                        if (desktopCollapsed) {
+                          return (
+                            <div key={href}>
+                              <Tooltip delay={0}>
+                                <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
+                                  <SidebarNavLink
+                                    href={href}
+                                    itemLabel={itemLabel}
+                                    Icon={Icon}
+                                    mode="collapsed"
+                                    active={active}
+                                    inviteCount={pendingInviteCount}
+                                  />
+                                </Tooltip.Trigger>
+                                <Tooltip.Content placement="right">{itemLabel}</Tooltip.Content>
+                              </Tooltip>
+                            </div>
+                          );
+                        }
+
                         return (
-                          <div key={href}>
-                            <Tooltip delay={0}>
-                              <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
-                                <SidebarNavLink
-                                  href={href}
-                                  itemLabel={itemLabel}
-                                  Icon={Icon}
-                                  mode="collapsed"
-                                  active={active}
-                                  inviteCount={pendingInviteCount}
-                                />
-                              </Tooltip.Trigger>
-                              <Tooltip.Content placement="right">{itemLabel}</Tooltip.Content>
-                            </Tooltip>
-                          </div>
+                          <SidebarNavLink
+                            key={href}
+                            href={href}
+                            itemLabel={itemLabel}
+                            Icon={Icon}
+                            mode="desktop"
+                            active={active}
+                            inviteCount={pendingInviteCount}
+                          />
                         );
-                      }
-
-                      return (
-                        <SidebarNavLink
-                          key={href}
-                          href={href}
-                          itemLabel={itemLabel}
-                          Icon={Icon}
-                          mode="desktop"
-                          active={active}
-                          inviteCount={pendingInviteCount}
-                        />
-                      );
-                    })}
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </nav>
 
             {isAdminRoute ? (
@@ -1178,29 +1220,51 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                             </Link>
                           )}
 
-                          {navigationGroups.map(({ label, items }) => (
-                            <div key={label} className="space-y-1.5">
-                              <p className="px-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                                {label}
-                              </p>
-                              <div className="space-y-1">
-                                {items.map(({ href, label: itemLabel, Icon }) => {
-                                  return (
-                                    <SidebarNavLink
-                                      key={href}
-                                      href={href}
-                                      itemLabel={itemLabel}
-                                      Icon={Icon}
-                                      mode="mobile"
-                                      active={isActiveRoute(pathname, href)}
-                                      inviteCount={pendingInviteCount}
-                                      onNavigate={() => setMobileNavOpen(false)}
-                                    />
-                                  );
-                                })}
+                          {navigationGroups.map((group) => {
+                            const { id, label, items } = group;
+                            const open = isGroupOpen(group);
+                            return (
+                              <div key={id} className="space-y-1.5">
+                                {label ? (
+                                  group.collapsible ? (
+                                    <button
+                                      type="button"
+                                      aria-expanded={open}
+                                      onClick={toggleManage}
+                                      className="flex w-full items-center justify-between px-2 py-1 text-xs font-medium text-muted-foreground"
+                                    >
+                                      {label}
+                                      <ArrowDown01Icon
+                                        size={14}
+                                        aria-hidden
+                                        className={`transition-transform ${open ? '' : '-rotate-90'}`}
+                                      />
+                                    </button>
+                                  ) : (
+                                    <p className="px-2 text-xs font-medium text-muted-foreground">
+                                      {label}
+                                    </p>
+                                  )
+                                ) : null}
+                                <div className={open ? 'space-y-1' : 'hidden'}>
+                                  {items.map(({ href, label: itemLabel, Icon }) => {
+                                    return (
+                                      <SidebarNavLink
+                                        key={href}
+                                        href={href}
+                                        itemLabel={itemLabel}
+                                        Icon={Icon}
+                                        mode="mobile"
+                                        active={isActiveRoute(pathname, href)}
+                                        inviteCount={pendingInviteCount}
+                                        onNavigate={() => setMobileNavOpen(false)}
+                                      />
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
 
                           {isAdminRoute ? (
                             <SidebarNavLink

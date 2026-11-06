@@ -132,7 +132,7 @@ const PAGE_COMMANDS: CommandDescriptor[] = [
   },
   {
     id: 'vulnkb',
-    label: 'Vuln KB',
+    label: 'Vulnerability KB',
     description: 'Research CVEs, affected packages, and remediation context.',
     href: '/vulnkb',
     Icon: ShieldKeyIcon,
@@ -148,7 +148,7 @@ const PAGE_COMMANDS: CommandDescriptor[] = [
   },
   {
     id: 'status',
-    label: 'Status Pages',
+    label: 'Status pages',
     description: 'Manage public reporting pages and visibility.',
     href: '/status',
     Icon: ViewIcon,

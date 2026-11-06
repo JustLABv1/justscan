@@ -1,5 +1,6 @@
 'use client';
 
+import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import {
   clearToken,
   clearUser,
@@ -22,10 +23,8 @@ import {
   buttonVariants,
   Chip,
   Drawer,
-  Description,
   Dropdown,
   Header,
-  Kbd,
   Label,
   Separator,
   Surface,
@@ -126,17 +125,6 @@ type SidebarIcon = ComponentType<{
   style?: CSSProperties;
   'aria-hidden'?: boolean;
 }>;
-
-type WorkspaceAvatarColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
-
-const workspaceColors: WorkspaceAvatarColor[] = ['accent', 'success', 'warning', 'danger'];
-
-function workspaceColorFor(kind: 'personal' | 'org', name: string): WorkspaceAvatarColor {
-  if (kind === 'personal') return 'default';
-
-  const nameHash = Array.from(name).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return workspaceColors[nameHash % workspaceColors.length];
-}
 
 type NavGroup = {
   id: string;
@@ -597,16 +585,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const scopeLabel =
     workScope.kind === 'org' ? (workScope.orgName ?? 'Organization') : 'Personal workspace';
   const workspaceTitle = `Workspace: ${scopeLabel}`;
-  const workspaceInitial = scopeLabel.trim().charAt(0).toUpperCase() || 'W';
-  const workspaceAvatarClasses: Record<WorkspaceAvatarColor, string> = {
-    default: 'bg-secondary text-foreground',
-    accent: 'bg-primary/15 text-primary',
-    success: 'bg-success/15 text-success-foreground',
-    warning: 'bg-warning/15 text-warning-foreground',
-    danger: 'bg-destructive/15 text-destructive',
-  };
-  const workspaceAvatarClassName =
-    workspaceAvatarClasses[workspaceColorFor(workScope.kind, scopeLabel)];
   const desktopCollapsed = collapsed;
   const navigationGroups: NavGroup[] = isAdminRoute
     ? adminNavigationGroups
@@ -632,78 +610,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       .filter((item) => isActiveRoute(pathname, item.href))
       .sort((a, b) => b.href.length - a.href.length)[0]?.label ??
     (isAssistantRoute ? 'Assistant' : pathname.startsWith('/profile') ? 'Profile' : 'Workspace');
-
-  function renderWorkspaceMenu() {
-    return (
-      <Dropdown.Menu
-        onAction={(key) => {
-          const value = key as string;
-          if (value.startsWith('invite:')) {
-            setMobileNavOpen(false);
-            router.push('/orgs');
-            return;
-          }
-          handleScopeChange(value);
-        }}
-        selectionMode="single"
-        selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
-      >
-        <Dropdown.Item id="personal" textValue="Personal workspace">
-          <div className="flex items-center gap-2">
-            <Avatar className="size-6 rounded-lg" color="default" variant="soft">
-              <Avatar.Fallback>P</Avatar.Fallback>
-            </Avatar>
-            <Label>Personal workspace</Label>
-          </div>
-        </Dropdown.Item>
-        {orgs.length > 0 ? (
-          <Dropdown.Section>
-            <Header>Organizations</Header>
-            {orgs.map((org) => (
-              <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
-                <div className="flex items-center gap-2">
-                  <Avatar
-                    className="size-6 rounded-lg"
-                    color={workspaceColorFor('org', org.name)}
-                    variant="soft"
-                  >
-                    <Avatar.Fallback>
-                      {org.name.trim().charAt(0).toUpperCase() || 'O'}
-                    </Avatar.Fallback>
-                  </Avatar>
-                  <Label>{org.name}</Label>
-                </div>
-              </Dropdown.Item>
-            ))}
-          </Dropdown.Section>
-        ) : null}
-        {pendingInvites.length > 0 ? (
-          <Dropdown.Section>
-            <Header>Pending invitations</Header>
-            {pendingInvites.map((invite) => (
-              <Dropdown.Item
-                key={invite.id}
-                id={`invite:${invite.id}`}
-                textValue={`Review invitation to ${invite.org_name || 'organization'}`}
-              >
-                <div className="flex items-center gap-2">
-                  <Avatar className="size-6 rounded-lg" color="warning" variant="soft">
-                    <Avatar.Fallback>
-                      {(invite.org_name || 'O').trim().charAt(0).toUpperCase() || 'O'}
-                    </Avatar.Fallback>
-                  </Avatar>
-                  <div className="flex min-w-0 flex-col">
-                    <Label>{invite.org_name || 'Organization'}</Label>
-                    <Description>Invitation awaiting acceptance · Review and accept</Description>
-                  </div>
-                </div>
-              </Dropdown.Item>
-            ))}
-          </Dropdown.Section>
-        ) : null}
-      </Dropdown.Menu>
-    );
-  }
 
   return (
     <DeferredWorkspaceTourProvider
@@ -753,20 +659,16 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                 </Link>
               </ShellTooltip>
               <div className={desktopCollapsed ? '' : 'ml-auto'}>
-                <ShellTooltip label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+                <ShellTooltip label="Search · ⌘K">
                   <Button
                     isIconOnly
                     size="sm"
                     variant="ghost"
-                    onPress={toggleCollapsed}
-                    aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                    className=" "
+                    onPress={() => setSearchOpen(true)}
+                    aria-label="Open command palette"
+                    className="shell-search"
                   >
-                    {desktopCollapsed ? (
-                      <SidebarRight01Icon size={17} />
-                    ) : (
-                      <SidebarLeft01Icon size={17} />
-                    )}
+                    <Search01Icon aria-hidden size={17} />
                   </Button>
                 </ShellTooltip>
               </div>
@@ -796,58 +698,25 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
             <div
               className={cn(
                 'flex shrink-0 gap-2 pb-4',
-                desktopCollapsed ? 'flex-col px-3' : 'items-center px-4'
+                desktopCollapsed ? 'flex-col px-3' : 'items-center px-4',
+                isAdminRoute && 'hidden'
               )}
             >
               {!isAdminRoute && (
-                <div id="tour-workspace-section" className="shrink-0">
-                  <ShellTooltip label={workspaceTitle}>
-                    <Dropdown>
-                      <Dropdown.Trigger
-                        id="tour-workspace-switcher"
-                        aria-label={`${workspaceTitle}${pendingInviteCount > 0 ? `, ${pendingInviteCount} pending organization invite${pendingInviteCount === 1 ? '' : 's'}` : ''}`}
-                        className="flex size-10 items-center justify-center rounded-full outline-none transition-shadow hover:ring-2 hover:ring-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                      >
-                        <Badge.Anchor>
-                          <Avatar className={cn('size-10 rounded-full', workspaceAvatarClassName)}>
-                            <Avatar.Fallback className="text-sm font-semibold">
-                              {workspaceInitial}
-                            </Avatar.Fallback>
-                          </Avatar>
-                          {pendingInviteCount > 0 && <Badge color="warning" size="sm" />}
-                        </Badge.Anchor>
-                      </Dropdown.Trigger>
-                      <Dropdown.Popover className="min-w-[240px]" placement="bottom start">
-                        {renderWorkspaceMenu()}
-                      </Dropdown.Popover>
-                    </Dropdown>
-                  </ShellTooltip>
+                <div id="tour-workspace-section" className="min-w-0 flex-1">
+                  <WorkspaceSwitcher
+                    id="tour-workspace-switcher"
+                    collapsed={desktopCollapsed}
+                    scopeLabel={scopeLabel}
+                    scopeValue={workScope.kind === 'org' ? workScope.orgId : 'personal'}
+                    orgs={orgs}
+                    invites={pendingInvites}
+                    onScopeChange={handleScopeChange}
+                    onReviewInvite={() => router.push('/orgs')}
+                    className={desktopCollapsed ? 'mx-auto' : undefined}
+                  />
                 </div>
               )}
-              <div className="min-w-0 flex-1">
-                <ShellTooltip label="Search · ⌘K" enabled={desktopCollapsed}>
-                  <Button
-                    aria-label="Open command palette"
-                    onPress={() => setSearchOpen(true)}
-                    variant="ghost"
-                    className={cn(
-                      'shell-search w-full border border-border ',
-                      desktopCollapsed ? '' : 'justify-start '
-                    )}
-                  >
-                    <Search01Icon aria-hidden size={16} />
-                    {!desktopCollapsed && (
-                      <>
-                        <span className="min-w-0 flex-1 truncate text-left text-sm">Search...</span>
-                        <Kbd className="border-0 bg-transparent p-0 text-xs text-muted-foreground">
-                          <Kbd.Abbr keyValue="command" />
-                          <Kbd.Content>K</Kbd.Content>
-                        </Kbd>
-                      </>
-                    )}
-                  </Button>
-                </ShellTooltip>
-              </div>
             </div>
             {!isAdminRoute ? (
               <div className={`shrink-0 ${desktopCollapsed ? 'px-3 pb-2' : 'px-4 pb-1'}`}>
@@ -983,9 +852,32 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               </div>
             ) : null}
 
-            <div className={cn('shrink-0 pb-2', desktopCollapsed ? 'px-3' : 'px-4')}>
+            <div className={cn('shrink-0 space-y-0.5 pb-2', desktopCollapsed ? 'px-3' : 'px-4')}>
               <ShellTooltip label="Background activity" enabled={desktopCollapsed}>
                 <BackgroundProcessCenter collapsed={desktopCollapsed} />
+              </ShellTooltip>
+              <ShellTooltip
+                label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                enabled={desktopCollapsed}
+              >
+                <Button
+                  variant="ghost"
+                  onPress={toggleCollapsed}
+                  aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                  className={cn(
+                    'w-full text-muted-foreground',
+                    desktopCollapsed ? 'justify-center px-0' : 'justify-start gap-2.5 px-2.5'
+                  )}
+                >
+                  {desktopCollapsed ? (
+                    <SidebarRight01Icon size={18} />
+                  ) : (
+                    <>
+                      <SidebarLeft01Icon size={18} />
+                      <span className="text-sm">Collapse</span>
+                    </>
+                  )}
+                </Button>
               </ShellTooltip>
             </div>
 
@@ -1128,41 +1020,17 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
                         <div className="space-y-4">
                           {!isAdminRoute ? (
-                            <Dropdown>
-                              <Dropdown.Trigger
-                                className="w-full flex items-center justify-between rounded-xl p-3 text-sm transition-all duration-150 outline-none text-left"
-                                style={{
-                                  background: 'var(--row-hover)',
-                                  border: '1px solid var(--surface-border)',
-                                }}
-                              >
-                                <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                                  <Badge.Anchor className="shrink-0">
-                                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface-secondary">
-                                      <Building04Icon aria-hidden size={18} />
-                                    </span>
-                                    {pendingInviteCount > 0 ? (
-                                      <Badge color="warning" size="sm" />
-                                    ) : null}
-                                  </Badge.Anchor>
-                                  <div className="flex flex-col min-w-0 flex-1">
-                                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                                      Workspace
-                                    </p>
-                                    <span className="mt-0.5 truncate text-xs font-medium text-foreground">
-                                      {scopeLabel}
-                                    </span>
-                                  </div>
-                                </div>
-                                <ArrowDown01Icon
-                                  size={16}
-                                  className="text-muted-foreground shrink-0 ml-2"
-                                />
-                              </Dropdown.Trigger>
-                              <Dropdown.Popover className="w-[min(80vw,300px)]">
-                                {renderWorkspaceMenu()}
-                              </Dropdown.Popover>
-                            </Dropdown>
+                            <WorkspaceSwitcher
+                              scopeLabel={scopeLabel}
+                              scopeValue={workScope.kind === 'org' ? workScope.orgId : 'personal'}
+                              orgs={orgs}
+                              invites={pendingInvites}
+                              onScopeChange={handleScopeChange}
+                              onReviewInvite={() => {
+                                setMobileNavOpen(false);
+                                router.push('/orgs');
+                              }}
+                            />
                           ) : (
                             <div className="rounded-xl bg-surface-secondary px-3 py-2.5">
                               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">

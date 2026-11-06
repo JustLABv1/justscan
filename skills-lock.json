@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "panelui-web": {
+      "source": "panel-ui/PanelUI",
+      "sourceType": "github",
+      "skillPath": "skills/panelui-web/SKILL.md",
+      "computedHash": "986278e6880a21711e5a0d84bd3872f20d6c17a41fda777b6e1d91304ef91e99"
+    },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",

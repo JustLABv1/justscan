@@ -9,6 +9,9 @@ export type FilterChipItem = {
   /** Per-item handler. Omit when the group provides `onSelect`. */
   onPress?: () => void;
   count?: number;
+  disabled?: boolean;
+  /** Tooltip, e.g. why the item is disabled. */
+  title?: string;
   /** Shows a leading status dot. */
   tone?: StatusDotTone;
 };
@@ -42,9 +45,11 @@ export function FilterChips({
           type="button"
           key={item.id}
           aria-pressed={item.active}
+          disabled={item.disabled}
+          title={item.title}
           onClick={() => (item.onPress ?? (() => onSelect?.(item.id)))()}
           className={cn(
-            'inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            'inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
             item.active
               ? 'bg-muted font-medium text-foreground'
               : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'

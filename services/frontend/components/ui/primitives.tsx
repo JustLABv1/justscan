@@ -69,8 +69,13 @@ export const Typography = {
   ),
 };
 export const Header = Aria.Header;
-export const Label = (props: React.ComponentProps<typeof Aria.Label>) => (
-  <Aria.Label data-slot="label" {...props} />
+// Block by default: an inline label ignores the vertical margin from `space-y-*` parents.
+export const Label = ({ className, ...props }: React.ComponentProps<typeof Aria.Label>) => (
+  <Aria.Label
+    data-slot="label"
+    className={typeof className === 'function' ? className : cn('block', className)}
+    {...props}
+  />
 );
 export const Description = (props: React.ComponentProps<typeof Aria.Text>) => (
   <Aria.Text data-slot="description" slot="description" {...props} />
@@ -423,8 +428,8 @@ function CheckboxIndicator() {
   );
 }
 
-export const Checkbox = Object.assign(
-  function Checkbox({
+export const AriaCheckbox = Object.assign(
+  function AriaCheckbox({
     className,
     variant: _variant,
     children,

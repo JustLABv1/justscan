@@ -60,8 +60,8 @@ export const ListBox = Object.assign(
     ),
   }
 );
-export const Select = Object.assign(
-  function Select<T extends object, M extends 'single' | 'multiple' = 'single'>({
+export const AriaSelect = Object.assign(
+  function AriaSelect<T extends object, M extends 'single' | 'multiple' = 'single'>({
     className,
     variant: _variant,
     ...props
@@ -131,11 +131,11 @@ export const ComboBox = Object.assign(
         <Indicator />
       </Aria.Button>
     ),
-    Popover: Select.Popover,
+    Popover: AriaSelect.Popover,
   }
 );
-export const Autocomplete = Object.assign(Select, {
-  ...Select,
+export const Autocomplete = Object.assign(AriaSelect, {
+  ...AriaSelect,
   ClearButton: ({ className }: { className?: string }) => {
     const state = React.useContext(Aria.SelectStateContext);
     return (
@@ -178,7 +178,7 @@ export const Dropdown = Object.assign(Aria.MenuTrigger, {
       {...props}
     />
   ),
-  Popover: Select.Popover,
+  Popover: AriaSelect.Popover,
   Menu: function Menu<T extends object>({
     onAction,
     className,

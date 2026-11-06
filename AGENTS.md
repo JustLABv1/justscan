@@ -33,7 +33,8 @@ When working in this repository, prefer small, local changes that fit the existi
 
 ## Frontend Rules
 
-- Use the local shadcn/ui and ReUI components under `services/frontend/components/ui/`. Do not reintroduce HeroUI.
+- Use the local shadcn/ui, ReUI, and PanelUI components. Do not reintroduce HeroUI.
+- PanelUI components live in `services/frontend/components/panelui/` (registry `@panelui` in `components.json`; add with `npx shadcn@latest add @panelui/<name>` and read `.agents/skills/panelui-web/components/<name>.md` first). `Select` and `Checkbox` in `components/ui/` are thin adapters over PanelUI that keep the existing `value`/`onChange` call shape; multi-selects and checkboxes bound to a React Aria collection (`slot="selection"`) still use React Aria. Use `Command` for launchers and `ChoiceCards` for picture-led single choices.
 - Prefer existing shared wrappers in `services/frontend/components/ui/` before creating new primitives.
 - Reuse local controls for buttons, inputs, modals, selects, alerts, tabs, cards, drawers, and dropdowns before adding another primitive.
 - Keep new UI consistent with the existing App Router structure and shared shell components in `services/frontend/components/`.

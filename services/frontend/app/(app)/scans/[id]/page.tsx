@@ -2178,36 +2178,35 @@ function ScanDetailContent() {
         <ArrowLeft01Icon size={15} />
         All scans
       </Button>
-      {isScanInProgress && (
+      {isScanInProgress ? (
         <Button
-          className="bg-warning-soft-hover text-warning-foreground"
+          className="text-destructive hover:text-destructive"
           isDisabled={cancelling || !canMutateCurrentScan}
           onPress={handleCancel}
-          variant="primary"
+          variant="outline"
         >
           {cancelling ? (
-            <span className="size-3.5 border-2 border-warning/30 border-t-amber-400 rounded-full animate-spin" />
+            <span className="size-3.5 animate-spin rounded-full border-2 border-destructive/30 border-t-destructive" />
           ) : (
             <Cancel01Icon size={15} />
           )}
-          Cancel
+          Cancel scan
+        </Button>
+      ) : (
+        <Button
+          className="btn-primary"
+          isDisabled={reScanning || !canMutateCurrentScan || Boolean(rescanDisabledReason)}
+          onPress={handleReScan}
+          variant="primary"
+        >
+          {reScanning ? (
+            <span className="size-3.5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+          ) : (
+            <Refresh01Icon size={15} />
+          )}
+          Re-scan
         </Button>
       )}
-      <Button
-        className="btn-primary"
-        isDisabled={
-          reScanning || !canMutateCurrentScan || isScanInProgress || Boolean(rescanDisabledReason)
-        }
-        onPress={handleReScan}
-        variant="primary"
-      >
-        {reScanning ? (
-          <span className="size-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-        ) : (
-          <Refresh01Icon size={15} />
-        )}
-        Re-scan
-      </Button>
       <div className="relative">
         <Dropdown>
           <Dropdown.Trigger
@@ -2328,38 +2327,42 @@ function ScanDetailContent() {
         ]}
         icon={<Shield01Icon size={18} />}
         status={
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge
-              status={scan.status}
-              currentStep={scan.current_step}
-              externalStatus={scan.external_status}
-            />
-            <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
-          </div>
+          isScanInProgress ? undefined : (
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge
+                status={scan.status}
+                currentStep={scan.current_step}
+                externalStatus={scan.external_status}
+              />
+              <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
+            </div>
+          )
         }
         title={`${scan.image_name}:${scan.image_tag}`}
         meta={
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5" title={fullDate(scanTimestamp)}>
-              <Clock01Icon size={15} aria-hidden />
-              {scanTimestampLabel} {timeAgo(scanTimestamp)}
-            </span>
-            {scan.image_digest ? (
-              <Button
-                aria-label="Copy image digest"
-                className=" max-w-full gap-1.5 "
-                onPress={() => void handleCopyDigest()}
-                size="sm"
-                variant="ghost"
-              >
-                <span className="text-muted-foreground">Digest</span>
-                <code className="max-w-[15rem] truncate font-mono text-foreground">
-                  {abbreviatedDigest}
-                </code>
-                <Copy01Icon size={13} aria-hidden />
-              </Button>
-            ) : null}
-          </div>
+          isScanInProgress ? undefined : (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5" title={fullDate(scanTimestamp)}>
+                <Clock01Icon size={15} aria-hidden />
+                {scanTimestampLabel} {timeAgo(scanTimestamp)}
+              </span>
+              {scan.image_digest ? (
+                <Button
+                  aria-label="Copy image digest"
+                  className=" max-w-full gap-1.5 "
+                  onPress={() => void handleCopyDigest()}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <span className="text-muted-foreground">Digest</span>
+                  <code className="max-w-[15rem] truncate font-mono text-foreground">
+                    {abbreviatedDigest}
+                  </code>
+                  <Copy01Icon size={13} aria-hidden />
+                </Button>
+              ) : null}
+            </div>
+          )
         }
         actions={headerActions}
       />

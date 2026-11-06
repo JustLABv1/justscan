@@ -1,5 +1,7 @@
 'use client';
 
+import { ChoiceCards } from '@/components/panelui/choice-cards';
+import { Container, GitBranch, Infinity, Layers, ListChecks, Regex } from 'lucide-react';
 import { FilterChips } from '@/components/ui/filter-chips';
 import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
 import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
@@ -58,8 +60,6 @@ import {
   Label,
   ListBox,
   Modal,
-  Radio,
-  RadioGroup,
   SearchField,
   Select,
   Spinner,
@@ -1159,91 +1159,84 @@ export default function StatusPagesPage() {
                           Choose the source first. You’ll only see the configuration it needs next.
                         </p>
                       </div>
-                      <RadioGroup
+                      <ChoiceCards
                         aria-label="Status page source type"
                         value={trackingMode}
-                        onChange={(value) => setTrackingMode(String(value) as TrackingMode)}
-                        variant="secondary"
+                        onValueChange={(value) => setTrackingMode(String(value) as TrackingMode)}
+                        columns={3}
+                        aspect="5 / 2"
                       >
-                        <div className="grid gap-3 md:grid-cols-3">
-                          {(
+                        {(
+                          [
                             [
-                              [
-                                'git',
-                                'Git repositories',
-                                'Yes — follow the current images discovered in Git.',
-                              ],
-                              [
-                                'images',
-                                'Specific image scope',
-                                'No — choose image tags, a pattern, or all tracked images.',
-                              ],
-                              [
-                                'mixed',
-                                'Both',
-                                'Combine Git discovery with a small fixed image scope.',
-                              ],
-                            ] as const
-                          ).map(([mode, title, detail]) => (
-                            <Radio
-                              key={mode}
-                              value={mode}
-                              className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-border bg-transparent p-4 transition-colors hover:bg-accent/50 data-[selected]:border-primary data-[selected]:bg-accent/50"
-                            >
-                              <Radio.Control className="absolute right-3 top-3">
-                                <Radio.Indicator />
-                              </Radio.Control>
-                              <Radio.Content className="flex min-w-0 flex-col items-start gap-1 pr-7">
-                                <span className="block text-sm font-semibold text-foreground">
-                                  {title}
-                                </span>
-                                <Description className="mt-1 block break-words text-xs leading-5 text-muted-foreground">
-                                  {detail}
-                                </Description>
-                              </Radio.Content>
-                            </Radio>
-                          ))}
-                        </div>
-                      </RadioGroup>
+                              'git',
+                              'Git repositories',
+                              'Yes — follow the current images discovered in Git.',
+                              GitBranch,
+                            ],
+                            [
+                              'images',
+                              'Specific image scope',
+                              'No — choose image tags, a pattern, or all tracked images.',
+                              Container,
+                            ],
+                            [
+                              'mixed',
+                              'Both',
+                              'Combine Git discovery with a small fixed image scope.',
+                              Layers,
+                            ],
+                          ] as const
+                        ).map(([mode, title, detail, Icon]) => (
+                          <ChoiceCards.Item key={mode} value={mode}>
+                            <ChoiceCards.Media>
+                              <Icon aria-hidden className="size-6" />
+                            </ChoiceCards.Media>
+                            <ChoiceCards.Label>{title}</ChoiceCards.Label>
+                            <ChoiceCards.Description>{detail}</ChoiceCards.Description>
+                          </ChoiceCards.Item>
+                        ))}
+                      </ChoiceCards>
                       {(trackingMode === 'images' || trackingMode === 'mixed') && (
                         <div className="space-y-4 border-t border-divider pt-6">
                           <p className="text-sm font-semibold text-foreground">
                             Do you want to manually choose every image?
                           </p>
-                          <RadioGroup
+                          <ChoiceCards
                             aria-label="Image selection method"
                             value={imageScopeMode}
-                            onChange={(value) => setImageScopeMode(String(value) as ImageScopeMode)}
-                            variant="secondary"
+                            onValueChange={(value) =>
+                              setImageScopeMode(String(value) as ImageScopeMode)
+                            }
+                            columns={3}
+                            aspect="5 / 2"
                           >
-                            <div className="grid gap-3 md:grid-cols-3">
-                              {(
+                            {(
+                              [
                                 [
-                                  ['exact', 'Yes, select tags', 'Pick individual image tags.'],
-                                  ['pattern', 'No, use a pattern', 'Match tags with a regex.'],
-                                  ['all', 'No, include all', 'Publish every tracked image tag.'],
-                                ] as const
-                              ).map(([mode, title, detail]) => (
-                                <Radio
-                                  key={mode}
-                                  value={mode}
-                                  className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-border bg-transparent p-4 transition-colors hover:bg-accent/50 data-[selected]:border-primary data-[selected]:bg-accent/50"
-                                >
-                                  <Radio.Control className="absolute right-3 top-3">
-                                    <Radio.Indicator />
-                                  </Radio.Control>
-                                  <Radio.Content className="flex min-w-0 flex-col items-start gap-1 pr-7">
-                                    <span className="block text-sm font-semibold text-foreground">
-                                      {title}
-                                    </span>
-                                    <Description className="mt-1 block break-words text-xs leading-5 text-muted-foreground">
-                                      {detail}
-                                    </Description>
-                                  </Radio.Content>
-                                </Radio>
-                              ))}
-                            </div>
-                          </RadioGroup>
+                                  'exact',
+                                  'Yes, select tags',
+                                  'Pick individual image tags.',
+                                  ListChecks,
+                                ],
+                                ['pattern', 'No, use a pattern', 'Match tags with a regex.', Regex],
+                                [
+                                  'all',
+                                  'No, include all',
+                                  'Publish every tracked image tag.',
+                                  Infinity,
+                                ],
+                              ] as const
+                            ).map(([mode, title, detail, Icon]) => (
+                              <ChoiceCards.Item key={mode} value={mode}>
+                                <ChoiceCards.Media>
+                                  <Icon aria-hidden className="size-6" />
+                                </ChoiceCards.Media>
+                                <ChoiceCards.Label>{title}</ChoiceCards.Label>
+                                <ChoiceCards.Description>{detail}</ChoiceCards.Description>
+                              </ChoiceCards.Item>
+                            ))}
+                          </ChoiceCards>
                         </div>
                       )}
                     </div>

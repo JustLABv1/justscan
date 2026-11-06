@@ -1,5 +1,6 @@
 'use client';
 
+import { SidebarGroupMenu } from '@/components/sidebar-group-menu';
 import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import {
   clearToken,
@@ -767,6 +768,19 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               {navigationGroups.map((group) => {
                 const { id, label, items } = group;
                 const open = desktopCollapsed || isGroupOpen(group);
+                if (desktopCollapsed && group.collapsible && label) {
+                  return (
+                    <div key={id} className="mb-2 last:mb-0">
+                      <SidebarGroupMenu
+                        label={label}
+                        Icon={MoreHorizontal}
+                        items={items}
+                        isActive={(href) => isActiveRoute(pathname, href)}
+                        attention={pendingInviteCount > 0}
+                      />
+                    </div>
+                  );
+                }
                 return (
                   <div key={id} className={desktopCollapsed ? 'mb-2 last:mb-0' : 'mb-3 last:mb-0'}>
                     {!desktopCollapsed && label ? (

@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
@@ -18,7 +19,6 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
-  Chip,
   Input,
   ListBox,
   Modal,
@@ -321,19 +321,15 @@ export function UsersTab() {
                     <Table.Cell className="font-medium">{user.username}</Table.Cell>
                     <Table.Cell className="text-xs text-muted-foreground">{user.email}</Table.Cell>
                     <Table.Cell>
-                      <Chip size="sm" variant="soft">
-                        {userAuthLabel(user.auth_type)}
-                      </Chip>
+                      <StatusTag>{userAuthLabel(user.auth_type)}</StatusTag>
                     </Table.Cell>
                     <Table.Cell>
-                      <Chip size="sm" variant="soft">
-                        {user.role}
-                      </Chip>
+                      <StatusTag>{user.role}</StatusTag>
                     </Table.Cell>
                     <Table.Cell>
-                      <Chip size="sm" color={user.disabled ? 'danger' : 'success'} variant="soft">
+                      <StatusTag tone={toneFromChipColor(user.disabled ? 'danger' : 'success')}>
                         {user.disabled ? 'Disabled' : 'Active'}
-                      </Chip>
+                      </StatusTag>
                     </Table.Cell>
                     <Table.Cell className="text-xs text-muted-foreground">
                       {user.last_login_at ? (

@@ -249,7 +249,7 @@ function ScanTreeTable({
         <Table.ScrollContainer className="rounded-none border-0">
           <Table.Content
             aria-label="Scanned images, tags and scan history"
-            className="min-w-[1152px] table-fixed [&_td]:px-3 [&_th]:px-3"
+            className="min-w-[960px] table-fixed [&_td]:px-3 [&_th]:px-3"
           >
             <Table.Header>
               <Table.Column isRowHeader className="w-auto">
@@ -257,8 +257,7 @@ function ScanTreeTable({
               </Table.Column>
               <Table.Column className="w-[216px]">Status</Table.Column>
               <Table.Column className="w-[216px]">Findings</Table.Column>
-              <Table.Column className="w-[144px]">History</Table.Column>
-              <Table.Column className="w-[144px]">Scanned</Table.Column>
+              <Table.Column className="w-[144px]">Last scan</Table.Column>
               <Table.Column className="w-14">
                 <span className="sr-only">Actions</span>
               </Table.Column>
@@ -267,14 +266,14 @@ function ScanTreeTable({
               {loading ? (
                 Array.from({ length: 5 }, (_, i) => (
                   <Table.Row key={i} id={`loading:${i}`}>
-                    <Table.Cell colSpan={6}>
+                    <Table.Cell colSpan={5}>
                       <div className="h-10 animate-pulse rounded bg-muted" />
                     </Table.Cell>
                   </Table.Row>
                 ))
               ) : images.length === 0 ? (
                 <Table.Row id="empty">
-                  <Table.Cell colSpan={6}>
+                  <Table.Cell colSpan={5}>
                     <div className="py-8">
                       <EmptyState
                         icon={<Shield01Icon size={28} />}
@@ -313,7 +312,7 @@ function renderTreeRow(
     const branch = row.tag === undefined ? tags[row.parent] : runs[row.parent];
     return (
       <Table.Row id={row.id}>
-        <Table.Cell colSpan={6}>
+        <Table.Cell colSpan={5}>
           <div
             className={`flex items-center gap-3 py-1 ${row.tag === undefined ? 'pl-12' : 'pl-20'}`}
           >
@@ -366,7 +365,15 @@ function renderTreeRow(
   const Icon = image ? Container : tag ? Tag : ScanLine;
   const queued = image && queuedImageNames?.has(image.image_name);
   return (
-    <Table.Row id={row.id} className={image ? 'bg-muted/20' : ''} textValue={name}>
+    <Table.Row
+      id={row.id}
+      className={`${image ? 'bg-muted/20' : ''} ${
+        image && (image.health_policy_failed || image.health_critical_count > 0)
+          ? 'shadow-[inset_2px_0_0_0_var(--destructive)]'
+          : ''
+      }`}
+      textValue={name}
+    >
       <Table.Cell>
         <div
           className={`flex min-w-0 items-center gap-2 py-2 ${tag ? 'pl-6' : scan ? 'pl-14' : ''}`}
@@ -412,9 +419,15 @@ function renderTreeRow(
               <Chip color="warning" size="sm" variant="soft">
                 Deletion queued
               </Chip>
-            ) : scan ? (
-              <span className="text-xs text-muted-foreground">{scan.scan_provider}</span>
-            ) : null}
+            ) : (
+              <span className="block text-xs text-muted-foreground">
+                {image
+                  ? `${image.tag_count} tags · ${image.scan_count} runs`
+                  : tag
+                    ? `${tag.scan_count} runs`
+                    : scan!.scan_provider}
+              </span>
+            )}
           </div>
         </div>
       </Table.Cell>
@@ -448,15 +461,6 @@ function renderTreeRow(
           medium={image?.health_medium_count ?? tag?.medium_count ?? scan!.medium_count}
           low={image?.health_low_count ?? tag?.low_count ?? scan!.low_count}
         />
-      </Table.Cell>
-      <Table.Cell>
-        <span className="text-xs text-muted-foreground">
-          {image
-            ? `${image.tag_count} tags · ${image.scan_count} runs`
-            : tag
-              ? `${tag.scan_count} runs`
-              : 'Scan run'}
-        </span>
       </Table.Cell>
       <Table.Cell>
         <span className="whitespace-nowrap text-xs text-muted-foreground" title={fullDate(date)}>

@@ -450,7 +450,7 @@ export const Checkbox = Object.assign(
     Control: ({ children, className, ...props }: React.ComponentProps<'span'>) => (
       <span
         className={cn(
-          'flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input dark:bg-input/30 group-data-[selected]:border-primary group-data-[selected]:bg-primary group-data-[selected]:text-primary-foreground group-data-[indeterminate]:bg-primary group-data-[focus-visible]:ring-3 group-data-[focus-visible]:ring-ring/50',
+          'flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input dark:bg-input/30 group-data-[selected]:border-primary group-data-[selected]:bg-primary group-data-[selected]:text-primary-foreground group-data-[indeterminate]:border-primary group-data-[indeterminate]:bg-primary group-data-[indeterminate]:text-primary-foreground dark:group-data-[selected]:bg-primary dark:group-data-[indeterminate]:bg-primary group-data-[focus-visible]:ring-3 group-data-[focus-visible]:ring-ring/50',
           className
         )}
         {...props}

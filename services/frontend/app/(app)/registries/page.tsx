@@ -5,11 +5,12 @@ import { XrayModeSelector } from '@/components/registries/xray-mode-selector';
 import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatusDot, StatusLabel } from '@/components/ui/status-dot';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
-import { StatCard } from '@/components/ui/stat-card';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useClientAuth } from '@/hooks/use-client-auth';
@@ -41,13 +42,11 @@ import {
   Alert,
   Button,
   Card,
-  Chip,
   ListBox,
   Modal,
   SearchField,
   Select,
   Table,
-  Tabs,
   Label,
   useOverlayState,
 } from '@/components/ui';
@@ -77,15 +76,11 @@ const PROVIDER_LABEL: Record<string, string> = {
 
 function HealthBadge({ status, message }: { status: string; message: string }) {
   return (
-    <Chip
-      size="sm"
-      variant="soft"
-      color={status === 'healthy' ? 'success' : status === 'unhealthy' ? 'danger' : 'default'}
+    <StatusLabel
+      tone={status === 'healthy' ? 'success' : status === 'unhealthy' ? 'danger' : 'neutral'}
+      label={status === 'healthy' ? 'Healthy' : status === 'unhealthy' ? 'Unhealthy' : 'Unknown'}
       title={message}
-    >
-      <span aria-hidden className="size-1.5 rounded-full bg-current" />
-      {status === 'healthy' ? 'Healthy' : status === 'unhealthy' ? 'Unhealthy' : 'Unknown'}
-    </Chip>
+    />
   );
 }
 
@@ -433,6 +428,26 @@ export default function RegistriesPage() {
     });
   }, [providerFilter, registries, searchQuery]);
 
+  const providerOf = (item: (typeof registries)[number]) => item.scan_provider ?? 'trivy';
+  const providerSegments: {
+    id: 'all' | 'trivy' | 'artifactory_xray';
+    label: string;
+    count: number;
+  }[] = [
+    { id: 'all', label: 'All', count: registries.length },
+    {
+      id: 'trivy',
+      label: 'Trivy',
+      count: registries.filter((i) => providerOf(i) === 'trivy').length,
+    },
+    {
+      id: 'artifactory_xray',
+      label: 'Artifactory Xray',
+      count: registries.filter((i) => providerOf(i) === 'artifactory_xray').length,
+    },
+  ];
+  const unhealthyCount = registries.filter((item) => item.health_status === 'unhealthy').length;
+
   return (
     <PageContainer>
       <PageHeader
@@ -452,32 +467,6 @@ export default function RegistriesPage() {
           </div>
         }
       />
-
-      {!loading && registries.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <StatCard
-            label="Registries"
-            value={registries.length}
-            hint="Available in this workspace"
-          />
-          <StatCard
-            label="Trivy"
-            value={registries.filter((item) => (item.scan_provider ?? 'trivy') === 'trivy').length}
-            hint="Built-in image scanning"
-          />
-          <StatCard
-            label="Artifactory Xray"
-            value={registries.filter((item) => item.scan_provider === 'artifactory_xray').length}
-            hint="External image scanning"
-          />
-          <StatCard
-            label="Unhealthy connections"
-            value={registries.filter((item) => item.health_status === 'unhealthy').length}
-            hint="Last recorded health check"
-            tone="danger"
-          />
-        </div>
-      ) : null}
 
       <LoadableCollectionState
         emptyState={
@@ -503,37 +492,24 @@ export default function RegistriesPage() {
       >
         <Card className="gap-0 overflow-hidden py-0">
           <Card.Header className="space-y-3 border-b p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Card.Title>Registry connections</Card.Title>
-              <span className="text-xs text-muted-foreground">
-                {filteredRegistries.length} of {registries.length} registries
-              </span>
-            </div>
-            <Tabs
-              selectedKey={providerFilter}
-              onSelectionChange={(key) =>
-                setProviderFilter(String(key) as 'all' | 'trivy' | 'artifactory_xray')
-              }
-              variant="secondary"
+            <FilterChips
+              label="Registry scan provider"
+              items={providerSegments.map((segment) => ({
+                id: segment.id,
+                label: segment.label,
+                count: segment.count,
+                active: providerFilter === segment.id,
+                onPress: () => setProviderFilter(segment.id),
+              }))}
             >
-              <Tabs.ListContainer className="overflow-x-auto">
-                <Tabs.List aria-label="Registry scan provider" className="min-w-max">
-                  {[
-                    { id: 'all', label: 'All providers' },
-                    { id: 'trivy', label: 'Trivy' },
-                    { id: 'artifactory_xray', label: 'Artifactory Xray' },
-                  ].map((option) => (
-                    <Tabs.Tab id={option.id} key={option.id}>
-                      {option.label}
-                      <Tabs.Indicator />
-                    </Tabs.Tab>
-                  ))}
-                </Tabs.List>
-              </Tabs.ListContainer>
-              {['all', 'trivy', 'artifactory_xray'].map((key) => (
-                <Tabs.Panel id={key} key={key} className="hidden" />
-              ))}
-            </Tabs>
+              {unhealthyCount > 0 ? (
+                <span className="mr-3 inline-flex items-center gap-1.5">
+                  <StatusDot tone="danger" />
+                  {unhealthyCount} unhealthy
+                </span>
+              ) : null}
+              {filteredRegistries.length} of {registries.length}
+            </FilterChips>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <SearchField name="registries-search" variant="secondary" className="w-full">
                 <SearchField.Group>
@@ -567,14 +543,14 @@ export default function RegistriesPage() {
               <Table.ScrollContainer className="rounded-none border-0">
                 <Table.Content
                   aria-label="Configured registries"
-                  className="min-w-[960px] [&_td]:py-3"
+                  className="min-w-[860px] [&_td]:py-3"
                 >
                   <Table.Header>
                     <Table.Column isRowHeader>Name</Table.Column>
                     <Table.Column className="min-w-56">Connection</Table.Column>
-                    <Table.Column className="min-w-56">Health</Table.Column>
+                    <Table.Column className="min-w-44">Health</Table.Column>
                     <Table.Column className="w-px whitespace-nowrap text-right">
-                      Actions
+                      <span className="sr-only">Actions</span>
                     </Table.Column>
                   </Table.Header>
                   <Table.Body>
@@ -591,51 +567,47 @@ export default function RegistriesPage() {
                         <Table.Cell>
                           <div className="space-y-1">
                             <p className="font-medium text-foreground">{r.name}</p>
-                            {r.is_default ? (
-                              <Chip size="sm" variant="soft" color="accent">
-                                Workspace default
-                              </Chip>
-                            ) : null}
-                            {hiddenSystemRegistryIdSet.has(r.id) ? (
-                              <Chip size="sm" variant="soft" color="default">
-                                Hidden in workspace
-                              </Chip>
-                            ) : null}
-                            <OwnershipBadge
-                              ownerType={r.owner_type}
-                              ownerOrgId={r.owner_org_id}
-                              orgNamesById={orgNamesById}
-                            />
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="min-w-56">
-                          <div className="space-y-1.5">
-                            <p className="max-w-md break-all font-mono text-xs text-muted-foreground">
-                              {r.url}
-                            </p>
-                            <div className="flex flex-wrap gap-1.5">
-                              <Chip size="sm" variant="soft">
-                                {PROVIDER_LABEL[r.scan_provider ?? 'trivy']}
-                              </Chip>
-                              <Chip size="sm" variant="soft">
-                                {AUTH_TYPE_LABEL[r.auth_type ?? 'none']}
-                              </Chip>
-                              {r.username ? (
-                                <span className="text-xs text-muted-foreground">{r.username}</span>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                              {r.is_default ? (
+                                <span className="font-medium text-primary">Workspace default</span>
                               ) : null}
+                              {hiddenSystemRegistryIdSet.has(r.id) ? (
+                                <span>Hidden in workspace</span>
+                              ) : null}
+                              <OwnershipBadge
+                                ownerType={r.owner_type}
+                                ownerOrgId={r.owner_org_id}
+                                orgNamesById={orgNamesById}
+                              />
                             </div>
                           </div>
                         </Table.Cell>
                         <Table.Cell className="min-w-56">
-                          <div className="flex flex-col gap-1">
+                          <div className="space-y-1">
+                            <p className="max-w-md break-all font-mono text-sm text-foreground">
+                              {r.url}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {[
+                                PROVIDER_LABEL[r.scan_provider ?? 'trivy'],
+                                AUTH_TYPE_LABEL[r.auth_type ?? 'none'],
+                                r.username,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </p>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell className="min-w-44">
+                          <div className="space-y-0.5">
                             <HealthBadge
                               status={r.health_status ?? 'unknown'}
                               message={r.health_message ?? ''}
                             />
                             {r.last_health_check_at && (
-                              <span className="text-xs text-muted-foreground">
+                              <p className="pl-4 text-xs text-muted-foreground">
                                 {timeAgo(r.last_health_check_at)}
-                              </span>
+                              </p>
                             )}
                           </div>
                         </Table.Cell>

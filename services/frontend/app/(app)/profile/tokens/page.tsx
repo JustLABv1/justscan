@@ -5,7 +5,8 @@ import type { ReactNode } from 'react';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
-import { StatCard } from '@/components/ui/stat-card';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusLabel, StatusTag } from '@/components/ui/status-dot';
 import { createUserToken, listUserTokens, PersonalToken, revokeUserToken } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo, timeUntil } from '@/lib/time';
@@ -13,7 +14,6 @@ import {
   Alert,
   Button,
   Card,
-  Chip,
   EmptyState,
   Label,
   Modal,
@@ -21,7 +21,6 @@ import {
   useOverlayState,
 } from '@/components/ui';
 import {
-  Clock01Icon,
   Copy01Icon,
   Delete01Icon,
   FolderLibraryIcon,
@@ -98,7 +97,9 @@ function DetailRow({
       className="flex items-start justify-between gap-4 rounded-xl px-4 py-3"
       style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
     >
-      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
+      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </span>
       <span
         className={`text-right text-sm text-foreground ${mono ? 'font-mono break-all' : ''}`.trim()}
       >
@@ -126,46 +127,9 @@ function TokenStatusBadge({ token }: { token: PersonalToken }) {
   const expiresAt = new Date(token.expires_at);
   const isNoExpiry = expiresAt.getFullYear() - now.getFullYear() >= 4;
 
-  if (token.disabled) {
-    return (
-      <span
-        className="text-xs px-2 py-0.5 rounded-md font-medium"
-        style={{
-          background: 'rgba(239,68,68,0.1)',
-          color: '#f87171',
-          border: '1px solid rgba(239,68,68,0.2)',
-        }}
-      >
-        Revoked
-      </span>
-    );
-  }
-  if (!isNoExpiry && expiresAt < now) {
-    return (
-      <span
-        className="text-xs px-2 py-0.5 rounded-md font-medium"
-        style={{
-          background: 'rgba(245,158,11,0.1)',
-          color: '#fbbf24',
-          border: '1px solid rgba(245,158,11,0.2)',
-        }}
-      >
-        Expired
-      </span>
-    );
-  }
-  return (
-    <span
-      className="text-xs px-2 py-0.5 rounded-md font-medium"
-      style={{
-        background: 'rgba(16,185,129,0.1)',
-        color: '#34d399',
-        border: '1px solid rgba(16,185,129,0.2)',
-      }}
-    >
-      Active
-    </span>
-  );
+  if (token.disabled) return <StatusLabel tone="danger" label="Revoked" />;
+  if (!isNoExpiry && expiresAt < now) return <StatusLabel tone="warning" label="Expired" />;
+  return <StatusLabel tone="success" label="Active" />;
 }
 
 function TokenExpiry({ token }: { token: PersonalToken }) {
@@ -442,40 +406,26 @@ export default function TokensPage() {
         </Alert>
       ) : (
         <>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard
+          <StatStrip className="lg:grid-cols-4">
+            <StatStripItem
               label="Total tokens"
               value={tokens.length}
-              hint="All tokens ever issued for this account."
-              icon={<Key01Icon size={16} />}
-              iconTone="accent"
-              valueClassName="text-lg font-semibold text-foreground"
+              hint="All tokens ever issued"
             />
-            <StatCard
+            <StatStripItem
               label="Active now"
               value={activeTokens.length}
-              hint="Usable tokens that are not revoked or expired."
-              icon={<Key01Icon size={16} />}
-              iconTone="success"
-              valueClassName="text-lg font-semibold text-foreground"
+              hint="Not revoked or expired"
+              tone="success"
             />
-            <StatCard
+            <StatStripItem
               label="Expiring soon"
               value={expiringSoon}
-              hint="Tokens that expire within the next 30 days."
-              icon={<Clock01Icon size={16} />}
-              iconTone="warning"
-              valueClassName="text-lg font-semibold text-foreground"
+              hint="Within the next 30 days"
+              tone={expiringSoon > 0 ? 'warning' : undefined}
             />
-            <StatCard
-              label="Revoked"
-              value={revokedTokens}
-              hint="Disabled tokens retained for audit visibility."
-              icon={<Delete01Icon size={16} />}
-              iconTone="danger"
-              valueClassName="text-lg font-semibold text-foreground"
-            />
-          </div>
+            <StatStripItem label="Revoked" value={revokedTokens} hint="Kept for audit visibility" />
+          </StatStrip>
 
           <Card>
             <Card.Header>
@@ -535,13 +485,9 @@ export default function TokensPage() {
                           </div>
                         </Table.Cell>
                         <Table.Cell>
-                          <Chip
-                            size="sm"
-                            variant="soft"
-                            color={token.type === 'cli_session' ? 'accent' : 'default'}
-                          >
+                          <StatusTag>
                             {token.type === 'cli_session' ? 'CLI session' : 'Personal token'}
-                          </Chip>
+                          </StatusTag>
                         </Table.Cell>
                         <Table.Cell>
                           <span className="text-sm text-muted-foreground hidden md:inline">

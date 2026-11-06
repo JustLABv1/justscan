@@ -3,7 +3,6 @@
 import {
   Button,
   Card,
-  Chip,
   Description,
   Label,
   ListBox,
@@ -30,7 +29,8 @@ import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
-import { StatCard } from '@/components/ui/stat-card';
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatusLabel } from '@/components/ui/status-dot';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -313,8 +313,33 @@ export default function GitRepositoriesPage() {
         .toLowerCase()
         .includes(query.trim().toLowerCase()) &&
       (scheduleFilter === 'all' ||
-        (scheduleFilter === 'scheduled' ? repository.enabled : !repository.enabled))
+        (scheduleFilter === 'scheduled'
+          ? repository.enabled
+          : scheduleFilter === 'never'
+            ? !repository.last_run_at
+            : !repository.enabled))
   );
+
+  const scheduleSegments = [
+    { id: 'all', label: 'All', count: repositories.length },
+    {
+      id: 'scheduled',
+      label: 'Scheduled',
+      tone: 'success' as const,
+      count: repositories.filter((repository) => repository.enabled).length,
+    },
+    {
+      id: 'manual',
+      label: 'Manual only',
+      count: repositories.filter((repository) => !repository.enabled).length,
+    },
+    {
+      id: 'never',
+      label: 'Never run',
+      tone: 'warning' as const,
+      count: repositories.filter((repository) => !repository.last_run_at).length,
+    },
+  ];
 
   return (
     <PageContainer>
@@ -328,31 +353,6 @@ export default function GitRepositoriesPage() {
           </Button>
         }
       />
-      {!loading && !loadError ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[
-            { label: 'Connected repositories', value: repositories.length },
-            {
-              label: 'Scheduled',
-              value: repositories.filter((repository) => repository.enabled).length,
-            },
-            {
-              label: 'Manual only',
-              value: repositories.filter((repository) => !repository.enabled).length,
-            },
-            {
-              label: 'Never run',
-              value: repositories.filter((repository) => !repository.last_run_at).length,
-            },
-          ].map((metric) => (
-            <StatCard
-              key={metric.label}
-              label={metric.label}
-              value={metric.value.toLocaleString()}
-            />
-          ))}
-        </div>
-      ) : null}
       <LoadableCollectionState
         emptyState={
           <EmptyState
@@ -376,18 +376,20 @@ export default function GitRepositoriesPage() {
         retry={() => void load()}
       >
         <Card className="overflow-hidden gap-0 py-0">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-4">
-            <div>
-              <h2 className="text-sm font-medium">Repository inventory</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                GitOps image discovery and scheduled scanning
-              </p>
-            </div>
-            <span className="text-xs text-muted-foreground">
+          <div className="space-y-3 border-b border-border p-3">
+            <FilterChips
+              label="Repository schedule filter"
+              items={scheduleSegments.map((segment) => ({
+                id: segment.id,
+                label: segment.label,
+                count: segment.count,
+                tone: segment.tone && segment.count > 0 ? segment.tone : undefined,
+                active: scheduleFilter === segment.id,
+                onPress: () => setScheduleFilter(segment.id),
+              }))}
+            >
               {visibleRepositories.length} of {repositories.length}
-            </span>
-          </div>
-          <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row">
+            </FilterChips>
             <SearchField
               aria-label="Search repositories"
               value={query}
@@ -400,24 +402,6 @@ export default function GitRepositoriesPage() {
                 <SearchField.ClearButton />
               </SearchField.Group>
             </SearchField>
-            <Select
-              aria-label="Repository schedule filter"
-              value={scheduleFilter}
-              onChange={(value) => setScheduleFilter(String(value))}
-              className="sm:w-44"
-            >
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="all">All repositories</ListBox.Item>
-                  <ListBox.Item id="scheduled">Scheduled</ListBox.Item>
-                  <ListBox.Item id="manual">Manual only</ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
           </div>
           <Table>
             <Table.ScrollContainer className="rounded-none border-0">
@@ -472,10 +456,10 @@ export default function GitRepositoriesPage() {
                         </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <code className="block truncate text-xs" title={repository.ref}>
+                        <code className="block truncate text-sm" title={repository.ref}>
                           {repository.ref}
                         </code>
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <p className="mt-0.5 text-xs text-muted-foreground">
                           {
                             {
                               auto: 'Automatic',
@@ -488,26 +472,31 @@ export default function GitRepositoriesPage() {
                         </p>
                       </Table.Cell>
                       <Table.Cell>
-                        <Chip
-                          color={repository.enabled ? 'success' : 'default'}
-                          size="sm"
-                          variant="soft"
-                        >
-                          {repository.enabled ? repository.schedule : 'Manual'}
-                        </Chip>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {repository.enabled ? repository.timezone : 'On demand'}
-                        </p>
+                        <StatusLabel
+                          tone={repository.enabled ? 'success' : 'neutral'}
+                          label={repository.enabled ? 'Scheduled' : 'Manual'}
+                          detail={
+                            repository.enabled ? (
+                              <span className="font-mono">
+                                {repository.schedule} · {repository.timezone}
+                              </span>
+                            ) : (
+                              'On demand'
+                            )
+                          }
+                        />
                       </Table.Cell>
                       <Table.Cell>
-                        <span
-                          className="text-xs text-muted-foreground"
-                          title={
-                            repository.last_run_at ? fullDate(repository.last_run_at) : undefined
-                          }
-                        >
-                          {repository.last_run_at ? timeAgo(repository.last_run_at) : 'Not run yet'}
-                        </span>
+                        {repository.last_run_at ? (
+                          <span
+                            className="text-sm text-muted-foreground"
+                            title={fullDate(repository.last_run_at)}
+                          >
+                            {timeAgo(repository.last_run_at)}
+                          </span>
+                        ) : (
+                          <StatusLabel tone="warning" label="Not run yet" />
+                        )}
                       </Table.Cell>
                       <Table.Cell>
                         <RowActionsMenu

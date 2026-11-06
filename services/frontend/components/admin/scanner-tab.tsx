@@ -1,13 +1,14 @@
 'use client';
 
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { StatusAlert } from '@/components/ui/form-alert';
-import { StatCard } from '@/components/ui/stat-card';
 import { ScannerRuntimePanel } from '@/components/admin/scanner-runtime-panel';
 import { getScannerHealth } from '@/lib/api/dashboard';
 import type { ScannerHealth } from '@/lib/api/types/dashboard';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate } from '@/lib/time';
-import { Button, Card, Chip } from '@/components/ui';
+import { Button, Card } from '@/components/ui';
 import { useCallback, useEffect, useState } from 'react';
 
 function formatDbAge(hours?: number | null): string {
@@ -44,13 +45,17 @@ export function ScannerTab() {
 
   return (
     <div className="space-y-4">
-      {error ? <StatusAlert status="danger" title="Scanner health failed to load" description={error} /> : null}
+      {error ? (
+        <StatusAlert status="danger" title="Scanner health failed to load" description={error} />
+      ) : null}
 
       <Card className="space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">Scanner Health</h2>
-            <p className="text-sm text-muted-foreground">Live worker cache status from the current backend instance.</p>
+            <p className="text-sm text-muted-foreground">
+              Live worker cache status from the current backend instance.
+            </p>
           </div>
           <Button variant="secondary" onPress={load} isDisabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
@@ -63,21 +68,40 @@ export function ScannerTab() {
               <StatusAlert
                 status="warning"
                 title="Local scanner is disabled"
-                description={health.message || 'This backend instance is running without the built-in local scanner.'}
+                description={
+                  health.message ||
+                  'This backend instance is running without the built-in local scanner.'
+                }
               />
             ) : (
               <>
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
-                  <StatCard label="Healthy workers" value={health.healthy_workers} tone="success" variant="compact" />
-                  <StatCard label="Stale workers" value={health.stale_workers} tone={health.stale_workers > 0 ? 'warning' : 'default'} variant="compact" />
-                  <StatCard label="Oldest vulnerability DB" value={formatDbAge(health.oldest_vuln_db_age_hours)} variant="compact" />
-                  <StatCard label="Oldest Java DB" value={formatDbAge(health.oldest_java_db_age_hours)} variant="compact" />
-                </div>
+                <StatStrip>
+                  <StatStripItem
+                    label="Healthy workers"
+                    value={health.healthy_workers}
+                    tone="success"
+                  />
+                  <StatStripItem
+                    label="Stale workers"
+                    value={health.stale_workers}
+                    tone={health.stale_workers > 0 ? 'warning' : undefined}
+                  />
+                  <StatStripItem
+                    label="Oldest vulnerability DB"
+                    value={formatDbAge(health.oldest_vuln_db_age_hours)}
+                  />
+                  <StatStripItem
+                    label="Oldest Java DB"
+                    value={formatDbAge(health.oldest_java_db_age_hours)}
+                  />
+                </StatStrip>
 
                 <Card variant="secondary">
                   <Card.Content>
                     <p className="text-xs text-muted-foreground">
-                      Status is based on when each worker last downloaded its local DB copy. A worker is healthy if it downloaded within the last {health.max_allowed_age_hours}h.
+                      Status is based on when each worker last downloaded its local DB copy. A
+                      worker is healthy if it downloaded within the last{' '}
+                      {health.max_allowed_age_hours}h.
                     </p>
                   </Card.Content>
                 </Card>
@@ -87,11 +111,20 @@ export function ScannerTab() {
                     <Card key={worker.worker_id} variant="secondary" className="space-y-3">
                       <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Chip size="sm" variant="soft">Worker {worker.worker_id}</Chip>
-                          <Chip size="sm" variant="soft" color={statusColor(worker.status)} className="capitalize">{worker.status}</Chip>
-                          <span className="text-xs text-muted-foreground">Trivy {worker.trivy_version || 'unknown'}</span>
+                          <StatusTag>Worker {worker.worker_id}</StatusTag>
+                          <StatusTag
+                            className="capitalize"
+                            tone={toneFromChipColor(statusColor(worker.status))}
+                          >
+                            {worker.status}
+                          </StatusTag>
+                          <span className="text-xs text-muted-foreground">
+                            Trivy {worker.trivy_version || 'unknown'}
+                          </span>
                         </div>
-                        <span className="text-xs text-muted-foreground" title={worker.cache_dir}>{worker.cache_dir}</span>
+                        <span className="text-xs text-muted-foreground" title={worker.cache_dir}>
+                          {worker.cache_dir}
+                        </span>
                       </div>
 
                       <div className="grid gap-3 md:grid-cols-2 text-xs">
@@ -99,16 +132,36 @@ export function ScannerTab() {
                           <Card.Content className="space-y-1">
                             <p className="text-muted-foreground">Vulnerability DB</p>
                             <p>Snapshot age: {formatDbAge(worker.vuln_db_age_hours)}</p>
-                            <p className="text-muted-foreground">Updated: {worker.vuln_db_updated_at ? fullDate(worker.vuln_db_updated_at) : 'Unknown'}</p>
-                            <p className="text-muted-foreground">Downloaded: {worker.vuln_db_downloaded_at ? fullDate(worker.vuln_db_downloaded_at) : 'Unknown'}</p>
+                            <p className="text-muted-foreground">
+                              Updated:{' '}
+                              {worker.vuln_db_updated_at
+                                ? fullDate(worker.vuln_db_updated_at)
+                                : 'Unknown'}
+                            </p>
+                            <p className="text-muted-foreground">
+                              Downloaded:{' '}
+                              {worker.vuln_db_downloaded_at
+                                ? fullDate(worker.vuln_db_downloaded_at)
+                                : 'Unknown'}
+                            </p>
                           </Card.Content>
                         </Card>
                         <Card variant="secondary">
                           <Card.Content className="space-y-1">
                             <p className="text-muted-foreground">Java DB</p>
                             <p>Snapshot age: {formatDbAge(worker.java_db_age_hours)}</p>
-                            <p className="text-muted-foreground">Updated: {worker.java_db_updated_at ? fullDate(worker.java_db_updated_at) : 'Unknown'}</p>
-                            <p className="text-muted-foreground">Downloaded: {worker.java_db_downloaded_at ? fullDate(worker.java_db_downloaded_at) : 'Unknown'}</p>
+                            <p className="text-muted-foreground">
+                              Updated:{' '}
+                              {worker.java_db_updated_at
+                                ? fullDate(worker.java_db_updated_at)
+                                : 'Unknown'}
+                            </p>
+                            <p className="text-muted-foreground">
+                              Downloaded:{' '}
+                              {worker.java_db_downloaded_at
+                                ? fullDate(worker.java_db_downloaded_at)
+                                : 'Unknown'}
+                            </p>
                           </Card.Content>
                         </Card>
                       </div>

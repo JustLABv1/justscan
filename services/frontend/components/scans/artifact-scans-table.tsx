@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag } from '@/components/ui/status-dot';
 import { ScanTagBadgeList } from '@/components/scans/scan-tag-badge-list';
 import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
 import { SevCount, StatusBadge } from '@/components/ui/badges';
@@ -11,7 +12,7 @@ import { useToast } from '@/components/toast';
 import { ArtifactSummary, listScans, Scan } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Checkbox, Chip, Pagination, Table } from '@/components/ui';
+import { Button, Checkbox, Pagination, Table } from '@/components/ui';
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
@@ -103,13 +104,13 @@ function ArtifactReference({
         {!hideImageName && registryHost ? (
           <span className="break-all font-mono text-xs text-muted-foreground">{registryHost}</span>
         ) : null}
-        <Chip className="text-xs font-semibold" color="accent" size="sm" variant="soft">
+        <StatusTag className="text-xs font-semibold" tone="accent">
           {scanCount} run{scanCount === 1 ? '' : 's'}
-        </Chip>
+        </StatusTag>
         {deletionQueued ? (
-          <Chip className="text-xs font-semibold" color="warning" size="sm" variant="soft">
+          <StatusTag className="text-xs font-semibold" tone="warning">
             Deletion queued
-          </Chip>
+          </StatusTag>
         ) : null}
       </div>
     </div>
@@ -124,11 +125,7 @@ function PolicyFailureChip({
   const failedPolicies = summary?.failed_policy_names?.filter(Boolean) ?? [];
   if (failedPolicies.length === 0) return null;
 
-  return (
-    <Chip color="danger" size="sm" title={failedPolicies.join(', ')} variant="soft">
-      Policy failed
-    </Chip>
-  );
+  return <StatusTag tone="danger">Policy failed</StatusTag>;
 }
 
 function ScanSelectionCheckbox({

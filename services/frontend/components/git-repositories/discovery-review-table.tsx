@@ -1,12 +1,12 @@
 'use client';
 
+import { StatusLabel } from '@/components/ui/status-dot';
 import { useState } from 'react';
 import { FileCode2, SearchCheck } from 'lucide-react';
 import {
   Button,
   Card,
   Checkbox,
-  Chip,
   Label,
   ListBox,
   SearchField,
@@ -224,21 +224,20 @@ export function DiscoveryReviewTable({
                       </p>
                     </Table.Cell>
                     <Table.Cell>
-                      <Chip
-                        size="sm"
-                        variant="soft"
-                        color={
+                      <StatusLabel
+                        tone={
                           candidate.status === 'unresolved'
                             ? 'warning'
                             : candidate.status === 'ignored'
-                              ? 'default'
+                              ? 'neutral'
                               : 'success'
                         }
-                      >
-                        {candidate.status === 'unresolved'
-                          ? 'Needs review'
-                          : candidate.status.replaceAll('_', ' ')}
-                      </Chip>
+                        label={
+                          candidate.status === 'unresolved'
+                            ? 'Needs review'
+                            : candidate.status.replaceAll('_', ' ')
+                        }
+                      />
                     </Table.Cell>
                     <Table.Cell>
                       {candidate.status === 'unresolved' ? (

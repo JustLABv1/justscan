@@ -1,4 +1,5 @@
 'use client';
+import { StatusTag } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
@@ -23,7 +24,6 @@ import {
   Avatar,
   Button,
   Card,
-  Chip,
   ListBox,
   Modal,
   SearchField,
@@ -527,16 +527,16 @@ export default function OrgsPage() {
                             </div>
                           </Table.Cell>
                           <Table.Cell className="min-w-32">
-                            <Chip variant="soft">
+                            <StatusTag>
                               {org.member_count ?? 0}{' '}
                               {(org.member_count ?? 0) === 1 ? 'member' : 'members'}
-                            </Chip>
+                            </StatusTag>
                           </Table.Cell>
                           <Table.Cell className="min-w-32">
-                            <Chip variant="soft">
+                            <StatusTag>
                               {org.policy_count ?? 0}{' '}
                               {org.policy_count === 1 ? 'policy' : 'policies'}
-                            </Chip>
+                            </StatusTag>
                           </Table.Cell>
                           <Table.Cell className="whitespace-nowrap text-xs text-muted-foreground">
                             {formatDateOnly(org.updated_at)}

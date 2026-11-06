@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { LocalAuthPanel } from '@/components/admin/local-auth-panel';
 import { StatusAlert } from '@/components/ui/form-alert';
@@ -835,13 +836,9 @@ export function IdentityTab() {
                       {provider.issuer_url}
                     </Table.Cell>
                     <Table.Cell>
-                      <Chip
-                        size="sm"
-                        variant="soft"
-                        color={provider.enabled ? 'success' : 'default'}
-                      >
+                      <StatusTag tone={toneFromChipColor(provider.enabled ? 'success' : 'default')}>
                         {provider.enabled ? 'Enabled' : 'Disabled'}
-                      </Chip>
+                      </StatusTag>
                     </Table.Cell>
                     <Table.Cell className="text-xs text-muted-foreground">
                       {provider.name === selectedProvider?.name ? mappings.length : '-'}
@@ -1078,9 +1075,9 @@ export function IdentityTab() {
                   <Card.Content className="flex flex-wrap gap-2">
                     {(debugReport.resolved_groups ?? []).length > 0 ? (
                       (debugReport.resolved_groups ?? []).map((group) => (
-                        <Chip key={group} size="sm" variant="soft">
+                        <StatusTag key={group}>
                           {group}
-                        </Chip>
+                        </StatusTag>
                       ))
                     ) : (
                       <span className="text-sm text-muted-foreground">No groups resolved</span>
@@ -1097,9 +1094,9 @@ export function IdentityTab() {
                   <Card.Content className="flex flex-wrap gap-2">
                     {(debugReport.resolved_roles ?? []).length > 0 ? (
                       (debugReport.resolved_roles ?? []).map((role) => (
-                        <Chip key={role} size="sm" variant="soft">
+                        <StatusTag key={role}>
                           {role}
-                        </Chip>
+                        </StatusTag>
                       ))
                     ) : (
                       <span className="text-sm text-muted-foreground">No roles resolved</span>
@@ -1121,15 +1118,11 @@ export function IdentityTab() {
                       <code>{debugReport.client_roles_path}</code> (
                       {(debugReport.client_roles ?? []).length})
                     </p>
-                    <Chip
-                      size="sm"
-                      variant="soft"
-                      color={debugReport.would_be_admin ? 'success' : 'default'}
-                    >
+                    <StatusTag tone={toneFromChipColor(debugReport.would_be_admin ? 'success' : 'default')}>
                       {debugReport.would_be_admin
                         ? 'Would receive admin role'
                         : 'Would receive user role'}
-                    </Chip>
+                    </StatusTag>
                   </Card.Content>
                 </Card>
               </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import {
   Bar as EvilBar,
   EvilBarChart,
@@ -25,13 +27,12 @@ import {
 } from '@/components/ui/chart-adapter';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { ChartSkeleton } from '@/components/ui/skeleton';
-import { StatCard } from '@/components/ui/stat-card';
 import { getAdminDashboard } from '@/lib/api/admin';
 import type { AdminDashboard, AdminDashboardVulnerabilityTrendPoint } from '@/lib/api/types/admin';
 import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Card, Chip, Link, Skeleton } from '@/components/ui';
+import { Button, Card, Link, Skeleton } from '@/components/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 function formatCompact(value: number) {
@@ -111,13 +112,13 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
 
       <div className="flex flex-wrap gap-2">
         {SEVERITY_SERIES.map((severity) => (
-          <Chip key={severity.key} variant="soft" size="sm" className="text-xs text-muted-foreground">
+          <StatusTag key={severity.key} className="text-xs text-muted-foreground">
             <span
               className="mr-1.5 inline-block size-2 rounded-full"
               style={{ background: severity.color }}
             />
             {severity.label}
-          </Chip>
+          </StatusTag>
         ))}
       </div>
     </div>
@@ -135,16 +136,7 @@ function SummaryTile({
   hint: string;
   hintClassName?: string;
 }) {
-  return (
-    <StatCard
-      label={label}
-      value={value}
-      hint={hint}
-      hintClassName={hintClassName}
-      variant="stacked"
-      className="h-full"
-    />
-  );
+  return <StatStripItem label={label} value={value} hint={hint} />;
 }
 
 function AttentionRow({
@@ -167,28 +159,20 @@ function AttentionRow({
           <p className="text-sm font-medium text-foreground">{label}</p>
           <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
         </div>
-        <Chip color={tone === 'default' ? 'default' : tone} size="sm" variant="soft">
+        <StatusTag tone={toneFromChipColor(tone === undefined ? 'default' : tone)}>
           {count}
-        </Chip>
+        </StatusTag>
       </Link>
     </Card>
   );
 }
 
-function ConfigurationLink({
-  href,
-  label,
-  value,
-}: {
-  href: string;
-  label: string;
-  value: number;
-}) {
+function ConfigurationLink({ href, label, value }: { href: string; label: string; value: number }) {
   return (
     <Card variant="secondary" className="p-0">
       <Link href={href} className="flex items-center justify-between gap-3 px-4 py-3 no-underline">
         <span className="text-sm font-medium text-foreground">{label}</span>
-        <Chip size="sm" variant="soft">{value}</Chip>
+        <StatusTag>{value}</StatusTag>
       </Link>
     </Card>
   );
@@ -341,13 +325,9 @@ export function OverviewTab() {
               A concise view of what needs attention across the system right now.
             </Card.Description>
           </div>
-          <Chip
-            color={attentionItems.length === 0 ? 'success' : 'warning'}
-            size="sm"
-            variant="soft"
-          >
+          <StatusTag tone={toneFromChipColor(attentionItems.length === 0 ? 'success' : 'warning')}>
             {attentionItems.length === 0 ? 'No immediate attention' : 'Attention needed'}
-          </Chip>
+          </StatusTag>
         </Card.Header>
         <Card.Content className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div>
@@ -383,7 +363,9 @@ export function OverviewTab() {
         <Card className="border border-divider/70">
           <Card.Header>
             <Card.Title>Needs attention</Card.Title>
-            <Card.Description>Follow the highest-signal issues without hunting through pages.</Card.Description>
+            <Card.Description>
+              Follow the highest-signal issues without hunting through pages.
+            </Card.Description>
           </Card.Header>
           <Card.Content className="space-y-2">
             {attentionItems.length > 0 ? (
@@ -402,11 +384,31 @@ export function OverviewTab() {
             <Card.Description>Open the service you want to manage directly.</Card.Description>
           </Card.Header>
           <Card.Content className="space-y-2">
-            <ConfigurationLink href="/admin/users" label="Users" value={dashboard.admin_counts.users} />
-            <ConfigurationLink href="/admin/tokens" label="Service tokens" value={dashboard.admin_counts.tokens} />
-            <ConfigurationLink href="/admin/identity" label="Identity providers" value={dashboard.admin_counts.identity_providers} />
-            <ConfigurationLink href="/admin/notifications" label="Active channels" value={dashboard.admin_counts.active_channels} />
-            <ConfigurationLink href="/admin/registries" label="Global registries" value={dashboard.admin_counts.global_registries} />
+            <ConfigurationLink
+              href="/admin/users"
+              label="Users"
+              value={dashboard.admin_counts.users}
+            />
+            <ConfigurationLink
+              href="/admin/tokens"
+              label="Service tokens"
+              value={dashboard.admin_counts.tokens}
+            />
+            <ConfigurationLink
+              href="/admin/identity"
+              label="Identity providers"
+              value={dashboard.admin_counts.identity_providers}
+            />
+            <ConfigurationLink
+              href="/admin/notifications"
+              label="Active channels"
+              value={dashboard.admin_counts.active_channels}
+            />
+            <ConfigurationLink
+              href="/admin/registries"
+              label="Global registries"
+              value={dashboard.admin_counts.global_registries}
+            />
           </Card.Content>
         </Card>
       </div>
@@ -435,14 +437,18 @@ export function OverviewTab() {
           value={dashboard.queues.needs_attention.toLocaleString()}
           hint={`${failedScans} failed · ${dashboard.queues.blocked_policies} blocked`}
           hintClassName={
-            dashboard.queues.needs_attention > 0 ? 'text-warning-foreground' : 'text-muted-foreground'
+            dashboard.queues.needs_attention > 0
+              ? 'text-warning-foreground'
+              : 'text-muted-foreground'
           }
         />
         <SummaryTile
           label="API Requests 24h"
           value={formatCompact(dashboard.insights.api_requests_24h)}
           hint={`${telemetryErrorRate}% error rate`}
-          hintClassName={telemetryErrorRate > 0 ? 'text-warning-foreground' : 'text-muted-foreground'}
+          hintClassName={
+            telemetryErrorRate > 0 ? 'text-warning-foreground' : 'text-muted-foreground'
+          }
         />
       </div>
 
@@ -456,15 +462,9 @@ export function OverviewTab() {
               </Card.Description>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Chip variant="soft" color="success" size="sm">
-                {completedScans} completed
-              </Chip>
-              <Chip variant="soft" color="danger" size="sm">
-                {failedScans} failed
-              </Chip>
-              <Chip variant="soft" color="success" size="sm">
-                {successRate}% success
-              </Chip>
+              <StatusTag tone="success">{completedScans} completed</StatusTag>
+              <StatusTag tone="danger">{failedScans} failed</StatusTag>
+              <StatusTag tone="success">{successRate}% success</StatusTag>
             </div>
           </Card.Header>
           <Card.Content className="pt-2 pb-3">
@@ -507,19 +507,17 @@ export function OverviewTab() {
               </Link>
             </Card.Header>
             <Card.Content className="grid gap-3 sm:grid-cols-2">
-              <StatCard
+              <StatStripItem
                 label="API traffic"
                 value={formatCompact(dashboard.insights.api_requests_24h)}
                 hint={`${dashboard.insights.api_error_requests_24h.toLocaleString()} errors · ${formatLatency(dashboard.insights.api_p95_ms)} p95`}
                 tone={dashboard.insights.api_error_requests_24h > 0 ? 'warning' : 'success'}
-                variant="stacked"
               />
-              <StatCard
+              <StatStripItem
                 label="xRay traffic"
                 value={formatCompact(dashboard.insights.xray_requests_24h)}
                 hint={`${dashboard.insights.xray_error_requests_24h.toLocaleString()} errors · ${formatLatency(dashboard.insights.api_average_ms)} avg API latency`}
                 tone={dashboard.insights.xray_error_requests_24h > 0 ? 'warning' : 'success'}
-                variant="stacked"
               />
             </Card.Content>
           </Card>
@@ -569,7 +567,7 @@ export function OverviewTab() {
               </Card.Description>
             </Card.Header>
             <Card.Content className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <StatStrip>
                 {[
                   {
                     label: 'Healthy',
@@ -592,15 +590,14 @@ export function OverviewTab() {
                     tone: 'accent' as const,
                   },
                 ].map((item) => (
-                  <StatCard
+                  <StatStripItem
                     key={item.label}
                     label={item.label}
                     value={item.value}
                     tone={item.tone}
-                    variant="stacked"
                   />
                 ))}
-              </div>
+              </StatStrip>
               <Card variant="secondary" className="border border-divider/70">
                 <Card.Content>
                   <p className="text-xs text-muted-foreground">

@@ -1,7 +1,7 @@
 import { OrgRiskScore, TrendPoint } from '@/lib/api';
-import { Card, Chip, Link } from '@/components/ui';
-
-import { StatCard } from '@/components/ui/stat-card';
+import { Card, Link } from '@/components/ui';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusTag } from '@/components/ui/status-dot';
 
 import { OrgScanItem, RiskOverviewCard, TrendChart } from './shared';
 
@@ -9,20 +9,6 @@ interface OrgOverviewTabProps {
   riskScore: OrgRiskScore | null;
   trend: TrendPoint[];
   orgScans: OrgScanItem[];
-}
-
-function SummaryMetric({
-  label,
-  value,
-  detail,
-  color = 'default',
-}: {
-  label: string;
-  value: string | number;
-  detail: string;
-  color?: 'default' | 'danger' | 'warning' | 'success';
-}) {
-  return <StatCard label={label} value={value} hint={detail} tone={color} />;
 }
 
 export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabProps) {
@@ -76,30 +62,30 @@ export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabPro
             The signals that should guide the next remediation decision.
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <SummaryMetric
+        <StatStrip className="lg:grid-cols-3">
+          <StatStripItem
             label="Critical findings"
             value={critical}
-            detail={critical === 1 ? '1 finding' : `${critical} findings`}
-            color={critical > 0 ? 'danger' : 'success'}
+            hint={critical === 1 ? '1 finding' : `${critical} findings`}
+            tone={critical > 0 ? 'danger' : 'success'}
           />
-          <SummaryMetric
+          <StatStripItem
             label="High findings"
             value={high}
-            detail={high === 1 ? '1 finding' : `${high} findings`}
-            color={high > 0 ? 'warning' : 'success'}
+            hint={high === 1 ? '1 finding' : `${high} findings`}
+            tone={high > 0 ? 'warning' : 'success'}
           />
-          <SummaryMetric
+          <StatStripItem
             label="Policy pass rate"
             value={`${Math.round(passRate)}%`}
-            detail={
+            hint={
               failingItems.length > 0
                 ? `${failingItems.length} recent failures`
                 : 'No recent failures'
             }
-            color={failingItems.length > 0 ? 'warning' : 'success'}
+            tone={failingItems.length > 0 ? 'warning' : 'success'}
           />
-        </div>
+        </StatStrip>
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.85fr)]">
@@ -150,9 +136,9 @@ export function OrgOverviewTab({ riskScore, trend, orgScans }: OrgOverviewTabPro
                     <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">
                       {item.policyName || 'Unnamed policy'}
                     </p>
-                    <Chip color="danger" size="sm" variant="soft">
+                    <StatusTag tone="danger">
                       {item.count} {item.count === 1 ? 'failure' : 'failures'}
-                    </Chip>
+                    </StatusTag>
                   </div>
                   <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
                     Latest: {item.imageRef}

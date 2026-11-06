@@ -5,7 +5,8 @@ import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
-import { StatCard } from '@/components/ui/stat-card';
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatusDot, StatusLabel } from '@/components/ui/status-dot';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -28,7 +29,6 @@ import { deferEffect } from '@/lib/defer-effect';
 import {
   Button,
   Card,
-  Chip,
   Description,
   Label,
   ListBox,
@@ -36,7 +36,6 @@ import {
   SearchField,
   Select,
   Table,
-  Tabs,
   useOverlayState,
 } from '@/components/ui';
 import {
@@ -270,6 +269,13 @@ export default function HelmRegistryCredentialsPage() {
     }
   }
 
+  const protocolSegments: { id: 'all' | 'oci' | 'http'; label: string; count: number }[] = [
+    { id: 'all', label: 'All', count: items.length },
+    { id: 'oci', label: 'OCI', count: items.filter((item) => item.protocol === 'oci').length },
+    { id: 'http', label: 'HTTP', count: items.filter((item) => item.protocol === 'http').length },
+  ];
+  const unhealthyCount = items.filter((item) => item.health_status === 'unhealthy').length;
+
   return (
     <PageContainer>
       <PageHeader
@@ -281,27 +287,6 @@ export default function HelmRegistryCredentialsPage() {
           </Button>
         }
       />
-      {!loading && items.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <StatCard label="Credentials" value={items.length} hint="Available in this workspace" />
-          <StatCard
-            label="OCI sources"
-            value={items.filter((item) => item.protocol === 'oci').length}
-            hint="Chart registry credentials"
-          />
-          <StatCard
-            label="HTTP sources"
-            value={items.filter((item) => item.protocol === 'http').length}
-            hint="Chart repository credentials"
-          />
-          <StatCard
-            label="Unhealthy"
-            value={items.filter((item) => item.health_status === 'unhealthy').length}
-            hint="Last recorded check"
-            tone="danger"
-          />
-        </div>
-      ) : null}
       <LoadableCollectionState
         emptyState={
           <EmptyState
@@ -330,30 +315,24 @@ export default function HelmRegistryCredentialsPage() {
       >
         <Card className="gap-0 overflow-hidden py-0">
           <Card.Header className="space-y-3 border-b p-4">
-            <Card.Title>Chart credentials</Card.Title>
-            <Tabs
-              selectedKey={protocolFilter}
-              onSelectionChange={(key) => setProtocolFilter(String(key) as 'all' | 'oci' | 'http')}
-              variant="secondary"
+            <FilterChips
+              label="Helm credential protocol"
+              items={protocolSegments.map((segment) => ({
+                id: segment.id,
+                label: segment.label,
+                count: segment.count,
+                active: protocolFilter === segment.id,
+                onPress: () => setProtocolFilter(segment.id),
+              }))}
             >
-              <Tabs.ListContainer>
-                <Tabs.List aria-label="Helm credential protocol">
-                  {[
-                    { id: 'all', label: 'All protocols' },
-                    { id: 'oci', label: 'OCI' },
-                    { id: 'http', label: 'HTTP' },
-                  ].map((option) => (
-                    <Tabs.Tab id={option.id} key={option.id}>
-                      {option.label}
-                      <Tabs.Indicator />
-                    </Tabs.Tab>
-                  ))}
-                </Tabs.List>
-              </Tabs.ListContainer>
-              {['all', 'oci', 'http'].map((key) => (
-                <Tabs.Panel key={key} id={key} className="hidden" />
-              ))}
-            </Tabs>
+              {unhealthyCount > 0 ? (
+                <span className="mr-3 inline-flex items-center gap-1.5">
+                  <StatusDot tone="danger" />
+                  {unhealthyCount} unhealthy
+                </span>
+              ) : null}
+              {filteredItems.length} of {items.length}
+            </FilterChips>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <SearchField
                 name="helm-credentials-search"
@@ -420,15 +399,14 @@ export default function HelmRegistryCredentialsPage() {
               <Table.ScrollContainer className="rounded-none border-0">
                 <Table.Content
                   aria-label="Helm registry credentials"
-                  className="min-w-[1040px] [&_td]:py-3"
+                  className="min-w-[860px] [&_td]:py-3"
                 >
                   <Table.Header>
                     <Table.Column isRowHeader>Credential</Table.Column>
                     <Table.Column className="min-w-44">Endpoint</Table.Column>
-                    <Table.Column className="min-w-44">Authentication</Table.Column>
                     <Table.Column className="min-w-44">Health</Table.Column>
                     <Table.Column className="w-px whitespace-nowrap text-right">
-                      Actions
+                      <span className="sr-only">Actions</span>
                     </Table.Column>
                   </Table.Header>
                   <Table.Body>
@@ -437,51 +415,36 @@ export default function HelmRegistryCredentialsPage() {
                         <Table.Cell>
                           <div className="space-y-1">
                             <p className="font-medium text-foreground">{item.name}</p>
-                            <Chip size="sm" variant="soft">
+                            <p className="text-xs text-muted-foreground">
                               {item.protocol.toUpperCase()}
-                            </Chip>
-                            <p className="truncate text-xs text-muted-foreground md:hidden">
+                            </p>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell className="min-w-44">
+                          <div className="space-y-1">
+                            <p className="max-w-md break-all font-mono text-sm text-foreground">
                               {item.url}
                             </p>
-                            <p className="text-xs capitalize text-muted-foreground md:hidden">
-                              {item.auth_type.replace('_', ' ')} · {item.health_status}
+                            <p className="text-xs capitalize text-muted-foreground">
+                              {[item.auth_type.replace('_', ' '), item.username]
+                                .filter(Boolean)
+                                .join(' · ')}
                             </p>
                           </div>
                         </Table.Cell>
                         <Table.Cell className="min-w-44">
-                          <p className="max-w-md break-all font-mono text-xs text-muted-foreground">
-                            {item.url}
-                          </p>
-                        </Table.Cell>
-                        <Table.Cell className="min-w-44">
-                          <div className="space-y-1">
-                            <p className="text-sm">{item.auth_type.replace('_', ' ')}</p>
-                            {item.username ? (
-                              <p className="text-xs text-muted-foreground">{item.username}</p>
-                            ) : null}
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="min-w-44">
-                          <div className="space-y-1">
-                            <Chip
-                              color={
-                                item.health_status === 'healthy'
-                                  ? 'success'
-                                  : item.health_status === 'unhealthy'
-                                    ? 'danger'
-                                    : 'warning'
-                              }
-                              size="sm"
-                              variant="soft"
-                            >
-                              {item.health_status}
-                            </Chip>
-                            {item.health_message ? (
-                              <p className="max-w-48 text-xs text-muted-foreground">
-                                {item.health_message}
-                              </p>
-                            ) : null}
-                          </div>
+                          <StatusLabel
+                            className="capitalize"
+                            tone={
+                              item.health_status === 'healthy'
+                                ? 'success'
+                                : item.health_status === 'unhealthy'
+                                  ? 'danger'
+                                  : 'warning'
+                            }
+                            label={item.health_status}
+                            detail={item.health_message || undefined}
+                          />
                         </Table.Cell>
                         <Table.Cell>
                           <div className="flex justify-end">

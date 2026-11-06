@@ -1,7 +1,7 @@
 'use client';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
 import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageHeader } from '@/components/ui/page-header';
-import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { compareScans, listScans, Scan, ScanComparison, Vulnerability } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
@@ -252,8 +252,8 @@ function ComparePageInner() {
       {result && (
         <>
           {/* Summary bar */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <StatCard
+          <StatStrip>
+            <StatStripItem
               label="New vulnerabilities"
               value={result.summary.added_count}
               hint={
@@ -265,11 +265,10 @@ function ComparePageInner() {
                   : 'No critical or high findings added'
               }
               tone="danger"
-              variant="stacked"
             />
-            <StatCard label="Resolved vulnerabilities" value={result.summary.removed_count} hint="Removed since the earlier scan" tone="success" variant="stacked" />
-            <StatCard label="Unchanged" value={result.summary.unchanged_count} hint="Present in both scans" variant="stacked" />
-          </div>
+            <StatStripItem label="Resolved vulnerabilities" value={result.summary.removed_count} hint="Removed since the earlier scan" tone="success" />
+            <StatStripItem label="Unchanged" value={result.summary.unchanged_count} hint="Present in both scans" />
+          </StatStrip>
 
           {/* Added */}
           <Card>

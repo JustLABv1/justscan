@@ -1,9 +1,10 @@
 'use client';
 
+import { StatusTag } from '@/components/ui/status-dot';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Container } from 'lucide-react';
-import { Button, Card, Chip, Table } from '@/components/ui';
+import { Button, Card, Table } from '@/components/ui';
 import { StatusBadge } from '@/components/ui/badges';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -224,11 +225,7 @@ function renderImageHealthRow(image: ImageOverview) {
       <Table.Cell>
         <div className="flex flex-wrap gap-1">
           <StatusBadge status={image.health_status} externalStatus={image.health_external_status} />
-          {image.health_policy_failed ? (
-            <Chip size="sm" color="danger" variant="soft">
-              Policy failed
-            </Chip>
-          ) : null}
+          {image.health_policy_failed ? <StatusTag tone="danger">Policy failed</StatusTag> : null}
         </div>
       </Table.Cell>
       <Table.Cell>

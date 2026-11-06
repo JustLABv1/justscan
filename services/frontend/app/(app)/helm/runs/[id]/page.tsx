@@ -18,12 +18,13 @@ import {
   buttonVariants,
   Button,
   Card,
-  Chip,
   Dropdown,
   Label,
   Spinner,
   Table,
 } from '@/components/ui';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusTag, type StatusDotTone } from '@/components/ui/status-dot';
 import {
   ArrowLeft01Icon,
   CopyLinkIcon,
@@ -37,10 +38,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-type ChipColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
-
 function StatusBadge({ status }: { status: string }) {
-  const color: ChipColor =
+  const tone: StatusDotTone =
     status === 'completed'
       ? 'success'
       : status === 'failed'
@@ -49,44 +48,25 @@ function StatusBadge({ status }: { status: string }) {
           ? 'accent'
           : status === 'cancelled'
             ? 'warning'
-            : 'default';
-  const label = status === 'pending' ? 'queued' : status;
-
+            : 'neutral';
   return (
-    <Chip color={color} size="sm" variant="soft">
-      {label}
-    </Chip>
+    <StatusTag tone={tone} className="text-sm capitalize text-foreground">
+      {status === 'pending' ? 'queued' : status}
+    </StatusTag>
   );
 }
 
-function SeverityCount({ count, color }: { count: number; color: ChipColor }) {
+const severityTextClass = {
+  critical: 'text-destructive',
+  high: 'text-warning-foreground',
+  medium: 'text-warning-foreground',
+  low: 'text-muted-foreground',
+} as const;
+
+function SeverityCount({ count, level }: { count: number; level: keyof typeof severityTextClass }) {
   if (!count) return <span className="text-xs text-muted-foreground">-</span>;
-
   return (
-    <Chip color={color} size="sm" variant="soft">
-      {count}
-    </Chip>
-  );
-}
-
-function StatBox({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string | number;
-  color?: ChipColor;
-}) {
-  return (
-    <Card>
-      <Card.Content className="flex flex-row items-center justify-between gap-3 px-4 py-3">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <Chip color={color ?? 'default'} size="sm" variant={color ? 'soft' : 'secondary'}>
-          {value}
-        </Chip>
-      </Card.Content>
-    </Card>
+    <span className={`text-sm font-medium tabular-nums ${severityTextClass[level]}`}>{count}</span>
   );
 }
 
@@ -300,13 +280,7 @@ export default function HelmRunDetailPage() {
     <div className="p-6 space-y-5">
       <PageHeader
         title={latestRun?.chart_name || displayUrl || 'Helm run'}
-        titleCom={
-          latestRun ? (
-            <Chip color={isOCI ? 'accent' : 'default'} size="sm" variant="soft">
-              {isOCI ? 'OCI' : 'HTTP'}
-            </Chip>
-          ) : null
-        }
+        titleCom={latestRun ? <StatusTag>{isOCI ? 'OCI' : 'HTTP'}</StatusTag> : null}
         description={displayUrl || 'Loading Helm run details.'}
         breadcrumbs={[{ label: 'Helm', href: '/helm' }, { label: latestRun?.chart_name || 'Run' }]}
         actions={
@@ -423,16 +397,8 @@ export default function HelmRunDetailPage() {
           </div>
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-            {latestRun?.chart_version && (
-              <Chip size="sm" variant="secondary">
-                v{latestRun.chart_version}
-              </Chip>
-            )}
-            {latestRun?.platform && (
-              <Chip size="sm" variant="secondary">
-                {latestRun.platform}
-              </Chip>
-            )}
+            {latestRun?.chart_version && <StatusTag>v{latestRun.chart_version}</StatusTag>}
+            {latestRun?.platform && <StatusTag>{latestRun.platform}</StatusTag>}
             {latestRun?.created_at && (
               <span title={fullDate(latestRun.created_at)}>
                 Started {timeAgo(latestRun.created_at)}
@@ -444,19 +410,21 @@ export default function HelmRunDetailPage() {
       </Card>
 
       {!loading && latestScans.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-          <StatBox label="Images" value={totalImages} />
-          <StatBox label="Completed" value={completed} color="success" />
-          {pending > 0 && <StatBox label="Running" value={pending} color="accent" />}
-          {failed > 0 && <StatBox label="Failed" value={failed} color="danger" />}
-          {totalCritical > 0 && <StatBox label="Critical" value={totalCritical} color="danger" />}
-          {totalHigh > 0 && <StatBox label="High" value={totalHigh} color="warning" />}
-          {totalMedium > 0 && <StatBox label="Medium" value={totalMedium} color="warning" />}
-          {totalLow > 0 && <StatBox label="Low" value={totalLow} color="accent" />}
-          {totalCritical === 0 && totalHigh === 0 && completed > 0 && (
-            <StatBox label="Vulnerabilities" value="Clean" color="success" />
+        <StatStrip>
+          <StatStripItem label="Images" value={totalImages} />
+          <StatStripItem label="Completed" value={completed} tone="success" />
+          {pending > 0 && <StatStripItem label="Running" value={pending} tone="accent" />}
+          {failed > 0 && <StatStripItem label="Failed" value={failed} tone="danger" />}
+          {totalCritical > 0 && (
+            <StatStripItem label="Critical" value={totalCritical} tone="danger" />
           )}
-        </div>
+          {totalHigh > 0 && <StatStripItem label="High" value={totalHigh} tone="warning" />}
+          {totalMedium > 0 && <StatStripItem label="Medium" value={totalMedium} tone="warning" />}
+          {totalLow > 0 && <StatStripItem label="Low" value={totalLow} tone="accent" />}
+          {totalCritical === 0 && totalHigh === 0 && completed > 0 && (
+            <StatStripItem label="Vulnerabilities" value="Clean" tone="success" />
+          )}
+        </StatStrip>
       )}
 
       {loading && (
@@ -521,16 +489,16 @@ export default function HelmRunDetailPage() {
                         {item.attempt_count}
                       </Table.Cell>
                       <Table.Cell className="text-center">
-                        <SeverityCount count={scan.critical_count ?? 0} color="danger" />
+                        <SeverityCount count={scan.critical_count ?? 0} level="critical" />
                       </Table.Cell>
                       <Table.Cell className="text-center">
-                        <SeverityCount count={scan.high_count ?? 0} color="warning" />
+                        <SeverityCount count={scan.high_count ?? 0} level="high" />
                       </Table.Cell>
                       <Table.Cell className="text-center">
-                        <SeverityCount count={scan.medium_count ?? 0} color="warning" />
+                        <SeverityCount count={scan.medium_count ?? 0} level="medium" />
                       </Table.Cell>
                       <Table.Cell className="text-center">
-                        <SeverityCount count={scan.low_count ?? 0} color="accent" />
+                        <SeverityCount count={scan.low_count ?? 0} level="low" />
                       </Table.Cell>
                       <Table.Cell className="text-right">
                         <StatusBadge status={scan.status} />
@@ -586,7 +554,10 @@ export default function HelmRunDetailPage() {
                 );
                 return (
                   <div key={source} className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-muted-foreground w-72 truncate" title={source}>
+                    <span
+                      className="text-xs font-mono text-muted-foreground w-72 truncate"
+                      title={source}
+                    >
                       {source}
                     </span>
                     <span className="text-xs text-muted-foreground">
@@ -594,16 +565,8 @@ export default function HelmRunDetailPage() {
                     </span>
                     {(critical > 0 || high > 0) && (
                       <div className="flex items-center gap-1">
-                        {critical > 0 && (
-                          <Chip color="danger" size="sm" variant="soft">
-                            {critical}C
-                          </Chip>
-                        )}
-                        {high > 0 && (
-                          <Chip color="warning" size="sm" variant="soft">
-                            {high}H
-                          </Chip>
-                        )}
+                        {critical > 0 && <StatusTag tone="danger">{critical}C</StatusTag>}
+                        {high > 0 && <StatusTag tone="warning">{high}H</StatusTag>}
                       </div>
                     )}
                   </div>

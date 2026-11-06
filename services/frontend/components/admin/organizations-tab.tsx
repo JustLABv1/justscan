@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { listAdminOrgs, updateAdminOrgGovernance } from '@/lib/api/admin';
@@ -20,7 +21,6 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
-  Chip,
   Input,
   ListBox,
   Modal,
@@ -254,9 +254,9 @@ export function OrganizationsTab() {
                     <Table.Cell>{org.pending_invite_count}</Table.Cell>
                     <Table.Cell>{org.active_token_count}</Table.Cell>
                     <Table.Cell>
-                      <Chip size="sm" variant="soft" color={org.is_active ? 'success' : 'danger'}>
+                      <StatusTag tone={toneFromChipColor(org.is_active ? 'success' : 'danger')}>
                         {org.is_active ? 'Active' : 'Suspended'}
-                      </Chip>
+                      </StatusTag>
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex justify-end">
@@ -402,9 +402,9 @@ export function OrganizationsTab() {
                                 </Table.Cell>
                                 <Table.Cell>
                                   {member.role === 'owner' ? (
-                                    <Chip size="sm" variant="soft" color="accent">
+                                    <StatusTag tone="accent">
                                       owner
-                                    </Chip>
+                                    </StatusTag>
                                   ) : (
                                     <Select
                                       value={member.role}

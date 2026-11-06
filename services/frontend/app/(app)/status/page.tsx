@@ -1,5 +1,8 @@
 'use client';
 
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { useToast } from '@/components/toast';
@@ -12,7 +15,6 @@ import {
   fieldSelectTriggerClassName,
   fieldTextAreaClassName,
 } from '@/components/ui/form-styles';
-import { StatCard } from '@/components/ui/stat-card';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -51,7 +53,6 @@ import {
   Button,
   Card,
   Checkbox,
-  Chip,
   Description,
   Input,
   Label,
@@ -63,7 +64,6 @@ import {
   Select,
   Spinner,
   Table,
-  Tabs,
   TextArea,
   useOverlayState,
 } from '@/components/ui';
@@ -781,7 +781,7 @@ export default function StatusPagesPage() {
       ) : null}
 
       {!loading && pages.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatStrip>
           {[
             { key: 'all', label: 'Status pages', value: pages.length, hint: 'Current workspace' },
             ...visibilityOptions.map((option) => ({
@@ -796,7 +796,7 @@ export default function StatusPagesPage() {
                     : 'Signed-in users',
             })),
           ].map((metric) => (
-            <StatCard
+            <StatStripItem
               key={metric.key}
               label={metric.label}
               value={metric.value}
@@ -805,38 +805,20 @@ export default function StatusPagesPage() {
               onPress={() => setVisibilityFilter(metric.key as 'all' | StatusPage['visibility'])}
             />
           ))}
-        </div>
+        </StatStrip>
       ) : null}
       <div className="space-y-4">
         <Card className="gap-0 overflow-hidden py-0">
           <Card.Header className="space-y-3 border-b p-4">
-            <div className="flex items-center justify-between gap-3">
-              <Card.Title>Published views</Card.Title>
-              <span className="text-xs text-muted-foreground">
-                {filteredPages.length} of {pages.length} pages
-              </span>
-            </div>
-            <Tabs
-              selectedKey={visibilityFilter}
-              onSelectionChange={(key) =>
-                setVisibilityFilter(String(key) as 'all' | StatusPage['visibility'])
-              }
-              variant="secondary"
-            >
-              <Tabs.ListContainer className="overflow-x-auto">
-                <Tabs.List aria-label="Status page visibility" className="min-w-max">
-                  {[{ id: 'all', label: 'All pages' }, ...visibilityOptions].map((option) => (
-                    <Tabs.Tab id={option.id} key={option.id}>
-                      {option.label}
-                      <Tabs.Indicator />
-                    </Tabs.Tab>
-                  ))}
-                </Tabs.List>
-              </Tabs.ListContainer>
-              {['all', ...visibilityOptions.map((option) => option.id)].map((key) => (
-                <Tabs.Panel id={key} key={key} className="hidden" />
-              ))}
-            </Tabs>
+            <FilterChips
+              label="Status page visibility"
+              onSelect={(id) => setVisibilityFilter(id as 'all' | StatusPage['visibility'])}
+              items={[{ id: 'all', label: 'All pages' }, ...visibilityOptions].map((option) => ({
+                id: option.id,
+                label: option.label,
+                active: visibilityFilter === option.id,
+              }))}
+            />
             <SearchField
               name="status-pages-search"
               aria-label="Search status pages"
@@ -907,14 +889,12 @@ export default function StatusPagesPage() {
                               </div>
                             </Table.Cell>
                             <Table.Cell>
-                              <Chip
+                              <StatusTag
                                 className="capitalize"
-                                color={visibilityTone(page.visibility)}
-                                size="sm"
-                                variant="soft"
+                                tone={toneFromChipColor(visibilityTone(page.visibility))}
                               >
                                 {page.visibility}
-                              </Chip>
+                              </StatusTag>
                             </Table.Cell>
                             <Table.Cell className="text-xs text-muted-foreground">
                               {describeScope(page)}
@@ -1283,12 +1263,13 @@ export default function StatusPagesPage() {
                             Use the latest completed discovery from each repository.
                           </p>
                         </div>
-                        <Chip
-                          color={selectedGitRepositoryIds.length > 0 ? 'accent' : 'default'}
-                          variant="soft"
+                        <StatusTag
+                          tone={toneFromChipColor(
+                            selectedGitRepositoryIds.length > 0 ? 'accent' : undefined
+                          )}
                         >
                           {selectedGitRepositoryIds.length} selected
-                        </Chip>
+                        </StatusTag>
                       </div>
 
                       <SearchField className={fieldCls} variant="secondary">
@@ -1499,9 +1480,7 @@ export default function StatusPagesPage() {
                                   Pick individual `image:tag` entries for a tightly curated page.
                                 </p>
                               </div>
-                              <Chip color="accent" variant="soft">
-                                {selectedTargets.length} selected
-                              </Chip>
+                              <StatusTag tone="accent">{selectedTargets.length} selected</StatusTag>
                             </div>
 
                             <SearchField
@@ -1550,19 +1529,17 @@ export default function StatusPagesPage() {
                                           <span className="break-all font-mono text-sm">
                                             {option.label}
                                           </span>
-                                          <Chip
-                                            size="sm"
-                                            variant="soft"
-                                            color={
+                                          <StatusTag
+                                            tone={toneFromChipColor(
                                               option.latest_status === 'failed'
                                                 ? 'danger'
                                                 : option.latest_status === 'completed'
                                                   ? 'success'
-                                                  : 'default'
-                                            }
+                                                  : undefined
+                                            )}
                                           >
                                             {option.latest_status}
-                                          </Chip>
+                                          </StatusTag>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                                           <span>Seen {timeAgo(option.observed_at)}</span>
@@ -1594,9 +1571,7 @@ export default function StatusPagesPage() {
                                   `image:tag`, image name, and tag.
                                 </p>
                               </div>
-                              <Chip color="accent" variant="soft">
-                                {imagePatterns.length} active
-                              </Chip>
+                              <StatusTag tone="accent">{imagePatterns.length} active</StatusTag>
                             </div>
 
                             <TextArea
@@ -1624,9 +1599,9 @@ export default function StatusPagesPage() {
                             <Card>
                               <div className="flex items-center justify-between gap-3">
                                 <p className="text-sm font-medium text-foreground">Preview</p>
-                                <Chip color="accent" variant="soft">
+                                <StatusTag tone="accent">
                                   {regexMatchedOptions.length} matching
-                                </Chip>
+                                </StatusTag>
                               </div>
 
                               {imagePatterns.length === 0 ? (

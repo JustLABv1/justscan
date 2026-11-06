@@ -44,7 +44,8 @@ import { StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
-import { StatCard } from '@/components/ui/stat-card';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusLabel, StatusTag } from '@/components/ui/status-dot';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import {
   cancelGitRepositoryRun,
@@ -250,9 +251,7 @@ function RegistryResolutionSummary({
     return (
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Chip className="shrink-0" color="accent" size="sm" variant="soft">
-            Configured override
-          </Chip>
+          <StatusTag tone="accent">Configured override</StatusTag>
           {host ? <code className="truncate text-xs text-muted-foreground">{host}</code> : null}
         </div>
         <Description className="!block">
@@ -268,14 +267,9 @@ function RegistryResolutionSummary({
     return (
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Chip
-            className="shrink-0"
-            color={inferredRegistry ? 'accent' : 'warning'}
-            size="sm"
-            variant="soft"
-          >
+          <StatusTag tone={inferredRegistry ? 'accent' : 'warning'}>
             {inferredRegistry ? 'Configured match' : 'Configured match unavailable'}
-          </Chip>
+          </StatusTag>
           {host ? <code className="truncate text-xs text-muted-foreground">{host}</code> : null}
         </div>
         <Description className="!block">
@@ -291,9 +285,7 @@ function RegistryResolutionSummary({
     return (
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Chip className="shrink-0" color="warning" size="sm" variant="soft">
-            Custom / unconfigured host
-          </Chip>
+          <StatusTag tone="warning">Custom / unconfigured host</StatusTag>
           <code className="truncate text-xs text-muted-foreground">{host}</code>
         </div>
         <Description className="!block">
@@ -306,9 +298,7 @@ function RegistryResolutionSummary({
 
   return (
     <div className="space-y-2">
-      <Chip className="shrink-0" size="sm" variant="soft">
-        Default matching
-      </Chip>
+      <StatusTag>Default matching</StatusTag>
       <Description className="!block">
         This image reference has no explicit registry host. Automatic matching uses the default
         Docker Hub behavior when a matching entry is available.
@@ -1138,21 +1128,22 @@ export default function GitRepositoryDetailPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard
-          title="Needs review"
+      <StatStrip className="lg:grid-cols-4">
+        <StatStripItem
+          label="Needs review"
+          tone={pendingCandidates.length > 0 ? 'warning' : undefined}
           onPress={() => setDetailView('review')}
           value={String(candidates.filter((candidate) => candidate.status === 'unresolved').length)}
-          detail="ambiguous deployment markers"
+          hint="ambiguous deployment markers"
         />
-        <MetricCard
-          title="Latest discovery"
+        <StatStripItem
+          label="Latest discovery"
           onPress={() => setDetailView('images')}
           value={String(previewImages.length)}
-          detail="unique image references"
+          hint="unique image references"
         />
-        <MetricCard
-          title={
+        <StatStripItem
+          label={
             repository.discovery_mode === 'manifests'
               ? 'Files with images'
               : repository.discovery_mode === 'registry'
@@ -1163,7 +1154,7 @@ export default function GitRepositoryDetailPage() {
           }
           onPress={() => setDetailView('tree')}
           value={String(files.length)}
-          detail={
+          hint={
             repository.discovery_mode === 'manifests'
               ? 'manifest files represented'
               : repository.discovery_mode === 'registry'
@@ -1173,13 +1164,13 @@ export default function GitRepositoryDetailPage() {
                   : 'rendered entrypoints represented'
           }
         />
-        <MetricCard
-          title="Latest commit"
-          value={preview?.run.commit_sha || '—'}
-          detail={preview?.run.completed_at ? fullDate(preview.run.completed_at) : 'No dry run yet'}
+        <StatStripItem
+          label="Latest commit"
+          value={preview?.run.commit_sha ? preview.run.commit_sha.slice(0, 8) : '—'}
+          hint={preview?.run.completed_at ? fullDate(preview.run.completed_at) : 'No dry run yet'}
           mono
         />
-      </div>
+      </StatStrip>
 
       <Tabs
         selectedKey={detailView}
@@ -1306,13 +1297,13 @@ export default function GitRepositoryDetailPage() {
                             <code className="break-all text-xs font-medium text-foreground">
                               {source.chart_path}
                             </code>
-                            <Chip size="sm" variant="soft">
+                            <StatusTag>
                               {source.source_type === 'local'
                                 ? 'This repository'
                                 : source.source_type === 'repository'
                                   ? 'Registered repository'
                                   : 'Direct Git URL'}
-                            </Chip>
+                            </StatusTag>
                           </div>
                           <p className="text-xs text-muted-foreground">
                             {source.values.length > 0
@@ -1397,12 +1388,8 @@ export default function GitRepositoryDetailPage() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <Chip size="sm" variant="soft">
-                    {preview.run.image_count} images
-                  </Chip>
-                  <Chip size="sm" variant="soft">
-                    {timeAgo(preview.run.created_at)}
-                  </Chip>
+                  <StatusTag>{preview.run.image_count} images</StatusTag>
+                  <StatusTag>{timeAgo(preview.run.created_at)}</StatusTag>
                 </div>
               </Card.Header>
               <Card.Content className="p-0">
@@ -1663,46 +1650,20 @@ export default function GitRepositoryDetailPage() {
                                     </span>
                                   </span>
                                 </span>
-                                {exclusion ? (
-                                  <Chip
-                                    className="shrink-0"
-                                    color="warning"
-                                    size="sm"
-                                    variant="soft"
-                                  >
-                                    Excluded
-                                  </Chip>
-                                ) : null}
+                                {exclusion ? <StatusTag tone="warning">Excluded</StatusTag> : null}
                                 {registryOverride || registryOverrideRule ? (
-                                  <Chip
-                                    className="shrink-0"
-                                    color="accent"
-                                    size="sm"
-                                    variant="soft"
-                                  >
+                                  <StatusTag tone="accent">
                                     {selectedRegistry?.name ?? 'Configured override'}
                                     {!registryOverride && registryOverrideRule ? ' · regex' : ''}
-                                  </Chip>
+                                  </StatusTag>
                                 ) : image.registry_id ? (
-                                  <Chip
-                                    className="shrink-0"
-                                    color={inferredRegistry ? 'accent' : 'warning'}
-                                    size="sm"
-                                    variant="soft"
-                                  >
+                                  <StatusTag tone={inferredRegistry ? 'accent' : 'warning'}>
                                     {inferredRegistry
                                       ? `Matched: ${inferredRegistry.name}`
                                       : 'Configured match unavailable'}
-                                  </Chip>
+                                  </StatusTag>
                                 ) : imageHost ? (
-                                  <Chip
-                                    className="shrink-0"
-                                    color="warning"
-                                    size="sm"
-                                    variant="soft"
-                                  >
-                                    Custom host: {imageHost}
-                                  </Chip>
+                                  <StatusTag tone="warning">Custom host: {imageHost}</StatusTag>
                                 ) : null}
                                 {latestScan ? (
                                   <span className="shrink-0">
@@ -1934,9 +1895,6 @@ export default function GitRepositoryDetailPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-4">
               <div>
                 <h2 className="text-sm font-medium">Recent activity</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Latest discovery and scan runs for this repository
-                </p>
               </div>
               <span className="text-xs text-muted-foreground">{Math.min(runs.length, 6)} runs</span>
             </div>
@@ -1988,10 +1946,8 @@ export default function GitRepositoryDetailPage() {
                             ) : null}
                           </Table.Cell>
                           <Table.Cell>
-                            <Chip
-                              size="sm"
-                              variant="soft"
-                              color={
+                            <StatusLabel
+                              tone={
                                 run.status === 'failed'
                                   ? 'danger'
                                   : run.status === 'completed'
@@ -2000,9 +1956,9 @@ export default function GitRepositoryDetailPage() {
                                       ? 'warning'
                                       : 'accent'
                               }
-                            >
-                              {run.status}
-                            </Chip>
+                              label={run.status}
+                              className="capitalize"
+                            />
                           </Table.Cell>
                           <Table.Cell className="tabular-nums">{run.image_count}</Table.Cell>
                           <Table.Cell className="tabular-nums">{run.scan_count}</Table.Cell>
@@ -2364,29 +2320,5 @@ export default function GitRepositoryDetailPage() {
       </Modal>
       {confirmDialog}
     </PageContainer>
-  );
-}
-
-function MetricCard({
-  title,
-  value,
-  detail,
-  mono = false,
-  onPress,
-}: {
-  title: string;
-  value: string;
-  detail: string;
-  mono?: boolean;
-  onPress?: () => void;
-}) {
-  return (
-    <StatCard
-      onPress={onPress}
-      label={title}
-      value={mono && value !== '—' ? value.slice(0, 8) : value}
-      hint={detail}
-      valueClassName={mono ? 'truncate font-mono' : undefined}
-    />
   );
 }

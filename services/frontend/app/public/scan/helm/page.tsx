@@ -1,4 +1,5 @@
 'use client';
+import { StatusTag } from '@/components/ui/status-dot';
 import { FormAlert } from '@/components/ui/form-alert';
 import { PublicNavbar } from '@/components/public/public-navbar';
 import {
@@ -31,7 +32,6 @@ import {
   Button,
   Card,
   Checkbox,
-  Chip,
   Input,
   Table,
   Select,
@@ -122,19 +122,13 @@ function HelmHistoryDisclosure({
                   </span>
                   {run.chart_version ? <span>v{run.chart_version}</span> : null}
                   {run.critical_count > 0 ? (
-                    <Chip color="danger" size="sm" variant="soft">
-                      {run.critical_count} critical
-                    </Chip>
+                    <StatusTag tone="danger">{run.critical_count} critical</StatusTag>
                   ) : null}
                   {run.high_count > 0 ? (
-                    <Chip color="warning" size="sm" variant="soft">
-                      {run.high_count} high
-                    </Chip>
+                    <StatusTag tone="warning">{run.high_count} high</StatusTag>
                   ) : null}
                   {run.failed_images > 0 ? (
-                    <Chip color="danger" size="sm" variant="soft">
-                      {run.failed_images} failed
-                    </Chip>
+                    <StatusTag tone="danger">{run.failed_images} failed</StatusTag>
                   ) : null}
                 </div>
               </div>
@@ -588,14 +582,9 @@ export default function PublicHelmScanPage() {
                                       >
                                         {parsed.name || 'Enter an image reference'}
                                       </p>
-                                      <Chip
-                                        size="sm"
-                                        variant="soft"
-                                        color="accent"
-                                        className="font-mono"
-                                      >
+                                      <StatusTag className="font-mono">
                                         {parsed.tag || '-'}
-                                      </Chip>
+                                      </StatusTag>
                                     </div>
                                     {img.source_path ? (
                                       <p

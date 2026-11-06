@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
@@ -13,7 +14,6 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
-  Chip,
   ListBox,
   Modal,
   Pagination,
@@ -341,14 +341,9 @@ export function ScansTab() {
                       {scan.image_name}:{scan.image_tag}
                     </Table.Cell>
                     <Table.Cell>
-                      <Chip
-                        size="sm"
-                        variant="soft"
-                        color={statusColor(scan.status)}
-                        className="capitalize"
-                      >
+                      <StatusTag className="capitalize" tone={toneFromChipColor(statusColor(scan.status))}>
                         {scan.status}
-                      </Chip>
+                      </StatusTag>
                     </Table.Cell>
                     <Table.Cell className="font-mono text-xs text-destructive">{scan.critical_count || 0}</Table.Cell>
                     <Table.Cell className="font-mono text-xs text-orange-400">{scan.high_count || 0}</Table.Cell>

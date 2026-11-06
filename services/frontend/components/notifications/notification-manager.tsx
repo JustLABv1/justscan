@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
@@ -49,7 +50,6 @@ import { deferEffect } from '@/lib/defer-effect';
 import {
   Button,
   Card,
-  Chip,
   ListBox,
   Modal,
   Select,
@@ -629,18 +629,14 @@ export function NotificationManager({
                         </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <Chip size="sm" variant="soft" className="capitalize">
+                        <StatusTag className="capitalize">
                           {channel.type}
-                        </Chip>
+                        </StatusTag>
                       </Table.Cell>
                       <Table.Cell>
-                        <Chip
-                          size="sm"
-                          color={channel.enabled ? 'success' : 'danger'}
-                          variant="soft"
-                        >
+                        <StatusTag tone={toneFromChipColor(channel.enabled ? 'success' : 'danger')}>
                           {channel.enabled ? 'Enabled' : 'Disabled'}
-                        </Chip>
+                        </StatusTag>
                       </Table.Cell>
                       <Table.Cell>
                         <div className="flex justify-end">
@@ -713,18 +709,14 @@ export function NotificationManager({
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{rule.name}</p>
-                          <Chip
-                            size="sm"
-                            color={rule.enabled ? 'success' : 'danger'}
-                            variant="soft"
-                          >
+                          <StatusTag tone={toneFromChipColor(rule.enabled ? 'success' : 'danger')}>
                             {rule.enabled ? 'Enabled' : 'Disabled'}
-                          </Chip>
-                          <Chip size="sm" variant="soft">
+                          </StatusTag>
+                          <StatusTag>
                             {rule.delivery_mode === 'digest'
                               ? `Summary ${rule.digest_window_minutes}m`
                               : 'Immediate'}
-                          </Chip>
+                          </StatusTag>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {summarizeRule(rule, channels)}
@@ -798,19 +790,13 @@ export function NotificationManager({
                         </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <Chip
-                          size="sm"
-                          color={
-                            job.status === 'delivered'
+                        <StatusTag tone={toneFromChipColor(job.status === 'delivered'
                               ? 'success'
                               : job.status === 'dead_letter'
                                 ? 'danger'
-                                : 'default'
-                          }
-                          variant="soft"
-                        >
+                                : 'default')}>
                           {job.status}
-                        </Chip>
+                        </StatusTag>
                       </Table.Cell>
                       <Table.Cell>
                         {job.attempt_count}/{job.max_attempts}
@@ -885,19 +871,13 @@ export function NotificationManager({
                       </Table.Cell>
                       <Table.Cell className="font-mono text-xs">{delivery.event}</Table.Cell>
                       <Table.Cell>
-                        <Chip
-                          size="sm"
-                          color={
-                            delivery.status === 'delivered'
+                        <StatusTag tone={toneFromChipColor(delivery.status === 'delivered'
                               ? 'success'
                               : delivery.status === 'dead_letter'
                                 ? 'danger'
-                                : 'default'
-                          }
-                          variant="soft"
-                        >
+                                : 'default')}>
                           {delivery.status}
-                        </Chip>
+                        </StatusTag>
                       </Table.Cell>
                     </Table.Row>
                   ))}

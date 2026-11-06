@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { StatusAlert } from '@/components/ui/form-alert';
 import {
@@ -12,7 +13,6 @@ import type { NotificationChannel } from '@/lib/api/types/admin';
 import { deferEffect } from '@/lib/defer-effect';
 import {
   Card,
-  Chip,
   ListBox,
   Pagination,
   SearchField,
@@ -256,16 +256,16 @@ export function NotificationsTab() {
                   <Table.Row key={channel.id} id={channel.id} className="hover:bg-[var(--row-hover)]">
                     <Table.Cell className="font-medium">{channel.name}</Table.Cell>
                     <Table.Cell>
-                      <Chip size="sm" variant="soft" className="capitalize">
+                      <StatusTag className="capitalize">
                         {channel.type}
-                      </Chip>
+                      </StatusTag>
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex flex-wrap gap-1">
                         {channel.events.map((eventName) => (
-                          <Chip key={eventName} size="sm" variant="soft" className="font-mono text-xs">
+                          <StatusTag key={eventName} className="font-mono text-xs">
                             {eventName}
-                          </Chip>
+                          </StatusTag>
                         ))}
                       </div>
                     </Table.Cell>
@@ -280,9 +280,9 @@ export function NotificationsTab() {
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <Chip size="sm" color={channel.enabled ? 'success' : 'default'} variant="soft">
+                      <StatusTag tone={toneFromChipColor(channel.enabled ? 'success' : 'default')}>
                         {channel.enabled ? 'Enabled' : 'Disabled'}
-                      </Chip>
+                      </StatusTag>
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex justify-end">

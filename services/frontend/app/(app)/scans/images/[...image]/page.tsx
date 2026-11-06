@@ -1,5 +1,6 @@
 'use client';
 
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
 import { ArtifactScansTable } from '@/components/scans/artifact-scans-table';
 import {
   getRecentActivityBounds,
@@ -19,7 +20,6 @@ import {
   FilterDisclosureTrigger,
 } from '@/components/ui/filter-toolbar';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
-import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   deleteScan,
@@ -133,19 +133,7 @@ function Metric({
   icon: ReactNode;
   tone?: MetricTone;
 }) {
-  return (
-    <StatCard
-      className="h-full"
-      hint={description}
-      icon={icon}
-      iconTone={tone === 'neutral' ? 'default' : tone}
-      label={label}
-      tone={tone}
-      value={value}
-      valueClassName="text-lg font-semibold tabular-nums"
-      variant="compact"
-    />
-  );
+  return <StatStripItem hint={description} label={label} tone={tone} value={value} />;
 }
 
 export default function ImageScansPage() {
@@ -512,13 +500,13 @@ export default function ImageScansPage() {
         </Alert>
       ) : null}
       {statsLoading ? (
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <StatStrip>
           {Array.from({ length: 4 }, (_, index) => (
             <Card key={index} className="p-3">
               <Skeleton className="h-10 rounded-lg" />
             </Card>
           ))}
-        </div>
+        </StatStrip>
       ) : stats ? (
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           <Metric label="Total scans" value={stats.total_scans} icon={<Shield01Icon size={17} />} />

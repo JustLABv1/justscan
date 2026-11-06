@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useToast } from '@/components/toast';
 import { FormAlert } from '@/components/ui/form-alert';
 import {
@@ -10,7 +11,7 @@ import {
 } from '@/lib/api';
 import { getApiBase } from '@/lib/api/base';
 import { deferEffect } from '@/lib/defer-effect';
-import { Alert, Button, ButtonGroup, Card, Chip, Label, ListBox, Select } from '@/components/ui';
+import { Alert, Button, ButtonGroup, Card, Label, ListBox, Select } from '@/components/ui';
 import { Copy01Icon, Download01Icon, Key01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -214,7 +215,9 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
               </span>
               <div>
                 <p className="text-sm font-medium">Connect to this organization</p>
-                <p className="mt-1 text-xs text-muted-foreground">Copy these values into your CLI profile.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Copy these values into your CLI profile.
+                </p>
               </div>
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
@@ -343,7 +346,9 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
         </Card.Header>
         <Card.Content>
           {history.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Run a scan with the CLI to create history.</p>
+            <p className="text-sm text-muted-foreground">
+              Run a scan with the CLI to create history.
+            </p>
           ) : (
             <div className="divide-y divide-divider rounded-xl border border-divider">
               {history.map((entry) => (
@@ -361,16 +366,10 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Chip size="sm" variant="soft">
-                      {entry.scan.status}
-                    </Chip>
-                    <Chip
-                      size="sm"
-                      color={deliveryStatusColor(entry.delivery_status)}
-                      variant="soft"
-                    >
+                    <StatusTag>{entry.scan.status}</StatusTag>
+                    <StatusTag tone={toneFromChipColor(deliveryStatusColor(entry.delivery_status))}>
                       {entry.delivery_status}
-                    </Chip>
+                    </StatusTag>
                   </div>
                 </div>
               ))}

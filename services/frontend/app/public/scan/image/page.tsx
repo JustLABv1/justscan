@@ -1,4 +1,5 @@
 'use client';
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { PublicNavbar } from '@/components/public/public-navbar';
 import {
   createPublicScan,
@@ -17,7 +18,7 @@ import {
   timeAgo,
   updatePublicHistoryEntry,
 } from '@/lib/publicScanHistory';
-import { Button, Card, Chip, Input, Label, Select, ListBox } from '@/components/ui';
+import { Button, Card, Input, Label, Select, ListBox } from '@/components/ui';
 import { ArrowRight01Icon, Clock01Icon, IrisScanIcon, PackageIcon } from 'hugeicons-react';
 import { FormAlert } from '@/components/ui/form-alert';
 import { useTheme } from 'next-themes';
@@ -67,53 +68,35 @@ function HistoryRow({ record }: { record: PublicScanRecord }) {
             <p className="min-w-0 flex-1 truncate font-mono text-sm font-medium text-foreground">
               {record.image_name}:{record.image_tag}
             </p>
-            {record.platform && (
-              <Chip color="accent" size="sm" variant="soft">
-                {record.platform}
-              </Chip>
-            )}
+            {record.platform && <StatusTag tone="accent">{record.platform}</StatusTag>}
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-            <Chip color={st.color} size="sm" variant="soft">
+            <StatusTag tone={toneFromChipColor(st.color)}>
               <span
                 className={`mr-1.5 inline-block size-1.5 rounded-full bg-current ${
                   isActive ? 'animate-pulse' : ''
                 }`}
               />
               {st.label}
-            </Chip>
+            </StatusTag>
 
             {record.status === 'completed' && (
               <>
                 {record.critical_count > 0 && (
-                  <Chip color="danger" size="sm" variant="soft">
-                    {record.critical_count} critical
-                  </Chip>
+                  <StatusTag tone="danger">{record.critical_count} critical</StatusTag>
                 )}
                 {record.high_count > 0 && (
-                  <Chip color="warning" size="sm" variant="soft">
-                    {record.high_count} high
-                  </Chip>
+                  <StatusTag tone="warning">{record.high_count} high</StatusTag>
                 )}
                 {record.medium_count > 0 && (
-                  <Chip color="accent" size="sm" variant="soft">
-                    {record.medium_count} medium
-                  </Chip>
+                  <StatusTag tone="accent">{record.medium_count} medium</StatusTag>
                 )}
-                {record.low_count > 0 && (
-                  <Chip size="sm" variant="soft">
-                    {record.low_count} low
-                  </Chip>
-                )}
+                {record.low_count > 0 && <StatusTag>{record.low_count} low</StatusTag>}
                 {record.critical_count === 0 &&
                   record.high_count === 0 &&
                   record.medium_count === 0 &&
-                  record.low_count === 0 && (
-                    <Chip color="success" size="sm" variant="soft">
-                      Clean
-                    </Chip>
-                  )}
+                  record.low_count === 0 && <StatusTag tone="success">Clean</StatusTag>}
               </>
             )}
           </div>

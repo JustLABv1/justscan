@@ -207,7 +207,18 @@ jobs:
           pull: true
           no-cache-filters: runtime-base
           target: ${{ matrix.target }}
+          tags: justscan-backend:${{ matrix.target }}
+          load: true
           push: false
+
+      - name: Block fixable HIGH/CRITICAL image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: justscan-backend:${{ matrix.target }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
 
   cli-image-build:
     name: CLI — Docker Build Check

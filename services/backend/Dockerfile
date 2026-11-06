@@ -31,7 +31,7 @@ WORKDIR /app
 # all other packages on 3.24. Remove this once 3.24 ships Expat >= 2.9.0.
 # Require fixed libcurl for CVE-2026-92392, including Git's HTTP transport.
 RUN apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
-    libexpat=2.9.0-r0 \
+    "libexpat>=2.9.0-r0" \
     && apk add --upgrade --no-cache ca-certificates git "libcurl>=8.23.0-r0" tzdata libcrypto3 libssl3
 
 COPY --from=builder /app/backend/justscan-backend /app/

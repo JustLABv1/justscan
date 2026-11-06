@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -598,4 +599,33 @@ func appendHelmChart(ctx context.Context, root string, byRef map[string]*Discove
 func findDiscoveryCandidates(root string, rules []models.GitRepositoryDiscoveryRule, configuration justScanConfig, helmSources []models.GitRepositoryHelmSource) []DiscoveryCandidate {
 	discoveryMatcher := emptyDiscoveryPathMatcher(root)
 	return findDiscoveryCandidatesWithMatcher(root, rules, configuration, helmSources, discoveryMatcher)
+}
+
+func TestImageRepositoryNameIgnoresTagAndDigest(t *testing.T) {
+	cases := map[string]string{
+		"ghcr.io/org/app:1.2":                               "ghcr.io/org/app",
+		"ghcr.io/org/app@sha256:" + strings.Repeat("a", 64): "ghcr.io/org/app",
+		"nginx":                      "nginx",
+		"localhost:5000/team/app":    "localhost:5000/team/app",
+		"localhost:5000/team/app:v2": "localhost:5000/team/app",
+	}
+	for ref, want := range cases {
+		if got := ImageRepositoryName(ref); got != want {
+			t.Errorf("ImageRepositoryName(%q) = %q, want %q", ref, got, want)
+		}
+	}
+}
+
+func TestImageRegistryRulePatternMatchesNewTagsOfTheSameImage(t *testing.T) {
+	pattern := regexp.MustCompile(ImageRegistryRulePattern("ghcr.io/org/app:1.0"))
+	for _, ref := range []string{"ghcr.io/org/app:1.0", "ghcr.io/org/app:2.0", "ghcr.io/org/app", "ghcr.io/org/app@sha256:" + strings.Repeat("b", 64)} {
+		if !pattern.MatchString(ref) {
+			t.Errorf("pattern should match %q", ref)
+		}
+	}
+	for _, ref := range []string{"ghcr.io/org/app-extra:1.0", "ghcr.io/org/other:1.0", "evil.io/ghcr.io/org/app:1.0"} {
+		if pattern.MatchString(ref) {
+			t.Errorf("pattern should not match %q", ref)
+		}
+	}
 }

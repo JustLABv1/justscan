@@ -375,6 +375,24 @@ func SetImageRegistryOverride(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save image registry override"})
 			return
 		}
+		// Choosing a registry for one version applies to the image, so older
+		// overrides of other tags of it must not keep the previous choice.
+		var siblings []models.GitRepositoryImageRegistryOverride
+		if err := db.NewSelect().Model(&siblings).
+			Where("repository_id = ? AND full_ref <> ?", item.ID, body.FullRef).
+			Scan(c.Request.Context()); err == nil {
+			name := gitservice.ImageRepositoryName(body.FullRef)
+			for _, sibling := range siblings {
+				if gitservice.ImageRepositoryName(sibling.FullRef) != name || sibling.RegistryID == registryID {
+					continue
+				}
+				_, _ = db.NewUpdate().Model((*models.GitRepositoryImageRegistryOverride)(nil)).
+					Set("registry_id = ?", registryID).
+					Set("updated_at = ?", now).
+					Where("id = ?", sibling.ID).
+					Exec(c.Request.Context())
+			}
+		}
 		c.JSON(http.StatusOK, override)
 	}
 }

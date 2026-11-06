@@ -657,14 +657,44 @@ func imageRegistryOverrides(ctx context.Context, db *bun.DB, repositoryID uuid.U
 	return result
 }
 
+// ImageRepositoryName is an image ref without its tag or digest, so every
+// version of one image shares a name: ghcr.io/org/app:1.2 -> ghcr.io/org/app.
+func ImageRepositoryName(fullRef string) string {
+	ref := strings.TrimSpace(fullRef)
+	if index := strings.Index(ref, "@"); index >= 0 {
+		ref = ref[:index]
+	}
+	if colon := strings.LastIndex(ref, ":"); colon > strings.LastIndex(ref, "/") {
+		ref = ref[:colon]
+	}
+	return ref
+}
+
+// ImageRegistryRulePattern is the pattern that matches every tag and digest of
+// one image. It is the same shape the web client saves with an override.
+func ImageRegistryRulePattern(fullRef string) string {
+	return "^" + regexp.QuoteMeta(ImageRepositoryName(fullRef)) + "(?::[^/]+|@.+)?$"
+}
+
 func applyImageRegistryOverrides(ctx context.Context, db *bun.DB, repositoryID uuid.UUID, images []DiscoveredImage) ([]DiscoveredImage, error) {
 	var overrides []models.GitRepositoryImageRegistryOverride
-	if err := db.NewSelect().Model(&overrides).Where("repository_id = ?", repositoryID).Scan(ctx); err != nil {
+	if err := db.NewSelect().Model(&overrides).
+		Where("repository_id = ?", repositoryID).
+		OrderExpr("updated_at DESC").
+		Scan(ctx); err != nil {
 		return nil, fmt.Errorf("load exact image registry overrides: %w", err)
 	}
 	exactRegistryIDs := make(map[string]uuid.UUID, len(overrides))
+	// A manual choice follows the image to its next tag: the most recently
+	// changed override of an image applies to versions that have no entry yet,
+	// such as after a tag bump in the repository.
+	imageRegistryIDs := make(map[string]uuid.UUID, len(overrides))
 	for _, override := range overrides {
 		exactRegistryIDs[override.FullRef] = override.RegistryID
+		name := ImageRepositoryName(override.FullRef)
+		if _, seen := imageRegistryIDs[name]; !seen {
+			imageRegistryIDs[name] = override.RegistryID
+		}
 	}
 
 	var rules []models.GitRepositoryImageRegistryOverrideRule
@@ -694,12 +724,20 @@ func applyImageRegistryOverrides(ctx context.Context, db *bun.DB, repositoryID u
 			images[index].RegistryID = &registryID
 			continue
 		}
+		matched := false
 		for _, rule := range compiledRules {
 			if rule.pattern.MatchString(images[index].FullRef) {
 				registryID := rule.registryID
 				images[index].RegistryID = &registryID
+				matched = true
 				break
 			}
+		}
+		if matched {
+			continue
+		}
+		if registryID, ok := imageRegistryIDs[ImageRepositoryName(images[index].FullRef)]; ok {
+			images[index].RegistryID = &registryID
 		}
 	}
 	return images, nil

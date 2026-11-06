@@ -1,10 +1,11 @@
 'use client';
 
-import { StatCard } from '@/components/ui/stat-card';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusTag } from '@/components/ui/status-dot';
 import { Logo } from '@/components/logo';
 import type { StatusPageUpdate } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip } from '@/components/ui';
+import { Alert, Button, Card } from '@/components/ui';
 import {
   Clock01Icon,
   Globe02Icon,
@@ -75,16 +76,14 @@ export function PublicStatusHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <Chip className="hidden capitalize sm:inline-flex" size="sm" variant="secondary">
+          <StatusTag className="hidden capitalize sm:inline-flex">
             {visibilityIcon(visibility)}
-            <Chip.Label>{visibility}</Chip.Label>
-          </Chip>
-          <Chip className="hidden lg:inline-flex" size="sm" variant="secondary">
+            {visibility}
+          </StatusTag>
+          <StatusTag className="hidden lg:inline-flex">
             <Clock01Icon size={14} aria-hidden />
-            <Chip.Label>
-              Updated {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
-            </Chip.Label>
-          </Chip>
+            Updated {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
+          </StatusTag>
           {mounted ? (
             <Button
               isIconOnly
@@ -183,19 +182,17 @@ export function StatusMetrics({
   onSelect?: (key: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <StatStrip>
       {metrics.map((metric) => (
-        <StatCard
+        <StatStripItem
           key={metric.key}
           label={metric.label}
-          className="min-h-0 gap-1 py-2.5"
-          valueClassName="text-xl"
           value={metric.value.toLocaleString()}
-          tone={metric.color ?? 'default'}
+          tone={metric.color ?? undefined}
           onPress={onSelect ? () => onSelect(metric.key) : undefined}
         />
       ))}
-    </div>
+    </StatStrip>
   );
 }
 

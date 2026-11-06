@@ -5,10 +5,11 @@ import { useToast } from '@/components/toast';
 import { OwnershipBadge, StatusBadge } from '@/components/ui/badges';
 import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatusLabel, type StatusDotTone } from '@/components/ui/status-dot';
 import { FormField } from '@/components/ui/form-field';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
-import { StatCard } from '@/components/ui/stat-card';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -61,7 +62,6 @@ import {
   Spinner,
   Switch,
   Table,
-  Tabs,
   TextArea,
   useOverlayState,
 } from '@/components/ui';
@@ -104,17 +104,6 @@ function parseWatchlistImport(value: string) {
   return [...entries.values()];
 }
 
-const postureChipColor: Record<
-  WatchlistPosture['tone'],
-  'success' | 'warning' | 'danger' | 'accent' | 'default'
-> = {
-  success: 'success',
-  warning: 'warning',
-  danger: 'danger',
-  accent: 'accent',
-  neutral: 'default',
-};
-
 type WatchlistFocus = 'all' | 'attention' | 'intelligence' | 'stale' | 'healthy' | 'never_scanned';
 
 function parseWatchlistFocus(value: string | null): WatchlistFocus {
@@ -149,70 +138,6 @@ function isHealthyWatchlistItem(item: WatchlistItem, now: number) {
     !isStaleWatchlistItem(item, now) &&
     posture.kind !== 'running'
   );
-}
-
-function getWatchlistOverviewSummary({
-  activeCount,
-  attentionCount,
-  intelligencePendingCount,
-  neverScannedCount,
-  staleCount,
-}: {
-  activeCount: number;
-  attentionCount: number;
-  intelligencePendingCount: number;
-  neverScannedCount: number;
-  staleCount: number;
-}): {
-  description: string;
-  label: string;
-  title: string;
-  tone: 'success' | 'warning' | 'danger' | 'accent' | 'neutral';
-} {
-  if (activeCount === 0) {
-    return {
-      label: 'Idle',
-      title: 'No active watchlist coverage is running',
-      description: 'Enable a recurring image schedule to start building watchlist coverage.',
-      tone: 'neutral',
-    };
-  }
-
-  if (attentionCount > 0) {
-    if (intelligencePendingCount > 0) {
-      return {
-        label: 'Confirmation pending',
-        title: 'CVE intelligence changed on the watchlist',
-        description:
-          'The stored policy result is preserved until the next scheduled scan confirms the current CVE state. Use Scan now for an immediate confirmation.',
-        tone: 'warning',
-      };
-    }
-    return {
-      label: 'Needs action',
-      title: 'Policy or scan failures need review',
-      description:
-        'Blocked, failed, or non-compliant watchlist items should be reviewed before treating coverage as healthy.',
-      tone: 'danger',
-    };
-  }
-
-  if (staleCount > 0 || neverScannedCount > 0) {
-    return {
-      label: 'Coverage gaps',
-      title: 'Watchlist freshness needs review',
-      description: 'Some scheduled items are stale or still missing a baseline scan result.',
-      tone: 'warning',
-    };
-  }
-
-  return {
-    label: 'Healthy',
-    title: 'Watchlist coverage is current',
-    description:
-      'Recurring scans are up to date and there are no current policy or failure signals.',
-    tone: 'success',
-  };
 }
 
 function LastScanState({
@@ -258,6 +183,14 @@ function LastScanState({
           hourCycle,
           timeZone: item.timezone,
         })}
+        {(item.last_scan?.critical_count ?? 0) > 0 || (item.last_scan?.high_count ?? 0) > 0 ? (
+          <>
+            {' · '}
+            <span className="tabular-nums">
+              {item.last_scan?.critical_count ?? 0}C / {item.last_scan?.high_count ?? 0}H
+            </span>
+          </>
+        ) : null}
       </span>
     </Link>
   );
@@ -266,8 +199,6 @@ function LastScanState({
 function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item: WatchlistItem }) {
   const failedPolicies = item.compliance_summary?.failed_policy_names ?? [];
   const allPolicies = item.compliance_summary?.policy_names ?? [];
-  const criticalCount = item.last_scan?.critical_count ?? 0;
-  const highCount = item.last_scan?.high_count ?? 0;
   const policyTitle =
     failedPolicies.length > 0
       ? failedPolicies.join(', ')
@@ -276,22 +207,22 @@ function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item:
         : posture.description;
 
   return (
-    <div className="max-w-[240px] space-y-1.5">
-      <Chip color={postureChipColor[posture.tone]} variant="soft" size="sm">
-        {posture.label}
-      </Chip>
-      <p className="truncate text-xs text-muted-foreground" title={policyTitle}>
-        {posture.description}
-      </p>
-      {posture.kind !== 'intelligence_pending' ? (
-        <IntelligenceSummaryChip compact summary={item.intelligence_summary} />
-      ) : null}
-      {criticalCount > 0 || highCount > 0 ? (
-        <Chip color="default" variant="soft" size="sm">
-          {criticalCount} critical · {highCount} high
-        </Chip>
-      ) : null}
-    </div>
+    <StatusLabel
+      className="max-w-[260px]"
+      tone={posture.tone}
+      label={posture.label}
+      title={policyTitle}
+      detail={
+        <>
+          <p className="truncate">{posture.description}</p>
+          {posture.kind !== 'intelligence_pending' ? (
+            <div className="empty:hidden">
+              <IntelligenceSummaryChip compact summary={item.intelligence_summary} />
+            </div>
+          ) : null}
+        </>
+      }
+    />
   );
 }
 
@@ -796,13 +727,6 @@ export default function WatchlistPage() {
   const staleCount = staleItems.length;
   const intelligencePendingItems = activeItems.filter(watchlistNeedsIntelligenceConfirmation);
   const healthyItems = activeItems.filter((item) => isHealthyWatchlistItem(item, postureNow));
-  const overviewSummary = getWatchlistOverviewSummary({
-    activeCount: activeItems.length,
-    attentionCount: attentionItems.length,
-    intelligencePendingCount: intelligencePendingItems.length,
-    neverScannedCount,
-    staleCount,
-  });
   const focusCounts: Record<WatchlistFocus, number> = {
     all: items.length,
     attention: attentionItems.length,
@@ -811,6 +735,25 @@ export default function WatchlistPage() {
     healthy: healthyItems.length,
     never_scanned: neverScannedCount,
   };
+  const focusSegments: { id: WatchlistFocus; label: string; tone: StatusDotTone; count: number }[] =
+    [
+      { id: 'all', label: 'All', tone: 'neutral', count: focusCounts.all },
+      { id: 'attention', label: 'Attention', tone: 'danger', count: focusCounts.attention },
+      {
+        id: 'intelligence',
+        label: 'CVE confirmation',
+        tone: 'warning',
+        count: focusCounts.intelligence,
+      },
+      { id: 'stale', label: 'Stale', tone: 'warning', count: focusCounts.stale },
+      {
+        id: 'never_scanned',
+        label: 'Never scanned',
+        tone: 'neutral',
+        count: focusCounts.never_scanned,
+      },
+      { id: 'healthy', label: 'Healthy', tone: 'success', count: focusCounts.healthy },
+    ];
   const hasFilters =
     searchQuery.trim().length > 0 || statusFilter !== 'all' || focusFilter !== 'all';
 
@@ -870,60 +813,6 @@ export default function WatchlistPage() {
         }
       />
 
-      {!loading && items.length > 0 ? (
-        <>
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            {[
-              {
-                label: 'Active schedules',
-                value: activeItems.length,
-                hint: `${items.length} images watched`,
-                filter: 'all',
-                tone: 'default',
-              },
-              {
-                label: 'Needs attention',
-                value: attentionItems.length,
-                hint: 'Policy or scan failures',
-                filter: 'attention',
-                tone: 'danger',
-              },
-              {
-                label: 'CVE confirmation',
-                value: intelligencePendingItems.length,
-                hint: 'Intelligence changed',
-                filter: 'intelligence',
-                tone: 'warning',
-              },
-              {
-                label: 'Stale images',
-                value: staleCount,
-                hint: `${neverScannedCount} not yet scanned`,
-                filter: 'stale',
-                tone: 'warning',
-              },
-            ].map((metric) => (
-              <StatCard
-                key={metric.label}
-                label={metric.label}
-                value={metric.value}
-                hint={metric.hint}
-                tone={metric.tone as 'default' | 'danger' | 'warning'}
-                selected={metric.filter !== 'all' && focusFilter === metric.filter}
-                onPress={() => {
-                  updateFocusFilter(parseWatchlistFocus(metric.filter));
-                  setStatusFilter(metric.filter === 'all' ? 'active' : 'all');
-                }}
-              />
-            ))}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{overviewSummary.title}.</span>{' '}
-            {overviewSummary.description}
-          </p>
-        </>
-      ) : null}
-
       {error ? (
         <StatusAlert
           status="danger"
@@ -969,43 +858,19 @@ export default function WatchlistPage() {
         <>
           <Card className="gap-0 overflow-hidden py-0">
             <Card.Header className="space-y-3 border-b p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Card.Title>Monitored images</Card.Title>
-                <span className="text-xs text-muted-foreground">
-                  {filteredItems.length} of {items.length} images
-                </span>
-              </div>
-              <Tabs
-                selectedKey={focusFilter}
-                onSelectionChange={(key) => updateFocusFilter(parseWatchlistFocus(String(key)))}
-                variant="secondary"
+              <FilterChips
+                label="Watchlist focus"
+                items={focusSegments.map((segment) => ({
+                  id: segment.id,
+                  label: segment.label,
+                  count: segment.count,
+                  tone: segment.count > 0 || segment.id === 'all' ? segment.tone : 'muted',
+                  active: focusFilter === segment.id,
+                  onPress: () => updateFocusFilter(segment.id),
+                }))}
               >
-                <Tabs.ListContainer className="overflow-x-auto">
-                  <Tabs.List aria-label="Watchlist focus" className="min-w-max">
-                    {[
-                      { id: 'all', label: 'All' },
-                      { id: 'attention', label: 'Attention' },
-                      { id: 'intelligence', label: 'CVE confirmation' },
-                      { id: 'stale', label: 'Stale' },
-                      { id: 'never_scanned', label: 'Never scanned' },
-                      { id: 'healthy', label: 'Healthy' },
-                    ].map((option) => (
-                      <Tabs.Tab id={option.id} key={option.id}>
-                        {option.label}
-                        <span className="ml-1 text-xs tabular-nums text-muted-foreground">
-                          {focusCounts[option.id as WatchlistFocus]}
-                        </span>
-                        <Tabs.Indicator />
-                      </Tabs.Tab>
-                    ))}
-                  </Tabs.List>
-                </Tabs.ListContainer>
-                {['all', 'attention', 'intelligence', 'stale', 'never_scanned', 'healthy'].map(
-                  (key) => (
-                    <Tabs.Panel id={key} key={key} className="hidden" />
-                  )
-                )}
-              </Tabs>
+                {filteredItems.length} of {items.length}
+              </FilterChips>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <SearchField
                   name="watchlist-search"
@@ -1121,7 +986,7 @@ export default function WatchlistPage() {
               <Table.ScrollContainer className="rounded-none border-0">
                 <Table.Content
                   aria-label="Watchlist images"
-                  className="min-w-[1040px] [&_td]:py-3"
+                  className="min-w-[900px] [&_td]:py-3"
                   disabledKeys={nonMutableItemIds}
                   selectedKeys={selectedIds}
                   selectionMode="multiple"
@@ -1146,10 +1011,12 @@ export default function WatchlistPage() {
                     <Table.Column isRowHeader className="min-w-60">
                       Image
                     </Table.Column>
+                    <Table.Column className="min-w-56">Status</Table.Column>
+                    <Table.Column className="min-w-36">Last scan</Table.Column>
                     <Table.Column className="min-w-44">Schedule</Table.Column>
-                    <Table.Column className="min-w-36">Latest scan</Table.Column>
-                    <Table.Column className="min-w-48">Coverage</Table.Column>
-                    <Table.Column className="w-px whitespace-nowrap text-right">Actions</Table.Column>
+                    <Table.Column className="w-px whitespace-nowrap text-right">
+                      <span className="sr-only">Actions</span>
+                    </Table.Column>
                   </Table.Header>
                   <Table.Body
                     items={filteredItems}
@@ -1234,7 +1101,11 @@ export default function WatchlistPage() {
                         <Table.Row
                           key={item.id}
                           id={item.id}
-                          className="hover:bg-[var(--row-hover)]"
+                          className={`group/row hover:bg-[var(--row-hover)] ${
+                            posture.tone === 'danger'
+                              ? 'shadow-[inset_2px_0_0_0_var(--destructive)]'
+                              : ''
+                          }`}
                         >
                           <Table.Cell>
                             <Checkbox
@@ -1250,62 +1121,55 @@ export default function WatchlistPage() {
                             </Checkbox>
                           </Table.Cell>
                           <Table.Cell>
-                            <div className="space-y-1.5">
-                              <p className="max-w-sm break-words font-mono text-xs text-foreground [overflow-wrap:anywhere]">
+                            <div className="space-y-1">
+                              <p className="max-w-sm break-words font-mono text-sm text-foreground [overflow-wrap:anywhere]">
                                 {item.image_name}:{item.image_tag}
                               </p>
-                              <p className="text-xs text-muted-foreground">
-                                {reg?.name ?? 'Direct image source'}
-                              </p>
-                              <OwnershipBadge
-                                ownerType={item.owner_type}
-                                ownerOrgId={item.owner_org_id}
-                                orgNamesById={orgNamesById}
-                              />
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                <span>{reg?.name ?? 'Direct image source'}</span>
+                                <OwnershipBadge
+                                  ownerType={item.owner_type}
+                                  ownerOrgId={item.owner_org_id}
+                                  orgNamesById={orgNamesById}
+                                />
+                              </div>
                             </div>
                           </Table.Cell>
                           <Table.Cell>
-                            <div className="space-y-1.5" title={item.schedule}>
-                              <div className="flex items-center gap-1.5 text-xs text-primary">
-                                <Clock01Icon size={12} className="shrink-0" />
-                                {cronToHuman(item.schedule ?? '', {
-                                  timezone: item.timezone,
-                                  hourCycle,
-                                })}
-                              </div>
-                              <p className="font-mono text-xs text-muted-foreground">
-                                {item.timezone || 'UTC'}
-                              </p>
-                            </div>
+                            <PolicyPostureCell posture={posture} item={item} />
                           </Table.Cell>
                           <Table.Cell>
                             <LastScanState item={item} hourCycle={hourCycle} />
                           </Table.Cell>
                           <Table.Cell>
-                            <div className="space-y-2">
-                              <Chip
-                                color={item.enabled ? 'success' : 'default'}
-                                size="sm"
-                                variant="soft"
-                              >
-                                {item.enabled ? 'Scheduled' : 'Paused'}
-                              </Chip>
-                              <PolicyPostureCell posture={posture} item={item} />
+                            <div className="space-y-0.5" title={item.schedule}>
+                              <p className="flex items-center gap-1.5 text-sm text-foreground">
+                                <Clock01Icon size={12} className="shrink-0 text-muted-foreground" />
+                                {cronToHuman(item.schedule ?? '', {
+                                  timezone: item.timezone,
+                                  hourCycle,
+                                })}
+                              </p>
+                              <p className="pl-[18px] font-mono text-xs text-muted-foreground">
+                                {item.timezone || 'UTC'}
+                              </p>
                             </div>
                           </Table.Cell>
                           <Table.Cell>
-                            <div className="flex justify-end gap-2">
+                            <div className="flex items-center justify-end gap-1">
                               {canMutate ? (
                                 <Button
                                   size="sm"
-                                  variant="secondary"
+                                  variant="tertiary"
+                                  aria-label={`Scan ${item.image_name}:${item.image_tag} now`}
                                   isPending={triggering === item.id}
                                   isDisabled={Boolean(triggering)}
+                                  className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100"
                                   onPress={() => {
                                     void handleTrigger(item.id);
                                   }}
                                 >
-                                  Scan now
+                                  <PlayIcon size={14} />
                                 </Button>
                               ) : null}
                               {actions.length > 0 ? (

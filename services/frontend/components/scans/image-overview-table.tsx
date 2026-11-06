@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight, Container, Tag, ScanLine } from 'lucide-react';
 import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
@@ -21,6 +21,8 @@ import { Delete01Icon, Shield01Icon } from 'hugeicons-react';
 
 type Props = {
   toolbar?: ReactNode;
+  /** Bumps whenever the list is refreshed, so expanded branches reload with it. */
+  revision?: number;
   images: ImageOverview[];
   loading: boolean;
   hasActiveFilters: boolean;
@@ -70,12 +72,12 @@ function Findings({
   );
 }
 
-function useScanTreeData(images: ImageOverview[]) {
+function useScanTreeData(images: ImageOverview[], revision: number) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [tags, setTags] = useState<Record<string, Branch<ArtifactSummary>>>({});
   const [runs, setRuns] = useState<Record<string, Branch<Scan>>>({});
 
-  async function loadBranch(image: string, tag?: string, page = 1) {
+  async function loadBranch(image: string, tag?: string, page = 1, silent = false) {
     const key = tag === undefined ? imageKey(image) : tagKey(image, tag);
     const pending = <T,>(current: Record<string, Branch<T>>) => ({
       ...current,
@@ -87,8 +89,10 @@ function useScanTreeData(images: ImageOverview[]) {
         requestedPage: page,
       },
     });
-    if (tag === undefined) setTags(pending);
-    else setRuns(pending);
+    if (!silent) {
+      if (tag === undefined) setTags(pending);
+      else setRuns(pending);
+    }
     try {
       if (tag === undefined) {
         const result = await listScanArtifacts(
@@ -145,6 +149,16 @@ function useScanTreeData(images: ImageOverview[]) {
       else setRuns(failed);
     }
   }
+
+  useEffect(() => {
+    if (revision === 0) return;
+    // Keep what is already expanded current as the list refreshes.
+    for (const key of expanded) {
+      const [image, tag] = JSON.parse(key) as [string, string | undefined];
+      void loadBranch(image, tag, 1, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revision]);
 
   function toggle(image: string, tag?: string) {
     const key = tag === undefined ? imageKey(image) : tagKey(image, tag);
@@ -218,13 +232,14 @@ function buildRows(
 
 function ScanTreeTable({
   toolbar,
+  revision = 0,
   images,
   loading,
   hasActiveFilters,
   onDeleteImage,
   queuedImageNames,
 }: Props) {
-  const tree = useScanTreeData(images);
+  const tree = useScanTreeData(images, revision);
   const { expanded, setExpanded, rows } = tree;
   return (
     <div>
@@ -249,7 +264,7 @@ function ScanTreeTable({
         <Table.ScrollContainer className="rounded-none border-0">
           <Table.Content
             aria-label="Scanned images, tags and scan history"
-            className="min-w-[1152px] table-fixed [&_td]:px-3 [&_th]:px-3"
+            className="min-w-[960px] table-fixed [&_td]:px-3 [&_th]:px-3"
           >
             <Table.Header>
               <Table.Column isRowHeader className="w-auto">
@@ -257,8 +272,7 @@ function ScanTreeTable({
               </Table.Column>
               <Table.Column className="w-[216px]">Status</Table.Column>
               <Table.Column className="w-[216px]">Findings</Table.Column>
-              <Table.Column className="w-[144px]">History</Table.Column>
-              <Table.Column className="w-[144px]">Scanned</Table.Column>
+              <Table.Column className="w-[144px]">Last scan</Table.Column>
               <Table.Column className="w-14">
                 <span className="sr-only">Actions</span>
               </Table.Column>
@@ -267,14 +281,14 @@ function ScanTreeTable({
               {loading ? (
                 Array.from({ length: 5 }, (_, i) => (
                   <Table.Row key={i} id={`loading:${i}`}>
-                    <Table.Cell colSpan={6}>
+                    <Table.Cell colSpan={5}>
                       <div className="h-10 animate-pulse rounded bg-muted" />
                     </Table.Cell>
                   </Table.Row>
                 ))
               ) : images.length === 0 ? (
                 <Table.Row id="empty">
-                  <Table.Cell colSpan={6}>
+                  <Table.Cell colSpan={5}>
                     <div className="py-8">
                       <EmptyState
                         icon={<Shield01Icon size={28} />}
@@ -313,7 +327,7 @@ function renderTreeRow(
     const branch = row.tag === undefined ? tags[row.parent] : runs[row.parent];
     return (
       <Table.Row id={row.id}>
-        <Table.Cell colSpan={6}>
+        <Table.Cell colSpan={5}>
           <div
             className={`flex items-center gap-3 py-1 ${row.tag === undefined ? 'pl-12' : 'pl-20'}`}
           >
@@ -366,7 +380,15 @@ function renderTreeRow(
   const Icon = image ? Container : tag ? Tag : ScanLine;
   const queued = image && queuedImageNames?.has(image.image_name);
   return (
-    <Table.Row id={row.id} className={image ? 'bg-muted/20' : ''} textValue={name}>
+    <Table.Row
+      id={row.id}
+      className={`${image ? 'bg-muted/20' : ''} ${
+        image && (image.health_policy_failed || image.health_critical_count > 0)
+          ? 'shadow-[inset_2px_0_0_0_var(--destructive)]'
+          : ''
+      }`}
+      textValue={name}
+    >
       <Table.Cell>
         <div
           className={`flex min-w-0 items-center gap-2 py-2 ${tag ? 'pl-6' : scan ? 'pl-14' : ''}`}
@@ -412,9 +434,15 @@ function renderTreeRow(
               <Chip color="warning" size="sm" variant="soft">
                 Deletion queued
               </Chip>
-            ) : scan ? (
-              <span className="text-xs text-muted-foreground">{scan.scan_provider}</span>
-            ) : null}
+            ) : (
+              <span className="block text-xs text-muted-foreground">
+                {image
+                  ? `${image.tag_count} tags · ${image.scan_count} runs`
+                  : tag
+                    ? `${tag.scan_count} runs`
+                    : scan!.scan_provider}
+              </span>
+            )}
           </div>
         </div>
       </Table.Cell>
@@ -448,15 +476,6 @@ function renderTreeRow(
           medium={image?.health_medium_count ?? tag?.medium_count ?? scan!.medium_count}
           low={image?.health_low_count ?? tag?.low_count ?? scan!.low_count}
         />
-      </Table.Cell>
-      <Table.Cell>
-        <span className="text-xs text-muted-foreground">
-          {image
-            ? `${image.tag_count} tags · ${image.scan_count} runs`
-            : tag
-              ? `${tag.scan_count} runs`
-              : 'Scan run'}
-        </span>
       </Table.Cell>
       <Table.Cell>
         <span className="whitespace-nowrap text-xs text-muted-foreground" title={fullDate(date)}>

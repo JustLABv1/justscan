@@ -1,5 +1,7 @@
 'use client';
+import { StatusDot, StatusTag, type StatusDotTone } from '@/components/ui/status-dot';
 import { FormAlert } from '@/components/ui/form-alert';
+import { PublicBackdrop } from '@/components/public/public-backdrop';
 import { PublicNavbar } from '@/components/public/public-navbar';
 import {
   createPublicHelmScans,
@@ -31,14 +33,13 @@ import {
   Button,
   Card,
   Checkbox,
-  Chip,
   Input,
   Table,
   Select,
   ListBox,
   Label,
 } from '@/components/ui';
-import { IrisScanIcon } from 'hugeicons-react';
+import { ArrowRight01Icon, IrisScanIcon, PackageIcon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -86,7 +87,7 @@ function toRunHistoryEntry(detail: {
   };
 }
 
-function HelmHistoryDisclosure({
+function HelmHistoryList({
   history,
   onOpenRun,
 }: {
@@ -94,58 +95,64 @@ function HelmHistoryDisclosure({
   onOpenRun: (run: PublicHelmRunHistoryEntry) => void;
 }) {
   return (
-    <Card className="gap-0 py-0">
-      <Card.Header className="border-b p-4">
-        <Card.Title>Recent Helm runs</Card.Title>
-        <Card.Description>Saved on this device only.</Card.Description>
-      </Card.Header>
-      <Card.Content className="divide-y p-0">
-        {history.length === 0 ? (
-          <div className="px-6 py-16 text-center text-sm text-muted-foreground">
-            Extract and scan a chart to see its runs here.
-          </div>
-        ) : (
-          history.slice(0, HISTORY_DISPLAY_LIMIT).map((run) => (
-            <button
-              key={run.id}
-              type="button"
-              onClick={() => onOpenRun(run)}
-              className="flex w-full items-start justify-between gap-3 p-4 text-left hover:bg-muted/50"
-            >
-              <div className="min-w-0 space-y-2">
-                <p className="truncate text-sm font-medium" title={run.chart_url}>
-                  {run.chart_name || run.chart_url.replace(/^oci:\/\//, '')}
-                </p>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span>
-                    {run.completed_images + run.failed_images}/{run.total_images} scanned
+    <section
+      aria-label="Recent Helm runs"
+      className="overflow-hidden rounded-2xl border border-border bg-card/60 shadow-sm backdrop-blur"
+    >
+      <div className="flex items-baseline gap-2 border-b border-border px-4 py-3">
+        <h2 className="text-sm font-medium">Recent Helm runs</h2>
+        <span className="text-xs text-muted-foreground">Saved on this device only</span>
+      </div>
+      <ul className="divide-y divide-border">
+        {history.slice(0, HISTORY_DISPLAY_LIMIT).map((run) => {
+          const tone: StatusDotTone =
+            run.failed_images > 0 || run.critical_count > 0
+              ? 'danger'
+              : run.high_count > 0
+                ? 'warning'
+                : run.completed_images + run.failed_images < run.total_images
+                  ? 'accent'
+                  : 'success';
+          const details = [
+            `${run.completed_images + run.failed_images}/${run.total_images} scanned`,
+            run.chart_version ? `v${run.chart_version}` : null,
+            run.critical_count > 0 ? `${run.critical_count} critical` : null,
+            run.high_count > 0 ? `${run.high_count} high` : null,
+            run.failed_images > 0 ? `${run.failed_images} failed` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          return (
+            <li key={run.id}>
+              <button
+                type="button"
+                onClick={() => onOpenRun(run)}
+                className="group flex w-full items-center gap-3 px-4 py-3.5 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+              >
+                <StatusDot tone={tone} />
+                <span className="min-w-0 flex-1">
+                  <span
+                    className="block truncate text-sm font-medium text-foreground"
+                    title={run.chart_url}
+                  >
+                    {run.chart_name || run.chart_url.replace(/^oci:\/\//, '')}
                   </span>
-                  {run.chart_version ? <span>v{run.chart_version}</span> : null}
-                  {run.critical_count > 0 ? (
-                    <Chip color="danger" size="sm" variant="soft">
-                      {run.critical_count} critical
-                    </Chip>
-                  ) : null}
-                  {run.high_count > 0 ? (
-                    <Chip color="warning" size="sm" variant="soft">
-                      {run.high_count} high
-                    </Chip>
-                  ) : null}
-                  {run.failed_images > 0 ? (
-                    <Chip color="danger" size="sm" variant="soft">
-                      {run.failed_images} failed
-                    </Chip>
-                  ) : null}
-                </div>
-              </div>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {timeAgo(run.created_at)}
-              </span>
-            </button>
-          ))
-        )}
-      </Card.Content>
-    </Card>
+                  <span className="block truncate text-xs text-muted-foreground">{details}</span>
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {timeAgo(run.created_at)}
+                </span>
+                <ArrowRight01Icon
+                  aria-hidden
+                  size={14}
+                  className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -337,7 +344,8 @@ export default function PublicHelmScanPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+    <div className="relative isolate min-h-screen overflow-hidden bg-background text-foreground">
+      <PublicBackdrop />
       <section>
         <PublicNavbar
           leadingActions={
@@ -373,40 +381,72 @@ export default function PublicHelmScanPage() {
         <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6">
           <div className="space-y-6">
             {(step === 'form' || step === 'extracting') && (
-              <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-                <Card className="gap-0 py-0">
-                  <Card.Header className="border-b p-5">
-                    <Card.Title>Extract chart images</Card.Title>
-                    <Card.Description>Review the images before starting a scan.</Card.Description>
-                  </Card.Header>
-                  <Card.Content className="p-5">
-                    {isDisabled ? (
-                      <FormAlert
-                        title="Public Helm scanning is unavailable"
-                        description={disabledMessage}
-                      />
-                    ) : (
-                      <form onSubmit={handleExtract} className="space-y-5">
-                        <div className="space-y-2">
-                          <label htmlFor="helm-chart-url" className="text-sm font-medium">
-                            Chart source
-                          </label>
-                          <Input
-                            id="helm-chart-url"
-                            value={chartUrl}
-                            onChange={(e) => setChartUrl(e.target.value)}
-                            placeholder="https://charts.example.com"
-                            disabled={step === 'extracting'}
-                            required
-                            className="w-full font-mono"
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Use a public HTTP repository or an oci:// chart reference.
-                          </p>
-                        </div>
+              <div className="mx-auto w-full max-w-2xl space-y-10 py-6 sm:py-14">
+                <div className="space-y-6">
+                  <div className="space-y-4 text-center">
+                    <p className="mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
+                      <StatusDot tone="success" className="size-1.5" />
+                      Free to use · No account needed
+                    </p>
+                    <h1 className="bg-gradient-to-b from-foreground to-foreground/60 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-5xl">
+                      Find vulnerabilities in a Helm chart
+                    </h1>
+                    <p className="mx-auto max-w-lg text-sm text-muted-foreground sm:text-base">
+                      We extract the images a chart deploys so you can scan them together.
+                    </p>
+                  </div>
+
+                  {isDisabled ? (
+                    <FormAlert
+                      title="Public Helm scanning is unavailable"
+                      description={disabledMessage}
+                    />
+                  ) : (
+                    <form onSubmit={handleExtract} className="space-y-3">
+                      <div className="flex items-center gap-2 rounded-2xl border border-input bg-card/80 p-2 shadow-lg shadow-black/10 backdrop-blur transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30">
+                        <PackageIcon
+                          aria-hidden
+                          size={18}
+                          className="ml-2.5 shrink-0 text-muted-foreground"
+                        />
+                        <input
+                          id="helm-chart-url"
+                          type="text"
+                          value={chartUrl}
+                          onChange={(e) => setChartUrl(e.target.value)}
+                          placeholder="oci://registry.example.com/charts/app"
+                          aria-label="Chart source"
+                          aria-describedby="helm-chart-hint"
+                          disabled={step === 'extracting'}
+                          required
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="h-12 min-w-0 flex-1 bg-transparent px-1 font-mono text-base sm:text-lg text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-60"
+                        />
+                        <Button
+                          type="submit"
+                          isDisabled={
+                            step === 'extracting' ||
+                            !chartUrl.trim() ||
+                            (!isOCI && !chartName.trim())
+                          }
+                          isPending={step === 'extracting'}
+                        >
+                          {step === 'extracting' ? 'Extracting…' : 'Extract images'}
+                        </Button>
+                      </div>
+                      <p id="helm-chart-hint" className="text-xs text-muted-foreground">
+                        A public HTTP chart repository (https://charts.example.com) or an oci://
+                        chart reference · {settings?.rate_limit_per_hour ?? 5} free scans per hour
+                      </p>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
                         {!isOCI ? (
-                          <div className="space-y-2">
-                            <label htmlFor="helm-chart-name" className="text-sm font-medium">
+                          <div className="space-y-1.5">
+                            <label
+                              htmlFor="helm-chart-name"
+                              className="block text-xs font-medium text-muted-foreground"
+                            >
                               Chart name
                             </label>
                             <Input
@@ -420,51 +460,36 @@ export default function PublicHelmScanPage() {
                             />
                           </div>
                         ) : null}
-                        <div className="space-y-2">
-                          <label htmlFor="helm-chart-version" className="text-sm font-medium">
-                            Version{' '}
-                            <span className="font-normal text-muted-foreground">(optional)</span>
+                        <div className="space-y-1.5">
+                          <label
+                            htmlFor="helm-chart-version"
+                            className="block text-xs font-medium text-muted-foreground"
+                          >
+                            Version (optional)
                           </label>
                           <Input
                             id="helm-chart-version"
                             value={chartVersion}
                             onChange={(e) => setChartVersion(e.target.value)}
-                            placeholder="Latest available"
+                            placeholder={
+                              isOCI ? 'Overrides the tag in the reference' : 'Latest available'
+                            }
                             disabled={step === 'extracting'}
                             className="w-full"
                           />
-                          {isOCI ? (
-                            <p className="text-xs text-muted-foreground">
-                              Overrides the tag in the chart reference.
-                            </p>
-                          ) : null}
                         </div>
-                        {extractError ? (
-                          <FormAlert title="Couldn’t extract images" description={extractError} />
-                        ) : null}
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-                          <span className="text-xs text-muted-foreground">
-                            {settings?.rate_limit_per_hour ?? 5} free scans per hour
-                          </span>
-                          <Button
-                            type="submit"
-                            isDisabled={
-                              step === 'extracting' ||
-                              !chartUrl.trim() ||
-                              (!isOCI && !chartName.trim())
-                            }
-                            isPending={step === 'extracting'}
-                          >
-                            {step === 'extracting' ? 'Extracting…' : 'Extract images'}
-                          </Button>
-                        </div>
-                      </form>
-                    )}
-                  </Card.Content>
-                </Card>
-                <section className="min-w-0" aria-label="Recent Helm runs">
-                  <HelmHistoryDisclosure history={helmHistory} onOpenRun={openRun} />
-                </section>
+                      </div>
+
+                      {extractError ? (
+                        <FormAlert title="Couldn’t extract images" description={extractError} />
+                      ) : null}
+                    </form>
+                  )}
+                </div>
+
+                {helmHistory.length > 0 ? (
+                  <HelmHistoryList history={helmHistory} onOpenRun={openRun} />
+                ) : null}
               </div>
             )}
 
@@ -588,14 +613,9 @@ export default function PublicHelmScanPage() {
                                       >
                                         {parsed.name || 'Enter an image reference'}
                                       </p>
-                                      <Chip
-                                        size="sm"
-                                        variant="soft"
-                                        color="accent"
-                                        className="font-mono"
-                                      >
+                                      <StatusTag className="font-mono">
                                         {parsed.tag || '-'}
-                                      </Chip>
+                                      </StatusTag>
                                     </div>
                                     {img.source_path ? (
                                       <p

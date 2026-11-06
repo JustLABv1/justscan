@@ -1,4 +1,4 @@
-import { StatCard } from '@/components/ui/stat-card';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
 import {
   Bar as EvilBar,
   EvilBarChart,
@@ -173,13 +173,28 @@ export function RiskOverviewCard({ riskScore }: { riskScore: OrgRiskScore | null
   const evaluated = riskScore.compliance_pass + riskScore.compliance_fail;
   const passRate = evaluated > 0 ? `${Math.round(riskScore.compliance_pass_rate * 100)}%` : '—';
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-      <StatCard label="Risk grade" value={riskScore.grade} hint="Current organization posture" />
-      <StatCard label="Critical" value={riskScore.totals.critical} hint="Findings" tone="danger" />
-      <StatCard label="High" value={riskScore.totals.high} hint="Findings" tone="warning" />
-      <StatCard label="Medium" value={riskScore.totals.medium} hint="Findings" tone="warning" />
-      <StatCard label="Low" value={riskScore.totals.low} hint="Findings" />
-      <StatCard
+    <StatStrip className="lg:grid-cols-6">
+      <StatStripItem label="Risk grade" value={riskScore.grade} hint="Organization posture" />
+      <StatStripItem
+        label="Critical"
+        value={riskScore.totals.critical}
+        hint="Findings"
+        tone={riskScore.totals.critical > 0 ? 'danger' : undefined}
+      />
+      <StatStripItem
+        label="High"
+        value={riskScore.totals.high}
+        hint="Findings"
+        tone={riskScore.totals.high > 0 ? 'warning' : undefined}
+      />
+      <StatStripItem
+        label="Medium"
+        value={riskScore.totals.medium}
+        hint="Findings"
+        tone={riskScore.totals.medium > 0 ? 'warning' : undefined}
+      />
+      <StatStripItem label="Low" value={riskScore.totals.low} hint="Findings" />
+      <StatStripItem
         label="Compliance"
         value={passRate}
         hint={
@@ -187,7 +202,8 @@ export function RiskOverviewCard({ riskScore }: { riskScore: OrgRiskScore | null
             ? `${riskScore.compliance_pass} of ${evaluated} passed`
             : 'No evaluated scans'
         }
+        tone={riskScore.compliance_fail > 0 ? 'danger' : undefined}
       />
-    </div>
+    </StatStrip>
   );
 }

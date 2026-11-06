@@ -1,5 +1,6 @@
 'use client';
 
+import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import {
   clearToken,
   clearUser,
@@ -22,10 +23,8 @@ import {
   buttonVariants,
   Chip,
   Drawer,
-  Description,
   Dropdown,
   Header,
-  Kbd,
   Label,
   Separator,
   Surface,
@@ -127,50 +126,37 @@ type SidebarIcon = ComponentType<{
   'aria-hidden'?: boolean;
 }>;
 
-type WorkspaceAvatarColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
+type NavGroup = {
+  id: string;
+  /** Section heading. Omit for a flat, unlabeled list. */
+  label?: string;
+  /** Collapsible groups stay closed until opened, unless the current page lives inside. */
+  collapsible?: boolean;
+  items: { href: string; label: string; Icon: SidebarIcon }[];
+};
 
-const workspaceColors: WorkspaceAvatarColor[] = ['accent', 'success', 'warning', 'danger'];
-
-function workspaceColorFor(kind: 'personal' | 'org', name: string): WorkspaceAvatarColor {
-  if (kind === 'personal') return 'default';
-
-  const nameHash = Array.from(name).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return workspaceColors[nameHash % workspaceColors.length];
-}
-
-const navGroups = [
+const navGroups: NavGroup[] = [
   {
-    label: 'Overview',
-    items: [{ href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon }],
-  },
-  {
-    label: 'Scanning',
+    id: 'primary',
     items: [
+      { href: '/dashboard', label: 'Dashboard', Icon: DashboardSquare01Icon },
       { href: '/scans', label: 'Scans', Icon: Shield01Icon },
-      { href: '/git-repositories', label: 'Git repositories', Icon: GitBranchIcon },
-      { href: '/helm', label: 'Helm', Icon: PackageIcon },
-    ],
-  },
-  {
-    label: 'Research & intelligence',
-    items: [
       { href: '/watchlist', label: 'Watchlist', Icon: Clock01Icon },
-      { href: '/vulnkb', label: 'Vuln KB', Icon: BookOpen01Icon },
+      { href: '/git-repositories', label: 'Git repositories', Icon: GitBranchIcon },
+      { href: '/helm', label: 'Helm charts', Icon: PackageIcon },
+      { href: '/vulnkb', label: 'Vulnerability KB', Icon: BookOpen01Icon },
     ],
   },
   {
-    label: 'Govern & share',
-    items: [
-      { href: '/suppressions', label: 'Suppressions', Icon: GridTableIcon },
-      { href: '/status', label: 'Status Pages', Icon: EyeIcon },
-    ],
-  },
-  {
-    label: 'Workspace setup',
+    id: 'manage',
+    label: 'Manage',
+    collapsible: true,
     items: [
       { href: '/registries', label: 'Registries', Icon: ServerStack01Icon },
       { href: '/helm-registry-credentials', label: 'Helm credentials', Icon: Key01Icon },
+      { href: '/suppressions', label: 'Suppressions', Icon: GridTableIcon },
       { href: '/tags', label: 'Tags', Icon: Tag01Icon },
+      { href: '/status', label: 'Status pages', Icon: EyeIcon },
       { href: '/orgs', label: 'Organizations', Icon: Building04Icon },
     ],
   },
@@ -195,7 +181,8 @@ const adminItemIcons: Record<AdminTab, SidebarIcon> = {
   settings: Settings01Icon,
 };
 
-const adminNavigationGroups = ADMIN_AREAS.map((area) => ({
+const adminNavigationGroups: NavGroup[] = ADMIN_AREAS.map((area) => ({
+  id: area.label,
   label: area.label,
   items: area.tabs.map((tab) => ({
     href: tab.href,
@@ -311,6 +298,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const [user, setUser] = useState(initialUser);
   const [collapsed, setCollapsed] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const collapsedRef = useRef(false);
   const [mounted, setMounted] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -356,6 +344,19 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     const closeAfterNavigation = window.setTimeout(() => setMobileNavOpen(false), 0);
     return () => window.clearTimeout(closeAfterNavigation);
   }, [pathname]);
+
+  useEffect(() => {
+    if (localStorage.getItem('sidebar_manage_open') === 'true') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setManageOpen(true);
+    }
+  }, []);
+
+  function toggleManage() {
+    const next = !manageOpen;
+    setManageOpen(next);
+    localStorage.setItem('sidebar_manage_open', String(next));
+  }
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
@@ -584,30 +585,24 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const scopeLabel =
     workScope.kind === 'org' ? (workScope.orgName ?? 'Organization') : 'Personal workspace';
   const workspaceTitle = `Workspace: ${scopeLabel}`;
-  const workspaceInitial = scopeLabel.trim().charAt(0).toUpperCase() || 'W';
-  const workspaceAvatarClasses: Record<WorkspaceAvatarColor, string> = {
-    default: 'bg-secondary text-foreground',
-    accent: 'bg-primary/15 text-primary',
-    success: 'bg-success/15 text-success-foreground',
-    warning: 'bg-warning/15 text-warning-foreground',
-    danger: 'bg-destructive/15 text-destructive',
-  };
-  const workspaceAvatarClassName =
-    workspaceAvatarClasses[workspaceColorFor(workScope.kind, scopeLabel)];
   const desktopCollapsed = collapsed;
-  const navigationGroups = isAdminRoute
+  const navigationGroups: NavGroup[] = isAdminRoute
     ? adminNavigationGroups
     : [
         ...navGroups,
         ...(user?.role === 'admin'
           ? [
               {
-                label: 'Admin',
+                id: 'admin',
                 items: [{ href: '/admin', label: 'Administration', Icon: Settings01Icon }],
               },
             ]
           : []),
       ];
+  const isGroupOpen = (group: NavGroup) =>
+    !group.collapsible ||
+    manageOpen ||
+    group.items.some((item) => isActiveRoute(pathname, item.href));
   const contentRailClass = 'px-4 md:px-5';
   const currentSection =
     navigationGroups
@@ -615,78 +610,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       .filter((item) => isActiveRoute(pathname, item.href))
       .sort((a, b) => b.href.length - a.href.length)[0]?.label ??
     (isAssistantRoute ? 'Assistant' : pathname.startsWith('/profile') ? 'Profile' : 'Workspace');
-
-  function renderWorkspaceMenu() {
-    return (
-      <Dropdown.Menu
-        onAction={(key) => {
-          const value = key as string;
-          if (value.startsWith('invite:')) {
-            setMobileNavOpen(false);
-            router.push('/orgs');
-            return;
-          }
-          handleScopeChange(value);
-        }}
-        selectionMode="single"
-        selectedKeys={new Set([workScope.kind === 'org' ? workScope.orgId : 'personal'])}
-      >
-        <Dropdown.Item id="personal" textValue="Personal workspace">
-          <div className="flex items-center gap-2">
-            <Avatar className="size-6 rounded-lg" color="default" variant="soft">
-              <Avatar.Fallback>P</Avatar.Fallback>
-            </Avatar>
-            <Label>Personal workspace</Label>
-          </div>
-        </Dropdown.Item>
-        {orgs.length > 0 ? (
-          <Dropdown.Section>
-            <Header>Organizations</Header>
-            {orgs.map((org) => (
-              <Dropdown.Item key={org.id} id={org.id} textValue={org.name}>
-                <div className="flex items-center gap-2">
-                  <Avatar
-                    className="size-6 rounded-lg"
-                    color={workspaceColorFor('org', org.name)}
-                    variant="soft"
-                  >
-                    <Avatar.Fallback>
-                      {org.name.trim().charAt(0).toUpperCase() || 'O'}
-                    </Avatar.Fallback>
-                  </Avatar>
-                  <Label>{org.name}</Label>
-                </div>
-              </Dropdown.Item>
-            ))}
-          </Dropdown.Section>
-        ) : null}
-        {pendingInvites.length > 0 ? (
-          <Dropdown.Section>
-            <Header>Pending invitations</Header>
-            {pendingInvites.map((invite) => (
-              <Dropdown.Item
-                key={invite.id}
-                id={`invite:${invite.id}`}
-                textValue={`Review invitation to ${invite.org_name || 'organization'}`}
-              >
-                <div className="flex items-center gap-2">
-                  <Avatar className="size-6 rounded-lg" color="warning" variant="soft">
-                    <Avatar.Fallback>
-                      {(invite.org_name || 'O').trim().charAt(0).toUpperCase() || 'O'}
-                    </Avatar.Fallback>
-                  </Avatar>
-                  <div className="flex min-w-0 flex-col">
-                    <Label>{invite.org_name || 'Organization'}</Label>
-                    <Description>Invitation awaiting acceptance · Review and accept</Description>
-                  </div>
-                </div>
-              </Dropdown.Item>
-            ))}
-          </Dropdown.Section>
-        ) : null}
-      </Dropdown.Menu>
-    );
-  }
 
   return (
     <DeferredWorkspaceTourProvider
@@ -736,20 +659,16 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                 </Link>
               </ShellTooltip>
               <div className={desktopCollapsed ? '' : 'ml-auto'}>
-                <ShellTooltip label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+                <ShellTooltip label="Search · ⌘K">
                   <Button
                     isIconOnly
                     size="sm"
                     variant="ghost"
-                    onPress={toggleCollapsed}
-                    aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                    className=" "
+                    onPress={() => setSearchOpen(true)}
+                    aria-label="Open command palette"
+                    className="shell-search"
                   >
-                    {desktopCollapsed ? (
-                      <SidebarRight01Icon size={17} />
-                    ) : (
-                      <SidebarLeft01Icon size={17} />
-                    )}
+                    <Search01Icon aria-hidden size={17} />
                   </Button>
                 </ShellTooltip>
               </div>
@@ -779,58 +698,25 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
             <div
               className={cn(
                 'flex shrink-0 gap-2 pb-4',
-                desktopCollapsed ? 'flex-col px-3' : 'items-center px-4'
+                desktopCollapsed ? 'flex-col px-3' : 'items-center px-4',
+                isAdminRoute && 'hidden'
               )}
             >
               {!isAdminRoute && (
-                <div id="tour-workspace-section" className="shrink-0">
-                  <ShellTooltip label={workspaceTitle}>
-                    <Dropdown>
-                      <Dropdown.Trigger
-                        id="tour-workspace-switcher"
-                        aria-label={`${workspaceTitle}${pendingInviteCount > 0 ? `, ${pendingInviteCount} pending organization invite${pendingInviteCount === 1 ? '' : 's'}` : ''}`}
-                        className="flex size-10 items-center justify-center rounded-full outline-none transition-shadow hover:ring-2 hover:ring-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                      >
-                        <Badge.Anchor>
-                          <Avatar className={cn('size-10 rounded-full', workspaceAvatarClassName)}>
-                            <Avatar.Fallback className="text-sm font-semibold">
-                              {workspaceInitial}
-                            </Avatar.Fallback>
-                          </Avatar>
-                          {pendingInviteCount > 0 && <Badge color="warning" size="sm" />}
-                        </Badge.Anchor>
-                      </Dropdown.Trigger>
-                      <Dropdown.Popover className="min-w-[240px]" placement="bottom start">
-                        {renderWorkspaceMenu()}
-                      </Dropdown.Popover>
-                    </Dropdown>
-                  </ShellTooltip>
+                <div id="tour-workspace-section" className="min-w-0 flex-1">
+                  <WorkspaceSwitcher
+                    id="tour-workspace-switcher"
+                    collapsed={desktopCollapsed}
+                    scopeLabel={scopeLabel}
+                    scopeValue={workScope.kind === 'org' ? workScope.orgId : 'personal'}
+                    orgs={orgs}
+                    invites={pendingInvites}
+                    onScopeChange={handleScopeChange}
+                    onReviewInvite={() => router.push('/orgs')}
+                    className={desktopCollapsed ? 'mx-auto' : undefined}
+                  />
                 </div>
               )}
-              <div className="min-w-0 flex-1">
-                <ShellTooltip label="Search · ⌘K" enabled={desktopCollapsed}>
-                  <Button
-                    aria-label="Open command palette"
-                    onPress={() => setSearchOpen(true)}
-                    variant="ghost"
-                    className={cn(
-                      'shell-search w-full border border-border ',
-                      desktopCollapsed ? '' : 'justify-start '
-                    )}
-                  >
-                    <Search01Icon aria-hidden size={16} />
-                    {!desktopCollapsed && (
-                      <>
-                        <span className="min-w-0 flex-1 truncate text-left text-sm">Search...</span>
-                        <Kbd className="border-0 bg-transparent p-0 text-xs text-muted-foreground">
-                          <Kbd.Abbr keyValue="command" />
-                          <Kbd.Content>K</Kbd.Content>
-                        </Kbd>
-                      </>
-                    )}
-                  </Button>
-                </ShellTooltip>
-              </div>
             </div>
             {!isAdminRoute ? (
               <div className={`shrink-0 ${desktopCollapsed ? 'px-3 pb-2' : 'px-4 pb-1'}`}>
@@ -878,52 +764,77 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               aria-label="Primary navigation"
               className={`flex-1 overflow-y-auto overflow-x-hidden pb-3 pt-2 ${desktopCollapsed ? 'px-3' : 'px-4'}`}
             >
-              {navigationGroups.map(({ label, items }) => (
-                <div key={label} className={desktopCollapsed ? 'mb-2 last:mb-0' : 'mb-4 last:mb-0'}>
-                  {!desktopCollapsed && (
-                    <div className="px-2.5 pb-2 pt-2 text-xs font-medium text-muted-foreground">
-                      {label}
-                    </div>
-                  )}
-                  <div className="space-y-0.5">
-                    {items.map(({ href, label: itemLabel, Icon }) => {
-                      const active = isActiveRoute(pathname, href);
+              {navigationGroups.map((group) => {
+                const { id, label, items } = group;
+                const open = desktopCollapsed || isGroupOpen(group);
+                return (
+                  <div key={id} className={desktopCollapsed ? 'mb-2 last:mb-0' : 'mb-3 last:mb-0'}>
+                    {!desktopCollapsed && label ? (
+                      group.collapsible ? (
+                        <button
+                          type="button"
+                          aria-expanded={open}
+                          onClick={toggleManage}
+                          className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <span className="flex items-center gap-2">
+                            {label}
+                            {!open && pendingInviteCount > 0 ? (
+                              <Badge color="warning" size="sm" />
+                            ) : null}
+                          </span>
+                          <ArrowDown01Icon
+                            size={14}
+                            aria-hidden
+                            className={`transition-transform ${open ? '' : '-rotate-90'}`}
+                          />
+                        </button>
+                      ) : (
+                        <div className="px-2.5 pb-2 pt-2 text-xs font-medium text-muted-foreground">
+                          {label}
+                        </div>
+                      )
+                    ) : null}
+                    <div className={open ? 'space-y-0.5' : 'hidden'}>
+                      {items.map(({ href, label: itemLabel, Icon }) => {
+                        const active = isActiveRoute(pathname, href);
 
-                      if (desktopCollapsed) {
+                        if (desktopCollapsed) {
+                          return (
+                            <div key={href}>
+                              <Tooltip delay={0}>
+                                <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
+                                  <SidebarNavLink
+                                    href={href}
+                                    itemLabel={itemLabel}
+                                    Icon={Icon}
+                                    mode="collapsed"
+                                    active={active}
+                                    inviteCount={pendingInviteCount}
+                                  />
+                                </Tooltip.Trigger>
+                                <Tooltip.Content placement="right">{itemLabel}</Tooltip.Content>
+                              </Tooltip>
+                            </div>
+                          );
+                        }
+
                         return (
-                          <div key={href}>
-                            <Tooltip delay={0}>
-                              <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
-                                <SidebarNavLink
-                                  href={href}
-                                  itemLabel={itemLabel}
-                                  Icon={Icon}
-                                  mode="collapsed"
-                                  active={active}
-                                  inviteCount={pendingInviteCount}
-                                />
-                              </Tooltip.Trigger>
-                              <Tooltip.Content placement="right">{itemLabel}</Tooltip.Content>
-                            </Tooltip>
-                          </div>
+                          <SidebarNavLink
+                            key={href}
+                            href={href}
+                            itemLabel={itemLabel}
+                            Icon={Icon}
+                            mode="desktop"
+                            active={active}
+                            inviteCount={pendingInviteCount}
+                          />
                         );
-                      }
-
-                      return (
-                        <SidebarNavLink
-                          key={href}
-                          href={href}
-                          itemLabel={itemLabel}
-                          Icon={Icon}
-                          mode="desktop"
-                          active={active}
-                          inviteCount={pendingInviteCount}
-                        />
-                      );
-                    })}
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </nav>
 
             {isAdminRoute ? (
@@ -941,9 +852,32 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
               </div>
             ) : null}
 
-            <div className={cn('shrink-0 pb-2', desktopCollapsed ? 'px-3' : 'px-4')}>
+            <div className={cn('shrink-0 space-y-0.5 pb-2', desktopCollapsed ? 'px-3' : 'px-4')}>
               <ShellTooltip label="Background activity" enabled={desktopCollapsed}>
                 <BackgroundProcessCenter collapsed={desktopCollapsed} />
+              </ShellTooltip>
+              <ShellTooltip
+                label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                enabled={desktopCollapsed}
+              >
+                <Button
+                  variant="ghost"
+                  onPress={toggleCollapsed}
+                  aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                  className={cn(
+                    'w-full text-muted-foreground',
+                    desktopCollapsed ? 'justify-center px-0' : 'justify-start gap-2.5 px-2.5'
+                  )}
+                >
+                  {desktopCollapsed ? (
+                    <SidebarRight01Icon size={18} />
+                  ) : (
+                    <>
+                      <SidebarLeft01Icon size={18} />
+                      <span className="text-sm">Collapse</span>
+                    </>
+                  )}
+                </Button>
               </ShellTooltip>
             </div>
 
@@ -1086,41 +1020,17 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                       <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
                         <div className="space-y-4">
                           {!isAdminRoute ? (
-                            <Dropdown>
-                              <Dropdown.Trigger
-                                className="w-full flex items-center justify-between rounded-xl p-3 text-sm transition-all duration-150 outline-none text-left"
-                                style={{
-                                  background: 'var(--row-hover)',
-                                  border: '1px solid var(--surface-border)',
-                                }}
-                              >
-                                <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                                  <Badge.Anchor className="shrink-0">
-                                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface-secondary">
-                                      <Building04Icon aria-hidden size={18} />
-                                    </span>
-                                    {pendingInviteCount > 0 ? (
-                                      <Badge color="warning" size="sm" />
-                                    ) : null}
-                                  </Badge.Anchor>
-                                  <div className="flex flex-col min-w-0 flex-1">
-                                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                                      Workspace
-                                    </p>
-                                    <span className="mt-0.5 truncate text-xs font-medium text-foreground">
-                                      {scopeLabel}
-                                    </span>
-                                  </div>
-                                </div>
-                                <ArrowDown01Icon
-                                  size={16}
-                                  className="text-muted-foreground shrink-0 ml-2"
-                                />
-                              </Dropdown.Trigger>
-                              <Dropdown.Popover className="w-[min(80vw,300px)]">
-                                {renderWorkspaceMenu()}
-                              </Dropdown.Popover>
-                            </Dropdown>
+                            <WorkspaceSwitcher
+                              scopeLabel={scopeLabel}
+                              scopeValue={workScope.kind === 'org' ? workScope.orgId : 'personal'}
+                              orgs={orgs}
+                              invites={pendingInvites}
+                              onScopeChange={handleScopeChange}
+                              onReviewInvite={() => {
+                                setMobileNavOpen(false);
+                                router.push('/orgs');
+                              }}
+                            />
                           ) : (
                             <div className="rounded-xl bg-surface-secondary px-3 py-2.5">
                               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -1178,29 +1088,51 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                             </Link>
                           )}
 
-                          {navigationGroups.map(({ label, items }) => (
-                            <div key={label} className="space-y-1.5">
-                              <p className="px-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                                {label}
-                              </p>
-                              <div className="space-y-1">
-                                {items.map(({ href, label: itemLabel, Icon }) => {
-                                  return (
-                                    <SidebarNavLink
-                                      key={href}
-                                      href={href}
-                                      itemLabel={itemLabel}
-                                      Icon={Icon}
-                                      mode="mobile"
-                                      active={isActiveRoute(pathname, href)}
-                                      inviteCount={pendingInviteCount}
-                                      onNavigate={() => setMobileNavOpen(false)}
-                                    />
-                                  );
-                                })}
+                          {navigationGroups.map((group) => {
+                            const { id, label, items } = group;
+                            const open = isGroupOpen(group);
+                            return (
+                              <div key={id} className="space-y-1.5">
+                                {label ? (
+                                  group.collapsible ? (
+                                    <button
+                                      type="button"
+                                      aria-expanded={open}
+                                      onClick={toggleManage}
+                                      className="flex w-full items-center justify-between px-2 py-1 text-xs font-medium text-muted-foreground"
+                                    >
+                                      {label}
+                                      <ArrowDown01Icon
+                                        size={14}
+                                        aria-hidden
+                                        className={`transition-transform ${open ? '' : '-rotate-90'}`}
+                                      />
+                                    </button>
+                                  ) : (
+                                    <p className="px-2 text-xs font-medium text-muted-foreground">
+                                      {label}
+                                    </p>
+                                  )
+                                ) : null}
+                                <div className={open ? 'space-y-1' : 'hidden'}>
+                                  {items.map(({ href, label: itemLabel, Icon }) => {
+                                    return (
+                                      <SidebarNavLink
+                                        key={href}
+                                        href={href}
+                                        itemLabel={itemLabel}
+                                        Icon={Icon}
+                                        mode="mobile"
+                                        active={isActiveRoute(pathname, href)}
+                                        inviteCount={pendingInviteCount}
+                                        onNavigate={() => setMobileNavOpen(false)}
+                                      />
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
 
                           {isAdminRoute ? (
                             <SidebarNavLink

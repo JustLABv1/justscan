@@ -6,7 +6,8 @@ import { OwnershipBadge, SuppressionSourceBadge } from '@/components/ui/badges';
 import { FormAlert } from '@/components/ui/form-alert';
 import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { LoadableCollectionState } from '@/components/ui/loadable-collection-state';
-import { StatCard } from '@/components/ui/stat-card';
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatusLabel, type StatusDotTone } from '@/components/ui/status-dot';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useClientAuth } from '@/hooks/use-client-auth';
@@ -31,15 +32,11 @@ import { formatDateOnly, fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
-  Chip,
-  ListBox,
   Modal,
   Pagination,
   SearchField,
-  Select,
   Separator,
   Table,
-  Tabs,
   useOverlayState,
 } from '@/components/ui';
 import { Delete01Icon, SecurityLockIcon, Shield01Icon } from 'hugeicons-react';
@@ -54,19 +51,15 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const color =
+  const tone: StatusDotTone =
     status === 'false_positive'
       ? 'success'
       : status === 'xray_ignore'
         ? 'warning'
         : status === 'accepted'
           ? 'accent'
-          : 'default';
-  return (
-    <Chip color={color} size="sm" variant="soft">
-      {STATUS_LABEL[status] ?? status}
-    </Chip>
-  );
+          : 'neutral';
+  return <StatusLabel tone={tone} label={STATUS_LABEL[status] ?? status} />;
 }
 
 const LIMIT = 50;
@@ -322,6 +315,13 @@ export default function SuppressionsPage() {
         )
       : [];
 
+  function selectStatus(id: string) {
+    const value = id === 'all' ? '' : id;
+    setStatusFilter(value);
+    setPage(1);
+    void load(1, value, searchQuery);
+  }
+
   return (
     <PageContainer>
       <PageHeader
@@ -334,59 +334,21 @@ export default function SuppressionsPage() {
       />
 
       <>
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <StatCard label="Matching suppressions" value={total} hint="Current filter scope" />
-          <StatCard
-            label="Accepted risk"
-            value={suppressions.filter((item) => item.status === 'accepted').length}
-            hint="On this page"
-          />
-          <StatCard
-            label="False positives"
-            value={suppressions.filter((item) => item.status === 'false_positive').length}
-            hint="On this page"
-          />
-          <StatCard
-            label="Expired"
-            value={
-              suppressions.filter(
-                (item) => item.expires_at && now !== null && new Date(item.expires_at) < now
-              ).length
-            }
-            hint="On this page"
-            tone="warning"
-          />
-        </div>
         <Card className="gap-0 overflow-hidden py-0">
           <Card.Header className="space-y-3 border-b p-4">
-            <Card.Title>Suppression rules</Card.Title>
-            <Tabs
-              selectedKey={statusFilter || 'all'}
-              onSelectionChange={(key) => {
-                const value = key === 'all' ? '' : String(key);
-                setStatusFilter(value);
-                setPage(1);
-                void load(1, value, searchQuery);
-              }}
-              variant="secondary"
+            <FilterChips
+              label="Filter suppressions by status"
+              onSelect={selectStatus}
+              items={[
+                { id: 'all', label: 'All' },
+                ...Object.entries(STATUS_LABEL).map(([id, label]) => ({ id, label })),
+              ].map((option) => ({
+                ...option,
+                active: (statusFilter || 'all') === option.id,
+              }))}
             >
-              <Tabs.ListContainer className="overflow-x-auto">
-                <Tabs.List aria-label="Filter suppressions by status" className="min-w-max">
-                  {[
-                    { id: 'all', label: 'All' },
-                    ...Object.entries(STATUS_LABEL).map(([id, label]) => ({ id, label })),
-                  ].map((option) => (
-                    <Tabs.Tab id={option.id} key={option.id}>
-                      {option.label}
-                      <Tabs.Indicator />
-                    </Tabs.Tab>
-                  ))}
-                </Tabs.List>
-              </Tabs.ListContainer>
-              {['all', ...Object.keys(STATUS_LABEL)].map((key) => (
-                <Tabs.Panel id={key} key={key} className="hidden" />
-              ))}
-            </Tabs>
+              {total.toLocaleString()} {total === 1 ? 'suppression' : 'suppressions'}
+            </FilterChips>
             <SearchField name="suppressions-search" variant="secondary" className="w-full">
               <SearchField.Group>
                 <SearchField.SearchIcon />

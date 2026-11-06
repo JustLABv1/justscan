@@ -161,6 +161,26 @@ func TestListAuthorizedExcludesTheCurrentUsersDismissedJobs(t *testing.T) {
 	}
 }
 
+func TestListAuthorizedHidesFinishedAutomatedJobs(t *testing.T) {
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer sqldb.Close()
+	db := bun.NewDB(sqldb, pgdialect.New())
+	defer db.Close()
+
+	mock.ExpectQuery(`NOT \(metadata->>'trigger_source' IS NOT NULL AND status IN \('succeeded', 'completed', 'cancelled'\)\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status"}))
+
+	if _, err := ListAuthorized(context.Background(), db, uuid.New(), true, "", 10); err != nil {
+		t.Fatalf("list authorized jobs: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
 type timeoutTestError struct{}
 
 func (timeoutTestError) Error() string   { return "read tcp: i/o timeout" }

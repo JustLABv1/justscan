@@ -1,9 +1,10 @@
 'use client';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { PublicNavbar } from '@/components/public/public-navbar';
 import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
 import { FormField } from '@/components/ui/form-field';
 import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
-import { StatCard } from '@/components/ui/stat-card';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
 import type { Scan, Vulnerability } from '@/lib/api';
 import {
@@ -20,7 +21,6 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
-  Chip,
   ListBox,
   SearchField,
   Select,
@@ -31,13 +31,7 @@ import {
   Checkbox,
   useOverlayState,
 } from '@/components/ui';
-import {
-  ArrowLeft01Icon,
-  Bug02Icon,
-  CpuIcon,
-  FileExportIcon,
-  Refresh01Icon,
-} from 'hugeicons-react';
+import { ArrowLeft01Icon, CpuIcon, FileExportIcon, Refresh01Icon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -553,9 +547,7 @@ export default function PublicScanResultPage() {
             )}
 
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-              <Chip color={statusTone.color} size="sm" variant="soft">
-                {statusTone.label}
-              </Chip>
+              <StatusTag tone={toneFromChipColor(statusTone.color)}>{statusTone.label}</StatusTag>
               <span>{providerLabel}</span>
               {scan?.architecture ? (
                 <span className="inline-flex items-center gap-1">
@@ -586,24 +578,23 @@ export default function PublicScanResultPage() {
             )}
 
             {scan && showRecoveredOverview && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <StatStrip>
                 {[
                   { ...SEV_CONFIG.CRITICAL, count: scan.critical_count },
                   { ...SEV_CONFIG.HIGH, count: scan.high_count },
                   { ...SEV_CONFIG.MEDIUM, count: scan.medium_count },
                   { ...SEV_CONFIG.LOW, count: scan.low_count },
                 ].map(({ label, count }) => (
-                  <StatCard
+                  <StatStripItem
                     key={label}
                     label={label}
                     value={count ?? 0}
-                    icon={<Bug02Icon size={16} />}
                     tone={
                       label === 'Critical'
                         ? 'danger'
                         : label === 'High' || label === 'Medium'
                           ? 'warning'
-                          : 'default'
+                          : undefined
                     }
                     selected={severityFilter === label.toUpperCase()}
                     hint={severityFilter === label.toUpperCase() ? 'Filter active' : 'Findings'}
@@ -616,7 +607,7 @@ export default function PublicScanResultPage() {
                     }}
                   />
                 ))}
-              </div>
+              </StatStrip>
             )}
 
             {showResultTabs && (

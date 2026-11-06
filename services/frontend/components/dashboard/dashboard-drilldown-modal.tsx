@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { RecentActivityRange, RecentActivityRangePicker } from '@/components/scans/recent-activity';
 import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
 import { StatusBadge } from '@/components/ui/badges';
@@ -7,7 +8,7 @@ import { RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { Scan, WatchlistItem } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { getWatchlistPosture } from '@/lib/watchlist-posture';
-import { Button, Card, Chip, Link as UiLink, Modal, useOverlayState } from '@/components/ui';
+import { Button, Card, Link as UiLink, Modal, useOverlayState } from '@/components/ui';
 import { CheckmarkCircle02Icon, Clock01Icon, Shield01Icon } from 'hugeicons-react';
 
 export type DashboardDrilldownKey = 'total' | 'completed' | 'watchlist' | 'watchlist_attention';
@@ -40,9 +41,9 @@ function WatchlistModalRow({ item }: { item: WatchlistItem }) {
             <p className="truncate font-mono text-sm text-foreground">
               {item.image_name}:{item.image_tag}
             </p>
-            <Chip color={chipColor} size="sm" variant="soft" className="shrink-0">
+            <StatusTag className="shrink-0" tone={toneFromChipColor(chipColor)}>
               {posture.label}
-            </Chip>
+            </StatusTag>
             {posture.kind !== 'intelligence_pending' && (
               <IntelligenceSummaryChip compact summary={item.intelligence_summary} />
             )}
@@ -167,9 +168,9 @@ function WatchlistBody({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">Prioritized by policy and scan health</p>
-        <Chip size="sm" variant="secondary">
+        <StatusTag>
           {watchlistItems.length} item{watchlistItems.length === 1 ? '' : 's'}
-        </Chip>
+        </StatusTag>
       </div>
       <WatchlistModalList
         watchlistError={watchlistError}

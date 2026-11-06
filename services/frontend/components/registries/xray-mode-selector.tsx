@@ -1,4 +1,5 @@
-import { Description, Label, Radio, RadioGroup } from '@/components/ui';
+import { ChoiceCards } from '@/components/panelui/choice-cards';
+import { ShieldCheck, ShieldHalf } from 'lucide-react';
 
 import type { XrayMode } from '@/lib/api/types/registries';
 
@@ -7,47 +8,46 @@ interface XrayModeSelectorProps {
   onChange: (value: XrayMode) => void;
 }
 
-const radioCardClassName =
-  'flex h-full items-start gap-3 rounded-lg border border-border bg-transparent p-4 transition-colors hover:bg-accent/40 data-[selected]:border-primary data-[selected]:bg-accent/50';
-
 export function XrayModeSelector({ value, onChange }: XrayModeSelectorProps) {
   return (
-    <RadioGroup
-      value={value}
-      variant="primary"
-      onChange={(nextValue) => onChange(nextValue as XrayMode)}
-    >
-      <Label>Xray scan mode</Label>
-      <Description>
-        Choose what this credential can do. The same credential is used for Artifactory pulls and
-        Xray API requests.
-      </Description>
-      <div className="mt-2 grid gap-3 sm:grid-cols-2">
-        <Radio className={radioCardClassName} value="limited">
-          <Radio.Control className="mt-0.5">
-            <Radio.Indicator />
-          </Radio.Control>
-          <Radio.Content>
-            <span className="text-sm font-medium">Limited</span>
-            <Description>
-              Import the existing Xray result. No rescan is requested, so freshness cannot be
-              verified.
-            </Description>
-          </Radio.Content>
-        </Radio>
-        <Radio className={radioCardClassName} value="full">
-          <Radio.Control className="mt-0.5">
-            <Radio.Indicator />
-          </Radio.Control>
-          <Radio.Content>
-            <span className="text-sm font-medium">Full</span>
-            <Description>
-              Request a scan and verify that Xray advances the provider result. Requires Xray Read
-              and Manage Xray Metadata; a denied request fails the scan.
-            </Description>
-          </Radio.Content>
-        </Radio>
+    <div className="space-y-2">
+      <div>
+        <p id="xray-scan-mode-label" className="text-sm font-medium text-foreground">
+          Xray scan mode
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Choose what this credential can do. The same credential is used for Artifactory pulls and
+          Xray API requests.
+        </p>
       </div>
-    </RadioGroup>
+      <ChoiceCards
+        aria-labelledby="xray-scan-mode-label"
+        value={value}
+        onValueChange={(next) => onChange(next as XrayMode)}
+        columns={2}
+        aspect="5 / 2"
+      >
+        <ChoiceCards.Item value="limited">
+          <ChoiceCards.Media>
+            <ShieldHalf aria-hidden className="size-6" />
+          </ChoiceCards.Media>
+          <ChoiceCards.Label>Limited</ChoiceCards.Label>
+          <ChoiceCards.Description>
+            Import the existing Xray result. No rescan is requested, so freshness cannot be
+            verified.
+          </ChoiceCards.Description>
+        </ChoiceCards.Item>
+        <ChoiceCards.Item value="full">
+          <ChoiceCards.Media>
+            <ShieldCheck aria-hidden className="size-6" />
+          </ChoiceCards.Media>
+          <ChoiceCards.Label>Full</ChoiceCards.Label>
+          <ChoiceCards.Description>
+            Request a scan and verify that Xray advances the provider result. Requires Xray Read and
+            Manage Xray Metadata; a denied request fails the scan.
+          </ChoiceCards.Description>
+        </ChoiceCards.Item>
+      </ChoiceCards>
+    </div>
   );
 }

@@ -104,9 +104,9 @@ function buildWorkspaceTour(includeAssistant: boolean): Tour[] {
       route: '/vulnkb',
       selector: DEFAULT_STEP_SELECTOR,
       icon: <ShieldKeyIcon size={18} />,
-      title: 'Vuln KB',
+      title: 'Vulnerability KB',
       content:
-        'Vuln KB is your research space for known vulnerabilities. Open it when you need background, affected packages, and remediation context for a CVE.',
+        'Vulnerability KB is your research space for known vulnerabilities. Open it when you need background, affected packages, and remediation context for a CVE.',
     },
     {
       route: '/suppressions',
@@ -120,9 +120,9 @@ function buildWorkspaceTour(includeAssistant: boolean): Tour[] {
       route: '/status',
       selector: DEFAULT_STEP_SELECTOR,
       icon: <EyeIcon size={18} />,
-      title: 'Status Pages',
+      title: 'Status pages',
       content:
-        'Status Pages lets you publish a shareable security view for other teams. It is useful when you need visibility without giving full app access.',
+        'Status pages lets you publish a shareable security view for other teams. It is useful when you need visibility without giving full app access.',
     },
     {
       route: '/registries',

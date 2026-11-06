@@ -47,6 +47,8 @@ func scanBackgroundMetadata(scan *models.Scan) models.JSONObject {
 	if scan.WatchlistID != nil && *scan.WatchlistID != uuid.Nil {
 		metadata["trigger_source"] = "watchlist"
 		metadata["watchlist_id"] = scan.WatchlistID.String()
+	} else if scan.GitRepositoryRunID != nil || scan.ScanSource == models.ScanSourceGitRepository {
+		metadata["trigger_source"] = "git_repository"
 	}
 	return metadata
 }

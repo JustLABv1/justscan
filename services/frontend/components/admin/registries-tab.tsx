@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { XrayModeSelector } from '@/components/registries/xray-mode-selector';
 import { StatusAlert } from '@/components/ui/form-alert';
@@ -269,17 +270,13 @@ export function RegistriesTab() {
                     </Table.Cell>
                     <Table.Cell className="text-xs text-muted-foreground uppercase tracking-[0.1em]">{registry.auth_type}</Table.Cell>
                     <Table.Cell>
-                      <Chip
-                        size="sm"
-                        variant="soft"
-                        color={registry.health_status === 'healthy' ? 'success' : registry.health_status === 'unhealthy' ? 'danger' : 'default'}
-                      >
+                      <StatusTag tone={toneFromChipColor(registry.health_status === 'healthy' ? 'success' : registry.health_status === 'unhealthy' ? 'danger' : 'default')}>
                         {registry.health_status}
-                      </Chip>
+                      </StatusTag>
                     </Table.Cell>
                     <Table.Cell>
                       {registry.is_default ? (
-                        <Chip size="sm" variant="soft" color="accent">Default</Chip>
+                        <StatusTag tone="accent">Default</StatusTag>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}

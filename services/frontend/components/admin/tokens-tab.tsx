@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
@@ -10,7 +11,6 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
-  Chip,
   Input,
   ListBox,
   Modal,
@@ -227,7 +227,7 @@ export function TokensTab() {
                   <Table.Row key={token.id} id={token.id} className="hover:bg-[var(--row-hover)]">
                     <Table.Cell className="font-medium">{token.description || 'No description'}</Table.Cell>
                     <Table.Cell>
-                      <Chip size="sm" variant="soft">{token.type}</Chip>
+                      <StatusTag>{token.type}</StatusTag>
                     </Table.Cell>
                     <Table.Cell className="font-mono text-xs text-muted-foreground">
                       {token.key.slice(0, 6)}••••••••{token.key.slice(-4)}
@@ -236,9 +236,9 @@ export function TokensTab() {
                       <span title={fullDate(token.expires_at)}>{timeAgo(token.expires_at)}</span>
                     </Table.Cell>
                     <Table.Cell>
-                      <Chip size="sm" color={token.disabled ? 'danger' : 'success'} variant="soft">
+                      <StatusTag tone={toneFromChipColor(token.disabled ? 'danger' : 'success')}>
                         {token.disabled ? 'Disabled' : 'Active'}
-                      </Chip>
+                      </StatusTag>
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex justify-end">

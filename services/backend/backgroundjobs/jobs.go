@@ -256,8 +256,12 @@ func ListAuthorized(ctx context.Context, db *bun.DB, userID uuid.UUID, isAdmin b
 		return nil, err
 	}
 
+	// Automated runs (watchlist schedules, Git repository scans) carry a
+	// trigger_source. They stay visible while running and when they fail, but a
+	// finished one is routine history that belongs on its own page, not here.
 	query := db.NewSelect().Model((*models.BackgroundJob)(nil)).
 		Where("NOT EXISTS (SELECT 1 FROM background_job_dismissals AS dismissal WHERE dismissal.job_id = background_job.id AND dismissal.user_id = ?)", userID).
+		Where("NOT (metadata->>'trigger_source' IS NOT NULL AND status IN ('succeeded', 'completed', 'cancelled'))").
 		OrderExpr("created_at DESC").Limit(int64(limit))
 	if !isAdmin {
 		query = query.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {

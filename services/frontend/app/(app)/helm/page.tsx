@@ -4,6 +4,8 @@ import { useToast } from '@/components/toast';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { StatusAlert } from '@/components/ui/form-alert';
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatusLabel, type StatusDotTone } from '@/components/ui/status-dot';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import type { Key } from '@/components/ui';
 import {
@@ -42,7 +44,6 @@ import {
   buttonVariants,
   Card,
   Checkbox,
-  Chip,
   Description,
   Input,
   Label,
@@ -1028,7 +1029,7 @@ export default function HelmPage() {
   return <HelmWorkspace />;
 }
 
-function statusColor(status: string): 'default' | 'success' | 'warning' | 'danger' | 'accent' {
+function statusTone(status: string): StatusDotTone {
   switch (status) {
     case 'completed':
       return 'success';
@@ -1037,8 +1038,25 @@ function statusColor(status: string): 'default' | 'success' | 'warning' | 'dange
     case 'running':
       return 'accent';
     default:
-      return 'default';
+      return 'neutral';
   }
+}
+
+const countToneClass = {
+  success: 'text-success-foreground',
+  warning: 'text-warning-foreground',
+  danger: 'text-destructive',
+} as const;
+
+function CountCell({ value, tone }: { value: number; tone?: keyof typeof countToneClass }) {
+  if (!value) return <span className="text-xs text-muted-foreground">-</span>;
+  return (
+    <span
+      className={`text-sm font-medium tabular-nums ${tone ? countToneClass[tone] : 'text-foreground'}`}
+    >
+      {value}
+    </span>
+  );
 }
 
 function getRunStatus(run: HelmScanRunSummary): Exclude<HelmRunHistoryStatus, 'all'> {
@@ -1180,16 +1198,58 @@ function HelmRunHistory({
   }
 
   const columnCount = isAdmin ? 10 : 9;
+  const statusSegments: {
+    id: HelmRunHistoryStatus;
+    label: string;
+    count: number;
+    tone?: StatusDotTone;
+  }[] = [
+    { id: 'all', label: 'All', count: runs.length },
+    {
+      id: 'running',
+      label: 'Running',
+      count: runs.filter((run) => getRunStatus(run) === 'running').length,
+      tone: 'accent',
+    },
+    {
+      id: 'failed',
+      label: 'Failed',
+      count: runs.filter((run) => getRunStatus(run) === 'failed').length,
+      tone: 'danger',
+    },
+    {
+      id: 'completed',
+      label: 'Completed',
+      count: runs.filter((run) => getRunStatus(run) === 'completed').length,
+      tone: 'success',
+    },
+  ];
 
   return (
     <>
-      <Card className="p-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="gap-0 overflow-hidden py-0">
+        <div className="space-y-3 border-b border-border p-3">
+          <FilterChips
+            label="Filter Helm runs by status"
+            items={statusSegments.map((segment) => ({
+              id: segment.id,
+              label: segment.label,
+              count: segment.count,
+              tone: segment.count > 0 ? segment.tone : undefined,
+              active: statusFilter === segment.id,
+              onPress: () => {
+                setStatusFilter(segment.id);
+                setPage(1);
+              },
+            }))}
+          >
+            {filteredRuns.length} of {runs.length}
+          </FilterChips>
           <SearchField
             name="helm-run-search"
             aria-label="Search Helm runs"
             variant="secondary"
-            className="w-full sm:max-w-sm"
+            className="w-full"
           >
             <SearchField.Group>
               <SearchField.SearchIcon />
@@ -1204,40 +1264,7 @@ function HelmRunHistory({
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
-
-          <Select
-            aria-label="Filter Helm runs by status"
-            className="w-full sm:w-[180px]"
-            value={statusFilter}
-            variant="secondary"
-            onChange={(value) => {
-              setStatusFilter(
-                value === 'running' || value === 'completed' || value === 'failed' ? value : 'all'
-              );
-              setPage(1);
-            }}
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="all">All statuses</ListBox.Item>
-                <ListBox.Item id="running">Running</ListBox.Item>
-                <ListBox.Item id="completed">Completed</ListBox.Item>
-                <ListBox.Item id="failed">Failed</ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
         </div>
-      </Card>
-
-      <Card>
-        <Card.Header>
-          <Card.Title>Recent Helm runs</Card.Title>
-          <Card.Description>Search, filter, and sort recent chart scan runs.</Card.Description>
-        </Card.Header>
         <Table variant="secondary">
           <Table.ScrollContainer>
             <Table.Content
@@ -1343,59 +1370,36 @@ function HelmRunHistory({
                             >
                               {getRunChartLabel(run)}
                             </Link>
-                            <p className="truncate text-xs text-muted-foreground" title={run.chart_url}>
+                            <p
+                              className="truncate text-xs text-muted-foreground"
+                              title={run.chart_url}
+                            >
                               {run.chart_url.replace(/^oci:\/\//, '')}
+                              {run.chart_version ? ` · v${run.chart_version}` : ''}
                             </p>
-                            {run.chart_version ? (
-                              <Chip size="sm" variant="secondary">
-                                v{run.chart_version}
-                              </Chip>
-                            ) : null}
                           </div>
                         </Table.Cell>
                         <Table.Cell>
-                          <Chip color={statusColor(status)} size="sm" variant="soft">
-                            {status}
-                          </Chip>
-                        </Table.Cell>
-                        <Table.Cell className="text-right font-mono text-xs text-muted-foreground">
-                          {run.total_images}
-                        </Table.Cell>
-                        <Table.Cell className="text-right">
-                          <Chip
-                            color={run.completed_images > 0 ? 'success' : 'default'}
-                            size="sm"
-                            variant="soft"
-                          >
-                            {run.completed_images}
-                          </Chip>
+                          <StatusLabel
+                            className="capitalize"
+                            tone={statusTone(status)}
+                            label={status}
+                          />
                         </Table.Cell>
                         <Table.Cell className="text-right">
-                          <Chip
-                            color={run.failed_images > 0 ? 'danger' : 'default'}
-                            size="sm"
-                            variant="soft"
-                          >
-                            {run.failed_images}
-                          </Chip>
+                          <CountCell value={run.total_images} />
+                        </Table.Cell>
+                        <Table.Cell className="text-right">
+                          <CountCell value={run.completed_images} tone="success" />
+                        </Table.Cell>
+                        <Table.Cell className="text-right">
+                          <CountCell value={run.failed_images} tone="danger" />
                         </Table.Cell>
                         <Table.Cell className="hidden text-right lg:table-cell">
-                          <Chip
-                            color={run.high_count > 0 ? 'warning' : 'default'}
-                            size="sm"
-                            variant="soft"
-                          >
-                            {run.high_count}
-                          </Chip>
+                          <CountCell value={run.high_count} tone="warning" />
                         </Table.Cell>
                         <Table.Cell className="hidden text-right lg:table-cell">
-                          <Chip
-                            color={run.critical_count > 0 ? 'danger' : 'default'}
-                            size="sm"
-                            variant="soft"
-                          >
-                            {run.critical_count}
-                          </Chip>
+                          <CountCell value={run.critical_count} tone="danger" />
                         </Table.Cell>
                         <Table.Cell className="text-xs text-muted-foreground">
                           {timeAgo(run.created_at)}
@@ -1521,18 +1525,29 @@ function StepBar({ current }: { current: Step }) {
   const idx = HELM_CREATION_STEPS.findIndex((step) => step.key === current);
 
   return (
-    <div className="flex items-center gap-2">
-      {HELM_CREATION_STEPS.map((step, index) => (
-        <div key={step.key} className="flex items-center gap-2">
-          <Chip
-            color={index <= idx ? 'accent' : 'default'}
-            variant={index <= idx ? 'soft' : 'secondary'}
+    <ol className="flex flex-wrap items-center gap-2 text-sm">
+      {HELM_CREATION_STEPS.map((step, index) => {
+        const reached = index <= idx;
+        return (
+          <li
+            key={step.key}
+            aria-current={index === idx ? 'step' : undefined}
+            className="flex items-center gap-2"
           >
-            {index + 1}. {step.label}
-          </Chip>
-          {index < HELM_CREATION_STEPS.length - 1 && <div className="h-px w-8 bg-border" />}
-        </div>
-      ))}
-    </div>
+            <span
+              className={`flex size-5 items-center justify-center rounded-full text-xs font-medium tabular-nums ${
+                reached ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {index + 1}
+            </span>
+            <span className={reached ? 'font-medium text-foreground' : 'text-muted-foreground'}>
+              {step.label}
+            </span>
+            {index < HELM_CREATION_STEPS.length - 1 && <div className="h-px w-8 bg-border" />}
+          </li>
+        );
+      })}
+    </ol>
   );
 }

@@ -69,8 +69,13 @@ export const Typography = {
   ),
 };
 export const Header = Aria.Header;
-export const Label = (props: React.ComponentProps<typeof Aria.Label>) => (
-  <Aria.Label data-slot="label" {...props} />
+// Block by default: an inline label ignores the vertical margin from `space-y-*` parents.
+export const Label = ({ className, ...props }: React.ComponentProps<typeof Aria.Label>) => (
+  <Aria.Label
+    data-slot="label"
+    className={typeof className === 'function' ? className : cn('block', className)}
+    {...props}
+  />
 );
 export const Description = (props: React.ComponentProps<typeof Aria.Text>) => (
   <Aria.Text data-slot="description" slot="description" {...props} />
@@ -423,8 +428,8 @@ function CheckboxIndicator() {
   );
 }
 
-export const Checkbox = Object.assign(
-  function Checkbox({
+export const AriaCheckbox = Object.assign(
+  function AriaCheckbox({
     className,
     variant: _variant,
     children,
@@ -450,7 +455,7 @@ export const Checkbox = Object.assign(
     Control: ({ children, className, ...props }: React.ComponentProps<'span'>) => (
       <span
         className={cn(
-          'flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input dark:bg-input/30 group-data-[selected]:border-primary group-data-[selected]:bg-primary group-data-[selected]:text-primary-foreground group-data-[indeterminate]:bg-primary group-data-[focus-visible]:ring-3 group-data-[focus-visible]:ring-ring/50',
+          'flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input dark:bg-input/30 group-data-[selected]:border-primary group-data-[selected]:bg-primary group-data-[selected]:text-primary-foreground group-data-[indeterminate]:border-primary group-data-[indeterminate]:bg-primary group-data-[indeterminate]:text-primary-foreground dark:group-data-[selected]:bg-primary dark:group-data-[indeterminate]:bg-primary group-data-[focus-visible]:ring-3 group-data-[focus-visible]:ring-ring/50',
           className
         )}
         {...props}

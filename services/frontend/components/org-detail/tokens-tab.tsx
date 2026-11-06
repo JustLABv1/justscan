@@ -1,4 +1,5 @@
 'use client';
+import { StatusLabel } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
@@ -56,47 +57,12 @@ function getTokenStatus(token: APIToken): 'active' | 'expired' | 'revoked' {
 }
 
 function OrgTokenStatusBadge({ token }: { token: APIToken }) {
-  const now = new Date();
-  const expiresAt = new Date(token.expires_at);
-  if (token.disabled) {
-    return (
-      <span
-        className="text-xs px-2 py-0.5 rounded-md font-medium"
-        style={{
-          background: 'rgba(239,68,68,0.1)',
-          color: '#f87171',
-          border: '1px solid rgba(239,68,68,0.2)',
-        }}
-      >
-        Revoked
-      </span>
-    );
-  }
-  if (expiresAt < now) {
-    return (
-      <span
-        className="text-xs px-2 py-0.5 rounded-md font-medium"
-        style={{
-          background: 'rgba(245,158,11,0.1)',
-          color: '#fbbf24',
-          border: '1px solid rgba(245,158,11,0.2)',
-        }}
-      >
-        Expired
-      </span>
-    );
-  }
+  const status = getTokenStatus(token);
   return (
-    <span
-      className="text-xs px-2 py-0.5 rounded-md font-medium"
-      style={{
-        background: 'rgba(16,185,129,0.1)',
-        color: '#34d399',
-        border: '1px solid rgba(16,185,129,0.2)',
-      }}
-    >
-      Active
-    </span>
+    <StatusLabel
+      tone={status === 'revoked' ? 'danger' : status === 'expired' ? 'warning' : 'success'}
+      label={status === 'revoked' ? 'Revoked' : status === 'expired' ? 'Expired' : 'Active'}
+    />
   );
 }
 
@@ -242,10 +208,12 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                     Scope
                   </Label>
                   <div className="grid grid-cols-2 gap-2">
-                    {([
-                      ['org_admin', 'Org admin', 'Full organization API access'],
-                      ['pipeline_scan', 'Pipeline scan', 'Create and read pipeline scans only'],
-                    ] as const).map(([value, label, description]) => (
+                    {(
+                      [
+                        ['org_admin', 'Org admin', 'Full organization API access'],
+                        ['pipeline_scan', 'Pipeline scan', 'Create and read pipeline scans only'],
+                      ] as const
+                    ).map(([value, label, description]) => (
                       <Button
                         key={value}
                         type="button"
@@ -452,7 +420,9 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
           </Button>
         )}
       </div>
-      {featureDisabledReason && <p className="text-xs text-warning-foreground">{featureDisabledReason}</p>}
+      {featureDisabledReason && (
+        <p className="text-xs text-warning-foreground">{featureDisabledReason}</p>
+      )}
 
       <div className="surface-card rounded-xl overflow-hidden">
         {loading ? (
@@ -478,7 +448,10 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
               </p>
             </div>
             {canManage && (
-              <Button onClick={() => createModal.open()} isDisabled={Boolean(featureDisabledReason)}>
+              <Button
+                onClick={() => createModal.open()}
+                isDisabled={Boolean(featureDisabledReason)}
+              >
                 <PlusSignIcon size={14} />
                 Create first token
               </Button>
@@ -535,12 +508,12 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
                       sortedTokens.map((token) => (
                         <Table.Row key={token.id} id={token.id}>
                           <Table.Cell>
-                            <span className="font-medium text-foreground">
-                              {token.description}
-                            </span>
+                            <span className="font-medium text-foreground">{token.description}</span>
                           </Table.Cell>
                           <Table.Cell>
-                            <span className="text-muted-foreground">{timeAgo(token.created_at)}</span>
+                            <span className="text-muted-foreground">
+                              {timeAgo(token.created_at)}
+                            </span>
                           </Table.Cell>
                           <Table.Cell>
                             <OrgTokenExpiry token={token} />

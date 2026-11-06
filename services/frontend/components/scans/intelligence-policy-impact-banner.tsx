@@ -1,7 +1,8 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import type { ScanIntelligencePolicyImpactResponse } from '@/lib/api';
-import { Accordion, Alert, Button, Chip, Link as UiLink } from '@/components/ui';
+import { Accordion, Alert, Button, Link as UiLink } from '@/components/ui';
 import { Refresh01Icon, ShieldKeyIcon } from 'hugeicons-react';
 
 interface IntelligencePolicyImpactBannerProps {
@@ -128,15 +129,13 @@ export function IntelligencePolicyImpactBanner({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Chip color={meta.status} size="sm" variant="soft">
-            {meta.label}
-          </Chip>
-          <Chip color="warning" size="sm" variant="soft">
+          <StatusTag tone={toneFromChipColor(meta.status)}>{meta.label}</StatusTag>
+          <StatusTag tone="warning">
             {cves.length} CVE{cves.length === 1 ? '' : 's'} changed
-          </Chip>
-          <Chip color="default" size="sm" variant="soft">
+          </StatusTag>
+          <StatusTag>
             {changedFindingCount} finding{changedFindingCount === 1 ? '' : 's'} affected
-          </Chip>
+          </StatusTag>
           <span className="text-xs text-muted-foreground">Stored result preserved</span>
         </div>
 

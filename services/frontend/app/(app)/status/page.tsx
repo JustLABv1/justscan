@@ -1,5 +1,10 @@
 'use client';
 
+import { ChoiceCards } from '@/components/panelui/choice-cards';
+import { Container, GitBranch, Infinity, Layers, ListChecks, Regex } from 'lucide-react';
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { useToast } from '@/components/toast';
@@ -12,7 +17,6 @@ import {
   fieldSelectTriggerClassName,
   fieldTextAreaClassName,
 } from '@/components/ui/form-styles';
-import { StatCard } from '@/components/ui/stat-card';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
@@ -51,19 +55,15 @@ import {
   Button,
   Card,
   Checkbox,
-  Chip,
   Description,
   Input,
   Label,
   ListBox,
   Modal,
-  Radio,
-  RadioGroup,
   SearchField,
   Select,
   Spinner,
   Table,
-  Tabs,
   TextArea,
   useOverlayState,
 } from '@/components/ui';
@@ -767,7 +767,7 @@ export default function StatusPagesPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Status Pages"
+        title="Status pages"
         description="Publish current image-tag health internally or externally."
         actions={
           <Button onPress={openCreate} isDisabled={!canMutateActiveScope}>
@@ -781,7 +781,7 @@ export default function StatusPagesPage() {
       ) : null}
 
       {!loading && pages.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatStrip>
           {[
             { key: 'all', label: 'Status pages', value: pages.length, hint: 'Current workspace' },
             ...visibilityOptions.map((option) => ({
@@ -796,7 +796,7 @@ export default function StatusPagesPage() {
                     : 'Signed-in users',
             })),
           ].map((metric) => (
-            <StatCard
+            <StatStripItem
               key={metric.key}
               label={metric.label}
               value={metric.value}
@@ -805,38 +805,20 @@ export default function StatusPagesPage() {
               onPress={() => setVisibilityFilter(metric.key as 'all' | StatusPage['visibility'])}
             />
           ))}
-        </div>
+        </StatStrip>
       ) : null}
       <div className="space-y-4">
         <Card className="gap-0 overflow-hidden py-0">
           <Card.Header className="space-y-3 border-b p-4">
-            <div className="flex items-center justify-between gap-3">
-              <Card.Title>Published views</Card.Title>
-              <span className="text-xs text-muted-foreground">
-                {filteredPages.length} of {pages.length} pages
-              </span>
-            </div>
-            <Tabs
-              selectedKey={visibilityFilter}
-              onSelectionChange={(key) =>
-                setVisibilityFilter(String(key) as 'all' | StatusPage['visibility'])
-              }
-              variant="secondary"
-            >
-              <Tabs.ListContainer className="overflow-x-auto">
-                <Tabs.List aria-label="Status page visibility" className="min-w-max">
-                  {[{ id: 'all', label: 'All pages' }, ...visibilityOptions].map((option) => (
-                    <Tabs.Tab id={option.id} key={option.id}>
-                      {option.label}
-                      <Tabs.Indicator />
-                    </Tabs.Tab>
-                  ))}
-                </Tabs.List>
-              </Tabs.ListContainer>
-              {['all', ...visibilityOptions.map((option) => option.id)].map((key) => (
-                <Tabs.Panel id={key} key={key} className="hidden" />
-              ))}
-            </Tabs>
+            <FilterChips
+              label="Status page visibility"
+              onSelect={(id) => setVisibilityFilter(id as 'all' | StatusPage['visibility'])}
+              items={[{ id: 'all', label: 'All pages' }, ...visibilityOptions].map((option) => ({
+                id: option.id,
+                label: option.label,
+                active: visibilityFilter === option.id,
+              }))}
+            />
             <SearchField
               name="status-pages-search"
               aria-label="Search status pages"
@@ -907,14 +889,12 @@ export default function StatusPagesPage() {
                               </div>
                             </Table.Cell>
                             <Table.Cell>
-                              <Chip
+                              <StatusTag
                                 className="capitalize"
-                                color={visibilityTone(page.visibility)}
-                                size="sm"
-                                variant="soft"
+                                tone={toneFromChipColor(visibilityTone(page.visibility))}
                               >
                                 {page.visibility}
-                              </Chip>
+                              </StatusTag>
                             </Table.Cell>
                             <Table.Cell className="text-xs text-muted-foreground">
                               {describeScope(page)}
@@ -1179,91 +1159,84 @@ export default function StatusPagesPage() {
                           Choose the source first. You’ll only see the configuration it needs next.
                         </p>
                       </div>
-                      <RadioGroup
+                      <ChoiceCards
                         aria-label="Status page source type"
                         value={trackingMode}
-                        onChange={(value) => setTrackingMode(String(value) as TrackingMode)}
-                        variant="secondary"
+                        onValueChange={(value) => setTrackingMode(String(value) as TrackingMode)}
+                        columns={3}
+                        aspect="5 / 2"
                       >
-                        <div className="grid gap-3 md:grid-cols-3">
-                          {(
+                        {(
+                          [
                             [
-                              [
-                                'git',
-                                'Git repositories',
-                                'Yes — follow the current images discovered in Git.',
-                              ],
-                              [
-                                'images',
-                                'Specific image scope',
-                                'No — choose image tags, a pattern, or all tracked images.',
-                              ],
-                              [
-                                'mixed',
-                                'Both',
-                                'Combine Git discovery with a small fixed image scope.',
-                              ],
-                            ] as const
-                          ).map(([mode, title, detail]) => (
-                            <Radio
-                              key={mode}
-                              value={mode}
-                              className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-border bg-transparent p-4 transition-colors hover:bg-accent/50 data-[selected]:border-primary data-[selected]:bg-accent/50"
-                            >
-                              <Radio.Control className="absolute right-3 top-3">
-                                <Radio.Indicator />
-                              </Radio.Control>
-                              <Radio.Content className="flex min-w-0 flex-col items-start gap-1 pr-7">
-                                <span className="block text-sm font-semibold text-foreground">
-                                  {title}
-                                </span>
-                                <Description className="mt-1 block break-words text-xs leading-5 text-muted-foreground">
-                                  {detail}
-                                </Description>
-                              </Radio.Content>
-                            </Radio>
-                          ))}
-                        </div>
-                      </RadioGroup>
+                              'git',
+                              'Git repositories',
+                              'Yes — follow the current images discovered in Git.',
+                              GitBranch,
+                            ],
+                            [
+                              'images',
+                              'Specific image scope',
+                              'No — choose image tags, a pattern, or all tracked images.',
+                              Container,
+                            ],
+                            [
+                              'mixed',
+                              'Both',
+                              'Combine Git discovery with a small fixed image scope.',
+                              Layers,
+                            ],
+                          ] as const
+                        ).map(([mode, title, detail, Icon]) => (
+                          <ChoiceCards.Item key={mode} value={mode}>
+                            <ChoiceCards.Media>
+                              <Icon aria-hidden className="size-6" />
+                            </ChoiceCards.Media>
+                            <ChoiceCards.Label>{title}</ChoiceCards.Label>
+                            <ChoiceCards.Description>{detail}</ChoiceCards.Description>
+                          </ChoiceCards.Item>
+                        ))}
+                      </ChoiceCards>
                       {(trackingMode === 'images' || trackingMode === 'mixed') && (
                         <div className="space-y-4 border-t border-divider pt-6">
                           <p className="text-sm font-semibold text-foreground">
                             Do you want to manually choose every image?
                           </p>
-                          <RadioGroup
+                          <ChoiceCards
                             aria-label="Image selection method"
                             value={imageScopeMode}
-                            onChange={(value) => setImageScopeMode(String(value) as ImageScopeMode)}
-                            variant="secondary"
+                            onValueChange={(value) =>
+                              setImageScopeMode(String(value) as ImageScopeMode)
+                            }
+                            columns={3}
+                            aspect="5 / 2"
                           >
-                            <div className="grid gap-3 md:grid-cols-3">
-                              {(
+                            {(
+                              [
                                 [
-                                  ['exact', 'Yes, select tags', 'Pick individual image tags.'],
-                                  ['pattern', 'No, use a pattern', 'Match tags with a regex.'],
-                                  ['all', 'No, include all', 'Publish every tracked image tag.'],
-                                ] as const
-                              ).map(([mode, title, detail]) => (
-                                <Radio
-                                  key={mode}
-                                  value={mode}
-                                  className="group relative flex h-full min-h-24 min-w-0 cursor-pointer flex-col items-stretch rounded-xl border border-border bg-transparent p-4 transition-colors hover:bg-accent/50 data-[selected]:border-primary data-[selected]:bg-accent/50"
-                                >
-                                  <Radio.Control className="absolute right-3 top-3">
-                                    <Radio.Indicator />
-                                  </Radio.Control>
-                                  <Radio.Content className="flex min-w-0 flex-col items-start gap-1 pr-7">
-                                    <span className="block text-sm font-semibold text-foreground">
-                                      {title}
-                                    </span>
-                                    <Description className="mt-1 block break-words text-xs leading-5 text-muted-foreground">
-                                      {detail}
-                                    </Description>
-                                  </Radio.Content>
-                                </Radio>
-                              ))}
-                            </div>
-                          </RadioGroup>
+                                  'exact',
+                                  'Yes, select tags',
+                                  'Pick individual image tags.',
+                                  ListChecks,
+                                ],
+                                ['pattern', 'No, use a pattern', 'Match tags with a regex.', Regex],
+                                [
+                                  'all',
+                                  'No, include all',
+                                  'Publish every tracked image tag.',
+                                  Infinity,
+                                ],
+                              ] as const
+                            ).map(([mode, title, detail, Icon]) => (
+                              <ChoiceCards.Item key={mode} value={mode}>
+                                <ChoiceCards.Media>
+                                  <Icon aria-hidden className="size-6" />
+                                </ChoiceCards.Media>
+                                <ChoiceCards.Label>{title}</ChoiceCards.Label>
+                                <ChoiceCards.Description>{detail}</ChoiceCards.Description>
+                              </ChoiceCards.Item>
+                            ))}
+                          </ChoiceCards>
                         </div>
                       )}
                     </div>
@@ -1283,12 +1256,13 @@ export default function StatusPagesPage() {
                             Use the latest completed discovery from each repository.
                           </p>
                         </div>
-                        <Chip
-                          color={selectedGitRepositoryIds.length > 0 ? 'accent' : 'default'}
-                          variant="soft"
+                        <StatusTag
+                          tone={toneFromChipColor(
+                            selectedGitRepositoryIds.length > 0 ? 'accent' : undefined
+                          )}
                         >
                           {selectedGitRepositoryIds.length} selected
-                        </Chip>
+                        </StatusTag>
                       </div>
 
                       <SearchField className={fieldCls} variant="secondary">
@@ -1499,9 +1473,7 @@ export default function StatusPagesPage() {
                                   Pick individual `image:tag` entries for a tightly curated page.
                                 </p>
                               </div>
-                              <Chip color="accent" variant="soft">
-                                {selectedTargets.length} selected
-                              </Chip>
+                              <StatusTag tone="accent">{selectedTargets.length} selected</StatusTag>
                             </div>
 
                             <SearchField
@@ -1550,19 +1522,17 @@ export default function StatusPagesPage() {
                                           <span className="break-all font-mono text-sm">
                                             {option.label}
                                           </span>
-                                          <Chip
-                                            size="sm"
-                                            variant="soft"
-                                            color={
+                                          <StatusTag
+                                            tone={toneFromChipColor(
                                               option.latest_status === 'failed'
                                                 ? 'danger'
                                                 : option.latest_status === 'completed'
                                                   ? 'success'
-                                                  : 'default'
-                                            }
+                                                  : undefined
+                                            )}
                                           >
                                             {option.latest_status}
-                                          </Chip>
+                                          </StatusTag>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                                           <span>Seen {timeAgo(option.observed_at)}</span>
@@ -1594,9 +1564,7 @@ export default function StatusPagesPage() {
                                   `image:tag`, image name, and tag.
                                 </p>
                               </div>
-                              <Chip color="accent" variant="soft">
-                                {imagePatterns.length} active
-                              </Chip>
+                              <StatusTag tone="accent">{imagePatterns.length} active</StatusTag>
                             </div>
 
                             <TextArea
@@ -1624,9 +1592,9 @@ export default function StatusPagesPage() {
                             <Card>
                               <div className="flex items-center justify-between gap-3">
                                 <p className="text-sm font-medium text-foreground">Preview</p>
-                                <Chip color="accent" variant="soft">
+                                <StatusTag tone="accent">
                                   {regexMatchedOptions.length} matching
-                                </Chip>
+                                </StatusTag>
                               </div>
 
                               {imagePatterns.length === 0 ? (

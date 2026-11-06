@@ -1,7 +1,6 @@
 'use client';
 
 import { PublicNavbar } from '@/components/public/public-navbar';
-import { StatCard } from '@/components/ui/stat-card';
 import {
   createPublicHelmScans,
   extractPublicHelmImages,
@@ -15,24 +14,18 @@ import { deferEffect } from '@/lib/defer-effect';
 import { getHelmImageSourceLabel } from '@/lib/helm-image-overrides';
 import { PublicHelmRunHistoryEntry, updateHelmPublicHistoryEntry } from '@/lib/publicScanHistory';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip, Spinner, Table, Tabs, SearchField } from '@/components/ui';
-import {
-  AlertCircleIcon,
-  ArrowReloadHorizontalIcon,
-  Bug02Icon,
-  CheckmarkCircle02Icon,
-  PackageIcon,
-  Refresh01Icon,
-} from 'hugeicons-react';
+import { Alert, Button, Card, Spinner, Table, SearchField } from '@/components/ui';
+import { ArrowReloadHorizontalIcon } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusTag, type StatusDotTone } from '@/components/ui/status-dot';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-type ChipColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
-
 function StatusBadge({ status }: { status: string }) {
-  const color: ChipColor =
+  const tone: StatusDotTone =
     status === 'completed'
       ? 'success'
       : status === 'failed'
@@ -41,17 +34,11 @@ function StatusBadge({ status }: { status: string }) {
           ? 'accent'
           : status === 'cancelled'
             ? 'warning'
-            : 'default';
-  const label = status === 'pending' ? 'queued' : status;
+            : 'neutral';
   return (
-    <Chip color={color} size="sm" variant="soft">
-      <span
-        className={`mr-1.5 inline-block size-1.5 rounded-full bg-current ${
-          status === 'running' ? 'animate-pulse' : ''
-        }`}
-      />
-      {label}
-    </Chip>
+    <StatusTag tone={tone} className="text-sm capitalize text-foreground">
+      {status === 'pending' ? 'queued' : status}
+    </StatusTag>
   );
 }
 
@@ -306,21 +293,16 @@ export default function PublicHelmRunDetailPage() {
           </div>
 
           {!loading && latestScans.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <StatStrip>
               {[
-                {
-                  label: 'Images',
-                  value: totalImages,
-                  hint: 'Latest scans in this run',
-                  tone: 'default',
-                },
+                { label: 'Images', value: totalImages, hint: 'Latest scans in this run' },
                 {
                   label: 'Completed',
                   value: completed,
                   hint: 'Finished successfully',
                   tone: 'success',
                 },
-                { label: 'Active', value: pending, hint: 'Queued or scanning', tone: 'default' },
+                { label: 'Active', value: pending, hint: 'Queued or scanning', tone: 'accent' },
                 { label: 'Failed', value: failed, hint: 'Needs attention', tone: 'danger' },
                 {
                   label: 'Critical',
@@ -340,17 +322,17 @@ export default function PublicHelmRunDetailPage() {
                   hint: 'Findings across images',
                   tone: 'warning',
                 },
-                { label: 'Low', value: totalLow, hint: 'Findings across images', tone: 'default' },
+                { label: 'Low', value: totalLow, hint: 'Findings across images' },
               ].map((metric) => (
-                <StatCard
+                <StatStripItem
                   key={metric.label}
                   label={metric.label}
                   value={metric.value}
                   hint={metric.hint}
-                  tone={metric.tone as 'default' | 'success' | 'danger' | 'warning'}
+                  tone={metric.value > 0 ? (metric.tone as StatusDotTone | undefined) : undefined}
                 />
               ))}
-            </div>
+            </StatStrip>
           ) : null}
 
           {loading ? (
@@ -374,37 +356,19 @@ export default function PublicHelmRunDetailPage() {
             <Card className="gap-0 overflow-hidden py-0">
               <Card.Content className="space-y-4 p-0">
                 <div className="space-y-4 border-b p-4">
-                  <div>
-                    <p className="text-sm font-semibold">Images in this run</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Open a scan for findings, or retry a failed attempt.
-                    </p>
-                  </div>
-                  <Tabs
-                    selectedKey={statusFilter}
-                    onSelectionChange={(key) => setStatusFilter(String(key))}
-                    variant="secondary"
-                  >
-                    <Tabs.ListContainer className="overflow-x-auto">
-                      <Tabs.List aria-label="Filter Helm scans by status" className="min-w-max">
-                        {['all', 'active', 'completed', 'failed'].map((key) => (
-                          <Tabs.Tab id={key} key={key}>
-                            {key === 'all'
-                              ? 'All images'
-                              : key === 'active'
-                                ? 'Active'
-                                : key === 'completed'
-                                  ? 'Completed'
-                                  : 'Failed'}
-                            <Tabs.Indicator />
-                          </Tabs.Tab>
-                        ))}
-                      </Tabs.List>
-                    </Tabs.ListContainer>
-                    {['all', 'active', 'completed', 'failed'].map((key) => (
-                      <Tabs.Panel className="hidden" id={key} key={key} />
-                    ))}
-                  </Tabs>
+                  <FilterChips
+                    label="Filter Helm scans by status"
+                    items={[
+                      { id: 'all', label: 'All images' },
+                      { id: 'active', label: 'Active', tone: 'accent' as const },
+                      { id: 'completed', label: 'Completed', tone: 'success' as const },
+                      { id: 'failed', label: 'Failed', tone: 'danger' as const },
+                    ].map((option) => ({
+                      ...option,
+                      active: statusFilter === option.id,
+                      onPress: () => setStatusFilter(option.id),
+                    }))}
+                  />
                   <SearchField
                     aria-label="Search Helm run images"
                     value={imageSearch}

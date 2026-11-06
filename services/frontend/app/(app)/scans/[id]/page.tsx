@@ -1,4 +1,7 @@
 'use client';
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
@@ -16,7 +19,6 @@ import {
 import { FormAlert, StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { fieldSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
-import { StatCard } from '@/components/ui/stat-card';
 import { PageTitle } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
@@ -97,7 +99,6 @@ import {
   DatePickerCalendar,
   Card,
   Checkbox,
-  Chip,
   DateField,
   DatePicker,
   Disclosure,
@@ -506,13 +507,7 @@ function ScanOverviewMetric({
   onPress?: () => void;
 }) {
   return (
-    <StatCard
-      label={label}
-      value={value.toLocaleString()}
-      icon={icon}
-      tone={tone}
-      onPress={onPress}
-    />
+    <StatStripItem label={label} value={value.toLocaleString()} tone={tone} onPress={onPress} />
   );
 }
 
@@ -2183,36 +2178,35 @@ function ScanDetailContent() {
         <ArrowLeft01Icon size={15} />
         All scans
       </Button>
-      {isScanInProgress && (
+      {isScanInProgress ? (
         <Button
-          className="bg-warning-soft-hover text-warning-foreground"
+          className="text-destructive hover:text-destructive"
           isDisabled={cancelling || !canMutateCurrentScan}
           onPress={handleCancel}
-          variant="primary"
+          variant="outline"
         >
           {cancelling ? (
-            <span className="size-3.5 border-2 border-warning/30 border-t-amber-400 rounded-full animate-spin" />
+            <span className="size-3.5 animate-spin rounded-full border-2 border-destructive/30 border-t-destructive" />
           ) : (
             <Cancel01Icon size={15} />
           )}
-          Cancel
+          Cancel scan
+        </Button>
+      ) : (
+        <Button
+          className="btn-primary"
+          isDisabled={reScanning || !canMutateCurrentScan || Boolean(rescanDisabledReason)}
+          onPress={handleReScan}
+          variant="primary"
+        >
+          {reScanning ? (
+            <span className="size-3.5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+          ) : (
+            <Refresh01Icon size={15} />
+          )}
+          Re-scan
         </Button>
       )}
-      <Button
-        className="btn-primary"
-        isDisabled={
-          reScanning || !canMutateCurrentScan || isScanInProgress || Boolean(rescanDisabledReason)
-        }
-        onPress={handleReScan}
-        variant="primary"
-      >
-        {reScanning ? (
-          <span className="size-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-        ) : (
-          <Refresh01Icon size={15} />
-        )}
-        Re-scan
-      </Button>
       <div className="relative">
         <Dropdown>
           <Dropdown.Trigger
@@ -2333,38 +2327,42 @@ function ScanDetailContent() {
         ]}
         icon={<Shield01Icon size={18} />}
         status={
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge
-              status={scan.status}
-              currentStep={scan.current_step}
-              externalStatus={scan.external_status}
-            />
-            <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
-          </div>
+          isScanInProgress ? undefined : (
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge
+                status={scan.status}
+                currentStep={scan.current_step}
+                externalStatus={scan.external_status}
+              />
+              <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
+            </div>
+          )
         }
         title={`${scan.image_name}:${scan.image_tag}`}
         meta={
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5" title={fullDate(scanTimestamp)}>
-              <Clock01Icon size={15} aria-hidden />
-              {scanTimestampLabel} {timeAgo(scanTimestamp)}
-            </span>
-            {scan.image_digest ? (
-              <Button
-                aria-label="Copy image digest"
-                className=" max-w-full gap-1.5 "
-                onPress={() => void handleCopyDigest()}
-                size="sm"
-                variant="ghost"
-              >
-                <span className="text-muted-foreground">Digest</span>
-                <code className="max-w-[15rem] truncate font-mono text-foreground">
-                  {abbreviatedDigest}
-                </code>
-                <Copy01Icon size={13} aria-hidden />
-              </Button>
-            ) : null}
-          </div>
+          isScanInProgress ? undefined : (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5" title={fullDate(scanTimestamp)}>
+                <Clock01Icon size={15} aria-hidden />
+                {scanTimestampLabel} {timeAgo(scanTimestamp)}
+              </span>
+              {scan.image_digest ? (
+                <Button
+                  aria-label="Copy image digest"
+                  className=" max-w-full gap-1.5 "
+                  onPress={() => void handleCopyDigest()}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <span className="text-muted-foreground">Digest</span>
+                  <code className="max-w-[15rem] truncate font-mono text-foreground">
+                    {abbreviatedDigest}
+                  </code>
+                  <Copy01Icon size={13} aria-hidden />
+                </Button>
+              ) : null}
+            </div>
+          )
         }
         actions={headerActions}
       />
@@ -2518,7 +2516,7 @@ function ScanDetailContent() {
               {blockedPolicyDetails.summary}
             </p>
           ) : null}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatStrip className="lg:grid-cols-4">
             <ScanOverviewMetric
               label="Vulnerabilities"
               value={scanVulnerabilityTotal}
@@ -2557,7 +2555,7 @@ function ScanDetailContent() {
               icon={<ShieldKeyIcon size={17} />}
               tone="danger"
             />
-          </div>
+          </StatStrip>
         </div>
       )}
 
@@ -2683,9 +2681,9 @@ function ScanDetailContent() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {(vulnSummary?.intelligence_changed ?? 0) > 0 ? (
-                  <Chip color="warning" size="sm" variant="soft">
+                  <StatusTag tone="warning">
                     {vulnSummary?.intelligence_changed} intelligence updates
-                  </Chip>
+                  </StatusTag>
                 ) : null}
                 <Dropdown>
                   <Dropdown.Trigger>
@@ -2743,52 +2741,34 @@ function ScanDetailContent() {
             </div>
 
             <div className="space-y-3">
-              <Tabs
-                selectedKey={severityFilter || 'all'}
-                onSelectionChange={(key) => {
+              <FilterChips
+                label="Filter findings by severity"
+                onSelect={(id) => {
                   setSeverityFilter(
-                    String(key) === 'all'
-                      ? ''
-                      : (String(key) as VulnerabilityViewSettings['severity'])
+                    id === 'all' ? '' : (id as VulnerabilityViewSettings['severity'])
                   );
                   setPage(1);
                 }}
-                variant="secondary"
-              >
-                <Tabs.ListContainer className="overflow-x-auto">
-                  <Tabs.List aria-label="Filter findings by severity" className="min-w-max">
-                    {[
-                      { id: 'all', label: 'All', count: scanVulnerabilityTotal },
-                      ...(severityFilter === 'CRITICAL,HIGH'
-                        ? [
-                            {
-                              id: 'CRITICAL,HIGH',
-                              label: 'Critical + high',
-                              count: scanCriticalAndHigh,
-                            },
-                          ]
-                        : []),
-                      { id: 'CRITICAL', label: 'Critical', count: scan.critical_count ?? 0 },
-                      { id: 'HIGH', label: 'High', count: scan.high_count ?? 0 },
-                      { id: 'MEDIUM', label: 'Medium', count: scan.medium_count ?? 0 },
-                      { id: 'LOW', label: 'Low', count: scan.low_count ?? 0 },
-                    ].map((option) => (
-                      <Tabs.Tab key={option.id} className="whitespace-nowrap" id={option.id}>
-                        {option.label}
-                        <span className="ml-1 text-xs tabular-nums text-muted-foreground">
-                          {option.count}
-                        </span>
-                        <Tabs.Indicator />
-                      </Tabs.Tab>
-                    ))}
-                  </Tabs.List>
-                </Tabs.ListContainer>
-                {['all', 'CRITICAL,HIGH', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map((tab) => (
-                  <Tabs.Panel key={tab} className="hidden" id={tab}>
-                    {tab}
-                  </Tabs.Panel>
-                ))}
-              </Tabs>
+                items={[
+                  { id: 'all', label: 'All', count: scanVulnerabilityTotal },
+                  ...(severityFilter === 'CRITICAL,HIGH'
+                    ? [
+                        {
+                          id: 'CRITICAL,HIGH',
+                          label: 'Critical + high',
+                          count: scanCriticalAndHigh,
+                        },
+                      ]
+                    : []),
+                  { id: 'CRITICAL', label: 'Critical', count: scan.critical_count ?? 0 },
+                  { id: 'HIGH', label: 'High', count: scan.high_count ?? 0 },
+                  { id: 'MEDIUM', label: 'Medium', count: scan.medium_count ?? 0 },
+                  { id: 'LOW', label: 'Low', count: scan.low_count ?? 0 },
+                ].map((option) => ({
+                  ...option,
+                  active: (severityFilter || 'all') === option.id,
+                }))}
+              />
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <SearchField
                   aria-label="Search packages"
@@ -3113,14 +3093,9 @@ function ScanDetailContent() {
                                     {v.data_source || 'Unknown source'}
                                   </span>
                                   {v.suppression && (
-                                    <Chip
-                                      color="warning"
-                                      size="sm"
-                                      title={v.suppression.justification || 'Suppressed'}
-                                      variant="soft"
-                                    >
+                                    <StatusTag tone="warning">
                                       {v.suppression.status.replace(/_/g, ' ')}
-                                    </Chip>
+                                    </StatusTag>
                                   )}
                                   {v.suppression && (
                                     <SuppressionSourceBadge source={v.suppression.source} />
@@ -3183,9 +3158,7 @@ function ScanDetailContent() {
                                   {hasPolicyFailure ? (
                                     <Tooltip delay={0}>
                                       <Tooltip.Trigger className="inline-flex">
-                                        <Chip color="danger" size="sm" variant="soft">
-                                          Org policy failed
-                                        </Chip>
+                                        <StatusTag tone="danger">Org policy failed</StatusTag>
                                       </Tooltip.Trigger>
                                       <Tooltip.Content placement="top" showArrow>
                                         <div className="max-w-xs space-y-2 p-0.5">
@@ -3270,15 +3243,15 @@ function ScanDetailContent() {
                                                 : 'No exception recorded.'}
                                             </span>
                                           </span>
-                                          <Chip
-                                            color={v.suppression ? 'warning' : 'default'}
-                                            size="sm"
-                                            variant="soft"
+                                          <StatusTag
+                                            tone={toneFromChipColor(
+                                              v.suppression ? 'warning' : undefined
+                                            )}
                                           >
                                             {v.suppression
                                               ? v.suppression.status.replace(/_/g, ' ')
                                               : 'None'}
-                                          </Chip>
+                                          </StatusTag>
                                           <Accordion.Indicator className="shrink-0 text-muted-foreground" />
                                         </Accordion.Trigger>
                                       </Accordion.Heading>
@@ -3302,9 +3275,7 @@ function ScanDetailContent() {
                                                       orgNamesById={orgNamesById}
                                                     />
                                                     {v.suppression.read_only && (
-                                                      <Chip size="sm" variant="soft">
-                                                        Managed by Xray
-                                                      </Chip>
+                                                      <StatusTag>Managed by Xray</StatusTag>
                                                     )}
                                                   </div>
                                                   {canManageSuppressionAccess(v.suppression) && (
@@ -3557,9 +3528,7 @@ function ScanDetailContent() {
                                               : 'Capture context for your team.'}
                                           </span>
                                         </span>
-                                        <Chip size="sm" variant="soft">
-                                          {v.comments?.length ?? 0}
-                                        </Chip>
+                                        <StatusTag>{v.comments?.length ?? 0}</StatusTag>
                                         <Accordion.Indicator className="shrink-0 text-muted-foreground" />
                                       </Accordion.Trigger>
                                     </Accordion.Heading>
@@ -4519,24 +4488,9 @@ function ScanDetailContent() {
                     <>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs text-muted-foreground">Current block state:</span>
-                        <Chip
-                          className="border text-xs font-semibold"
-                          style={
-                            hasActiveBlocking
-                              ? {
-                                  borderColor: 'rgba(239,68,68,0.28)',
-                                  color: '#f87171',
-                                  background: 'rgba(239,68,68,0.12)',
-                                }
-                              : {
-                                  borderColor: 'var(--surface-border)',
-                                  color: 'var(--text-secondary)',
-                                  background: 'var(--app-bg)',
-                                }
-                          }
-                        >
+                        <StatusTag className="border text-xs font-semibold">
                           {hasActiveBlocking ? 'Blocking is active' : 'Blocking is not active'}
-                        </Chip>
+                        </StatusTag>
                       </div>
 
                       {watchNames.length > 0 && (
@@ -4546,9 +4500,7 @@ function ScanDetailContent() {
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {watchNames.map((watchName) => (
-                              <Chip key={watchName} variant="soft">
-                                {watchName}
-                              </Chip>
+                              <StatusTag key={watchName}>{watchName}</StatusTag>
                             ))}
                           </div>
                         </div>

@@ -1,17 +1,6 @@
 'use client';
-import { StatCard } from '@/components/ui/stat-card';
 import { DashboardImageReview } from '@/components/dashboard/dashboard-image-review';
-import {
-  Activity,
-  ShieldAlert,
-  ScanLine,
-  CalendarCheck,
-  Radar,
-  ChevronRight,
-  CircleAlert,
-  GitBranch,
-  ShieldCheck,
-} from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import {
   DashboardDrilldownKey,
   DashboardDrilldownModal,
@@ -47,10 +36,12 @@ import {
 } from '@/lib/api';
 import { getWatchlistPolicyAttentionItems } from '@/lib/watchlist-posture';
 import { Button, Card, useOverlayState } from '@/components/ui';
+import { StatusDot } from '@/components/ui/status-dot';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
 import { ArrowRight01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { isAbortError } from '@/lib/utils';
 
 const ScanOutcomeChart = dynamic(
@@ -167,22 +158,6 @@ function isScannerReady({
 }
 
 // ── page ─────────────────────────────────────────────────────────────
-function DashboardMetric({
-  label,
-  value,
-  hint,
-  icon,
-  onPress,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  icon: ReactNode;
-  onPress: () => void;
-}) {
-  return <StatCard {...{ label, value, hint, icon, onPress }} />;
-}
-
 export default function DashboardPage() {
   const router = useRouter();
   const workScope = useWorkScope();
@@ -629,38 +604,36 @@ export default function DashboardPage() {
         />
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-        <DashboardMetric
+      <StatStrip>
+        <StatStripItem
           label="Scan runs"
           value={stats.total_scans.toLocaleString()}
           hint="Across workspace history"
-          icon={<ScanLine className="size-4" />}
           onPress={() => router.push('/scans')}
         />
-        <DashboardMetric
+        <StatStripItem
           label="Critical + high"
+          tone="danger"
           value={criticalHighCount.toLocaleString()}
           hint="Findings in scan history"
-          icon={<ShieldAlert className="size-4 text-destructive" />}
           onPress={() => router.push('/scans?sort=risk_desc')}
         />
-        <DashboardMetric
+        <StatStripItem
           label="Policy failures"
+          tone="warning"
           value={policyFailures.today.toLocaleString()}
           hint="Recorded today"
-          icon={<CircleAlert className="size-4 text-warning-foreground" />}
           onPress={() => router.push('/scans?policy=fail')}
         />
-        <DashboardMetric
+        <StatStripItem
           label="Active scans"
           value={(
             (stats.status_counts.running ?? 0) + (stats.status_counts.pending ?? 0)
           ).toLocaleString()}
           hint="Running or queued"
-          icon={<Activity className="size-4 text-info-foreground" />}
           onPress={() => openBackgroundProcessCenter()}
         />
-        <DashboardMetric
+        <StatStripItem
           label="Fresh coverage"
           value={
             watchlistOverviewLoading ||
@@ -678,10 +651,9 @@ export default function DashboardPage() {
                   ? 'Enabled watchlist · last 7 days'
                   : 'No enabled watchlist images'
           }
-          icon={<Radar className="size-4 text-success-foreground" />}
           onPress={() => openDrilldown('watchlist')}
         />
-      </div>
+      </StatStrip>
 
       <section
         className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]"
@@ -704,21 +676,21 @@ export default function DashboardPage() {
                 label: 'Severe findings',
                 detail: 'Critical + high across scan history',
                 value: criticalHighCount,
-                icon: <ShieldAlert className="size-4 text-destructive" />,
+                tone: 'danger',
                 href: '/scans?sort=risk_desc',
               },
               {
                 label: 'CVE confirmation',
                 detail: 'Images awaiting confirmation',
                 value: intelligencePendingCount,
-                icon: <Radar className="size-4 text-info-foreground" />,
+                tone: 'warning',
                 href: '/scans?intelligence=confirmation_pending',
               },
               {
                 label: 'Policy signals',
                 detail: 'Organization and scanner policy signals',
                 value: activePolicySignals,
-                icon: <ShieldCheck className="size-4 text-warning-foreground" />,
+                tone: 'warning',
                 href: '/scans?policy=fail',
               },
               {
@@ -728,14 +700,14 @@ export default function DashboardPage() {
                   watchlistOverviewUnavailable || watchlistOverviewLoading
                     ? null
                     : watchlistAttentionCount,
-                icon: <CalendarCheck className="size-4 text-warning-foreground" />,
+                tone: 'warning',
                 href: '/watchlist',
               },
               {
                 label: 'Repository attention',
                 detail: 'Git repositories needing review',
                 value: gitRepositories.needs_attention,
-                icon: <GitBranch className="size-4 text-info-foreground" />,
+                tone: 'warning',
                 href: '/git-repositories',
               },
             ].map((item) => (
@@ -744,9 +716,9 @@ export default function DashboardPage() {
                 href={item.href}
                 className="flex min-w-0 items-center gap-3 px-4 py-3 outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/40">
-                  {item.icon}
-                </span>
+                <StatusDot
+                  tone={!item.value ? 'muted' : item.tone === 'danger' ? 'danger' : 'warning'}
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium">{item.label}</span>
                   <span className="block text-xs text-muted-foreground">{item.detail}</span>

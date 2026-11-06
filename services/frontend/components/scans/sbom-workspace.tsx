@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import type { SBOMComponent, SBOMComponentDetail, SBOMGraph, Vulnerability } from '@/lib/api';
@@ -21,7 +22,6 @@ import {
   Popover,
   Tabs,
   Tooltip,
-  Chip,
   Drawer,
   Label,
   ListBox,
@@ -77,11 +77,7 @@ function PackageNode({ data }: NodeProps<Node<PackageNodeData>>) {
         <span className="max-w-36 truncate text-sm font-medium">
           {packageLabel(data.component)}
         </span>
-        {count > 0 ? (
-          <Chip size="sm" color="danger" variant="soft">
-            {count}
-          </Chip>
-        ) : null}
+        {count > 0 ? <StatusTag tone="danger">{count}</StatusTag> : null}
       </div>
       <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
         {data.component.version || 'No version'}
@@ -540,9 +536,7 @@ export function SBOMWorkspace({
                               <span title={component.version}>{component.version || '—'}</span>
                             </Table.Cell>
                             <Table.Cell className="truncate">
-                              <Chip size="sm" variant="soft">
-                                {component.ecosystem || component.type}
-                              </Chip>
+                              <StatusTag>{component.ecosystem || component.type}</StatusTag>
                             </Table.Cell>
                             <Table.Cell className="truncate">
                               {component.is_root
@@ -552,15 +546,13 @@ export function SBOMWorkspace({
                                   : 'Unknown'}
                             </Table.Cell>
                             <Table.Cell>
-                              <Chip
-                                size="sm"
-                                variant="soft"
-                                color={
+                              <StatusTag
+                                tone={toneFromChipColor(
                                   (component.vulnerability_count ?? 0) > 0 ? 'danger' : 'default'
-                                }
+                                )}
                               >
                                 {component.vulnerability_count ?? 0}
-                              </Chip>
+                              </StatusTag>
                             </Table.Cell>
                             <Table.Cell className="truncate">
                               {component.licenses?.join(', ') || component.license || '—'}
@@ -747,18 +739,16 @@ export function SBOMWorkspace({
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <span className="font-mono text-sm">{vulnerability.vuln_id}</span>
-                                <Chip
-                                  size="sm"
-                                  variant="soft"
-                                  color={
+                                <StatusTag
+                                  tone={toneFromChipColor(
                                     vulnerability.severity === 'CRITICAL' ||
-                                    vulnerability.severity === 'HIGH'
+                                      vulnerability.severity === 'HIGH'
                                       ? 'danger'
                                       : 'warning'
-                                  }
+                                  )}
                                 >
                                   {vulnerability.severity}
-                                </Chip>
+                                </StatusTag>
                               </div>
                               <p className="mt-1 text-sm text-muted-foreground">
                                 {vulnerability.fixed_version
@@ -845,9 +835,7 @@ function TreeNode({
           <span className="font-mono text-xs text-muted-foreground">{component.version}</span>
         </Button>
         {(component.vulnerability_count ?? 0) > 0 ? (
-          <Chip size="sm" variant="soft" color="danger">
-            {component.vulnerability_count}
-          </Chip>
+          <StatusTag tone="danger">{component.vulnerability_count}</StatusTag>
         ) : null}
       </div>
       {expanded

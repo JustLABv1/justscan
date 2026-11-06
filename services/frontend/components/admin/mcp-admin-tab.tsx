@@ -1,10 +1,8 @@
 'use client';
 
-import {
-  getAdminMCPOverview,
-  listAdminMCPActivity,
-  updateAdminMCPSettings,
-} from '@/lib/api/admin';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
+import { getAdminMCPOverview, listAdminMCPActivity, updateAdminMCPSettings } from '@/lib/api/admin';
 import type {
   MCPActivityFilters,
   MCPInteraction,
@@ -12,32 +10,18 @@ import type {
   MCPRuntimeMode,
 } from '@/lib/api/types/admin';
 import { useToast } from '@/components/toast';
-import { StatCard } from '@/components/ui/stat-card';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import {
-  Activity01Icon,
-  Clock03Icon,
-  CodeIcon,
-  FlashIcon,
-  UserGroupIcon,
-} from 'hugeicons-react';
-import {
-  Button,
-  Card,
-  Chip,
-  ListBox,
-  Pagination,
-  SearchField,
-  Select,
-  Table,
-} from '@/components/ui';
+import { Clock03Icon, CodeIcon, } from 'hugeicons-react';
+import { Button, Card, ListBox, Pagination, SearchField, Select, Table } from '@/components/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const PAGE_SIZE = 25;
 type MCPWindow = '24h' | '7d' | '30d';
 
-function statusColor(status: MCPInteraction['status']): 'success' | 'warning' | 'danger' | 'default' {
+function statusColor(
+  status: MCPInteraction['status']
+): 'success' | 'warning' | 'danger' | 'default' {
   if (status === 'success') return 'success';
   if (status === 'rejected') return 'warning';
   if (status === 'error') return 'danger';
@@ -116,12 +100,7 @@ export function MCPAdminTab() {
     setActivityLoading(true);
     setActivityError('');
     try {
-      const result = await listAdminMCPActivity(
-        activityPage,
-        PAGE_SIZE,
-        activityFilters,
-        window
-      );
+      const result = await listAdminMCPActivity(activityPage, PAGE_SIZE, activityFilters, window);
       setActivity(result.data ?? []);
       setActivityTotal(result.total ?? 0);
     } catch (error: unknown) {
@@ -194,38 +173,30 @@ export function MCPAdminTab() {
       {overviewError && <p className="text-sm text-danger">{overviewError}</p>}
 
       {metrics && !overviewLoading && (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
-          <StatCard
+        <StatStrip>
+          <StatStripItem
             label="Tool calls"
             value={metrics.total_calls.toLocaleString()}
             hint={`${(metrics.error_rate * 100).toFixed(1)}% error or rejected`}
-            icon={<Activity01Icon size={17} />}
-            variant="stacked"
           />
-          <StatCard
+          <StatStripItem
             label="Successful"
             value={metrics.successful_calls.toLocaleString()}
             hint={`${metrics.failed_calls.toLocaleString()} tool errors`}
-            icon={<FlashIcon size={17} />}
             tone="success"
-            variant="stacked"
           />
-          <StatCard
+          <StatStripItem
             label="Actions"
             value={metrics.action_calls.toLocaleString()}
             hint={`${metrics.replayed_actions.toLocaleString()} idempotent replays`}
-            icon={<CodeIcon size={17} />}
             tone="warning"
-            variant="stacked"
           />
-          <StatCard
+          <StatStripItem
             label="Active users"
             value={metrics.active_users.toLocaleString()}
             hint={`${metrics.p95_duration_ms.toFixed(0)} ms p95`}
-            icon={<UserGroupIcon size={17} />}
-            variant="stacked"
           />
-        </div>
+        </StatStrip>
       )}
 
       {overview && (
@@ -257,20 +228,34 @@ export function MCPAdminTab() {
                   </ListBox>
                 </Select.Popover>
               </Select>
-              <p className="text-xs leading-5 text-muted-foreground">{modeDescription(draftMode)}</p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {modeDescription(draftMode)}
+              </p>
               <div className="flex flex-wrap gap-2">
-                <Chip size="sm" variant="soft" color={overview.settings.config_enabled ? 'success' : 'warning'}>
-                  {overview.settings.config_enabled ? 'MCP configured' : 'MCP not enabled in config'}
-                </Chip>
-                <Chip size="sm" variant="soft" color={overview.settings.http_enabled ? 'success' : 'default'}>
+                <StatusTag
+                  tone={toneFromChipColor(overview.settings.config_enabled ? 'success' : 'warning')}
+                >
+                  {overview.settings.config_enabled
+                    ? 'MCP configured'
+                    : 'MCP not enabled in config'}
+                </StatusTag>
+                <StatusTag
+                  tone={toneFromChipColor(overview.settings.http_enabled ? 'success' : undefined)}
+                >
                   HTTP {overview.settings.http_enabled ? 'exposed' : 'off'}
-                </Chip>
+                </StatusTag>
               </div>
               {overview.settings.http_enabled && overview.settings.endpoint && (
-                <p className="font-mono text-xs text-muted-foreground">{overview.settings.endpoint}</p>
+                <p className="font-mono text-xs text-muted-foreground">
+                  {overview.settings.endpoint}
+                </p>
               )}
               <div className="flex justify-end">
-                <Button variant="secondary" onPress={() => void saveMode()} isDisabled={savingMode || draftMode === overview.settings.mode}>
+                <Button
+                  variant="secondary"
+                  onPress={() => void saveMode()}
+                  isDisabled={savingMode || draftMode === overview.settings.mode}
+                >
                   {savingMode ? 'Saving...' : 'Save runtime mode'}
                 </Button>
               </div>
@@ -296,7 +281,9 @@ export function MCPAdminTab() {
                     <Table.Body
                       renderEmptyState={() => (
                         <div className="py-8 text-center text-sm text-muted-foreground">
-                          {overviewLoading ? 'Loading MCP tool stats...' : 'No MCP calls in this window.'}
+                          {overviewLoading
+                            ? 'Loading MCP tool stats...'
+                            : 'No MCP calls in this window.'}
                         </div>
                       )}
                     >
@@ -305,12 +292,16 @@ export function MCPAdminTab() {
                           <Table.Cell className="font-mono text-xs">{tool.tool_name}</Table.Cell>
                           <Table.Cell>{tool.calls.toLocaleString()}</Table.Cell>
                           <Table.Cell>
-                            <Chip size="sm" variant="soft" color={tool.errors > 0 ? 'warning' : 'success'}>
+                            <StatusTag
+                              tone={toneFromChipColor(tool.errors > 0 ? 'warning' : 'success')}
+                            >
                               {tool.errors.toLocaleString()}
-                            </Chip>
+                            </StatusTag>
                           </Table.Cell>
                           <Table.Cell>{tool.actions.toLocaleString()}</Table.Cell>
-                          <Table.Cell className="text-xs text-muted-foreground">{tool.avg_duration_ms.toFixed(0)} ms</Table.Cell>
+                          <Table.Cell className="text-xs text-muted-foreground">
+                            {tool.avg_duration_ms.toFixed(0)} ms
+                          </Table.Cell>
                         </Table.Row>
                       ))}
                     </Table.Body>
@@ -322,9 +313,9 @@ export function MCPAdminTab() {
                   Transport mix
                 </span>
                 {transportMetrics.map((transport) => (
-                  <Chip key={transport.transport} size="sm" variant="soft">
+                  <StatusTag key={transport.transport}>
                     {transport.transport}: {transport.calls.toLocaleString()}
-                  </Chip>
+                  </StatusTag>
                 ))}
                 {transportMetrics.length === 0 && (
                   <span className="text-xs text-muted-foreground">No calls yet</span>
@@ -338,7 +329,9 @@ export function MCPAdminTab() {
       <Card className="space-y-4">
         <Card.Header>
           <Card.Title>Interaction activity</Card.Title>
-          <Card.Description>Recent calls are searchable by tool, transport, status, and user.</Card.Description>
+          <Card.Description>
+            Recent calls are searchable by tool, transport, status, and user.
+          </Card.Description>
         </Card.Header>
         <Card.Content className="space-y-4">
           {activityError && <p className="text-sm text-danger">{activityError}</p>}
@@ -347,7 +340,10 @@ export function MCPAdminTab() {
               aria-label="MCP tool filter"
               value={filters.tool || '__all__'}
               onChange={(value) => {
-                setFilters((current) => ({ ...current, tool: value === '__all__' ? '' : String(value) }));
+                setFilters((current) => ({
+                  ...current,
+                  tool: value === '__all__' ? '' : String(value),
+                }));
                 setActivityPage(1);
               }}
               variant="secondary"
@@ -371,7 +367,10 @@ export function MCPAdminTab() {
               aria-label="MCP transport filter"
               value={filters.transport || '__all__'}
               onChange={(value) => {
-                setFilters((current) => ({ ...current, transport: value === '__all__' ? '' : String(value) }));
+                setFilters((current) => ({
+                  ...current,
+                  transport: value === '__all__' ? '' : String(value),
+                }));
                 setActivityPage(1);
               }}
               variant="secondary"
@@ -392,7 +391,10 @@ export function MCPAdminTab() {
               aria-label="MCP status filter"
               value={filters.status || '__all__'}
               onChange={(value) => {
-                setFilters((current) => ({ ...current, status: value === '__all__' ? '' : String(value) }));
+                setFilters((current) => ({
+                  ...current,
+                  status: value === '__all__' ? '' : String(value),
+                }));
                 setActivityPage(1);
               }}
               variant="secondary"
@@ -454,17 +456,17 @@ export function MCPAdminTab() {
                         {entry.username || entry.email || entry.user_id?.slice(0, 8) || 'unknown'}
                       </Table.Cell>
                       <Table.Cell>
-                        <Chip size="sm" variant="soft" className="font-mono">
-                          {entry.transport}
-                        </Chip>
+                        <StatusTag className="font-mono">{entry.transport}</StatusTag>
                       </Table.Cell>
                       <Table.Cell className="font-mono text-xs">{entry.tool_name}</Table.Cell>
                       <Table.Cell>
-                        <Chip size="sm" variant="soft" color={statusColor(entry.status)}>
+                        <StatusTag tone={toneFromChipColor(statusColor(entry.status))}>
                           {entry.status}
-                        </Chip>
+                        </StatusTag>
                       </Table.Cell>
-                      <Table.Cell className="text-xs text-muted-foreground">{entry.duration_ms} ms</Table.Cell>
+                      <Table.Cell className="text-xs text-muted-foreground">
+                        {entry.duration_ms} ms
+                      </Table.Cell>
                       <Table.Cell className="text-xs">
                         {entry.action ? (
                           <span className="inline-flex items-center gap-1 text-warning-foreground">
@@ -515,7 +517,9 @@ export function MCPAdminTab() {
                   <Pagination.Item>
                     <Pagination.Next
                       isDisabled={activityPage === totalPages}
-                      onPress={() => setActivityPage((current) => Math.min(totalPages, current + 1))}
+                      onPress={() =>
+                        setActivityPage((current) => Math.min(totalPages, current + 1))
+                      }
                     >
                       <span>Next</span>
                       <Pagination.NextIcon />

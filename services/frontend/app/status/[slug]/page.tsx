@@ -1,5 +1,7 @@
 'use client';
 
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { Logo } from '@/components/logo';
 import {
   ActiveStatusUpdates,
@@ -23,14 +25,12 @@ import { timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
-  Chip,
   Drawer,
   ListBox,
   SearchField,
   Select,
   Skeleton,
   Table,
-  Tabs,
   Tooltip,
   useOverlayState,
 } from '@/components/ui';
@@ -485,13 +485,9 @@ function ImageStatusChips({ item }: { item: StatusPageItem }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {decisionMeta ? (
-        <Chip color={decisionMeta.color} size="sm" variant="soft">
-          <Chip.Label>{decisionMeta.label}</Chip.Label>
-        </Chip>
+        <StatusTag tone={toneFromChipColor(decisionMeta.color)}>{decisionMeta.label}</StatusTag>
       ) : null}
-      <Chip color={operationalMeta.color} size="sm" variant="soft">
-        <Chip.Label>{operationalMeta.label}</Chip.Label>
-      </Chip>
+      <StatusTag tone={toneFromChipColor(operationalMeta.color)}>{operationalMeta.label}</StatusTag>
     </div>
   );
 }
@@ -874,9 +870,7 @@ function StatusItemHistoryModal({
                   {selectedScan ? (
                     <>
                       {getPolicyDecisionMeta(getPolicyDecision(selectedScan)) ? (
-                        <Chip color="danger" size="sm" variant="soft">
-                          <Chip.Label>Org policy failed</Chip.Label>
-                        </Chip>
+                        <StatusTag tone="danger">Org policy failed</StatusTag>
                       ) : null}
                       <StatusBadge
                         externalStatus={selectedScan.external_status}
@@ -929,9 +923,7 @@ function StatusItemHistoryModal({
                         {timeAgo(displayedScan.observed_at)}
                       </p>
                     </div>
-                    <Chip size="sm" variant="secondary">
-                      <Chip.Label>{totalFindings.toLocaleString()} findings</Chip.Label>
-                    </Chip>
+                    <StatusTag>{totalFindings.toLocaleString()} findings</StatusTag>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {[
@@ -1527,25 +1519,15 @@ export default function PublicStatusPage() {
                 {filteredTrackedItems.length} of {trackedItems.length} images
               </span>
             </div>
-            <Tabs
-              selectedKey={statusFilter}
-              onSelectionChange={(key) => setStatusFilter(String(key) as ImageStatusFilter)}
-              variant="secondary"
-            >
-              <Tabs.ListContainer className="overflow-x-auto">
-                <Tabs.List aria-label="Filter status page images" className="min-w-max">
-                  {IMAGE_STATUS_FILTER_OPTIONS.map((option) => (
-                    <Tabs.Tab id={option.key} key={option.key}>
-                      {option.key === '__all__' ? 'All images' : option.label}
-                      <Tabs.Indicator />
-                    </Tabs.Tab>
-                  ))}
-                </Tabs.List>
-              </Tabs.ListContainer>
-              {IMAGE_STATUS_FILTER_OPTIONS.map((option) => (
-                <Tabs.Panel id={option.key} key={option.key} className="hidden" />
-              ))}
-            </Tabs>
+            <FilterChips
+              label="Filter status page images"
+              onSelect={(id) => setStatusFilter(id as ImageStatusFilter)}
+              items={IMAGE_STATUS_FILTER_OPTIONS.map((option) => ({
+                id: option.key,
+                label: option.key === '__all__' ? 'All images' : option.label,
+                active: statusFilter === option.key,
+              }))}
+            />
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <SearchField
                 aria-label="Search images"

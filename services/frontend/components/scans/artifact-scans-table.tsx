@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusTag } from '@/components/ui/status-dot';
 import { ScanTagBadgeList } from '@/components/scans/scan-tag-badge-list';
 import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
 import { SevCount, StatusBadge } from '@/components/ui/badges';
@@ -11,7 +12,7 @@ import { useToast } from '@/components/toast';
 import { ArtifactSummary, listScans, Scan } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Checkbox, Chip, Pagination, Table } from '@/components/ui';
+import { Button, Checkbox, Pagination, Table } from '@/components/ui';
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
@@ -43,6 +44,8 @@ type ArtifactScansTableProps = {
   artifacts: ArtifactSummary[];
   childRefreshKey: Record<string, number>;
   historyRefreshKey?: number;
+  /** Bumps on each live refresh: reloads open history in place, keeping its page. */
+  historyLiveToken?: number;
   emptyState?: { description: string; title: string };
   expanded: Set<string>;
   hasActiveFilters: boolean;
@@ -103,13 +106,13 @@ function ArtifactReference({
         {!hideImageName && registryHost ? (
           <span className="break-all font-mono text-xs text-muted-foreground">{registryHost}</span>
         ) : null}
-        <Chip className="text-xs font-semibold" color="accent" size="sm" variant="soft">
+        <StatusTag className="text-xs font-semibold" tone="accent">
           {scanCount} run{scanCount === 1 ? '' : 's'}
-        </Chip>
+        </StatusTag>
         {deletionQueued ? (
-          <Chip className="text-xs font-semibold" color="warning" size="sm" variant="soft">
+          <StatusTag className="text-xs font-semibold" tone="warning">
             Deletion queued
-          </Chip>
+          </StatusTag>
         ) : null}
       </div>
     </div>
@@ -124,11 +127,7 @@ function PolicyFailureChip({
   const failedPolicies = summary?.failed_policy_names?.filter(Boolean) ?? [];
   if (failedPolicies.length === 0) return null;
 
-  return (
-    <Chip color="danger" size="sm" title={failedPolicies.join(', ')} variant="soft">
-      Policy failed
-    </Chip>
-  );
+  return <StatusTag tone="danger">Policy failed</StatusTag>;
 }
 
 function ScanSelectionCheckbox({
@@ -160,7 +159,12 @@ function ScanSelectionCheckbox({
   );
 }
 
-function useArtifactHistory(imageName: string, imageTag: string, refreshToken: number) {
+function useArtifactHistory(
+  imageName: string,
+  imageTag: string,
+  refreshToken: number,
+  liveToken: number
+) {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const [page, setPage] = useState(1);
@@ -203,6 +207,15 @@ function useArtifactHistory(imageName: string, imageTag: string, refreshToken: n
     });
   }, [load, page, refreshToken, scopeKey]);
 
+  useEffect(() => {
+    if (liveToken === 0) return;
+    return deferEffect(() => {
+      void load(page);
+    });
+    // Only a new live token reloads; page and filters are read as they are then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveToken]);
+
   useConditionalInterval(
     () => {
       void load(page);
@@ -225,6 +238,7 @@ function ArtifactHistoryRows({
   allowMutationActions,
   artifact,
   refreshToken,
+  liveToken,
   onCancel,
   onDelete,
   onDeleteHistoryScan,
@@ -238,6 +252,7 @@ function ArtifactHistoryRows({
   allowMutationActions: boolean;
   artifact: ArtifactSummary;
   refreshToken: number;
+  liveToken: number;
   onCancel: (scanId: string) => void;
   onDelete: (scanId: string) => void;
   onDeleteHistoryScan?: (scan: Scan) => void;
@@ -251,7 +266,8 @@ function ArtifactHistoryRows({
   const { loading, page, scans, setPage, totalPages } = useArtifactHistory(
     artifact.image_name,
     artifact.image_tag,
-    refreshToken
+    refreshToken,
+    liveToken
   );
   type HistoryRow =
     | { id: string; kind: 'loading' | 'empty' | 'pagination'; scan?: never }
@@ -474,6 +490,7 @@ export function ArtifactScansTable({
   artifacts,
   childRefreshKey,
   historyRefreshKey,
+  historyLiveToken,
   emptyState,
   expanded,
   hasActiveFilters,
@@ -843,6 +860,7 @@ export function ArtifactScansTable({
                         allowMutationActions={allowMutationActions}
                         artifact={artifact}
                         refreshToken={childRefreshKey[key] ?? historyRefreshKey ?? 0}
+                        liveToken={historyLiveToken ?? 0}
                         onCancel={(scanId) => onCancel(scanId, key)}
                         onDelete={(scanId) => onDelete(scanId, key)}
                         onDeleteHistoryScan={onDeleteHistoryScan}

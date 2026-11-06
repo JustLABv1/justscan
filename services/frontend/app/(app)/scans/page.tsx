@@ -4,7 +4,6 @@ import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { ImageOverviewTable } from '@/components/scans/image-overview-table';
 import { FilterDisclosureTrigger } from '@/components/ui/filter-toolbar';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
-import { StatCard } from '@/components/ui/stat-card';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   getRecentActivityBounds,
@@ -24,6 +23,8 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import { useToast } from '@/components/toast';
 import { StatusAlert } from '@/components/ui/form-alert';
+import { FilterChips } from '@/components/ui/filter-chips';
+import type { StatusDotTone } from '@/components/ui/status-dot';
 import { parseDate, type DateValue } from '@internationalized/date';
 import {
   AlertDialog,
@@ -37,17 +38,9 @@ import {
   Select,
   Spinner,
 } from '@/components/ui';
-import { Clock01Icon, GitCompareIcon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
+import { GitCompareIcon, PlusSignIcon } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useState,
-  type ReactNode,
-} from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 
 const PAGE_SIZE = 30;
 const STATUS_OPTIONS = [
@@ -71,24 +64,6 @@ type ScanFilters = {
   dateTo: string;
   sort: string;
 };
-
-type MetricTone = 'default' | 'danger' | 'success';
-
-function Metric({
-  label,
-  value,
-  description,
-  icon,
-  tone = 'default',
-}: {
-  label: string;
-  value: string | number;
-  description?: string;
-  icon: ReactNode;
-  tone?: MetricTone;
-}) {
-  return <StatCard label={label} value={value} hint={description} icon={icon} tone={tone} />;
-}
 
 function initialScanFilters(searchParams: { get(name: string): string | null }): ScanFilters {
   const range = searchParams.get('range');
@@ -160,6 +135,7 @@ function ScansPageContent() {
     () => new Map()
   );
   const [refreshKey, setRefreshKey] = useState(0);
+  const [pollTick, setPollTick] = useState(0);
   const [page, setPage] = useState(() => Math.max(1, Number(searchParams.get('page') ?? '1')));
   const [filters, updateFilters] = useReducer(scanFiltersReducer, searchParams, initialScanFilters);
   const { query, status, critical, policy, intelligence, range, date, dateTo, sort } = filters;
@@ -207,19 +183,85 @@ function ScansPageContent() {
   const activeFilters = Boolean(
     query || status || critical || policy || intelligence || range || date || sort
   );
-  const filterCount = [critical, policy, intelligence, range, date, sort].filter(Boolean).length;
+  const filterCount = [status, critical, policy, intelligence, range, date, sort].filter(
+    Boolean
+  ).length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const visibleOverview = useMemo(
-    () => ({
-      critical: images.filter((image) => image.health_critical_count > 0).length,
-      policyFailed: images.filter((image) => image.health_policy_failed).length,
-      intelligencePending: images.filter(
-        (image) => image.intelligence_summary?.state === 'confirmation_pending'
-      ).length,
-      active: images.filter((image) => ['running', 'pending'].includes(image.latest_status)).length,
-    }),
-    [images]
+  const quickFilters: {
+    id: string;
+    label: string;
+    tone: StatusDotTone;
+    active: boolean;
+    apply: Partial<ScanFilters>;
+  }[] = [
+    {
+      id: 'all',
+      label: 'All',
+      tone: 'neutral',
+      active: !status && !critical && !policy && !intelligence,
+      apply: { status: '', critical: '', policy: '', intelligence: '' },
+    },
+    {
+      id: 'failed',
+      label: 'Failed',
+      tone: 'danger',
+      active: status === 'failed',
+      apply: { status: status === 'failed' ? '' : 'failed' },
+    },
+    {
+      id: 'critical',
+      label: 'Has critical',
+      tone: 'danger',
+      active: critical === 'yes',
+      apply: { critical: critical === 'yes' ? '' : 'yes' },
+    },
+    {
+      id: 'policy',
+      label: 'Policy failed',
+      tone: 'danger',
+      active: policy === 'fail',
+      apply: { policy: policy === 'fail' ? '' : 'fail' },
+    },
+    {
+      id: 'intelligence',
+      label: 'CVE confirmation',
+      tone: 'warning',
+      active: intelligence === 'confirmation_pending',
+      apply: {
+        intelligence: intelligence === 'confirmation_pending' ? '' : 'confirmation_pending',
+      },
+    },
+    {
+      id: 'running',
+      label: 'Running',
+      tone: 'accent',
+      active: status === 'running',
+      apply: { status: status === 'running' ? '' : 'running' },
+    },
+  ];
+
+  const hasActiveScans = images.some((image) =>
+    ['pending', 'queued', 'running'].includes(image.latest_status)
   );
+
+  // Keep the list current: quickly while something is running, slowly otherwise,
+  // and straight away when the tab comes back into view.
+  useEffect(() => {
+    const interval = window.setInterval(
+      () => {
+        if (document.visibilityState === 'visible') setPollTick((current) => current + 1);
+      },
+      hasActiveScans ? 4000 : 30000
+    );
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setPollTick((current) => current + 1);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [hasActiveScans]);
 
   const syncRoute = useCallback(() => {
     const params = new URLSearchParams();
@@ -290,6 +332,7 @@ function ScansPageContent() {
       policy,
       query,
       refreshKey,
+      pollTick,
       scopeKey,
       sort,
       status,
@@ -404,41 +447,6 @@ function ScansPageContent() {
           </AlertDialog.Container>
         </AlertDialog.Backdrop>
       </AlertDialog>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3">
-        <Metric
-          description="Current filter scope"
-          icon={<Shield01Icon size={16} />}
-          label="Matching images"
-          value={total}
-        />
-        <Metric
-          description="On this page"
-          icon={<Shield01Icon size={16} />}
-          label="Critical risk"
-          tone="danger"
-          value={visibleOverview.critical}
-        />
-        <Metric
-          description="On this page"
-          icon={<Shield01Icon size={16} />}
-          label="Policy failed"
-          tone="danger"
-          value={visibleOverview.policyFailed}
-        />
-        <Metric
-          description="On this page"
-          icon={<Shield01Icon size={16} />}
-          label="CVE confirmation"
-          tone={visibleOverview.intelligencePending > 0 ? 'danger' : 'default'}
-          value={visibleOverview.intelligencePending}
-        />
-        <Metric
-          description="Running or queued"
-          icon={<Clock01Icon size={16} />}
-          label="Active scans"
-          value={visibleOverview.active}
-        />
-      </div>
       {error ? (
         <StatusAlert
           className="border-danger/40"
@@ -459,7 +467,19 @@ function ScansPageContent() {
       <Card className="overflow-hidden gap-0 py-0">
         <ImageOverviewTable
           toolbar={
-            <div className="border-b border-border p-3">
+            <div className="space-y-3 border-b border-border p-3">
+              <FilterChips
+                label="Quick filters"
+                items={quickFilters.map((filter) => ({
+                  id: filter.id,
+                  label: filter.label,
+                  tone: filter.tone,
+                  active: filter.active,
+                  onPress: () => updateFilters(filter.apply),
+                }))}
+              >
+                {total === 1 ? '1 image' : `${total} images`}
+              </FilterChips>
               <Disclosure className="w-full">
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
                   <SearchField
@@ -476,58 +496,64 @@ function ScansPageContent() {
                       <SearchField.ClearButton />
                     </SearchField.Group>
                   </SearchField>
-                  <Select
-                    aria-label="Latest state"
-                    className="min-w-[180px]"
-                    value={status || '__all__'}
-                    onChange={(value) =>
-                      updateFilters({ status: value === '__all__' ? '' : String(value ?? '') })
-                    }
-                    variant="secondary"
-                  >
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {STATUS_OPTIONS.map((option) => (
-                          <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>
-                            {option.label}
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                  <Select
-                    aria-label="Current risk"
-                    className="min-w-[170px]"
-                    value={critical || '__all__'}
-                    onChange={(value) =>
-                      updateFilters({
-                        critical: (value === '__all__'
-                          ? ''
-                          : String(value ?? '')) as ScanFilters['critical'],
-                      })
-                    }
-                    variant="secondary"
-                  >
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        <ListBox.Item id="__all__">Any risk</ListBox.Item>
-                        <ListBox.Item id="yes">Has critical</ListBox.Item>
-                        <ListBox.Item id="no">No critical</ListBox.Item>
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
                   <FilterDisclosureTrigger activeCount={filterCount} label="More filters" />
                 </div>
                 <Disclosure.Content>
                   <Disclosure.Body className="mt-3 grid grid-cols-1 gap-3 border-t border-border pt-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <Select
+                      aria-label="Latest state"
+                      className="min-w-0 w-full"
+                      value={status || '__all__'}
+                      onChange={(value) =>
+                        updateFilters({ status: value === '__all__' ? '' : String(value ?? '') })
+                      }
+                      variant="secondary"
+                    >
+                      <Label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Latest state
+                      </Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {STATUS_OPTIONS.map((option) => (
+                            <ListBox.Item key={option.id || '__all__'} id={option.id || '__all__'}>
+                              {option.label}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <Select
+                      aria-label="Current risk"
+                      className="min-w-0 w-full"
+                      value={critical || '__all__'}
+                      onChange={(value) =>
+                        updateFilters({
+                          critical: (value === '__all__'
+                            ? ''
+                            : String(value ?? '')) as ScanFilters['critical'],
+                        })
+                      }
+                      variant="secondary"
+                    >
+                      <Label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Current risk
+                      </Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="__all__">Any risk</ListBox.Item>
+                          <ListBox.Item id="yes">Has critical</ListBox.Item>
+                          <ListBox.Item id="no">No critical</ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
                     <Select
                       aria-label="Time range"
                       className="min-w-0 w-full"
@@ -670,6 +696,7 @@ function ScansPageContent() {
           }
           key={JSON.stringify([page, refreshKey])}
           hasActiveFilters={activeFilters}
+          revision={pollTick}
           images={images}
           loading={loading && images.length === 0}
           onDeleteImage={setPendingDelete}

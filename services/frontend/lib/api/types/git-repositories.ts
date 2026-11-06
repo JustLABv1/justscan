@@ -170,5 +170,9 @@ export interface GitRepositoryLatestImageScan {
   scan_id: string;
   status: string;
   external_status?: string;
+  error_message?: string;
+  critical_count?: number;
+  high_count?: number;
+  failed_policy_names?: string[];
   created_at: string;
 }

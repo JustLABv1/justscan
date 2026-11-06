@@ -563,22 +563,31 @@ func ListRuns(db *bun.DB) gin.HandlerFunc {
 	}
 }
 
+type latestImageScan struct {
+	FullRef           string    `bun:"full_ref" json:"full_ref"`
+	ScanID            uuid.UUID `bun:"scan_id" json:"scan_id"`
+	Status            string    `bun:"status" json:"status"`
+	ExternalStatus    string    `bun:"external_status" json:"external_status"`
+	ErrorMessage      string    `bun:"error_message" json:"error_message,omitempty"`
+	CriticalCount     int       `bun:"critical_count" json:"critical_count"`
+	HighCount         int       `bun:"high_count" json:"high_count"`
+	CreatedAt         time.Time `bun:"created_at" json:"created_at"`
+	FailedPolicyNames []string  `bun:"-" json:"failed_policy_names"`
+}
+
+// ListLatestImageScans returns the newest scan of every image this repository
+// has scanned, with what is needed to tell a healthy image from a failing or
+// policy-blocked one without opening each scan.
 func ListLatestImageScans(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		item, ok := load(c, db)
 		if !ok {
 			return
 		}
-		var scans []struct {
-			FullRef        string    `bun:"full_ref" json:"full_ref"`
-			ScanID         uuid.UUID `bun:"scan_id" json:"scan_id"`
-			Status         string    `bun:"status" json:"status"`
-			ExternalStatus string    `bun:"external_status" json:"external_status"`
-			CreatedAt      time.Time `bun:"created_at" json:"created_at"`
-		}
+		scans := make([]latestImageScan, 0)
 		if err := db.NewSelect().
 			TableExpr("git_repository_run_images AS ri").
-			ColumnExpr("DISTINCT ON (ri.full_ref) ri.full_ref, s.id AS scan_id, s.status, s.external_status, s.created_at").
+			ColumnExpr("DISTINCT ON (ri.full_ref) ri.full_ref, s.id AS scan_id, s.status, COALESCE(s.external_status, '') AS external_status, COALESCE(s.error_message, '') AS error_message, s.critical_count, s.high_count, s.created_at").
 			Join("JOIN git_repository_runs AS r ON r.id = ri.run_id").
 			Join("JOIN scans AS s ON s.id = ri.scan_id").
 			Where("r.repository_id = ?", item.ID).
@@ -587,9 +596,61 @@ func ListLatestImageScans(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load latest image scans"})
 			return
 		}
+		for index := range scans {
+			scans[index].FailedPolicyNames = []string{}
+		}
+		if len(scans) > 0 && !attachFailedPolicyNames(c, db, scans) {
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{"data": scans})
 	}
 }
+
+// attachFailedPolicyNames adds the organization policies each scan failed,
+// limited to organizations the caller can see. A lookup failure leaves the
+// names empty rather than hiding the scans themselves.
+func attachFailedPolicyNames(c *gin.Context, db *bun.DB, scans []latestImageScan) bool {
+	_, isAdmin, accessibleOrgIDs, ok := authz.RequireOwnershipContext(c, db)
+	if !ok {
+		return false
+	}
+	scanIDs := make([]uuid.UUID, 0, len(scans))
+	for _, scan := range scans {
+		scanIDs = append(scanIDs, scan.ScanID)
+	}
+	var rows []struct {
+		ScanID uuid.UUID `bun:"scan_id"`
+		Name   string    `bun:"name"`
+	}
+	query := db.NewSelect().
+		TableExpr("compliance_results AS cr").
+		ColumnExpr("cr.scan_id, op.name").
+		Join("JOIN org_policies AS op ON op.id = cr.policy_id").
+		Where("cr.scan_id IN (?)", bun.In(scanIDs)).
+		Where("cr.status = 'fail'").
+		OrderExpr("op.name ASC")
+	if !isAdmin {
+		if len(accessibleOrgIDs) == 0 {
+			return true
+		}
+		query = query.Where("cr.org_id IN (?)", bun.In(accessibleOrgIDs))
+	}
+	if err := query.Scan(c.Request.Context(), &rows); err != nil {
+		log.Warnf("Git repository latest image scans: load failed policies: %v", err)
+		return true
+	}
+	namesByScan := make(map[uuid.UUID][]string, len(rows))
+	for _, row := range rows {
+		namesByScan[row.ScanID] = append(namesByScan[row.ScanID], row.Name)
+	}
+	for index := range scans {
+		if names := namesByScan[scans[index].ScanID]; len(names) > 0 {
+			scans[index].FailedPolicyNames = names
+		}
+	}
+	return true
+}
+
 func GetRun(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		item, ok := load(c, db)

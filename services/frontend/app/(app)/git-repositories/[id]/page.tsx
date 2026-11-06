@@ -34,18 +34,19 @@ import {
   Search01Icon,
   Settings02Icon,
 } from 'hugeicons-react';
-import { FileCode2 } from 'lucide-react';
+import { ArrowUpRight, Ban, ChevronDown, FileCode2, Undo2 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import Link from 'next/link';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
-import { StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField } from '@/components/ui/form-field';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
-import { StatusLabel, StatusTag } from '@/components/ui/status-dot';
+import { FilterChips } from '@/components/ui/filter-chips';
+import { StatusDot, StatusLabel, StatusTag, type StatusDotTone } from '@/components/ui/status-dot';
 import { PageContainer, PageTitle } from '@/components/ui/page-header';
 import {
   cancelGitRepositoryRun,
@@ -92,6 +93,93 @@ import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
 
 type Preview = { run: GitRepositoryRun; images: GitRepositoryRunImage[] };
+
+type ImageHealthKind =
+  'blocked' | 'policy' | 'failed' | 'running' | 'unscanned' | 'healthy' | 'excluded';
+
+type ImageHealth = {
+  kind: ImageHealthKind;
+  label: string;
+  reason: string;
+  tone: StatusDotTone;
+  rank: number;
+};
+
+type ImageFilter = 'all' | 'failing' | 'blocked' | 'healthy' | 'unscanned' | 'excluded';
+
+/** What the latest scan of an image says about it, in the order that matters. */
+function imageHealth(
+  scan: GitRepositoryLatestImageScan | undefined,
+  excluded: boolean
+): ImageHealth {
+  if (excluded) {
+    return {
+      kind: 'excluded',
+      label: 'Excluded',
+      reason: 'Skipped by repository scans',
+      tone: 'muted',
+      rank: 6,
+    };
+  }
+  if (!scan) {
+    return {
+      kind: 'unscanned',
+      label: 'Not scanned',
+      reason: 'No scan yet',
+      tone: 'warning',
+      rank: 4,
+    };
+  }
+  if (scan.external_status === 'blocked_by_xray_policy') {
+    return {
+      kind: 'blocked',
+      label: 'Blocked by Xray',
+      reason: 'Xray policy blocked this image',
+      tone: 'danger',
+      rank: 0,
+    };
+  }
+  const policies = scan.failed_policy_names ?? [];
+  if (policies.length > 0) {
+    return {
+      kind: 'policy',
+      label: 'Policy failed',
+      reason:
+        policies.slice(0, 3).join(', ') + (policies.length > 3 ? ` +${policies.length - 3}` : ''),
+      tone: 'danger',
+      rank: 1,
+    };
+  }
+  if (scan.status === 'failed') {
+    const firstLine = (scan.error_message ?? '').trim().split('\n')[0] ?? '';
+    return {
+      kind: 'failed',
+      label: 'Scan failed',
+      reason:
+        firstLine.length > 140
+          ? `${firstLine.slice(0, 140)}…`
+          : firstLine || 'The scan did not complete',
+      tone: 'danger',
+      rank: 2,
+    };
+  }
+  if (['pending', 'queued', 'running'].includes(scan.status)) {
+    return {
+      kind: 'running',
+      label: 'Scanning',
+      reason: 'Scan in progress',
+      tone: 'accent',
+      rank: 3,
+    };
+  }
+  return {
+    kind: 'healthy',
+    label: 'Healthy',
+    reason: 'Latest scan passed',
+    tone: 'success',
+    rank: 5,
+  };
+}
 
 type HelmSourceMode = 'local' | 'repository' | 'url';
 
@@ -161,7 +249,7 @@ function ImageRegistrySelect({
       }
       variant="secondary"
     >
-      <Label>Image registry / credential</Label>
+      <Label className="sr-only">Image registry and credential</Label>
       <Select.Trigger>
         <Select.Value />
         <Select.Indicator />
@@ -178,11 +266,7 @@ function ImageRegistrySelect({
             <ListBox.ItemIndicator />
           </ListBox.Item>
           {registries.map((registry) => (
-            <ListBox.Item
-              id={registry.id}
-              key={registry.id}
-              textValue={`${registry.name} ${registry.url}`}
-            >
+            <ListBox.Item id={registry.id} key={registry.id} textValue={registry.name}>
               <div className="flex min-w-0 flex-col items-start gap-0.5">
                 <Label>{registry.name}</Label>
                 <Description className="!block break-all">
@@ -195,10 +279,6 @@ function ImageRegistrySelect({
           ))}
         </ListBox>
       </Select.Popover>
-      <Description>
-        Choose another configured registry entry when this image needs a different endpoint or
-        token. This selector uses saved JustScan entries; add a new credential from Registries.
-      </Description>
     </Select>
   );
 }
@@ -232,79 +312,6 @@ function imageRegistryHost(imageRef: string): string | null {
     return null;
   }
   return firstSegment;
-}
-
-function RegistryResolutionSummary({
-  image,
-  override,
-  overrideRegistry,
-  inferredRegistry,
-}: {
-  image: GitRepositoryRunImage;
-  override?: GitRepositoryImageRegistryOverride;
-  overrideRegistry?: Registry;
-  inferredRegistry?: Registry;
-}) {
-  const host = imageRegistryHost(image.full_ref);
-
-  if (override) {
-    return (
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusTag tone="accent">Configured override</StatusTag>
-          {host ? <code className="truncate text-xs text-muted-foreground">{host}</code> : null}
-        </div>
-        <Description className="!block">
-          {overrideRegistry
-            ? `This image is pinned to the configured ${overrideRegistry.name} registry entry.`
-            : 'This image has an override for a registry entry that is not available in the current workspace.'}
-        </Description>
-      </div>
-    );
-  }
-
-  if (image.registry_id) {
-    return (
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusTag tone={inferredRegistry ? 'accent' : 'warning'}>
-            {inferredRegistry ? 'Configured match' : 'Configured match unavailable'}
-          </StatusTag>
-          {host ? <code className="truncate text-xs text-muted-foreground">{host}</code> : null}
-        </div>
-        <Description className="!block">
-          {inferredRegistry
-            ? `Automatic matching selected the configured ${inferredRegistry.name} registry entry${host ? ` for ${host}` : ''}.`
-            : 'Automatic matching found a configured registry entry, but it is not available in the current workspace view.'}
-        </Description>
-      </div>
-    );
-  }
-
-  if (host) {
-    return (
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusTag tone="warning">Custom / unconfigured host</StatusTag>
-          <code className="truncate text-xs text-muted-foreground">{host}</code>
-        </div>
-        <Description className="!block">
-          No JustScan registry entry matches this host. Automatic matching keeps the original host;
-          add a registry entry from Registries if this image needs credentials.
-        </Description>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <StatusTag>Default matching</StatusTag>
-      <Description className="!block">
-        This image reference has no explicit registry host. Automatic matching uses the default
-        Docker Hub behavior when a matching entry is available.
-      </Description>
-    </div>
-  );
 }
 
 function locationsFor(image: GitRepositoryRunImage) {
@@ -386,6 +393,8 @@ export default function GitRepositoryDetailPage() {
   const [helmRegistryCredentialID, setHelmRegistryCredentialID] = useState<string | null>(null);
   const helmCredentialSelectionTouched = useRef(false);
   const [imageSearch, setImageSearch] = useState('');
+  const [imageFilter, setImageFilter] = useState<ImageFilter>('all');
+  const [expandedImageRefs, setExpandedImageRefs] = useState<Set<string>>(new Set());
   const [helmSources, setHelmSources] = useState<GitRepositoryHelmSource[]>([]);
   const [availableRepositories, setAvailableRepositories] = useState<GitRepository[]>([]);
   const [availableHelmCredentials, setAvailableHelmCredentials] = useState<
@@ -814,6 +823,15 @@ export default function GitRepositoryDetailPage() {
     }
   }
 
+  function toggleImageOpen(fullRef: string) {
+    setExpandedImageRefs((current) => {
+      const next = new Set(current);
+      if (next.has(fullRef)) next.delete(fullRef);
+      else next.add(fullRef);
+      return next;
+    });
+  }
+
   async function updateImageRegistry(imageRef: string, registryID: string | null) {
     const current = imageRegistryOverrides.find((override) => override.full_ref === imageRef);
     const matchingRule = imageRegistryOverrideRules.find((rule) =>
@@ -983,7 +1001,7 @@ export default function GitRepositoryDetailPage() {
       .filter(([, items]) => items.length > 0);
   }, [files, repository?.discovery_mode]);
 
-  const previewImages = preview?.images ?? [];
+  const previewImages = useMemo(() => preview?.images ?? [], [preview]);
   const exclusionByRef = useMemo(
     () => new Map(imageExclusions.map((exclusion) => [exclusion.full_ref, exclusion])),
     [imageExclusions]
@@ -1011,11 +1029,65 @@ export default function GitRepositoryDetailPage() {
     () => new Map(availableHelmCredentials.map((credential) => [credential.id, credential])),
     [availableHelmCredentials]
   );
-  const normalizedImageSearch = imageSearch.trim().toLowerCase();
-  const filteredPreviewImages = previewImages.filter(
-    (image) =>
-      !normalizedImageSearch || image.full_ref.toLowerCase().includes(normalizedImageSearch)
+  const healthByRef = useMemo(() => {
+    const map = new Map<string, ImageHealth>();
+    for (const image of previewImages) {
+      map.set(
+        image.full_ref,
+        imageHealth(latestScanByRef.get(image.full_ref), exclusionByRef.has(image.full_ref))
+      );
+    }
+    return map;
+  }, [exclusionByRef, latestScanByRef, previewImages]);
+  const healthCounts = useMemo(() => {
+    const counts = { failing: 0, blocked: 0, healthy: 0, unscanned: 0, excluded: 0, running: 0 };
+    for (const health of healthByRef.values()) {
+      if (health.kind === 'failed') counts.failing += 1;
+      else if (health.kind === 'blocked' || health.kind === 'policy') counts.blocked += 1;
+      else if (health.kind === 'healthy') counts.healthy += 1;
+      else if (health.kind === 'unscanned') counts.unscanned += 1;
+      else if (health.kind === 'excluded') counts.excluded += 1;
+      else counts.running += 1;
+    }
+    return counts;
+  }, [healthByRef]);
+  const attentionImages = useMemo(
+    () =>
+      previewImages
+        .filter((image) => (healthByRef.get(image.full_ref)?.rank ?? 9) <= 2)
+        .sort(
+          (left, right) =>
+            (healthByRef.get(left.full_ref)?.rank ?? 9) -
+            (healthByRef.get(right.full_ref)?.rank ?? 9)
+        ),
+    [healthByRef, previewImages]
   );
+  const normalizedImageSearch = imageSearch.trim().toLowerCase();
+  const filteredPreviewImages = previewImages
+    .filter((image) => {
+      if (normalizedImageSearch && !image.full_ref.toLowerCase().includes(normalizedImageSearch)) {
+        return false;
+      }
+      const kind = healthByRef.get(image.full_ref)?.kind;
+      switch (imageFilter) {
+        case 'failing':
+          return kind === 'failed';
+        case 'blocked':
+          return kind === 'blocked' || kind === 'policy';
+        case 'healthy':
+          return kind === 'healthy';
+        case 'unscanned':
+          return kind === 'unscanned';
+        case 'excluded':
+          return kind === 'excluded';
+        default:
+          return true;
+      }
+    })
+    .sort(
+      (left, right) =>
+        (healthByRef.get(left.full_ref)?.rank ?? 9) - (healthByRef.get(right.full_ref)?.rank ?? 9)
+    );
   const selectableImages = previewImages.filter((image) => !exclusionByRef.has(image.full_ref));
   const filteredSelectableImages = filteredPreviewImages.filter(
     (image) => !exclusionByRef.has(image.full_ref)
@@ -1130,47 +1202,125 @@ export default function GitRepositoryDetailPage() {
 
       <StatStrip className="lg:grid-cols-4">
         <StatStripItem
-          label="Needs review"
-          tone={pendingCandidates.length > 0 ? 'warning' : undefined}
-          onPress={() => setDetailView('review')}
-          value={String(candidates.filter((candidate) => candidate.status === 'unresolved').length)}
-          hint="ambiguous deployment markers"
+          label="Failing"
+          tone={healthCounts.failing > 0 ? 'danger' : undefined}
+          value={String(healthCounts.failing)}
+          hint="latest scan failed"
+          onPress={() => {
+            setImageFilter('failing');
+            setDetailView('images');
+          }}
         />
         <StatStripItem
-          label="Latest discovery"
-          onPress={() => setDetailView('images')}
-          value={String(previewImages.length)}
-          hint="unique image references"
+          label="Policy blocked"
+          tone={healthCounts.blocked > 0 ? 'danger' : undefined}
+          value={String(healthCounts.blocked)}
+          hint="policy or Xray blocked"
+          onPress={() => {
+            setImageFilter('blocked');
+            setDetailView('images');
+          }}
         />
         <StatStripItem
-          label={
-            repository.discovery_mode === 'manifests'
-              ? 'Files with images'
-              : repository.discovery_mode === 'registry'
-                ? 'Registry reference files'
-                : repository.discovery_mode === 'gitlab_ci'
-                  ? 'CI config files'
-                  : 'Deployment targets'
-          }
-          onPress={() => setDetailView('tree')}
-          value={String(files.length)}
-          hint={
-            repository.discovery_mode === 'manifests'
-              ? 'manifest files represented'
-              : repository.discovery_mode === 'registry'
-                ? 'files with matching image references'
-                : repository.discovery_mode === 'gitlab_ci'
-                  ? 'GitLab CI image declarations represented'
-                  : 'rendered entrypoints represented'
-          }
+          label="Healthy"
+          tone={healthCounts.healthy > 0 ? 'success' : undefined}
+          value={String(healthCounts.healthy)}
+          hint={`of ${previewImages.length} discovered images`}
+          onPress={() => {
+            setImageFilter('healthy');
+            setDetailView('images');
+          }}
         />
         <StatStripItem
-          label="Latest commit"
-          value={preview?.run.commit_sha ? preview.run.commit_sha.slice(0, 8) : '—'}
-          hint={preview?.run.completed_at ? fullDate(preview.run.completed_at) : 'No dry run yet'}
-          mono
+          label="Not scanned"
+          tone={healthCounts.unscanned > 0 ? 'warning' : undefined}
+          value={String(healthCounts.unscanned)}
+          hint="no scan yet"
+          onPress={() => {
+            setImageFilter('unscanned');
+            setDetailView('images');
+          }}
         />
       </StatStrip>
+
+      {preview && attentionImages.length > 0 ? (
+        <section
+          aria-label="Images that need attention"
+          className="overflow-hidden rounded-xl border border-destructive/30 bg-destructive/5"
+        >
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <h2 className="flex items-center gap-2 text-sm font-medium">
+              <StatusDot tone="danger" />
+              {attentionImages.length === 1
+                ? '1 image needs attention'
+                : `${attentionImages.length} images need attention`}
+            </h2>
+            {attentionImages.length > 5 ? (
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                onClick={() => {
+                  setImageFilter('all');
+                  setDetailView('images');
+                }}
+              >
+                Show all
+              </button>
+            ) : null}
+          </div>
+          <ul className="divide-y divide-destructive/15 border-t border-destructive/15">
+            {attentionImages.slice(0, 5).map((image) => {
+              const health = healthByRef.get(image.full_ref);
+              const scan = latestScanByRef.get(image.full_ref);
+              return (
+                <li key={image.id} className="flex min-w-0 items-center gap-3 px-4 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <code className="block truncate text-xs font-medium text-foreground">
+                      {image.full_ref}
+                    </code>
+                    <p className="truncate text-xs text-muted-foreground">
+                      <span className="font-medium text-destructive">{health?.label}</span>
+                      {health?.reason ? ` · ${health.reason}` : ''}
+                    </p>
+                  </div>
+                  {scan ? (
+                    <Link
+                      href={`/scans/details/${scan.scan_id}`}
+                      className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    >
+                      Open scan
+                    </Link>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : preview && healthCounts.healthy > 0 ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <StatusDot tone="success" />
+          Nothing failing or blocked across {healthCounts.healthy} scanned{' '}
+          {healthCounts.healthy === 1 ? 'image' : 'images'}.
+        </p>
+      ) : null}
+
+      <p className="text-xs text-muted-foreground">
+        {previewImages.length} images · {files.length} deployment targets
+        {preview?.run.commit_sha ? ` · commit ${preview.run.commit_sha.slice(0, 8)}` : ''}
+        {preview?.run.completed_at ? ` · discovered ${timeAgo(preview.run.completed_at)}` : ''}
+        {pendingCandidates.length > 0 ? (
+          <>
+            {' · '}
+            <button
+              type="button"
+              className="underline underline-offset-2 hover:text-foreground"
+              onClick={() => setDetailView('review')}
+            >
+              {pendingCandidates.length} markers need review
+            </button>
+          </>
+        ) : null}
+      </p>
 
       <Tabs
         selectedKey={detailView}
@@ -1259,6 +1409,118 @@ export default function GitRepositoryDetailPage() {
               </Card.Content>
             </Card>
           ) : null}
+
+          <Card className="gap-3">
+            <Card.Header>
+              <Card.Title>Registry override patterns</Card.Title>
+              <Card.Description>
+                {imageRegistryOverrideRules.length === 0
+                  ? 'None yet. Changing an image’s registry saves a pattern across its tags.'
+                  : `${imageRegistryOverrideRules.length} configured`}
+              </Card.Description>
+            </Card.Header>
+            <Card.Content>
+              <div className="space-y-4">
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                  Route matching images to a registry using RE2 patterns. Exact image overrides take
+                  priority; otherwise, the most recently updated matching pattern wins.
+                </p>
+                {imageRegistryOverrideRules.length > 0 ? (
+                  <div className="space-y-2">
+                    {imageRegistryOverrideRules.map((rule) => {
+                      const ruleRegistry = registryByID.get(rule.registry_id);
+                      const matchCount = previewImages.filter((image) =>
+                        imageRegistryRuleMatches(rule.pattern, image.full_ref)
+                      ).length;
+                      return (
+                        <div
+                          key={rule.id}
+                          className="flex min-w-0 items-center gap-3 border-b border-border py-3 last:border-b-0"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <code className="block break-all text-xs text-foreground">
+                              {rule.pattern}
+                            </code>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {ruleRegistry?.name ?? 'Registry unavailable'} · matches {matchCount}{' '}
+                              {matchCount === 1 ? 'discovered image' : 'discovered images'}
+                            </p>
+                          </div>
+                          <Button
+                            aria-label={`Remove registry pattern ${rule.pattern}`}
+                            isDisabled={savingRegistryRule}
+                            isIconOnly
+                            size="sm"
+                            variant="tertiary"
+                            onPress={() => void removeImageRegistryOverrideRule(rule)}
+                          >
+                            <Delete01Icon size={16} />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                <form
+                  onSubmit={saveImageRegistryOverrideRule}
+                  className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.65fr)_auto]"
+                >
+                  <div className="space-y-2">
+                    <FormField
+                      label="Image reference pattern"
+                      placeholder="^ghcr\\.io/team/api(:.*)?$"
+                      value={registryRulePattern}
+                      onChange={(event) => setRegistryRulePattern(event.target.value)}
+                    />
+                  </div>
+                  <Select
+                    aria-label="Registry for image ref pattern"
+                    isDisabled={savingRegistryRule || registries.length === 0}
+                    value={registryRuleRegistryID || '__none__'}
+                    onChange={(value) =>
+                      setRegistryRuleRegistryID(String(value === '__none__' ? '' : (value ?? '')))
+                    }
+                    variant="secondary"
+                  >
+                    <Label>Registry</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="__none__">Choose a registry</ListBox.Item>
+                        {registries.map((registry) => (
+                          <ListBox.Item
+                            key={registry.id}
+                            id={registry.id}
+                            textValue={registry.name}
+                          >
+                            {registry.name}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                  <Button
+                    isDisabled={!registryRulePattern.trim() || !registryRuleRegistryID}
+                    isPending={savingRegistryRule}
+                    type="submit"
+                    variant="secondary"
+                  >
+                    Save pattern
+                  </Button>
+                  <p className="text-xs text-muted-foreground md:col-span-3">
+                    Patterns match the full image reference, including its tag or digest. Changing
+                    an image’s registry below saves a pattern across its tags.
+                  </p>
+                  {registryRuleError ? (
+                    <p className="text-xs text-danger md:col-span-3">{registryRuleError}</p>
+                  ) : null}
+                </form>
+              </div>
+            </Card.Content>
+          </Card>
 
           <Card className="overflow-hidden gap-0 py-0">
             <Card.Header className="flex flex-row flex-wrap items-start justify-between gap-3 border-b border-border p-4">
@@ -1373,150 +1635,42 @@ export default function GitRepositoryDetailPage() {
             />
           ) : (
             <Card className="overflow-hidden gap-0 py-0">
-              <Card.Header className="flex flex-row flex-wrap items-start justify-between gap-3 border-b border-border p-4">
-                <div className="flex min-w-0 items-start gap-3">
-                  <PackageIcon size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <Card.Title>Discovered images</Card.Title>
-                    <Card.Description>
-                      {repository.discovery_mode === 'registry'
-                        ? `This discovery searches ${registryDiscoverySource(repository, registries)} and keeps each matching image reference tied to its source file. Review the results, then scan only the workloads you want to track.`
-                        : repository.discovery_mode === 'gitlab_ci'
-                          ? 'Images and service declarations found in GitLab CI YAML. Review the results, then scan only the workloads you want to track.'
-                          : 'Review the images found in this dry run, then scan only the workloads you want to track.'}
-                    </Card.Description>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <StatusTag>{preview.run.image_count} images</StatusTag>
-                  <StatusTag>{timeAgo(preview.run.created_at)}</StatusTag>
-                </div>
-              </Card.Header>
+              <div className="space-y-3 border-b border-border p-3">
+                <FilterChips
+                  label="Filter images by health"
+                  onSelect={(id) => setImageFilter(id as ImageFilter)}
+                  items={[
+                    { id: 'all', label: 'All', count: previewImages.length },
+                    {
+                      id: 'failing',
+                      label: 'Failing',
+                      count: healthCounts.failing,
+                      tone: healthCounts.failing > 0 ? 'danger' : undefined,
+                    },
+                    {
+                      id: 'blocked',
+                      label: 'Policy blocked',
+                      count: healthCounts.blocked,
+                      tone: healthCounts.blocked > 0 ? 'danger' : undefined,
+                    },
+                    {
+                      id: 'healthy',
+                      label: 'Healthy',
+                      count: healthCounts.healthy,
+                      tone: healthCounts.healthy > 0 ? 'success' : undefined,
+                    },
+                    { id: 'unscanned', label: 'Not scanned', count: healthCounts.unscanned },
+                    { id: 'excluded', label: 'Excluded', count: healthCounts.excluded },
+                  ].map((item) => ({
+                    ...item,
+                    tone: item.tone as StatusDotTone | undefined,
+                    active: imageFilter === item.id,
+                  }))}
+                >
+                  {filteredPreviewImages.length} of {previewImages.length}
+                </FilterChips>
+              </div>
               <Card.Content className="p-0">
-                <Accordion className="border-b border-border">
-                  <Accordion.Item id="registry-patterns">
-                    <Accordion.Heading>
-                      <Accordion.Trigger className="px-4 py-3">
-                        <span>Registry override patterns</span>
-                        <span className="ml-auto text-xs text-muted-foreground">
-                          {imageRegistryOverrideRules.length} configured
-                        </span>
-                        <Accordion.Indicator />
-                      </Accordion.Trigger>
-                    </Accordion.Heading>
-                    <Accordion.Panel>
-                      <Accordion.Body>
-                        <div className="space-y-4 px-4 pb-4">
-                          <p className="max-w-3xl text-sm text-muted-foreground">
-                            Route matching images to a registry using RE2 patterns. Exact image
-                            overrides take priority; otherwise, the most recently updated matching
-                            pattern wins.
-                          </p>
-                          {imageRegistryOverrideRules.length > 0 ? (
-                            <div className="space-y-2">
-                              {imageRegistryOverrideRules.map((rule) => {
-                                const ruleRegistry = registryByID.get(rule.registry_id);
-                                const matchCount = previewImages.filter((image) =>
-                                  imageRegistryRuleMatches(rule.pattern, image.full_ref)
-                                ).length;
-                                return (
-                                  <div
-                                    key={rule.id}
-                                    className="flex min-w-0 items-center gap-3 border-b border-border py-3 last:border-b-0"
-                                  >
-                                    <div className="min-w-0 flex-1">
-                                      <code className="block break-all text-xs text-foreground">
-                                        {rule.pattern}
-                                      </code>
-                                      <p className="mt-1 text-xs text-muted-foreground">
-                                        {ruleRegistry?.name ?? 'Registry unavailable'} · matches{' '}
-                                        {matchCount}{' '}
-                                        {matchCount === 1
-                                          ? 'discovered image'
-                                          : 'discovered images'}
-                                      </p>
-                                    </div>
-                                    <Button
-                                      aria-label={`Remove registry pattern ${rule.pattern}`}
-                                      isDisabled={savingRegistryRule}
-                                      isIconOnly
-                                      size="sm"
-                                      variant="tertiary"
-                                      onPress={() => void removeImageRegistryOverrideRule(rule)}
-                                    >
-                                      <Delete01Icon size={16} />
-                                    </Button>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : null}
-                          <form
-                            onSubmit={saveImageRegistryOverrideRule}
-                            className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.65fr)_auto]"
-                          >
-                            <div className="space-y-2">
-                              <FormField
-                                label="Image reference pattern"
-                                placeholder="^ghcr\\.io/team/api(:.*)?$"
-                                value={registryRulePattern}
-                                onChange={(event) => setRegistryRulePattern(event.target.value)}
-                              />
-                            </div>
-                            <Select
-                              aria-label="Registry for image ref pattern"
-                              isDisabled={savingRegistryRule || registries.length === 0}
-                              value={registryRuleRegistryID || '__none__'}
-                              onChange={(value) =>
-                                setRegistryRuleRegistryID(
-                                  String(value === '__none__' ? '' : (value ?? ''))
-                                )
-                              }
-                              variant="secondary"
-                            >
-                              <Label>Registry</Label>
-                              <Select.Trigger>
-                                <Select.Value />
-                                <Select.Indicator />
-                              </Select.Trigger>
-                              <Select.Popover>
-                                <ListBox>
-                                  <ListBox.Item id="__none__">Choose a registry</ListBox.Item>
-                                  {registries.map((registry) => (
-                                    <ListBox.Item
-                                      key={registry.id}
-                                      id={registry.id}
-                                      textValue={registry.name}
-                                    >
-                                      {registry.name}
-                                    </ListBox.Item>
-                                  ))}
-                                </ListBox>
-                              </Select.Popover>
-                            </Select>
-                            <Button
-                              isDisabled={!registryRulePattern.trim() || !registryRuleRegistryID}
-                              isPending={savingRegistryRule}
-                              type="submit"
-                              variant="secondary"
-                            >
-                              Save pattern
-                            </Button>
-                            <p className="text-xs text-muted-foreground md:col-span-3">
-                              Patterns match the full image reference, including its tag or digest.
-                              Changing an image’s registry below saves a pattern across its tags.
-                            </p>
-                            {registryRuleError ? (
-                              <p className="text-xs text-danger md:col-span-3">
-                                {registryRuleError}
-                              </p>
-                            ) : null}
-                          </form>
-                        </div>
-                      </Accordion.Body>
-                    </Accordion.Panel>
-                  </Accordion.Item>
-                </Accordion>
                 <div className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <SearchField
                     aria-label="Search discovered images"
@@ -1598,172 +1752,164 @@ export default function GitRepositoryDetailPage() {
                     );
                     const selectedRegistryID =
                       registryOverride?.registry_id ?? registryOverrideRule?.registry_id;
-                    const selectedRegistry = selectedRegistryID
-                      ? registryByID.get(selectedRegistryID)
-                      : undefined;
                     const inferredRegistry = image.registry_id
                       ? registryByID.get(image.registry_id)
                       : undefined;
                     const imageHost = imageRegistryHost(image.full_ref);
                     const latestScan = latestScanByRef.get(image.full_ref);
+                    const health = healthByRef.get(image.full_ref);
+                    const isOpen = expandedImageRefs.has(image.full_ref);
+                    const needsAttention = (health?.rank ?? 9) <= 2;
+                    const registryHint = registryOverride
+                      ? 'Pinned for this image.'
+                      : registryOverrideRule
+                        ? 'Set by a registry pattern.'
+                        : image.registry_id
+                          ? inferredRegistry
+                            ? 'Matched automatically from the image host.'
+                            : 'The matched registry is not available in this workspace.'
+                          : imageHost
+                            ? `No registry configured for ${imageHost}; the reference is used as written.`
+                            : 'Automatic matching (Docker Hub).';
+                    const subtitle = [
+                      needsAttention && health?.reason ? health.reason : null,
+                      `${locations.length} deployment ${locations.length === 1 ? 'location' : 'locations'}`,
+                      latestScan ? `scanned ${timeAgo(latestScan.created_at)}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ');
+                    const menuItems = [
+                      ...(latestScan
+                        ? [
+                            {
+                              id: 'open-scan',
+                              label: 'Open latest scan',
+                              icon: <ArrowUpRight size={15} />,
+                              onAction: () => router.push(`/scans/details/${latestScan.scan_id}`),
+                            },
+                          ]
+                        : []),
+                      exclusion
+                        ? {
+                            id: 'reenable',
+                            label: 'Re-enable',
+                            icon: <Undo2 size={15} />,
+                            pending: updatingImageExclusions,
+                            onAction: () => void reenableImage(exclusion),
+                          }
+                        : {
+                            id: 'exclude',
+                            label: 'Exclude from scans',
+                            icon: <Ban size={15} />,
+                            pending: updatingImageExclusions,
+                            onAction: () => void excludeImages([image.full_ref]),
+                          },
+                    ];
                     return (
-                      <div
-                        key={image.id}
-                        className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 border-b border-border px-4 py-3 last:border-b-0 transition-colors hover:bg-secondary"
-                      >
-                        <Checkbox
-                          aria-label={`Select ${image.full_ref}`}
-                          className="mt-2 shrink-0"
-                          isDisabled={Boolean(exclusion)}
-                          isSelected={selectedImageRefs.has(image.full_ref)}
-                          onChange={(next) => toggleImage(image.full_ref, next)}
-                          variant="secondary"
-                        >
-                          <Checkbox.Content>
-                            <Checkbox.Control>
-                              <Checkbox.Indicator />
-                            </Checkbox.Control>
-                          </Checkbox.Content>
-                        </Checkbox>
-                        <Accordion className="min-w-0 flex-1" hideSeparator>
-                          <Accordion.Item id={image.id}>
-                            <Accordion.Heading>
-                              <Accordion.Trigger className="min-w-0 flex-wrap gap-y-2 py-0 hover:no-underline">
-                                <span className="flex min-w-0 flex-1 items-start gap-3 text-left">
-                                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                                    <PackageIcon size={16} />
-                                  </span>
-                                  <span className="min-w-0 flex-1 space-y-1.5">
-                                    <code className="block truncate text-xs font-medium text-foreground">
-                                      {image.full_ref}
-                                    </code>
-                                    <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                                      <span>
-                                        {locations.length} deployment{' '}
-                                        {locations.length === 1 ? 'location' : 'locations'}
-                                      </span>
-                                      {latestScan ? (
-                                        <span>Last scanned {timeAgo(latestScan.created_at)}</span>
-                                      ) : (
-                                        <span>Not scanned yet</span>
-                                      )}
-                                    </span>
-                                  </span>
-                                </span>
-                                {exclusion ? <StatusTag tone="warning">Excluded</StatusTag> : null}
-                                {registryOverride || registryOverrideRule ? (
-                                  <StatusTag tone="accent">
-                                    {selectedRegistry?.name ?? 'Configured override'}
-                                    {!registryOverride && registryOverrideRule ? ' · regex' : ''}
-                                  </StatusTag>
-                                ) : image.registry_id ? (
-                                  <StatusTag tone={inferredRegistry ? 'accent' : 'warning'}>
-                                    {inferredRegistry
-                                      ? `Matched: ${inferredRegistry.name}`
-                                      : 'Configured match unavailable'}
-                                  </StatusTag>
-                                ) : imageHost ? (
-                                  <StatusTag tone="warning">Custom host: {imageHost}</StatusTag>
-                                ) : null}
-                                {latestScan ? (
-                                  <span className="shrink-0">
-                                    <StatusBadge
-                                      status={latestScan.status}
-                                      externalStatus={latestScan.external_status}
-                                    />
-                                  </span>
-                                ) : null}
-                                <Accordion.Indicator className="shrink-0" />
-                              </Accordion.Trigger>
-                            </Accordion.Heading>
-                            <Accordion.Panel>
-                              <Accordion.Body className="mt-3 border-t border-border pt-3">
-                                <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3">
-                                  <RegistryResolutionSummary
-                                    image={image}
-                                    inferredRegistry={inferredRegistry}
-                                    override={registryOverride}
-                                    overrideRegistry={selectedRegistry}
-                                  />
-                                  <div className="mt-4 border-t border-border pt-4">
-                                    <ImageRegistrySelect
-                                      registries={registries}
-                                      value={selectedRegistryID ?? null}
-                                      isDisabled={savingImageRegistryRef === image.full_ref}
-                                      onChange={(value) =>
-                                        void updateImageRegistry(image.full_ref, value)
-                                      }
-                                    />
-                                  </div>
-                                </div>
-                                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                                  Deployment locations
-                                </p>
-                                <div className="grid gap-2 sm:grid-cols-2">
-                                  {locations.map((location) => (
-                                    <div
-                                      key={`${location.file}:${location.path}`}
-                                      className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs"
-                                    >
-                                      <p className="truncate font-mono text-foreground">
-                                        {location.target
-                                          ? `Rendered from ${location.target}`
-                                          : location.file}
-                                      </p>
-                                      <p className="mt-1 truncate text-muted-foreground">
-                                        {location.path}
-                                      </p>
-                                      <p className="mt-1.5 text-muted-foreground">
-                                        {location.kind ?? 'Manifest'}
-                                        {location.name ? `/${location.name}` : ''}
-                                        {location.namespace ? ` · ${location.namespace}` : ''}
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-                                {latestScan ? (
-                                  <Button
-                                    className="mt-3"
-                                    size="sm"
-                                    variant="secondary"
-                                    onPress={() =>
-                                      router.push(`/scans/details/${latestScan.scan_id}`)
-                                    }
-                                  >
-                                    Open latest scan · {timeAgo(latestScan.created_at)}
-                                  </Button>
-                                ) : null}
-                              </Accordion.Body>
-                            </Accordion.Panel>
-                          </Accordion.Item>
-                        </Accordion>
-                        {exclusion ? (
-                          <Button
-                            className="mt-2 shrink-0"
-                            isPending={updatingImageExclusions}
-                            size="sm"
+                      <div key={image.id} className="border-b border-border last:border-b-0">
+                        <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40">
+                          <Checkbox
+                            aria-label={`Select ${image.full_ref}`}
+                            className="shrink-0"
+                            isDisabled={Boolean(exclusion)}
+                            isSelected={selectedImageRefs.has(image.full_ref)}
+                            onChange={(next) => toggleImage(image.full_ref, next)}
                             variant="secondary"
-                            onPress={() => void reenableImage(exclusion)}
                           >
-                            Re-enable
-                          </Button>
-                        ) : (
-                          <Button
-                            className="mt-2 shrink-0"
-                            isPending={updatingImageExclusions}
-                            size="sm"
-                            variant="outline"
-                            onPress={() => void excludeImages([image.full_ref])}
+                            <Checkbox.Content>
+                              <Checkbox.Control>
+                                <Checkbox.Indicator />
+                              </Checkbox.Control>
+                            </Checkbox.Content>
+                          </Checkbox>
+                          <button
+                            type="button"
+                            aria-expanded={isOpen}
+                            onClick={() => toggleImageOpen(image.full_ref)}
+                            className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                           >
-                            Exclude
-                          </Button>
-                        )}
+                            <span className="min-w-0 flex-1">
+                              <code
+                                className="block truncate text-sm font-medium text-foreground"
+                                title={image.full_ref}
+                              >
+                                {image.full_ref}
+                              </code>
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {subtitle}
+                              </span>
+                            </span>
+                            {health ? (
+                              <StatusTag
+                                tone={health.tone}
+                                className="shrink-0 text-sm font-medium text-foreground"
+                              >
+                                {health.label}
+                              </StatusTag>
+                            ) : null}
+                            <ChevronDown
+                              aria-hidden
+                              className={`size-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                            />
+                          </button>
+                          <RowActionsMenu
+                            label={`Actions for ${image.full_ref}`}
+                            items={menuItems}
+                          />
+                        </div>
+                        {isOpen ? (
+                          <div className="grid gap-6 border-t border-border bg-muted/20 px-4 py-4 pl-[3.25rem] md:grid-cols-2">
+                            <div className="min-w-0 space-y-2">
+                              <h3 className="text-xs font-medium text-muted-foreground">
+                                Registry
+                              </h3>
+                              <ImageRegistrySelect
+                                registries={registries}
+                                value={selectedRegistryID ?? null}
+                                isDisabled={savingImageRegistryRef === image.full_ref}
+                                onChange={(value) =>
+                                  void updateImageRegistry(image.full_ref, value)
+                                }
+                              />
+                              <p className="text-xs text-muted-foreground">{registryHint}</p>
+                            </div>
+                            <div className="min-w-0 space-y-2">
+                              <h3 className="text-xs font-medium text-muted-foreground">
+                                Deployment locations
+                              </h3>
+                              <ul className="space-y-2">
+                                {locations.map((location) => (
+                                  <li
+                                    key={`${location.file}:${location.path}`}
+                                    className="min-w-0 text-xs"
+                                  >
+                                    <p
+                                      className="truncate font-mono text-foreground"
+                                      title={location.target ?? location.file}
+                                    >
+                                      {location.target
+                                        ? `Rendered from ${location.target}`
+                                        : location.file}
+                                    </p>
+                                    <p className="truncate text-muted-foreground">
+                                      {location.path} · {location.kind ?? 'Manifest'}
+                                      {location.name ? `/${location.name}` : ''}
+                                      {location.namespace ? ` · ${location.namespace}` : ''}
+                                    </p>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}
                   {filteredPreviewImages.length === 0 ? (
                     <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                      No discovered images match “{imageSearch}”.
+                      {imageSearch.trim()
+                        ? `No discovered images match “${imageSearch}”.`
+                        : 'No images in this group.'}
                     </p>
                   ) : null}
                 </div>

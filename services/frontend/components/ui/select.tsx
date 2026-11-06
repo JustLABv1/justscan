@@ -110,7 +110,9 @@ function PanelSelectAdapter({
     originalKeys.set(String(key), key);
     return {
       value: String(key),
-      label: withoutItemIndicators(element.props.children),
+      // The trigger shows this label. Rich option content (a name with a
+      // description underneath) would not fit there, so a plain `textValue` wins.
+      label: element.props.textValue || withoutItemIndicators(element.props.children),
       disabled: element.props.isDisabled,
     };
   });

@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -66,5 +67,16 @@ func TestMultiSourcePostureKeepsNewestChangeEvent(t *testing.T) {
 	posture := derivePostureForIdentity(finding, vulnerabilityFindingIdentity{PackageName: "pkg", InstalledVersion: "1.0.0"}, latest, nil)
 	if posture.ChangeEventID == nil || *posture.ChangeEventID != newer {
 		t.Fatalf("change event = %v, want %v", posture.ChangeEventID, newer)
+	}
+}
+
+func TestRawJSONObjectStripsNUL(t *testing.T) {
+	object, err := rawJSONObject([]byte(`{"a\u0000b":"x\u0000y","lit":"escape \\u0000 here","n":[{"k":"\u0000"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(object)
+	if strings.Contains(string(encoded), `u0000`) && !strings.Contains(string(encoded), `\\ u0000`) || strings.Contains(string(encoded), `\u0000`) {
+		t.Fatalf("NUL survived: %s", encoded)
 	}
 }

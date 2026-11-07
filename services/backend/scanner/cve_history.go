@@ -865,7 +865,38 @@ func rawJSONObject(raw json.RawMessage) (models.JSONObject, error) {
 	if err := json.Unmarshal(raw, &object); err != nil {
 		return nil, err
 	}
+	if cleaned, ok := stripNULFromJSON(object).(map[string]any); ok {
+		return models.JSONObject(cleaned), nil
+	}
 	return object, nil
+}
+
+// stripNULFromJSON removes NUL characters from every string and object key.
+// Postgres jsonb rejects \u0000 ("unsupported Unicode escape sequence"), and
+// NVD change details occasionally contain it. The literal six-character text
+// "\\u0000" (e.g. advisories that discuss NUL escapes) is rewritten as well,
+// because the driver's JSON encoding turns it into a real escape.
+func stripNULFromJSON(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return scrubNUL(typed)
+	case map[string]any:
+		result := make(map[string]any, len(typed))
+		for key, item := range typed {
+			result[scrubNUL(key)] = stripNULFromJSON(item)
+		}
+		return result
+	case models.JSONObject:
+		return stripNULFromJSON(map[string]any(typed))
+	case []any:
+		result := make([]any, len(typed))
+		for i, item := range typed {
+			result[i] = stripNULFromJSON(item)
+		}
+		return result
+	default:
+		return value
+	}
 }
 
 func deduplicateJSONObjectSlice(values []models.JSONObject) []models.JSONObject {
@@ -1492,6 +1523,16 @@ func performCVEHistorySync(ctx context.Context, db *bun.DB, client *cveHistoryCl
 		return fmt.Errorf("create CVE history sync run: %w", err)
 	}
 
+	if trigger == "manual" {
+		// An operator-triggered run must not be silently skipped by the failure
+		// backoff, otherwise "Run sync now" reports success without doing anything.
+		if _, err := db.NewUpdate().Model((*models.VulnerabilityIntelligenceSyncCheckpoint)(nil)).
+			Set("next_retry_at = NULL").
+			Where("source = ?", cveHistorySource).Exec(ctx); err != nil {
+			log.Warnf("clear CVE history retry backoff: %v", err)
+		}
+	}
+
 	syncErr := syncCVEHistoryWithClient(ctx, db, client)
 	completedAt := time.Now().UTC()
 	run.CompletedAt = &completedAt
@@ -1549,4 +1590,10 @@ func endCVEHistorySync() {
 	cveHistoryRunState.cancelRequested = false
 	cveHistoryRunState.startedAt = nil
 	cveHistoryRunState.progress = CVEHistorySyncProgress{}
+}
+
+var nulScrubber = strings.NewReplacer("\x00", "", "\\u0000", "\\ u0000", "\\U0000", "\\ U0000")
+
+func scrubNUL(value string) string {
+	return nulScrubber.Replace(value)
 }

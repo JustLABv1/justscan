@@ -26,6 +26,26 @@ func latestImageStatusWhereClause(raw string) (string, []interface{}) {
 	return "(" + strings.Join(clauses, " OR ") + ")", args
 }
 
+// scanStatusWhereClause filters individual scans by status the way
+// latestImageStatusWhereClause filters an image's latest scan.
+func scanStatusWhereClause(raw string) (string, []interface{}) {
+	statuses := strings.Split(raw, ",")
+	clauses := make([]string, 0, len(statuses))
+	args := make([]interface{}, 0, len(statuses)*2)
+	for _, status := range statuses {
+		status = strings.TrimSpace(status)
+		if status == "" {
+			continue
+		}
+		clauses = append(clauses, "(scan.status = ? OR scan.external_status = ?)")
+		args = append(args, status, status)
+	}
+	if len(clauses) == 0 {
+		return "1=1", nil
+	}
+	return "(" + strings.Join(clauses, " OR ") + ")", args
+}
+
 func scanOwnershipWhere(userID uuid.UUID, isAdmin bool, accessibleOrgIDs []uuid.UUID, scanAlias string) (string, []interface{}) {
 	if isAdmin {
 		return "1=1", nil

@@ -4,6 +4,7 @@ import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
 import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useAIContextBridge } from '@/components/assistant/ai-context-bridge';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { FindingReviewPanel } from '@/components/scans/finding-review-panel';
 import { ScanFailureAlert } from '@/components/scans/scan-failure-alert';
 import { IntelligencePolicyImpactBanner } from '@/components/scans/intelligence-policy-impact-banner';
 import { SBOMWorkspace } from '@/components/scans/sbom-workspace';
@@ -3044,7 +3045,7 @@ function ScanDetailContent() {
           ) : null}
 
           <Table variant="secondary">
-            <Table.ScrollContainer className="rounded-none border-0">
+            <Table.ScrollContainer className="rounded-none border-0 [container-type:inline-size]">
               <Table.Content
                 aria-label="Scan vulnerabilities"
                 aria-busy={vulnLoading}
@@ -3266,396 +3267,40 @@ function ScanDetailContent() {
                             <Table.Row id={`${v.id}-expanded`}>
                               <Table.Cell
                                 colSpan={5}
-                                className="p-4"
-                                style={{
-                                  borderTop: '1px solid var(--border-subtle)',
-                                  background: 'var(--row-hover)',
-                                }}
+                                className="border-t border-border bg-muted/30 p-4"
                               >
-                                <Accordion
-                                  className="w-full overflow-hidden rounded-xl border border-divider bg-surface-secondary"
-                                  hideSeparator
-                                  variant="surface"
-                                >
-                                  {scan.image_digest && (
-                                    <Accordion.Item id={`suppression-${v.id}`}>
-                                      <Accordion.Heading>
-                                        <Accordion.Trigger className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-tertiary">
-                                          <ShieldKeyIcon
-                                            className="shrink-0 text-muted-foreground"
-                                            size={16}
-                                          />
-                                          <span className="min-w-0 flex-1">
-                                            <span className="block text-sm font-medium text-foreground">
-                                              Risk decision
-                                            </span>
-                                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                                              {v.suppression
-                                                ? 'An exception is recorded for this finding.'
-                                                : 'No exception recorded.'}
-                                            </span>
-                                          </span>
-                                          <StatusTag
-                                            tone={toneFromChipColor(
-                                              v.suppression ? 'warning' : undefined
-                                            )}
-                                          >
-                                            {v.suppression
-                                              ? v.suppression.status.replace(/_/g, ' ')
-                                              : 'None'}
-                                          </StatusTag>
-                                          <Accordion.Indicator className="shrink-0 text-muted-foreground" />
-                                        </Accordion.Trigger>
-                                      </Accordion.Heading>
-                                      <Accordion.Panel>
-                                        <Accordion.Body className="space-y-3 border-t border-divider p-4">
-                                          {v.suppression ? (
-                                            <Card variant="default">
-                                              <Card.Content className="space-y-3 p-3">
-                                                <p className="text-sm text-foreground">
-                                                  {v.suppression.justification ||
-                                                    'No justification provided.'}
-                                                </p>
-                                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                                  <div className="flex flex-wrap items-center gap-2">
-                                                    <SuppressionSourceBadge
-                                                      source={v.suppression.source}
-                                                    />
-                                                    <OwnershipBadge
-                                                      ownerType={v.suppression.owner_type}
-                                                      ownerOrgId={v.suppression.owner_org_id}
-                                                      orgNamesById={orgNamesById}
-                                                    />
-                                                    {v.suppression.read_only && (
-                                                      <StatusTag>Managed by Xray</StatusTag>
-                                                    )}
-                                                  </div>
-                                                  {canManageSuppressionAccess(v.suppression) && (
-                                                    <Button
-                                                      onPress={() =>
-                                                        openSuppressionAccess(
-                                                          v.suppression as Suppression
-                                                        )
-                                                      }
-                                                      size="sm"
-                                                      className="inline-flex items-center gap-1"
-                                                      type="button"
-                                                      variant="secondary"
-                                                    >
-                                                      <Shield01Icon size={12} />
-                                                      Manage Access
-                                                    </Button>
-                                                  )}
-                                                </div>
-                                                <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-                                                  {v.suppression.expires_at && (
-                                                    <p>
-                                                      Expires:{' '}
-                                                      {new Date(
-                                                        v.suppression.expires_at
-                                                      ).toLocaleDateString()}
-                                                    </p>
-                                                  )}
-                                                  {(v.suppression.xray_policy_name ||
-                                                    v.suppression.xray_watch_name) && (
-                                                    <p>
-                                                      {[
-                                                        v.suppression.xray_policy_name,
-                                                        v.suppression.xray_watch_name,
-                                                      ]
-                                                        .filter(Boolean)
-                                                        .join(' · ')}
-                                                    </p>
-                                                  )}
-                                                  {v.suppression.username && (
-                                                    <p>By: {v.suppression.username}</p>
-                                                  )}
-                                                </div>
-                                              </Card.Content>
-                                            </Card>
-                                          ) : (
-                                            <p className="text-sm text-muted-foreground">
-                                              No suppression exists for this vulnerability yet.
-                                            </p>
-                                          )}
-
-                                          {canMutateCurrentScan &&
-                                          !(
-                                            v.suppression?.read_only ||
-                                            v.suppression?.source === 'xray'
-                                          ) &&
-                                          !(
-                                            v.suppression?.owner_type === 'system' &&
-                                            !isPlatformAdmin
-                                          ) ? (
-                                            <Card variant="default">
-                                              <Card.Content className="space-y-3 p-3">
-                                                <div className="grid gap-2 sm:grid-cols-2">
-                                                  <Select
-                                                    value={suppressStatus}
-                                                    onChange={(value: any) =>
-                                                      setSuppressStatus(
-                                                        value as Suppression['status']
-                                                      )
-                                                    }
-                                                    isDisabled={!canMutateCurrentScan}
-                                                    variant="secondary"
-                                                  >
-                                                    <Select.Trigger>
-                                                      <Select.Value />
-                                                      <Select.Indicator />
-                                                    </Select.Trigger>
-                                                    <Select.Popover>
-                                                      <ListBox>
-                                                        <ListBox.Item id="accepted">
-                                                          Accepted Risk
-                                                        </ListBox.Item>
-                                                        <ListBox.Item id="wont_fix">
-                                                          Won&apos;t Fix
-                                                        </ListBox.Item>
-                                                        <ListBox.Item id="false_positive">
-                                                          False Positive
-                                                        </ListBox.Item>
-                                                      </ListBox>
-                                                    </Select.Popover>
-                                                  </Select>
-                                                  <Select
-                                                    value={suppressScope}
-                                                    onChange={(value: any) =>
-                                                      setSuppressScope(
-                                                        (value as
-                                                          'personal' | 'workspace' | 'global') ??
-                                                          (workScope.kind === 'org'
-                                                            ? 'workspace'
-                                                            : 'personal')
-                                                      )
-                                                    }
-                                                    variant="secondary"
-                                                    isDisabled={Boolean(v.suppression)}
-                                                  >
-                                                    <Select.Trigger>
-                                                      <Select.Value />
-                                                      <Select.Indicator />
-                                                    </Select.Trigger>
-                                                    <Select.Popover>
-                                                      <ListBox>
-                                                        <ListBox.Item id="personal">
-                                                          Personal
-                                                        </ListBox.Item>
-                                                        {(workScope.kind === 'org' ||
-                                                          suppressScope === 'workspace') && (
-                                                          <ListBox.Item id="workspace">
-                                                            {workScope.kind === 'org' &&
-                                                            workScope.orgName
-                                                              ? `Workspace: ${workScope.orgName}`
-                                                              : 'Organization workspace'}
-                                                          </ListBox.Item>
-                                                        )}
-                                                        {isPlatformAdmin && (
-                                                          <ListBox.Item id="global">
-                                                            Global (all workspaces)
-                                                          </ListBox.Item>
-                                                        )}
-                                                      </ListBox>
-                                                    </Select.Popover>
-                                                  </Select>
-                                                </div>
-                                                <FormField
-                                                  hideLabel
-                                                  label="Suppression justification"
-                                                  type="text"
-                                                  value={suppressJustification}
-                                                  onChange={(e: any) =>
-                                                    setSuppressJustification(e.target.value)
-                                                  }
-                                                  placeholder="Suppression justification"
-                                                  className="w-full"
-                                                  containerClassName="w-full"
-                                                  disabled={!canMutateCurrentScan}
-                                                />
-                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                                  <span className="text-xs text-muted-foreground">
-                                                    {suppressScope === 'global'
-                                                      ? 'Visible in all workspaces.'
-                                                      : suppressScope === 'workspace'
-                                                        ? 'Visible in the selected organization workspace.'
-                                                        : 'Visible only in your personal workspace unless shared later.'}
-                                                  </span>
-                                                  <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-                                                    <DatePicker
-                                                      aria-label="Expiry date (optional)"
-                                                      value={suppressExpiry}
-                                                      onChange={setSuppressExpiry}
-                                                      className="w-64"
-                                                      isDisabled={!canMutateCurrentScan}
-                                                    >
-                                                      <DateField.Group
-                                                        className={`${inputCls} flex min-h-10 items-center justify-between gap-1`}
-                                                      >
-                                                        <DateField.Input>
-                                                          {(seg: any) => (
-                                                            <DateField.Segment segment={seg} />
-                                                          )}
-                                                        </DateField.Input>
-                                                        <DateField.Suffix>
-                                                          <DatePicker.Trigger>
-                                                            <DatePicker.TriggerIndicator />
-                                                          </DatePicker.Trigger>
-                                                        </DateField.Suffix>
-                                                      </DateField.Group>
-                                                      <DatePicker.Popover>
-                                                        <DatePickerCalendar aria-label="Expiry date" />
-                                                      </DatePicker.Popover>
-                                                    </DatePicker>
-                                                    <Button
-                                                      onPress={() => handleSuppress(v)}
-                                                      isDisabled={
-                                                        suppressSaving ||
-                                                        !suppressJustification.trim() ||
-                                                        !canMutateCurrentScan
-                                                      }
-                                                      className="btn-warning inline-flex shrink-0 items-center gap-1.5"
-                                                      type="button"
-                                                      variant="danger-soft"
-                                                    >
-                                                      {suppressSaving && (
-                                                        <span className="size-3 border-2 border-destructive/30 border-t-red-400 rounded-full animate-spin" />
-                                                      )}
-                                                      {v.suppression ? 'Update' : 'Suppress'}
-                                                    </Button>
-                                                    {v.suppression && (
-                                                      <Button
-                                                        onPress={() => handleLiftSuppression(v)}
-                                                        isDisabled={
-                                                          suppressSaving || !canMutateCurrentScan
-                                                        }
-                                                        className="btn-secondary shrink-0"
-                                                        type="button"
-                                                        variant="secondary"
-                                                      >
-                                                        Remove
-                                                      </Button>
-                                                    )}
-                                                  </div>
-                                                </div>
-                                                {suppressError && (
-                                                  <p className="text-xs text-destructive">
-                                                    {suppressError}
-                                                  </p>
-                                                )}
-                                              </Card.Content>
-                                            </Card>
-                                          ) : (
-                                            <Card variant="default">
-                                              <Card.Content className="p-3">
-                                                <p className="text-xs text-muted-foreground">
-                                                  {canMutateCurrentScan
-                                                    ? v.suppression?.owner_type === 'system'
-                                                      ? 'This is a global suppression. Only platform admins can edit it here.'
-                                                      : 'This suppression comes from Xray and cannot be edited here.'
-                                                    : 'Your role has read-only suppression access in this organization.'}
-                                                </p>
-                                              </Card.Content>
-                                            </Card>
-                                          )}
-                                        </Accordion.Body>
-                                      </Accordion.Panel>
-                                    </Accordion.Item>
-                                  )}
-
-                                  <Accordion.Item id={`notes-${v.id}`}>
-                                    <Accordion.Heading>
-                                      <Accordion.Trigger className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-tertiary">
-                                        <Comment01Icon
-                                          className="shrink-0 text-muted-foreground"
-                                          size={16}
-                                        />
-                                        <span className="min-w-0 flex-1">
-                                          <span className="block text-sm font-medium text-foreground">
-                                            Notes
-                                          </span>
-                                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                                            {(v.comments?.length ?? 0) > 0
-                                              ? `${v.comments?.length} team note${(v.comments?.length ?? 0) === 1 ? '' : 's'}`
-                                              : 'Capture context for your team.'}
-                                          </span>
-                                        </span>
-                                        <StatusTag>{v.comments?.length ?? 0}</StatusTag>
-                                        <Accordion.Indicator className="shrink-0 text-muted-foreground" />
-                                      </Accordion.Trigger>
-                                    </Accordion.Heading>
-                                    <Accordion.Panel>
-                                      <Accordion.Body className="space-y-3 border-t border-divider p-4">
-                                        {v.comments && v.comments.length > 0 ? (
-                                          <div className="space-y-2">
-                                            {v.comments.map((c) => (
-                                              <Card key={c.id} variant="default">
-                                                <Card.Content className="p-3">
-                                                  <div className="flex items-start justify-between gap-3">
-                                                    <div className="min-w-0 flex-1">
-                                                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                        <span className="text-xs font-semibold text-foreground">
-                                                          {c.username || 'You'}
-                                                        </span>
-                                                        <span
-                                                          className="text-xs text-muted-foreground"
-                                                          title={fullDate(c.created_at)}
-                                                        >
-                                                          {timeAgo(c.created_at)}
-                                                        </span>
-                                                      </div>
-                                                      <p className="mt-1 text-sm text-muted-foreground">
-                                                        {c.content}
-                                                      </p>
-                                                    </div>
-                                                    {currentUser?.id === c.user_id && (
-                                                      <Button
-                                                        onPress={() => handleDeleteComment(c.id)}
-                                                        className="shrink-0"
-                                                        isIconOnly
-                                                        variant="secondary"
-                                                      >
-                                                        <Delete02Icon size={14} />
-                                                      </Button>
-                                                    )}
-                                                  </div>
-                                                </Card.Content>
-                                              </Card>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <Card variant="default">
-                                            <Card.Content className="p-3">
-                                              <p className="text-sm text-muted-foreground">
-                                                No notes yet. Add context for teammates here.
-                                              </p>
-                                            </Card.Content>
-                                          </Card>
-                                        )}
-                                        <div className="space-y-2">
-                                          <TextArea
-                                            className="w-full"
-                                            value={commentText}
-                                            onChange={(e: any) => setCommentText(e.target.value)}
-                                            placeholder="Add a note..."
-                                            rows={3}
-                                          />
-                                          <div className="flex justify-end">
-                                            <Button
-                                              onPress={() => handleAddComment(v.id)}
-                                              isDisabled={commentSaving || !commentText.trim()}
-                                              className="btn-primary shrink-0"
-                                              type="button"
-                                              variant="primary"
-                                            >
-                                              Add Note
-                                            </Button>
-                                          </div>
-                                        </div>
-                                      </Accordion.Body>
-                                    </Accordion.Panel>
-                                  </Accordion.Item>
-                                </Accordion>
+                                <FindingReviewPanel
+                                  vuln={v}
+                                  showRiskDecision={Boolean(scan.image_digest)}
+                                  canMutate={canMutateCurrentScan}
+                                  isPlatformAdmin={isPlatformAdmin}
+                                  workScope={workScope}
+                                  orgNamesById={orgNamesById}
+                                  currentUserId={currentUser?.id}
+                                  decision={{
+                                    status: suppressStatus,
+                                    onStatusChange: setSuppressStatus,
+                                    scope: suppressScope,
+                                    onScopeChange: setSuppressScope,
+                                    justification: suppressJustification,
+                                    onJustificationChange: setSuppressJustification,
+                                    expiry: suppressExpiry,
+                                    onExpiryChange: setSuppressExpiry,
+                                    saving: suppressSaving,
+                                    error: suppressError,
+                                    onSave: () => handleSuppress(v),
+                                    onLift: () => handleLiftSuppression(v),
+                                    canManageAccess: canManageSuppressionAccess,
+                                    onManageAccess: openSuppressionAccess,
+                                  }}
+                                  notes={{
+                                    text: commentText,
+                                    onTextChange: setCommentText,
+                                    saving: commentSaving,
+                                    onAdd: () => handleAddComment(v.id),
+                                    onDelete: handleDeleteComment,
+                                  }}
+                                />
                               </Table.Cell>
                             </Table.Row>
                           )}

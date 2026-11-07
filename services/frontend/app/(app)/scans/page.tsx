@@ -466,6 +466,15 @@ function ScansPageContent() {
       ) : null}
       <Card className="overflow-hidden gap-0 py-0">
         <ImageOverviewTable
+          filters={{
+            query,
+            status,
+            critical,
+            policy,
+            intelligence,
+            from: bounds?.from,
+            to: bounds?.to,
+          }}
           toolbar={
             <div className="space-y-3 border-b border-border p-3">
               <FilterChips

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight, Container, Tag, ScanLine } from 'lucide-react';
 import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
@@ -19,7 +19,19 @@ import {
 import { fullDate, timeAgo } from '@/lib/time';
 import { Delete01Icon, Shield01Icon } from 'hugeicons-react';
 
+/** The list filters, applied to expanded tags and scans so they match their image row. */
+export type ScanTreeFilters = {
+  query?: string;
+  status?: string;
+  critical?: '' | 'yes' | 'no';
+  policy?: '' | 'fail';
+  intelligence?: 'changed' | 'confirmation_pending' | '';
+  from?: string;
+  to?: string;
+};
+
 type Props = {
+  filters?: ScanTreeFilters;
   toolbar?: ReactNode;
   /** Bumps whenever the list is refreshed, so expanded branches reload with it. */
   revision?: number;
@@ -72,12 +84,17 @@ function Findings({
   );
 }
 
-function useScanTreeData(images: ImageOverview[], revision: number) {
+function useScanTreeData(images: ImageOverview[], revision: number, filters: ScanTreeFilters = {}) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [tags, setTags] = useState<Record<string, Branch<ArtifactSummary>>>({});
   const [runs, setRuns] = useState<Record<string, Branch<Scan>>>({});
 
+  // Read the latest filters inside async loads without re-creating loadBranch.
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
   async function loadBranch(image: string, tag?: string, page = 1, silent = false) {
+    const f = filtersRef.current;
     const key = tag === undefined ? imageKey(image) : tagKey(image, tag);
     const pending = <T,>(current: Record<string, Branch<T>>) => ({
       ...current,
@@ -98,11 +115,14 @@ function useScanTreeData(images: ImageOverview[], revision: number) {
         const result = await listScanArtifacts(
           page,
           LIMIT,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          image
+          f.query || undefined,
+          f.status || undefined,
+          f.critical,
+          f.policy,
+          image,
+          f.from,
+          f.to,
+          f.intelligence || undefined
         );
         setTags((current) => ({
           ...current,
@@ -118,13 +138,17 @@ function useScanTreeData(images: ImageOverview[], revision: number) {
           page,
           LIMIT,
           image,
-          undefined,
+          f.status || undefined,
           true,
           undefined,
           undefined,
-          undefined,
-          undefined,
-          tag
+          f.from,
+          f.to,
+          tag,
+          f.query || undefined,
+          f.intelligence || undefined,
+          f.critical,
+          f.policy
         );
         setRuns((current) => ({
           ...current,
@@ -159,6 +183,19 @@ function useScanTreeData(images: ImageOverview[], revision: number) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision]);
+
+  // A changed filter must also refresh branches that are already open.
+  const filtersKey = JSON.stringify(filters);
+  const firstFiltersKey = useRef(filtersKey);
+  useEffect(() => {
+    if (firstFiltersKey.current === filtersKey) return;
+    firstFiltersKey.current = filtersKey;
+    for (const key of expanded) {
+      const [image, tag] = JSON.parse(key) as [string, string | undefined];
+      void loadBranch(image, tag, 1, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   function toggle(image: string, tag?: string) {
     const key = tag === undefined ? imageKey(image) : tagKey(image, tag);
@@ -231,6 +268,7 @@ function buildRows(
 }
 
 function ScanTreeTable({
+  filters,
   toolbar,
   revision = 0,
   images,
@@ -239,7 +277,7 @@ function ScanTreeTable({
   onDeleteImage,
   queuedImageNames,
 }: Props) {
-  const tree = useScanTreeData(images, revision);
+  const tree = useScanTreeData(images, revision, filters);
   const { expanded, setExpanded, rows } = tree;
   return (
     <div>

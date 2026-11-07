@@ -255,3 +255,25 @@ jobs:
           pull: true
           no-cache-filters: runner
           push: false
+
+  required-checks:
+    name: Required CI
+    if: always()
+    needs: [changes, frontend-compile, docs-compile, backend-compile, cli-test, frontend-image-build, docs-image-build, backend-image-build, cli-image-build, combined-image-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, sys
+          jobs = json.loads(os.environ["NEEDS_JSON"])
+          failed = {name: job["result"] for name, job in jobs.items()
+                    if job["result"] not in ("success", "skipped")
+                    or (name == "changes" and job["result"] != "success")}
+          if failed:
+              print(f"Required jobs did not pass: {failed}")
+              sys.exit(1)
+          print("All relevant CI jobs passed.")
+          PYTHON

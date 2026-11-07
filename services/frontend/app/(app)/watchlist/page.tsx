@@ -1008,7 +1008,7 @@ export default function WatchlistPage() {
                         </Checkbox.Content>
                       </Checkbox>
                     </Table.Column>
-                    <Table.Column isRowHeader className="min-w-60">
+                    <Table.Column isRowHeader className="min-w-72">
                       Image
                     </Table.Column>
                     <Table.Column className="min-w-56">Status</Table.Column>
@@ -1122,7 +1122,7 @@ export default function WatchlistPage() {
                           </Table.Cell>
                           <Table.Cell>
                             <div className="space-y-1">
-                              <p className="max-w-sm break-words font-mono text-sm text-foreground [overflow-wrap:anywhere]">
+                              <p className="max-w-sm whitespace-normal break-words font-mono text-sm text-foreground [overflow-wrap:anywhere]">
                                 {item.image_name}:{item.image_tag}
                               </p>
                               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">

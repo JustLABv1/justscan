@@ -3,6 +3,7 @@
 import { ChevronsUpDown } from 'lucide-react';
 import { Avatar } from '@/components/panelui/avatar';
 import { Menu } from '@/components/panelui/menu';
+import { useOverlayPortal } from '@/components/ui/overlay-portal';
 import { StatusDot } from '@/components/ui/status-dot';
 import { cn } from '@/lib/utils';
 
@@ -35,6 +36,8 @@ export function WorkspaceSwitcher({
   id?: string;
   className?: string;
 }) {
+  // Inside the mobile drawer (a modal) the menu must render within its focus scope.
+  const portal = useOverlayPortal();
   const inviteLabel =
     invites.length > 0
       ? `, ${invites.length} pending organization invite${invites.length === 1 ? '' : 's'}`
@@ -70,7 +73,7 @@ export function WorkspaceSwitcher({
           </>
         )}
       </Menu.Trigger>
-      <Menu.Content className="min-w-60">
+      <Menu.Content className="min-w-60" container={portal}>
         <Menu.RadioGroup value={scopeValue} onValueChange={(value) => onScopeChange(String(value))}>
           <Menu.RadioItem value="personal">
             <Avatar name="Personal workspace" shape="square" size="xs" />

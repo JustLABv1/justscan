@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"justscan-backend/pkg/models"
 
@@ -92,13 +93,42 @@ func derivePostureForIdentity(finding models.Vulnerability, identity vulnerabili
 		posture.IntelligenceVersionID = nil
 		posture.IntelligenceVersion = ""
 		posture.ChangeEventID = nil
-		for _, record := range latest[1:] {
+		var changeEventObservedAt time.Time
+		for _, record := range latest {
 			if record.ObservedAt.After(posture.ObservedAt) {
 				posture.ObservedAt = record.ObservedAt
+			}
+			// Keep the link to the newest source event so the change history can
+			// still explain why the posture moved when several sources agree.
+			if record.ChangeEventID != nil && !record.ObservedAt.Before(changeEventObservedAt) {
+				changeEventObservedAt = record.ObservedAt
+				posture.ChangeEventID = cloneUUIDPointer(record.ChangeEventID)
 			}
 		}
 	}
 	return posture
+}
+
+// fixedVersionsAreNew reports whether the intelligence names a fixed version
+// that the scan did not already report. A fix the scanner already surfaced is
+// not new information and must not mark the finding as changed.
+func fixedVersionsAreNew(scanFixed string, current []string) bool {
+	if len(current) == 0 {
+		return false
+	}
+	normalize := func(value string) string {
+		return strings.TrimPrefix(strings.ToLower(strings.TrimSpace(value)), "v")
+	}
+	known := make(map[string]bool)
+	for _, version := range splitFixedVersions(scanFixed) {
+		known[normalize(version)] = true
+	}
+	for _, version := range current {
+		if !known[normalize(version)] {
+			return true
+		}
+	}
+	return false
 }
 
 // derivePostureState remains the compatibility wrapper for callers that only
@@ -140,7 +170,7 @@ func derivePostureStateForIdentity(finding models.Vulnerability, identity vulner
 		// A scanner finding with a fixed version is still affected at the
 		// installed version, but the current posture should make remediation
 		// available without rewriting the scan-time result.
-		if len(evidence.FixedVersions) > 0 {
+		if fixedVersionsAreNew(finding.FixedVersion, evidence.FixedVersions) {
 			return models.PostureStateFixAvailable, fmt.Sprintf("%s reports fixed version(s): %s.", source, strings.Join(evidence.FixedVersions, ", "))
 		}
 		currentRank := severityRank(finding.Severity)

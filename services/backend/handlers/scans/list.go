@@ -42,7 +42,21 @@ func ListScans(db *bun.DB) gin.HandlerFunc {
 
 		// Filters
 		if status := c.Query("status"); status != "" {
-			q = q.Where("status = ?", status)
+			// Same semantics as the image and tag lists: match either the scan
+			// status or the external (Xray) status.
+			statusWhere, statusArgs := scanStatusWhereClause(status)
+			q = q.Where(statusWhere, statusArgs...)
+		}
+		switch strings.TrimSpace(c.Query("critical")) {
+		case "yes":
+			q = q.Where("critical_count > 0")
+		case "no":
+			q = q.Where("critical_count = 0")
+		}
+		if strings.TrimSpace(c.Query("policy")) == "fail" {
+			if scopedOrgID, orgScoped := scopedOrgIDFromRequest(c); orgScoped {
+				q = q.Where("EXISTS (SELECT 1 FROM compliance_results cr WHERE cr.scan_id = scan.id AND cr.org_id = ? AND cr.status = 'fail')", scopedOrgID)
+			}
 		}
 		if image := c.Query("image"); image != "" {
 			if c.Query("exact") == "true" {

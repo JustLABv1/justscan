@@ -43,10 +43,14 @@ export const listScans = (
   imageTag?: string,
   query?: string,
   intelligence?: 'changed' | 'confirmation_pending',
+  critical?: '' | 'yes' | 'no',
+  policy?: '' | 'fail',
   options?: ApiRequestOptions
 ) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (image) params.set('image', image);
+  if (critical) params.set('critical', critical);
+  if (policy) params.set('policy', policy);
   if (status) params.set('status', status);
   if (exact) params.set('exact', 'true');
   if (helmOnly) params.set('helm_only', 'true');

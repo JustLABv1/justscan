@@ -865,7 +865,38 @@ func rawJSONObject(raw json.RawMessage) (models.JSONObject, error) {
 	if err := json.Unmarshal(raw, &object); err != nil {
 		return nil, err
 	}
+	if cleaned, ok := stripNULFromJSON(object).(map[string]any); ok {
+		return models.JSONObject(cleaned), nil
+	}
 	return object, nil
+}
+
+// stripNULFromJSON removes NUL characters from every string and object key.
+// Postgres jsonb rejects \u0000 ("unsupported Unicode escape sequence"), and
+// NVD change details occasionally contain it. The literal six-character text
+// "\\u0000" (e.g. advisories that discuss NUL escapes) is rewritten as well,
+// because the driver's JSON encoding turns it into a real escape.
+func stripNULFromJSON(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return scrubNUL(typed)
+	case map[string]any:
+		result := make(map[string]any, len(typed))
+		for key, item := range typed {
+			result[scrubNUL(key)] = stripNULFromJSON(item)
+		}
+		return result
+	case models.JSONObject:
+		return stripNULFromJSON(map[string]any(typed))
+	case []any:
+		result := make([]any, len(typed))
+		for i, item := range typed {
+			result[i] = stripNULFromJSON(item)
+		}
+		return result
+	default:
+		return value
+	}
 }
 
 func deduplicateJSONObjectSlice(values []models.JSONObject) []models.JSONObject {
@@ -1031,7 +1062,12 @@ func syncCVEHistoryWindows(ctx context.Context, db *bun.DB, runContext *cveHisto
 				}
 				if err := processCVEHistoryChange(ctx, db, runContext, change); err != nil {
 					failCVEHistoryEventProgress()
-					return err
+					var quarantined quarantinedCVEHistoryEventError
+					if !errors.As(err, &quarantined) {
+						return err
+					}
+					// Quarantined: the error is stored on the event; continue so one
+					// bad event cannot block the rest of the feed.
 				}
 				checkpoint.CursorAt = change.ObservedAt
 				checkpoint.CursorEventID = change.SourceEventID
@@ -1081,6 +1117,25 @@ func processCVEHistoryChange(ctx context.Context, db *bun.DB, runContext *cveHis
 		return nil
 	}
 
+	// NVD reports every CVE worldwide. Only CVEs that appear in a retained
+	// finding or the local KB can change a posture, so skip the two rate-limited
+	// upstream requests for everything else.
+	tracked, err := cveIsTracked(ctx, db, event.VulnID)
+	if err != nil {
+		return markCVEHistoryEventError(ctx, db, event.ID, err)
+	}
+	if !tracked {
+		now := time.Now().UTC()
+		if _, err := db.NewUpdate().Model((*models.VulnerabilityIntelligenceChangeEvent)(nil)).
+			Set("processed_at = ?", now).
+			Set("processing_error = ''").
+			Set("updated_at = ?", now).
+			Where("id = ?", event.ID).Exec(ctx); err != nil {
+			return fmt.Errorf("mark untracked CVE history event %s processed: %w", event.ID, err)
+		}
+		return nil
+	}
+
 	snapshot, err := runContext.fetchCurrentSnapshot(ctx, event.VulnID)
 	if err != nil {
 		return markCVEHistoryEventError(ctx, db, event.ID, err)
@@ -1109,7 +1164,7 @@ func processCVEHistoryChange(ctx context.Context, db *bun.DB, runContext *cveHis
 		}},
 	})
 	if err != nil {
-		return markCVEHistoryEventError(ctx, db, event.ID, err)
+		return handleCVEHistoryIngestFailure(ctx, db, event, err)
 	}
 	runContext.addPolicyImpactChanges(result.PolicyImpactChanges)
 	if _, err := db.NewUpdate().Model((*models.VulnerabilityIntelligenceChangeEvent)(nil)).
@@ -1143,6 +1198,52 @@ func persistCVEHistoryChange(ctx context.Context, db *bun.DB, change normalizedC
 		return nil, fmt.Errorf("load CVE history event %s: %w", change.SourceEventID, err)
 	}
 	return persisted, nil
+}
+
+// maxCVEHistoryEventAttempts bounds how often one event may fail storage or
+// posture evaluation before it is quarantined. Without a bound a single
+// unprocessable event blocks the checkpoint, and with it every later event.
+const maxCVEHistoryEventAttempts = 3
+
+type quarantinedCVEHistoryEventError struct{ error }
+
+func (e quarantinedCVEHistoryEventError) Unwrap() error { return e.error }
+
+// handleCVEHistoryIngestFailure records the failure. Cancellation is never
+// counted, so a stopped sync does not burn an attempt. Once the attempt limit is
+// reached the event is quarantined: its error stays visible, but the sync moves
+// on instead of retrying it forever.
+func handleCVEHistoryIngestFailure(ctx context.Context, db *bun.DB, event *models.VulnerabilityIntelligenceChangeEvent, ingestErr error) error {
+	if ctx.Err() != nil {
+		return markCVEHistoryEventError(ctx, db, event.ID, ingestErr)
+	}
+	attempts := event.Attempts + 1
+	message := ingestErr.Error()
+	if attempts >= maxCVEHistoryEventAttempts {
+		message = fmt.Sprintf("quarantined after %d attempts: %s", attempts, message)
+	}
+	if _, err := db.NewUpdate().Model((*models.VulnerabilityIntelligenceChangeEvent)(nil)).
+		Set("processing_error = ?", message).
+		Set("attempts = ?", attempts).
+		Set("updated_at = ?", time.Now().UTC()).
+		Where("id = ?", event.ID).Exec(ctx); err != nil {
+		return fmt.Errorf("record CVE history event %s failure: %v (and update failed: %w)", event.ID, ingestErr, err)
+	}
+	if attempts >= maxCVEHistoryEventAttempts {
+		log.Warnf("Quarantined CVE history event %s (%s): %v", event.SourceEventID, event.VulnID, ingestErr)
+		return quarantinedCVEHistoryEventError{ingestErr}
+	}
+	return ingestErr
+}
+
+func cveIsTracked(ctx context.Context, db *bun.DB, vulnID string) (bool, error) {
+	var tracked bool
+	err := db.NewRaw(`SELECT EXISTS (SELECT 1 FROM vulnerabilities WHERE vuln_id = ?)
+		OR EXISTS (SELECT 1 FROM vuln_kb WHERE vuln_id = ?)`, vulnID, vulnID).Scan(ctx, &tracked)
+	if err != nil {
+		return false, fmt.Errorf("check whether %s is tracked: %w", vulnID, err)
+	}
+	return tracked, nil
 }
 
 func markCVEHistoryEventError(ctx context.Context, db *bun.DB, eventID uuid.UUID, eventErr error) error {
@@ -1422,6 +1523,16 @@ func performCVEHistorySync(ctx context.Context, db *bun.DB, client *cveHistoryCl
 		return fmt.Errorf("create CVE history sync run: %w", err)
 	}
 
+	if trigger == "manual" {
+		// An operator-triggered run must not be silently skipped by the failure
+		// backoff, otherwise "Run sync now" reports success without doing anything.
+		if _, err := db.NewUpdate().Model((*models.VulnerabilityIntelligenceSyncCheckpoint)(nil)).
+			Set("next_retry_at = NULL").
+			Where("source = ?", cveHistorySource).Exec(ctx); err != nil {
+			log.Warnf("clear CVE history retry backoff: %v", err)
+		}
+	}
+
 	syncErr := syncCVEHistoryWithClient(ctx, db, client)
 	completedAt := time.Now().UTC()
 	run.CompletedAt = &completedAt
@@ -1479,4 +1590,10 @@ func endCVEHistorySync() {
 	cveHistoryRunState.cancelRequested = false
 	cveHistoryRunState.startedAt = nil
 	cveHistoryRunState.progress = CVEHistorySyncProgress{}
+}
+
+var nulScrubber = strings.NewReplacer("\x00", "", "\\u0000", "\\ u0000", "\\U0000", "\\ U0000")
+
+func scrubNUL(value string) string {
+	return nulScrubber.Replace(value)
 }

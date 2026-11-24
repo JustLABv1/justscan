@@ -111,7 +111,31 @@ func LoadLocalSuppressionsByDigest(ctx context.Context, db *bun.DB, imageDigest 
 	return results, nil
 }
 
-func LoadXraySuppressionsByScan(ctx context.Context, db *bun.DB, scanID uuid.UUID) (map[string]*models.XraySuppression, error) {
+// XraySuppressionIndex holds a scan's active Xray ignore-rule snapshots by
+// vulnerability ID, newest first.
+type XraySuppressionIndex map[string][]*models.XraySuppression
+
+// Match returns the newest Xray suppression that covers the finding: the
+// vulnerability ID must match and, when the rule is limited to components,
+// one of them must match the finding's package.
+func (index XraySuppressionIndex) Match(finding *models.Vulnerability) *models.XraySuppression {
+	if finding == nil {
+		return nil
+	}
+	for _, suppression := range index[finding.VulnID] {
+		if len(suppression.Components) == 0 {
+			return suppression
+		}
+		for _, component := range suppression.Components {
+			if XrayComponentMatchesFinding(component, finding) {
+				return suppression
+			}
+		}
+	}
+	return nil
+}
+
+func LoadXraySuppressionsByScan(ctx context.Context, db *bun.DB, scanID uuid.UUID) (XraySuppressionIndex, error) {
 	var suppressions []models.XraySuppression
 	if err := db.NewSelect().Model(&suppressions).
 		Where("scan_id = ?", scanID).
@@ -120,18 +144,47 @@ func LoadXraySuppressionsByScan(ctx context.Context, db *bun.DB, scanID uuid.UUI
 		return nil, err
 	}
 
-	results := make(map[string]*models.XraySuppression, len(suppressions))
+	results := make(XraySuppressionIndex, len(suppressions))
 	for i := range suppressions {
 		if isExpiredAt(suppressions[i].ExpiresAt) {
 			continue
 		}
-		if _, exists := results[suppressions[i].VulnID]; exists {
-			continue
-		}
-		results[suppressions[i].VulnID] = &suppressions[i]
+		results[suppressions[i].VulnID] = append(results[suppressions[i].VulnID], &suppressions[i])
 	}
 
 	return results, nil
+}
+
+// XrayComponentMatchesFinding compares an Xray component reference such as
+// "deb://debian:bookworm:openssl:3.0.11" (with or without version) against a
+// finding's Xray component ID, package name, and installed version.
+func XrayComponentMatchesFinding(ref string, finding *models.Vulnerability) bool {
+	normalize := func(value string) string {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if index := strings.Index(value, "://"); index >= 0 {
+			value = value[index+3:]
+		}
+		return value
+	}
+	refValue := normalize(ref)
+	if refValue == "" || finding == nil {
+		return false
+	}
+	if componentID := normalize(finding.ExternalComponentID); componentID != "" {
+		if refValue == componentID || strings.HasPrefix(componentID, refValue+":") || strings.HasPrefix(refValue, componentID+":") {
+			return true
+		}
+	}
+	pkgName := normalize(finding.PkgName)
+	if pkgName == "" {
+		return false
+	}
+	nameMatches := refValue == pkgName || strings.HasPrefix(refValue, pkgName+":") || strings.HasSuffix(refValue, ":"+pkgName) || strings.Contains(refValue, ":"+pkgName+":")
+	if !nameMatches {
+		return false
+	}
+	version := normalize(finding.InstalledVersion)
+	return version == "" || refValue == pkgName || strings.HasSuffix(refValue, ":"+pkgName) || strings.HasSuffix(refValue, ":"+version)
 }
 
 func ApplyEffectiveSuppressions(ctx context.Context, db *bun.DB, scan *models.Scan, vulns []models.Vulnerability) (int, error) {
@@ -141,9 +194,9 @@ func ApplyEffectiveSuppressions(ctx context.Context, db *bun.DB, scan *models.Sc
 		return 0, err
 	}
 
-	xrayByVuln := map[string]*models.XraySuppression{}
+	xrayIndex := XraySuppressionIndex{}
 	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
-		xrayByVuln, err = LoadXraySuppressionsByScan(ctx, db, scan.ID)
+		xrayIndex, err = LoadXraySuppressionsByScan(ctx, db, scan.ID)
 		if err != nil {
 			return 0, err
 		}
@@ -151,7 +204,7 @@ func ApplyEffectiveSuppressions(ctx context.Context, db *bun.DB, scan *models.Sc
 
 	suppressedCount := 0
 	for i := range vulns {
-		vulns[i].Suppression = MergeEffectiveSuppression(localByVuln[vulns[i].VulnID], xrayByVuln[vulns[i].VulnID])
+		vulns[i].Suppression = MergeEffectiveSuppression(localByVuln[vulns[i].VulnID], xrayIndex.Match(&vulns[i]))
 		if vulns[i].Suppression != nil {
 			suppressedCount += 1
 		}
@@ -163,7 +216,7 @@ func ApplyEffectiveSuppressions(ctx context.Context, db *bun.DB, scan *models.Sc
 func RecalculateSuppressedCount(ctx context.Context, db *bun.DB, scan *models.Scan) (int, error) {
 	var vulns []models.Vulnerability
 	if err := db.NewSelect().Model(&vulns).
-		Column("vuln_id").
+		Column("vuln_id", "pkg_name", "installed_version", "external_component_id").
 		Where("scan_id = ?", scan.ID).
 		Scan(ctx); err != nil {
 		return 0, err

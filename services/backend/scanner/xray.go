@@ -64,6 +64,9 @@ type xrayClient struct {
 	registryHTTPClient   *http.Client
 	db                   *bun.DB
 	registryID           *uuid.UUID
+	// violationExports caches exportDetails violation payloads per component
+	// and path so violation import and the ignore-rule fallback share one call.
+	violationExports map[string][]byte
 }
 
 type RegistryXrayTestClient struct {
@@ -208,6 +211,10 @@ type xrayIgnoreRule struct {
 	Justification string
 	ExpiresAt     *time.Time
 	Raw           models.JSONObject
+	// Components and WatchNames come from the rule's ignore_filters (or the
+	// ignored violation row); empty means the rule is not limited by them.
+	Components []string
+	WatchNames []string
 }
 
 type xrayExportIgnoreRule struct {
@@ -1267,16 +1274,7 @@ func (c *xrayClient) exportIgnoredViolationRules(ctx context.Context, componentN
 
 	var lastErr error
 	for _, candidatePath := range trimmedPaths {
-		body := xrayComponentExportRequest{
-			PackageType:    "docker",
-			ComponentName:  componentName,
-			Path:           candidatePath,
-			OutputFormat:   "json_full",
-			Violations:     true,
-			IncludeIgnored: true,
-		}
-
-		payload, err := c.doRawJSON(ctx, http.MethodPost, "/xray/api/v2/component/exportDetails", body, "application/json, application/zip", http.StatusOK)
+		payload, err := c.exportViolationDetails(ctx, componentName, candidatePath)
 		if err != nil {
 			lastErr = err
 			continue
@@ -1307,16 +1305,7 @@ func (c *xrayClient) exportViolations(ctx context.Context, componentName string,
 
 	var lastErr error
 	for _, candidatePath := range trimmedPaths {
-		body := xrayComponentExportRequest{
-			PackageType:    "docker",
-			ComponentName:  componentName,
-			Path:           candidatePath,
-			OutputFormat:   "json_full",
-			Violations:     true,
-			IncludeIgnored: true,
-		}
-
-		payload, err := c.doRawJSON(ctx, http.MethodPost, "/xray/api/v2/component/exportDetails", body, "application/json, application/zip", http.StatusOK)
+		payload, err := c.exportViolationDetails(ctx, componentName, candidatePath)
 		if err != nil {
 			lastErr = err
 			continue
@@ -1336,6 +1325,33 @@ func (c *xrayClient) exportViolations(ctx context.Context, componentName string,
 		return nil, lastErr
 	}
 	return nil, nil
+}
+
+// exportViolationDetails requests the json_full violation export (including
+// ignored violations) for one component path. Successful payloads are cached
+// on the client, which lives for a single scan.
+func (c *xrayClient) exportViolationDetails(ctx context.Context, componentName, candidatePath string) ([]byte, error) {
+	key := componentName + "\x00" + candidatePath
+	if payload, ok := c.violationExports[key]; ok {
+		return payload, nil
+	}
+	body := xrayComponentExportRequest{
+		PackageType:    "docker",
+		ComponentName:  componentName,
+		Path:           candidatePath,
+		OutputFormat:   "json_full",
+		Violations:     true,
+		IncludeIgnored: true,
+	}
+	payload, err := c.doRawJSON(ctx, http.MethodPost, "/xray/api/v2/component/exportDetails", body, "application/json, application/zip", http.StatusOK)
+	if err != nil {
+		return nil, err
+	}
+	if c.violationExports == nil {
+		c.violationExports = make(map[string][]byte)
+	}
+	c.violationExports[key] = payload
+	return payload, nil
 }
 
 func xrayExportPathCandidates(artifactoryID string, candidatePaths ...string) []string {
@@ -2294,14 +2310,36 @@ func persistXrayIgnoreRuleSnapshots(ctx context.Context, db *bun.DB, scan *model
 		return nil
 	}
 
-	var rows []struct {
-		VulnID string `bun:"vuln_id"`
+	var findingIDs []struct {
+		VulnID      string `bun:"vuln_id"`
+		XrayIssueID string `bun:"xray_issue_id"`
 	}
 	if err := db.NewSelect().Model((*models.Vulnerability)(nil)).
-		ColumnExpr("DISTINCT vuln_id").
+		ColumnExpr("DISTINCT vuln_id, xray_issue_id").
 		Where("scan_id = ?", scan.ID).
-		Scan(ctx, &rows); err != nil {
+		Scan(ctx, &findingIDs); err != nil {
 		return fmt.Errorf("failed to load vulnerabilities for xray suppression snapshot: %w", err)
+	}
+	type findingVulnIDs struct {
+		VulnID   string
+		IssueIDs []string
+	}
+	rows := make([]findingVulnIDs, 0, len(findingIDs))
+	rowIndex := make(map[string]int, len(findingIDs))
+	for _, finding := range findingIDs {
+		vulnID := strings.TrimSpace(finding.VulnID)
+		if vulnID == "" {
+			continue
+		}
+		index, ok := rowIndex[vulnID]
+		if !ok {
+			index = len(rows)
+			rowIndex[vulnID] = index
+			rows = append(rows, findingVulnIDs{VulnID: vulnID})
+		}
+		if issueID := strings.TrimSpace(finding.XrayIssueID); issueID != "" && !strings.EqualFold(issueID, vulnID) {
+			rows[index].IssueIDs = append(rows[index].IssueIDs, issueID)
+		}
 	}
 
 	artifactName := lastPathSegment(scan.ImageName)
@@ -2318,14 +2356,33 @@ func persistXrayIgnoreRuleSnapshots(ctx context.Context, db *bun.DB, scan *model
 	useExportFallback := false
 	now := time.Now()
 
-	for _, row := range rows {
-		vulnID := strings.TrimSpace(row.VulnID)
-		if vulnID == "" {
-			continue
+	// List the ignore rules once and evaluate their scope locally. This covers
+	// global and repository-wide rules that per-artifact filters miss, and
+	// replaces one lookup per vulnerability. Unknown rule formats or listing
+	// errors fall back to the per-vulnerability lookup below.
+	var listedRules map[string][]xrayIgnoreRule
+	if listed, listErr := client.listIgnoreRules(ctx); listErr != nil {
+		log.Debugf("Xray ignore-rule listing for scan %s unavailable, using per-vulnerability lookups: %v", scan.ID, listErr)
+	} else {
+		vulnIDs := make(map[string][]string, len(rows))
+		for _, row := range rows {
+			vulnIDs[row.VulnID] = row.IssueIDs
 		}
+		image := xrayIgnoreRuleImage{Name: scan.ImageName, Tag: artifactVersion, Digest: scan.ImageDigest, ArtifactPaths: artifactPaths}
+		if matched, ok := matchXrayIgnoreRules(listed, vulnIDs, image, now); ok {
+			listedRules = matched
+			recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Evaluated %d Xray ignore rules against this image in one lookup.", len(listed)))
+		}
+	}
+
+	for _, row := range rows {
+		vulnID := row.VulnID
 
 		rules := []xrayIgnoreRule(nil)
-		if useExportFallback {
+		if listedRules != nil {
+			rules = listedRules[vulnID]
+			successfulLookups += 1
+		} else if useExportFallback {
 			if fallbackRules, ok := exportFallback[vulnID]; ok {
 				rules = fallbackRules
 				successfulLookups += 1
@@ -2386,26 +2443,50 @@ func persistXrayIgnoreRuleSnapshots(ctx context.Context, db *bun.DB, scan *model
 			if ruleID == "" {
 				ruleID = fallbackXrayIgnoreRuleID(vulnID, rule.PolicyName, rule.WatchName)
 			}
-			suppressionKey := vulnID + "\x00" + ruleID
-			if seenSuppressions[suppressionKey] {
-				continue
+			scope := parseXrayIgnoreRuleScope(rule.Raw)
+			components := rule.Components
+			if len(components) == 0 {
+				components = scope.Components
 			}
-			seenSuppressions[suppressionKey] = true
+			if components == nil {
+				components = []string{}
+			}
+			policyName := strings.TrimSpace(rule.PolicyName)
+			if policyName == "" {
+				policyName = strings.Join(scope.Policies, ", ")
+			}
+			// One snapshot per watch keeps watch-level ignore evidence usable
+			// for blocked-policy explanations.
+			watchNames := rule.WatchNames
+			if len(watchNames) == 0 {
+				watchNames = scope.Watches
+			}
+			if watch := strings.TrimSpace(rule.WatchName); watch != "" || len(watchNames) == 0 {
+				watchNames = []string{watch}
+			}
+			for _, watchName := range watchNames {
+				suppressionKey := vulnID + "\x00" + ruleID + "\x00" + watchName
+				if seenSuppressions[suppressionKey] {
+					continue
+				}
+				seenSuppressions[suppressionKey] = true
 
-			results = append(results, models.XraySuppression{
-				ScanID:        scan.ID,
-				ImageDigest:   scan.ImageDigest,
-				VulnID:        vulnID,
-				RuleID:        ruleID,
-				PolicyName:    strings.TrimSpace(rule.PolicyName),
-				WatchName:     strings.TrimSpace(rule.WatchName),
-				Justification: strings.TrimSpace(rule.Justification),
-				ArtifactPath:  firstNonEmpty(artifactPaths...),
-				ExpiresAt:     rule.ExpiresAt,
-				Raw:           rule.Raw,
-				CreatedAt:     now,
-				UpdatedAt:     now,
-			})
+				results = append(results, models.XraySuppression{
+					ScanID:        scan.ID,
+					ImageDigest:   scan.ImageDigest,
+					VulnID:        vulnID,
+					RuleID:        ruleID,
+					PolicyName:    policyName,
+					WatchName:     strings.TrimSpace(watchName),
+					Justification: strings.TrimSpace(rule.Justification),
+					ArtifactPath:  firstNonEmpty(artifactPaths...),
+					Components:    components,
+					ExpiresAt:     rule.ExpiresAt,
+					Raw:           rule.Raw,
+					CreatedAt:     now,
+					UpdatedAt:     now,
+				})
+			}
 		}
 	}
 
@@ -2580,6 +2661,12 @@ func appendXrayIgnoredViolationRulesFromPayload(results []xrayExportIgnoreRule, 
 			"expired_at",
 			"expires",
 		)
+		for _, key := range []string{"infected_components", "impacted_components", "component_id", "component"} {
+			if value, ok := candidate[key]; ok {
+				rule.Components = append(rule.Components, xrayIgnoreComponentRefs(value)...)
+			}
+		}
+		rule.Components = dedupeStrings(rule.Components)
 
 		if rule.RuleID == "" {
 			rule.RuleID = fallbackXrayIgnoreRuleID(vulnID, rule.PolicyName, rule.WatchName)

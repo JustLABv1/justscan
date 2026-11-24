@@ -695,7 +695,7 @@ export function AssistantExperience({
                     <AlertDialog.Heading>Delete conversation?</AlertDialog.Heading>
                   </AlertDialog.Header>
                   <AlertDialog.Body>
-                    <p className="text-sm leading-6 text-muted-foreground dark:text-foreground">
+                    <p className="text-sm leading-6 text-muted-foreground">
                       This removes{' '}
                       <strong>{conversationPendingDelete?.title ?? 'this conversation'}</strong> and
                       its message history from this scope.
@@ -754,9 +754,7 @@ export function AssistantExperience({
                         <Avatar className="mb-6 size-14" color="accent" variant="soft">
                           <Avatar.Fallback>AI</Avatar.Fallback>
                         </Avatar>
-                        <p className="text-sm font-medium tracking-[0.08em] text-muted-foreground">
-                          {greetingLabel}
-                        </p>
+                        <p className="text-sm font-medium text-muted-foreground">{greetingLabel}</p>
                         <h2 className="mt-4 max-w-3xl text-balance text-4xl font-semibold tracking-tight md:text-5xl">
                           {hasMeaningfulContext
                             ? `How can I help with ${scopeLabel}?`
@@ -1025,10 +1023,7 @@ function renderMessageContent(content: string) {
     .map((block, index) => {
       if (/^#{1,6}\s+/.test(block)) {
         return (
-          <p
-            className="text-base font-semibold text-foreground"
-            key={`${block}-${index}`}
-          >
+          <p className="text-base font-semibold text-foreground" key={`${block}-${index}`}>
             {renderInlineMarkdown(block.replace(/^#{1,6}\s+/, ''))}
           </p>
         );
@@ -1070,17 +1065,14 @@ function renderInlineMarkdown(value: string): ReactNode[] {
 
     if (match[2]) {
       result.push(
-        <strong
-          className="font-semibold text-foreground"
-          key={`${fullMatch}-${start}`}
-        >
+        <strong className="font-semibold text-foreground" key={`${fullMatch}-${start}`}>
           {match[2]}
         </strong>
       );
     } else if (match[3]) {
       result.push(
         <code
-          className="rounded bg-background/5 px-1.5 py-0.5 font-mono text-[0.95em] text-foreground dark:bg-white/10 dark:text-foreground"
+          className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground"
           key={`${fullMatch}-${start}`}
         >
           {match[3]}
@@ -1105,11 +1097,7 @@ function renderInlineMarkdown(value: string): ReactNode[] {
 function renderLinkNode(href: string, label: string, key: string) {
   if (/^\/[a-z0-9?=/_-]+$/i.test(href)) {
     return (
-      <Link
-        className="text-primary hover:text-primary dark:text-primary dark:hover:text-primary"
-        href={href}
-        key={key}
-      >
+      <Link className="text-primary underline-offset-4 hover:underline" href={href} key={key}>
         {label}
       </Link>
     );
@@ -1117,7 +1105,7 @@ function renderLinkNode(href: string, label: string, key: string) {
   if (/^https?:\/\//i.test(href)) {
     return (
       <a
-        className="text-primary hover:text-primary dark:text-primary dark:hover:text-primary"
+        className="text-primary underline-offset-4 hover:underline"
         href={href}
         key={key}
         rel="noreferrer"

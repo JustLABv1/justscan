@@ -1,6 +1,8 @@
 'use client';
 
-import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
+import { StatusTag, type StatusDotTone } from '@/components/ui/status-dot';
+import { eventLabel, humanize, JOB_STATUS_LABELS, labelFor, summarizeError } from '@/lib/labels';
+import { fullDate, timeAgo } from '@/lib/time';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
@@ -52,6 +54,7 @@ import {
   Card,
   ListBox,
   Modal,
+  ResourceList,
   Select,
   Spinner,
   Switch,
@@ -93,9 +96,12 @@ const noopConditionLookup = () => {};
 
 type NotificationManagerProps = {
   basePath: string;
+  /** Used only when `showHeader` is set; host pages usually title the section already. */
   heading: string;
   description: string;
   canManage?: boolean;
+  /** Render a heading card above the sections. Off by default to avoid repeating the page title. */
+  showHeader?: boolean;
 };
 
 type ChannelFormState = {
@@ -206,8 +212,45 @@ function summarizeRule(rule: NotificationRule, channels: NotificationChannel[]) 
         (condition) =>
           `${conditionFieldLabels[condition.field as keyof typeof conditionFieldLabels] ?? condition.field} ${operatorLabels[condition.operator] ?? condition.operator} ${formatConditionValue(condition.value)}`
       )
-      .join(' • ') || 'No conditions';
-  return `${rule.event_types.join(', ')} • ${channelNames || 'No channels'} • ${conditions}`;
+      .join(' · ') || 'No conditions';
+  const events = rule.event_types.map(notificationEventLabel).join(', ') || 'No events';
+  return `${events} · ${channelNames || 'No channels'} · ${conditions}`;
+}
+
+function channelTypeLabel(type: string) {
+  return channelTypeOptions.find((option) => option.value === type)?.label ?? humanize(type);
+}
+
+function notificationEventLabel(event: string) {
+  return eventTypeOptions.find((option) => option.value === event)?.label ?? eventLabel(event);
+}
+
+const DELIVERY_STATUS_LABELS: Record<string, string> = {
+  ...JOB_STATUS_LABELS,
+  leased: 'Sending',
+};
+
+function deliveryStatusLabel(status: string) {
+  return labelFor(DELIVERY_STATUS_LABELS, status);
+}
+
+function deliveryTone(status: string): StatusDotTone {
+  switch (status) {
+    case 'delivered':
+    case 'sent':
+    case 'success':
+      return 'success';
+    case 'dead_letter':
+    case 'failed':
+    case 'error':
+      return 'danger';
+    case 'pending':
+    case 'leased':
+    case 'retrying':
+      return 'accent';
+    default:
+      return 'neutral';
+  }
 }
 
 export function NotificationManager({
@@ -215,6 +258,7 @@ export function NotificationManager({
   heading,
   description,
   canManage = true,
+  showHeader = false,
 }: NotificationManagerProps) {
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [rules, setRules] = useState<NotificationRule[]>([]);
@@ -569,13 +613,15 @@ export function NotificationManager({
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <Card.Header>
-          <Card.Title>{heading}</Card.Title>
-          <Card.Description>{description}</Card.Description>
-        </Card.Header>
-      </Card>
+    <div className="space-y-4">
+      {showHeader ? (
+        <Card>
+          <Card.Header>
+            <Card.Title>{heading}</Card.Title>
+            <Card.Description>{description}</Card.Description>
+          </Card.Header>
+        </Card>
+      ) : null}
 
       {error ? (
         <StatusAlert status="danger" title="Notifications failed to load" description={error} />
@@ -591,139 +637,118 @@ export function NotificationManager({
         />
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-        <Card className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold">Channels</h2>
-              <p className="text-sm text-muted-foreground">Delivery credentials and destination toggles.</p>
+              <Card.Title>Channels</Card.Title>
+              <Card.Description>Where notifications are delivered.</Card.Description>
             </div>
             <Button onPress={openCreateChannel} isDisabled={!canManage}>
               <Add01Icon size={15} />
               Add channel
             </Button>
-          </div>
-
-          <Table variant="secondary">
-            <Table.ScrollContainer>
-              <Table.Content aria-label="Notification channels">
-                <Table.Header>
-                  <Table.Column isRowHeader>Name</Table.Column>
-                  <Table.Column>Type</Table.Column>
-                  <Table.Column>Status</Table.Column>
-                  <Table.Column className="text-right">Actions</Table.Column>
-                </Table.Header>
-                <Table.Body
-                  renderEmptyState={() => (
-                    <div className="py-8 text-center text-sm text-muted-foreground">
-                      {loading ? 'Loading channels...' : 'No notification channels configured.'}
-                    </div>
-                  )}
-                >
-                  {channels.map((channel) => (
-                    <Table.Row key={channel.id} id={channel.id}>
-                      <Table.Cell>
-                        <div>
-                          <p className="font-medium">{channel.name}</p>
-                          <p className="text-xs text-muted-foreground">{channel.type}</p>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <StatusTag className="capitalize">
-                          {channel.type}
-                        </StatusTag>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <StatusTag tone={toneFromChipColor(channel.enabled ? 'success' : 'danger')}>
-                          {channel.enabled ? 'Enabled' : 'Disabled'}
-                        </StatusTag>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex justify-end">
-                          {canManage ? (
-                            <RowActionsMenu
-                              label={`Open actions for ${channel.name}`}
-                              items={[
-                                {
-                                  id: 'edit-channel',
-                                  label: 'Edit channel',
-                                  icon: <Setting07Icon size={14} />,
-                                  onAction: () => openEditChannel(channel),
-                                },
-                                {
-                                  id: 'test-channel',
-                                  label: 'Send test',
-                                  icon: <Notification01Icon size={14} />,
-                                  onAction: () => {
-                                    void handleTestChannel(channel);
-                                  },
-                                },
-                                {
-                                  id: 'delete-channel',
-                                  label: 'Delete channel',
-                                  icon: <Delete01Icon size={14} />,
-                                  variant: 'danger',
-                                  onAction: () => {
-                                    void handleDeleteChannel(channel);
-                                  },
-                                },
-                              ]}
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Read only</span>
-                          )}
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+          </Card.Header>
+          <Card.Content>
+            {channels.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                {loading ? 'Loading channels…' : 'No notification channels configured.'}
+              </p>
+            ) : (
+              <ResourceList aria-label="Notification channels">
+                {channels.map((channel) => (
+                  <ResourceList.Item
+                    key={channel.id}
+                    title={channel.name}
+                    description={channelTypeLabel(channel.type)}
+                    meta={
+                      <StatusTag tone={channel.enabled ? 'success' : 'muted'}>
+                        {channel.enabled ? 'Enabled' : 'Disabled'}
+                      </StatusTag>
+                    }
+                    actions={
+                      canManage ? (
+                        <RowActionsMenu
+                          label={`Open actions for ${channel.name}`}
+                          items={[
+                            {
+                              id: 'edit-channel',
+                              label: 'Edit channel',
+                              icon: <Setting07Icon size={14} />,
+                              onAction: () => openEditChannel(channel),
+                            },
+                            {
+                              id: 'test-channel',
+                              label: 'Send test',
+                              icon: <Notification01Icon size={14} />,
+                              onAction: () => {
+                                void handleTestChannel(channel);
+                              },
+                            },
+                            {
+                              id: 'delete-channel',
+                              label: 'Delete channel',
+                              icon: <Delete01Icon size={14} />,
+                              variant: 'danger',
+                              onAction: () => {
+                                void handleDeleteChannel(channel);
+                              },
+                            },
+                          ]}
+                        />
+                      ) : null
+                    }
+                  />
+                ))}
+              </ResourceList>
+            )}
+          </Card.Content>
         </Card>
 
-        <Card className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
+        <Card>
+          <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold">Rules</h2>
-              <p className="text-sm text-muted-foreground">
+              <Card.Title>Rules</Card.Title>
+              <Card.Description>
                 Match scan events and route them through selected channels.
-              </p>
+              </Card.Description>
             </div>
             <Button onPress={openCreateRule} isDisabled={!canManage || channels.length === 0}>
               <Add01Icon size={15} />
               Add rule
             </Button>
-          </div>
-
-          <div className="space-y-3">
-            {loading ? (
-              <p className="text-sm text-muted-foreground">Loading rules...</p>
-            ) : rules.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No rules configured yet.</p>
+          </Card.Header>
+          <Card.Content>
+            {rules.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                {loading
+                  ? 'Loading rules…'
+                  : channels.length === 0
+                    ? 'Add a channel first, then create a rule that uses it.'
+                    : 'No rules configured yet.'}
+              </p>
             ) : (
-              rules.map((rule) => (
-                <Card key={rule.id} variant="secondary" className="space-y-3">
-                  <Card.Content className="space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium">{rule.name}</p>
-                          <StatusTag tone={toneFromChipColor(rule.enabled ? 'success' : 'danger')}>
+              <ResourceList aria-label="Notification rules">
+                {rules.map((rule) => {
+                  const summary = summarizeRule(rule, channels);
+                  return (
+                    <ResourceList.Item
+                      key={rule.id}
+                      title={rule.name}
+                      meta={
+                        <>
+                          <StatusTag tone={rule.enabled ? 'success' : 'muted'}>
                             {rule.enabled ? 'Enabled' : 'Disabled'}
                           </StatusTag>
                           <StatusTag>
                             {rule.delivery_mode === 'digest'
-                              ? `Summary ${rule.digest_window_minutes}m`
+                              ? `Summary every ${rule.digest_window_minutes} min`
                               : 'Immediate'}
                           </StatusTag>
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {summarizeRule(rule, channels)}
-                        </p>
-                      </div>
-                      <div className="flex">
-                        {canManage ? (
+                        </>
+                      }
+                      actions={
+                        canManage ? (
                           <RowActionsMenu
                             label={`Open actions for ${rule.name}`}
                             items={[
@@ -744,143 +769,150 @@ export function NotificationManager({
                               },
                             ]}
                           />
-                        ) : null}
-                      </div>
-                    </div>
-                  </Card.Content>
-                </Card>
-              ))
+                        ) : null
+                      }
+                    >
+                      <p className="line-clamp-2 text-xs text-muted-foreground" title={summary}>
+                        {summary}
+                      </p>
+                    </ResourceList.Item>
+                  );
+                })}
+              </ResourceList>
             )}
-          </div>
+          </Card.Content>
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="space-y-4">
-          <div>
-            <h2 className="text-base font-semibold">Queue</h2>
-            <p className="text-sm text-muted-foreground">
-              Recent notification jobs, retries, and dead letters.
-            </p>
-          </div>
-          <Table variant="secondary">
-            <Table.ScrollContainer>
-              <Table.Content aria-label="Notification queue jobs">
-                <Table.Header>
-                  <Table.Column isRowHeader>Rule</Table.Column>
-                  <Table.Column>Status</Table.Column>
-                  <Table.Column>Attempts</Table.Column>
-                  <Table.Column className="text-right">Action</Table.Column>
-                </Table.Header>
-                <Table.Body
-                  renderEmptyState={() => (
-                    <div className="py-8 text-center text-sm text-muted-foreground">
-                      {loading ? 'Loading queue...' : 'No queued notifications yet.'}
-                    </div>
-                  )}
-                >
-                  {queueJobs.map((job) => (
-                    <Table.Row key={job.id} id={job.id}>
-                      <Table.Cell>
-                        <div>
-                          <p className="font-medium">{job.rule_name ?? 'Rule'}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {job.channel_name ?? channelNames[job.channel_id] ?? job.channel_id}
-                          </p>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <StatusTag tone={toneFromChipColor(job.status === 'delivered'
-                              ? 'success'
-                              : job.status === 'dead_letter'
-                                ? 'danger'
-                                : 'default')}>
-                          {job.status}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <Card.Header>
+            <Card.Title>Queue</Card.Title>
+            <Card.Description>Recent notification jobs, retries, and failures.</Card.Description>
+          </Card.Header>
+          <Card.Content>
+            {queueJobs.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                {loading ? 'Loading queue…' : 'No queued notifications yet.'}
+              </p>
+            ) : (
+              <ResourceList aria-label="Notification queue jobs">
+                {queueJobs.map((job) => {
+                  const canRetry =
+                    canManage && (job.status === 'dead_letter' || job.status === 'failed');
+                  const errorSummary = summarizeError(job.last_error);
+                  return (
+                    <ResourceList.Item
+                      key={job.id}
+                      tone={job.status === 'dead_letter' ? 'danger' : 'default'}
+                      title={job.rule_name ?? 'Deleted rule'}
+                      description={
+                        <>
+                          {job.channel_name ?? channelNames[job.channel_id] ?? 'Deleted channel'}
+                          {' · '}attempt {job.attempt_count} of {job.max_attempts}
+                          {' · '}
+                          <span title={fullDate(job.updated_at || job.created_at)}>
+                            {timeAgo(job.updated_at || job.created_at)}
+                          </span>
+                        </>
+                      }
+                      meta={
+                        <StatusTag tone={deliveryTone(job.status)}>
+                          {deliveryStatusLabel(job.status)}
                         </StatusTag>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {job.attempt_count}/{job.max_attempts}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex justify-end">
-                          {canManage &&
-                          (job.status === 'dead_letter' || job.status === 'failed') ? (
-                            <RowActionsMenu
-                              label={`Open actions for ${job.rule_name ?? 'notification job'}`}
-                              items={[
-                                {
-                                  id: 'retry-job',
-                                  label: 'Retry job',
-                                  icon: <Refresh01Icon size={14} />,
-                                  onAction: () => {
-                                    void handleRetryJob(job);
-                                  },
-                                },
-                              ]}
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              {job.last_error ? job.last_error : 'Ready'}
-                            </span>
-                          )}
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+                      }
+                      actions={
+                        canRetry ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onPress={() => void handleRetryJob(job)}
+                          >
+                            <Refresh01Icon size={14} />
+                            Retry
+                          </Button>
+                        ) : null
+                      }
+                    >
+                      {errorSummary ? (
+                        <details className="text-xs text-muted-foreground">
+                          <summary className="cursor-pointer text-destructive">
+                            {errorSummary}
+                          </summary>
+                          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-2 font-mono">
+                            {job.last_error}
+                          </pre>
+                        </details>
+                      ) : null}
+                    </ResourceList.Item>
+                  );
+                })}
+              </ResourceList>
+            )}
+          </Card.Content>
         </Card>
 
-        <Card className="space-y-4">
-          <div>
-            <h2 className="text-base font-semibold">Deliveries</h2>
-            <p className="text-sm text-muted-foreground">
+        <Card className="gap-0 overflow-hidden pb-0">
+          <Card.Header className="pb-4">
+            <Card.Title>Deliveries</Card.Title>
+            <Card.Description>
               Latest delivery attempts across all channels in this scope.
-            </p>
-          </div>
+            </Card.Description>
+          </Card.Header>
           <Table variant="secondary">
-            <Table.ScrollContainer className="max-h-[28rem] overflow-y-auto">
+            <Table.ScrollContainer className="max-h-[28rem] overflow-y-auto rounded-none border-x-0 border-b-0">
               <Table.Content aria-label="Notification deliveries">
-                <Table.Header className="sticky top-0 z-10 bg-surface-secondary">
+                <Table.Header className="sticky top-0 z-10 bg-card">
                   <Table.Column isRowHeader>Channel</Table.Column>
                   <Table.Column>Event</Table.Column>
                   <Table.Column>Status</Table.Column>
+                  <Table.Column className="text-right">When</Table.Column>
                 </Table.Header>
                 <Table.Body
                   renderEmptyState={() => (
                     <div className="py-8 text-center text-sm text-muted-foreground">
-                      {loading ? 'Loading deliveries...' : 'No delivery history yet.'}
+                      {loading ? 'Loading deliveries…' : 'No delivery history yet.'}
                     </div>
                   )}
                 >
-                  {deliveries.map((delivery) => (
-                    <Table.Row key={delivery.id} id={delivery.id}>
-                      <Table.Cell>
-                        <div>
-                          <p className="font-medium">
-                            {delivery.channel_name ??
-                              channelNames[delivery.channel_id] ??
-                              delivery.channel_id}
+                  {deliveries.map((delivery) => {
+                    const channelName =
+                      delivery.channel_name ??
+                      channelNames[delivery.channel_id] ??
+                      'Deleted channel';
+                    return (
+                      <Table.Row key={delivery.id} id={delivery.id}>
+                        <Table.Cell>
+                          <p className="max-w-48 truncate font-medium" title={channelName}>
+                            {channelName}
                           </p>
                           {delivery.rule_name ? (
-                            <p className="text-xs text-muted-foreground">{delivery.rule_name}</p>
+                            <p
+                              className="max-w-48 truncate text-xs text-muted-foreground"
+                              title={delivery.rule_name}
+                            >
+                              {delivery.rule_name}
+                            </p>
                           ) : null}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell className="font-mono text-xs">{delivery.event}</Table.Cell>
-                      <Table.Cell>
-                        <StatusTag tone={toneFromChipColor(delivery.status === 'delivered'
-                              ? 'success'
-                              : delivery.status === 'dead_letter'
-                                ? 'danger'
-                                : 'default')}>
-                          {delivery.status}
-                        </StatusTag>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
+                        </Table.Cell>
+                        <Table.Cell className="text-sm">
+                          {notificationEventLabel(delivery.event)}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <span title={delivery.error || undefined}>
+                            <StatusTag tone={deliveryTone(delivery.status)}>
+                              {deliveryStatusLabel(delivery.status)}
+                            </StatusTag>
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell className="whitespace-nowrap text-right text-xs text-muted-foreground">
+                          <span title={fullDate(delivery.created_at)}>
+                            {timeAgo(delivery.created_at)}
+                          </span>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
                   {deliveriesHasMore ? (
                     <Table.LoadMore
                       isLoading={deliveriesLoadingMore}
@@ -906,7 +938,7 @@ export function NotificationManager({
             <Modal.Dialog>
               <Modal.Header>
                 <Modal.Heading>
-                  {channelForm.id ? 'Edit Notification Channel' : 'Add Notification Channel'}
+                  {channelForm.id ? 'Edit notification channel' : 'Add notification channel'}
                 </Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
@@ -1148,7 +1180,7 @@ export function NotificationManager({
             <Modal.Dialog>
               <Modal.Header>
                 <Modal.Heading>
-                  {ruleForm.id ? 'Edit Notification Rule' : 'Add Notification Rule'}
+                  {ruleForm.id ? 'Edit notification rule' : 'Add notification rule'}
                 </Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
@@ -1198,7 +1230,9 @@ export function NotificationManager({
                       <Select.Trigger className={fieldSelectTriggerClassName}>
                         <span
                           className={
-                            ruleForm.channel_ids.length > 0 ? 'truncate' : 'truncate text-muted-foreground'
+                            ruleForm.channel_ids.length > 0
+                              ? 'truncate'
+                              : 'truncate text-muted-foreground'
                           }
                         >
                           {ruleForm.channel_ids.length > 0
@@ -1239,7 +1273,9 @@ export function NotificationManager({
                       <Select.Trigger className={fieldSelectTriggerClassName}>
                         <span
                           className={
-                            ruleForm.event_types.length > 0 ? 'truncate' : 'truncate text-muted-foreground'
+                            ruleForm.event_types.length > 0
+                              ? 'truncate'
+                              : 'truncate text-muted-foreground'
                           }
                         >
                           {ruleForm.event_types.length > 0

@@ -1,12 +1,12 @@
 module github.com/JustLABv1/justscan/services/cli
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.10.2
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/term v0.47.0
+	golang.org/x/term v0.48.0
 )
 
 require (

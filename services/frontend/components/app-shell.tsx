@@ -1019,12 +1019,11 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                           <Logo size={36} className="shrink-0" />
                           <div>
                             <Drawer.Heading
-                              className="text-sm font-semibold"
-                              style={{ color: 'var(--text-primary)' }}
+                              className="text-sm font-semibold text-foreground"
                             >
                               {isAdminRoute ? 'Administration' : 'JustScan'}
                             </Drawer.Heading>
-                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            <p className="text-xs text-muted-foreground">
                               {isAdminRoute ? 'Platform control plane' : 'Scan, watch, and manage'}
                             </p>
                           </div>
@@ -1179,8 +1178,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                         </Button>
                         <Dropdown>
                           <Dropdown.Trigger
-                            className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left"
-                            style={{ background: 'var(--row-hover)' }}
+                            className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left bg-muted/50"
                           >
                             <div className="flex items-center gap-3 min-w-0 flex-1">
                               <div
@@ -1281,11 +1279,11 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                                   key="signout"
                                   id="signout"
                                   textValue="Sign Out"
-                                  className="text-danger"
+                                  className="text-destructive"
                                 >
                                   <div className="flex items-center gap-2">
                                     <Logout02Icon size={14} />
-                                    <Label className="text-danger">Sign Out</Label>
+                                    <Label className="text-destructive">Sign Out</Label>
                                   </div>
                                 </Dropdown.Item>
                               </Dropdown.Section>
@@ -1386,11 +1384,11 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
                           key="signout"
                           id="signout"
                           textValue="Sign Out"
-                          className="text-danger flex items-center gap-2 mt-1 border-t border-border dark:border-border pt-1"
+                          className="text-destructive flex items-center gap-2 mt-1 border-t border-border dark:border-border pt-1"
                         >
                           <div className="flex items-center gap-2">
                             <Logout02Icon size={14} />
-                            <Label className="text-danger">Sign Out</Label>
+                            <Label className="text-destructive">Sign Out</Label>
                           </div>
                         </Dropdown.Item>
                       </Dropdown.Menu>

@@ -31,8 +31,7 @@ export function RouteLoadingState({
           {Array.from({ length: 3 }).map((_, index) => (
             <div
               key={index}
-              className="rounded-xl p-5"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
+              className="rounded-xl p-5 border border-border bg-muted/40"
             >
               <div className="skeleton h-4 w-24 rounded" />
               <div className="skeleton h-8 w-20 rounded mt-3" />
@@ -41,8 +40,7 @@ export function RouteLoadingState({
           ))}
         </div>
         <div
-          className="rounded-xl p-5 space-y-3"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
+          className="rounded-xl p-5 space-y-3 border border-border bg-muted/40"
         >
           <div className="skeleton h-4 w-40 rounded" />
           <div className="skeleton h-3 w-full rounded" />

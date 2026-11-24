@@ -998,7 +998,7 @@ export default function StatusPagesPage() {
                             required
                           />
                           {detailsErrors.name && (
-                            <p className="text-xs text-danger" role="alert">
+                            <p className="text-xs text-destructive" role="alert">
                               {detailsErrors.name}
                             </p>
                           )}
@@ -1019,7 +1019,7 @@ export default function StatusPagesPage() {
                             aria-invalid={Boolean(detailsErrors.slug)}
                           />
                           {detailsErrors.slug && (
-                            <p className="text-xs text-danger" role="alert">
+                            <p className="text-xs text-destructive" role="alert">
                               {detailsErrors.slug}
                             </p>
                           )}
@@ -1103,7 +1103,7 @@ export default function StatusPagesPage() {
                             aria-invalid={Boolean(detailsErrors.staleAfterHours)}
                           />
                           {detailsErrors.staleAfterHours && (
-                            <p className="text-xs text-danger" role="alert">
+                            <p className="text-xs text-destructive" role="alert">
                               {detailsErrors.staleAfterHours}
                             </p>
                           )}
@@ -1400,7 +1400,7 @@ export default function StatusPagesPage() {
                               </div>
                             )}
                             {isPickingImages && selectedImageNames.size === 0 && (
-                              <p className="text-xs text-danger">
+                              <p className="text-xs text-destructive">
                                 Select at least one image, or check All images.
                               </p>
                             )}
@@ -1755,11 +1755,8 @@ export default function StatusPagesPage() {
                         !scopeIsValid ||
                         (editing ? !canManageStatusPage(editing) : !canMutateActiveScope)
                       }
-                      className="btn-primary"
+                      isPending={saving}
                     >
-                      {saving && (
-                        <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      )}
                       {editing ? 'Save status page' : 'Create status page'}
                     </Button>
                   )}

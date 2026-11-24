@@ -4,7 +4,7 @@ import { OwnershipBadge } from '@/components/ui/badges';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { FormAlert } from '@/components/ui/form-alert';
 import type { ResourceShare, Suppression } from '@/lib/api';
-import { Button, Card, ListBox, Modal, Select, useOverlayState } from '@/components/ui';
+import { Button, Card, ListBox, Modal, Select, Spinner, useOverlayState } from '@/components/ui';
 import { Delete01Icon } from 'hugeicons-react';
 import { pluralize } from '@/lib/labels';
 
@@ -89,8 +89,9 @@ export function ManageSuppressionAccessModal({
                   </p>
                 </div>
                 {loading ? (
-                  <div className="flex justify-center py-6">
-                    <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+                  <div className="flex justify-center py-6" role="status">
+                    <Spinner size="sm" />
+                    <span className="sr-only">Loading access grants</span>
                   </div>
                 ) : shares.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No organization grants yet.</p>

@@ -270,12 +270,9 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                 type="submit"
                 form="create-org-token-form"
                 isDisabled={saving}
-                className="btn-primary inline-flex items-center gap-2"
+                isPending={saving}
                 variant="primary"
               >
-                {saving && (
-                  <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                )}
                 Create token
               </Button>
             </Modal.Footer>

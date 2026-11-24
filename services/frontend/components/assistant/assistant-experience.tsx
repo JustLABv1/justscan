@@ -589,7 +589,7 @@ export function AssistantExperience({
           {sending ? 'Working...' : 'Send'}
         </Button>
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-divider pt-3">
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
         <div className="flex min-w-0 items-center gap-2">
           <Button isIconOnly size="sm" variant="ghost" onPress={startNewConversation}>
             <PlusSignIcon size={14} />

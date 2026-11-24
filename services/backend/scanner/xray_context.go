@@ -52,20 +52,24 @@ func GetVulnerabilityContextAnalysis(ctx context.Context, db *bun.DB, scan *mode
 		return nil, err
 	}
 
-	_, artifactPath, pathErr := xrayArtifactPaths(scan.ImageName, scan.ImageTag, registry, client.artifactoryID)
-	if pathErr == nil {
-		repoKey, artifactName, imageTag, partsErr := xrayImageParts(scan.ImageName, scan.ImageTag, registry)
-		if partsErr == nil {
-			manifestFilename := client.resolveManifestFilename(ctx, repoKey+"/"+artifactName, imageTag)
-			if manifestFilename != "manifest.json" {
-				artifactPath = client.artifactoryID + "/" + repoKey + "/" + artifactName + "/" + imageTag + "/" + manifestFilename
-			}
-		}
-		analysis.ArtifactPath = artifactPath
-	}
 	analysis.SourceComponentID = analysis.ComponentID
 
-	raw, err := client.contextualAnalysis(ctx, vulnerability.VulnID, analysis.ComponentID, analysis.SourceComponentID, analysis.ArtifactPath)
+	// Query the same artifact the scan imported: the digest path when the
+	// digest is known, so a moved tag cannot change the analysis target.
+	artifactPaths := xrayContextAnalysisPaths(ctx, client, scan, registry)
+	if len(artifactPaths) == 0 {
+		artifactPaths = []string{""}
+	}
+	var raw models.JSONObject
+	for index, artifactPath := range artifactPaths {
+		analysis.ArtifactPath = artifactPath
+		raw, err = client.contextualAnalysis(ctx, vulnerability.VulnID, analysis.ComponentID, analysis.SourceComponentID, artifactPath)
+		var httpErr *xrayHTTPError
+		if err != nil && index < len(artifactPaths)-1 && errors.As(err, &httpErr) && (httpErr.StatusCode == http.StatusNotFound || httpErr.StatusCode == http.StatusBadRequest) {
+			continue
+		}
+		break
+	}
 	if err != nil {
 		var httpErr *xrayHTTPError
 		if errors.As(err, &httpErr) {
@@ -94,6 +98,40 @@ func GetVulnerabilityContextAnalysis(ctx context.Context, db *bun.DB, scan *mode
 	}
 
 	return analysis, nil
+}
+
+// xrayContextAnalysisPaths returns the artifact paths to try for contextual
+// analysis. With a resolved digest only digest paths are used; without one it
+// falls back to the tag path with the manifest file name Artifactory reports.
+func xrayContextAnalysisPaths(ctx context.Context, client *xrayClient, scan *models.Scan, registry *models.Registry) []string {
+	repoKey, artifactName, imageTag, err := xrayImageParts(scan.ImageName, scan.ImageTag, registry)
+	if err != nil {
+		return nil
+	}
+	if digest := strings.TrimSpace(scan.ImageDigest); digest != "" {
+		candidates := xrayDigestCandidates(buildXrayArtifactPathCandidates(client.artifactoryID, repoKey, artifactName, imageTag, "manifest.json", digest), digest)
+		if len(candidates) > 0 {
+			return xrayContextCandidatePaths(candidates)
+		}
+	}
+	manifestFilename := client.resolveManifestFilename(ctx, repoKey+"/"+artifactName, imageTag)
+	// Keep the previous behavior for scans without a digest: the requested
+	// repository's tag path only.
+	tagCandidates := buildXrayArtifactPathCandidates(client.artifactoryID, repoKey, artifactName, imageTag, manifestFilename, "")
+	if len(tagCandidates) > 1 {
+		tagCandidates = tagCandidates[:1]
+	}
+	return xrayContextCandidatePaths(tagCandidates)
+}
+
+func xrayContextCandidatePaths(candidates []xrayArtifactPathCandidate) []string {
+	paths := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		if path := strings.TrimSpace(candidate.ArtifactPath); path != "" {
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 func xrayContextSummary(raw models.JSONObject, applicable *bool) string {

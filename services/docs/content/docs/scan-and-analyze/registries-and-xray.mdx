@@ -32,4 +32,8 @@ Xray `PARTIAL` is terminal and JustScan imports the available findings, but reco
 
 The requested platform must exist; JustScan does not silently fall back to another architecture. Full mode binds status checks and result import to one digest artifact and checks for tag movement before the scan request and after completion. If the tag changed, submit a new scan. A provider that does not expose the selected digest artifact cannot produce verified results for that image; check repository indexing instead of importing a different tag or architecture.
 
+## Xray policy violations
+
+JustScan imports Xray watch and policy matches as violation context on each finding. Violations covered by an Xray ignore rule are not shown as active or blocking violations; the rule appears as an Xray suppression instead. When Xray names the infected component, the context is attached only to findings for that component, so one CVE in `openssl` does not mark the same CVE in `libssl3` as violating. Violations without component details apply to every finding with the same vulnerability ID.
+
 See [Xray capacity and deadlines](/operate/scanners-and-xray#xray-capacity-and-deadlines) and [Xray timeout troubleshooting](/operate/troubleshooting#xray-warm-up-or-provider-wait-times-out).

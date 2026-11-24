@@ -221,6 +221,7 @@ type xrayViolationRecord struct {
 	Severity               string                `json:"severity,omitempty"`
 	ImpactArtifacts        []string              `json:"impact_artifacts,omitempty"`
 	ComponentPhysicalPaths []string              `json:"component_physical_paths,omitempty"`
+	InfectedComponents     []string              `json:"infected_components,omitempty"`
 	Source                 string                `json:"source,omitempty"`
 	SourceVersion          string                `json:"source_version,omitempty"`
 	SourceID               string                `json:"source_id,omitempty"`
@@ -2699,6 +2700,11 @@ func parseXrayViolationsPayload(payload any) *xrayViolationsResponse {
 		if issueID == "" {
 			continue
 		}
+		// Ignored violations no longer count against the image; their ignore
+		// rules are imported separately as suppressions.
+		if xrayViolationObjectIgnored(object) {
+			continue
+		}
 
 		violationID := strings.TrimSpace(firstNonEmpty(
 			findStringValue(object, "violation_id"),
@@ -2736,12 +2742,78 @@ func parseXrayViolationsPayload(payload any) *xrayViolationsResponse {
 		}
 		record.ImpactArtifacts = extractStringSlice(object, "paths")
 		record.ComponentPhysicalPaths = extractStringSlice(object, "component_physical_paths")
+		record.InfectedComponents = xrayViolationComponentRefs(object)
 		record.IsBlocking = anyXrayViolationPolicyBlocking(record.Policies)
 		response.Violations = append(response.Violations, record)
 	}
 
 	response.Total = len(response.Violations)
 	return response
+}
+
+// xrayViolationObjectIgnored reports whether an exported violation row is
+// covered by an Xray ignore rule.
+func xrayViolationObjectIgnored(object models.JSONObject) bool {
+	for _, key := range []string{"is_ignored", "ignored"} {
+		if value, ok := findBoolValue(object, key); ok {
+			return value
+		}
+	}
+	status := strings.ToLower(strings.TrimSpace(firstNonEmpty(
+		findStringValue(object, "status"),
+		findStringValue(object, "violation_status"),
+		findStringValue(object, "ignore_status"),
+	)))
+	return status == "ignored" || status == "ignore" || status == "suppressed"
+}
+
+// xrayViolationComponentRefs returns the component identifiers a violation
+// applies to, read from the top-level fields Xray uses across API versions.
+func xrayViolationComponentRefs(object models.JSONObject) []string {
+	refs := make([]string, 0, 2)
+	var add func(value any)
+	add = func(value any) {
+		switch typed := value.(type) {
+		case string:
+			if trimmed := strings.TrimSpace(typed); trimmed != "" {
+				refs = append(refs, trimmed)
+			}
+		case []any:
+			for _, entry := range typed {
+				add(entry)
+			}
+		case []string:
+			for _, entry := range typed {
+				add(entry)
+			}
+		case map[string]any:
+			add(models.JSONObject(typed))
+		case models.JSONObject:
+			if id := firstNonEmpty(stringFromAny(typed["component_id"]), stringFromAny(typed["id"])); id != "" {
+				add(id)
+				return
+			}
+			name := stringFromAny(typed["name"])
+			if version := stringFromAny(typed["version"]); name != "" && version != "" {
+				add(name + ":" + version)
+			} else {
+				add(name)
+			}
+		}
+	}
+	for _, key := range []string{"infected_components", "impacted_components", "infected_component", "vulnerable_component", "component_id", "component"} {
+		if value, ok := object[key]; ok {
+			add(value)
+		}
+	}
+	return dedupeStrings(refs)
+}
+
+func stringFromAny(value any) string {
+	if text, ok := value.(string); ok {
+		return strings.TrimSpace(text)
+	}
+	return ""
 }
 
 func anyXrayViolationPolicyBlocking(policies []xrayViolationPolicy) bool {
@@ -3652,56 +3724,58 @@ func persistXrayViolationContext(ctx context.Context, db *bun.DB, scan *models.S
 		Raw                    models.JSONObject
 	}
 
-	byVulnID := make(map[string]*contextRecord)
-	for _, violation := range response.Violations {
-		candidateVulnIDs := xrayViolationCandidateVulnIDs(violation)
-		if len(candidateVulnIDs) == 0 {
-			continue
-		}
-
-		firstKey := candidateVulnIDs[0]
-		record, exists := byVulnID[firstKey]
-		if !exists {
-			record = &contextRecord{}
-			byVulnID[firstKey] = record
-		}
-		for _, vulnID := range candidateVulnIDs[1:] {
-			if _, ok := byVulnID[vulnID]; !ok {
-				byVulnID[vulnID] = record
-			}
-		}
-
-		if record.ViolationID == "" {
-			record.ViolationID = strings.TrimSpace(violation.ID)
-		}
-		if record.IssueID == "" {
-			record.IssueID = strings.TrimSpace(violation.IssueID)
-		}
-		if record.WatchName == "" {
-			record.WatchName = strings.TrimSpace(violation.Watch)
-		}
-		record.WatchNames = append(record.WatchNames, strings.TrimSpace(violation.Watch))
-		if record.Source == "" {
-			record.Source = strings.TrimSpace(violation.Source)
-		}
-		if record.SourceVersion == "" {
-			record.SourceVersion = strings.TrimSpace(violation.SourceVersion)
-		}
-		if record.SourceID == "" {
-			record.SourceID = strings.TrimSpace(violation.SourceID)
-		}
-		if len(record.Raw) == 0 && len(violation.Raw) > 0 {
-			record.Raw = violation.Raw
-		}
-		record.IsBlocking = record.IsBlocking || violation.IsBlocking
-
-		record.MatchedPolicies = append(record.MatchedPolicies, xrayViolationPoliciesToJSON(violation.Policies)...)
-		record.WatchPolicyMatches = append(record.WatchPolicyMatches, xrayWatchPolicyMatchesToJSON(violation)...)
-		record.ViolationPaths = append(record.ViolationPaths, violation.ImpactArtifacts...)
-		record.ComponentPhysicalPaths = append(record.ComponentPhysicalPaths, violation.ComponentPhysicalPaths...)
+	var findings []models.Vulnerability
+	if err := db.NewSelect().Model(&findings).
+		Column("id", "vuln_id", "xray_issue_id", "pkg_name", "installed_version", "external_component_id").
+		Where("scan_id = ?", scan.ID).
+		Scan(ctx); err != nil {
+		return fmt.Errorf("failed to load findings for xray violation context: %w", err)
 	}
 
-	for vulnID, record := range byVulnID {
+	byFinding := make(map[uuid.UUID]*contextRecord)
+	order := make([]uuid.UUID, 0)
+	for _, violation := range response.Violations {
+		for _, findingID := range xrayViolationFindingIDs(violation, findings) {
+			record, exists := byFinding[findingID]
+			if !exists {
+				record = &contextRecord{}
+				byFinding[findingID] = record
+				order = append(order, findingID)
+			}
+
+			if record.ViolationID == "" {
+				record.ViolationID = strings.TrimSpace(violation.ID)
+			}
+			if record.IssueID == "" {
+				record.IssueID = strings.TrimSpace(violation.IssueID)
+			}
+			if record.WatchName == "" {
+				record.WatchName = strings.TrimSpace(violation.Watch)
+			}
+			record.WatchNames = append(record.WatchNames, strings.TrimSpace(violation.Watch))
+			if record.Source == "" {
+				record.Source = strings.TrimSpace(violation.Source)
+			}
+			if record.SourceVersion == "" {
+				record.SourceVersion = strings.TrimSpace(violation.SourceVersion)
+			}
+			if record.SourceID == "" {
+				record.SourceID = strings.TrimSpace(violation.SourceID)
+			}
+			if len(record.Raw) == 0 && len(violation.Raw) > 0 {
+				record.Raw = violation.Raw
+			}
+			record.IsBlocking = record.IsBlocking || violation.IsBlocking
+
+			record.MatchedPolicies = append(record.MatchedPolicies, xrayViolationPoliciesToJSON(violation.Policies)...)
+			record.WatchPolicyMatches = append(record.WatchPolicyMatches, xrayWatchPolicyMatchesToJSON(violation)...)
+			record.ViolationPaths = append(record.ViolationPaths, violation.ImpactArtifacts...)
+			record.ComponentPhysicalPaths = append(record.ComponentPhysicalPaths, violation.ComponentPhysicalPaths...)
+		}
+	}
+
+	for _, findingID := range order {
+		record := byFinding[findingID]
 		watchNames := dedupeStrings(record.WatchNames)
 		watchName := strings.TrimSpace(record.WatchName)
 		if watchName == "" && len(watchNames) > 0 {
@@ -3722,13 +3796,87 @@ func persistXrayViolationContext(ctx context.Context, db *bun.DB, scan *models.S
 			Set("xray_is_blocking = ?", record.IsBlocking).
 			Set("xray_violation_raw = ?", record.Raw).
 			Where("scan_id = ?", scan.ID).
-			Where("(vuln_id = ? OR xray_issue_id = ?)", vulnID, vulnID).
+			Where("id = ?", findingID).
 			Exec(ctx); err != nil {
-			return fmt.Errorf("failed to persist xray violation context for %s: %w", vulnID, err)
+			return fmt.Errorf("failed to persist xray violation context for finding %s: %w", findingID, err)
 		}
 	}
 
 	return nil
+}
+
+// xrayViolationFindingIDs returns the findings a violation applies to. A
+// violation that names its infected components only applies to findings for
+// those components; without component details (or when none of them can be
+// matched) it applies to every finding with the same vulnerability ID.
+func xrayViolationFindingIDs(violation xrayViolationRecord, findings []models.Vulnerability) []uuid.UUID {
+	vulnIDs := xrayViolationCandidateVulnIDs(violation)
+	if len(vulnIDs) == 0 {
+		return nil
+	}
+	byID := make([]uuid.UUID, 0, 2)
+	byComponent := make([]uuid.UUID, 0, 2)
+	for i := range findings {
+		finding := &findings[i]
+		if !xrayFindingHasVulnID(finding, vulnIDs) {
+			continue
+		}
+		byID = append(byID, finding.ID)
+		for _, ref := range violation.InfectedComponents {
+			if xrayComponentRefMatchesFinding(ref, finding) {
+				byComponent = append(byComponent, finding.ID)
+				break
+			}
+		}
+	}
+	if len(violation.InfectedComponents) > 0 && len(byComponent) > 0 {
+		return byComponent
+	}
+	return byID
+}
+
+func xrayFindingHasVulnID(finding *models.Vulnerability, vulnIDs []string) bool {
+	for _, vulnID := range vulnIDs {
+		if strings.EqualFold(vulnID, strings.TrimSpace(finding.VulnID)) {
+			return true
+		}
+		if issueID := strings.TrimSpace(finding.XrayIssueID); issueID != "" && strings.EqualFold(vulnID, issueID) {
+			return true
+		}
+	}
+	return false
+}
+
+// xrayComponentRefMatchesFinding compares an Xray component reference such as
+// "deb://debian:bookworm:openssl:3.0.11" (with or without version) against a
+// finding's Xray component ID, package name, and installed version.
+func xrayComponentRefMatchesFinding(ref string, finding *models.Vulnerability) bool {
+	normalize := func(value string) string {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if index := strings.Index(value, "://"); index >= 0 {
+			value = value[index+3:]
+		}
+		return value
+	}
+	refValue := normalize(ref)
+	if refValue == "" {
+		return false
+	}
+	if componentID := normalize(finding.ExternalComponentID); componentID != "" {
+		if refValue == componentID || strings.HasPrefix(componentID, refValue+":") || strings.HasPrefix(refValue, componentID+":") {
+			return true
+		}
+	}
+	pkgName := normalize(finding.PkgName)
+	if pkgName == "" {
+		return false
+	}
+	nameMatches := refValue == pkgName || strings.HasPrefix(refValue, pkgName+":") || strings.HasSuffix(refValue, ":"+pkgName) || strings.Contains(refValue, ":"+pkgName+":")
+	if !nameMatches {
+		return false
+	}
+	version := normalize(finding.InstalledVersion)
+	return version == "" || refValue == pkgName || strings.HasSuffix(refValue, ":"+pkgName) || strings.HasSuffix(refValue, ":"+version)
 }
 
 func clearXrayViolationContext(ctx context.Context, db *bun.DB, scanID uuid.UUID) error {

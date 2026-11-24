@@ -204,7 +204,7 @@ function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item:
       ? failedPolicies.join(', ')
       : allPolicies.length > 0
         ? allPolicies.join(', ')
-        : posture.description;
+        : (posture.detail ?? posture.description);
 
   return (
     <StatusLabel

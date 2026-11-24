@@ -21,9 +21,11 @@ import {
   listStatusPageScanHistory,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { useClientAuth } from '@/hooks/use-client-auth';
 import { timeAgo } from '@/lib/time';
 import {
   Button,
+  buttonVariants,
   Card,
   Drawer,
   ListBox,
@@ -116,6 +118,14 @@ const DECISION_FILTER_OPTIONS: Array<{ key: DecisionFilter; label: string }> = [
   { key: 'passed', label: 'Policy passed' },
   { key: 'not_evaluated', label: 'Not evaluated' },
 ];
+
+/**
+ * Scan detail pages need a signed-in session. Anonymous viewers of a public
+ * status page get plain text instead of links that bounce them to sign-in.
+ */
+function useCanOpenScans() {
+  return Boolean(useClientAuth().currentUserId);
+}
 
 function getStatusRank(status: string) {
   return STATUS_PRIORITY[status] ?? 99;
@@ -418,6 +428,7 @@ function RecentScanStrip({
   item: StatusPageItem;
   scans?: StatusPageScanSummary[];
 }) {
+  const canOpenScans = useCanOpenScans();
   const hasLoadedHistory = scans !== undefined;
   const historyDays = getScanHistoryDays(item, scans);
 
@@ -450,6 +461,17 @@ function RecentScanStrip({
         if (!day.scan) {
           return (
             <span key={day.key} aria-label={`${day.label}: no scans`}>
+              {content}
+            </span>
+          );
+        }
+        if (!canOpenScans) {
+          return (
+            <span
+              key={day.key}
+              aria-label={`${day.label}: ${formatScanHistoryOptionLabel(day.scan)}`}
+              title={`${day.label}: ${formatScanHistoryOptionLabel(day.scan)}`}
+            >
               {content}
             </span>
           );
@@ -540,6 +562,7 @@ function MobileImageStatusCard({
   item: StatusPageItem;
   scans?: StatusPageScanSummary[];
 }) {
+  const canOpenScans = useCanOpenScans();
   const totalFindings = getFindingTotal(item);
 
   return (
@@ -550,27 +573,32 @@ function MobileImageStatusCard({
             <PackageIcon size={17} aria-hidden />
           </span>
           <div className="min-w-0">
-            <Link
-              href={`/scans/details/${item.latest_scan_id}`}
-              className="block max-w-sm break-words text-left text-sm font-medium text-foreground hover:underline [overflow-wrap:anywhere]"
-            >
-              {item.image_name}
-            </Link>
+            {canOpenScans && item.latest_scan_id ? (
+              <Link
+                href={`/scans/details/${item.latest_scan_id}`}
+                className="block max-w-sm break-words text-left text-sm font-medium text-foreground hover:underline [overflow-wrap:anywhere]"
+              >
+                {item.image_name}
+              </Link>
+            ) : (
+              <p className="max-w-sm break-words text-sm font-medium text-foreground [overflow-wrap:anywhere]">
+                {item.image_name}
+              </p>
+            )}
             <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
               {item.image_tag}
             </p>
           </div>
         </div>
-        <Link href={`/scans/details/${item.latest_scan_id}`}>
-          <Button
-            isIconOnly
+        {canOpenScans && item.latest_scan_id ? (
+          <Link
+            href={`/scans/details/${item.latest_scan_id}`}
             aria-label={`View scan details for ${item.image_name}:${item.image_tag}`}
-            size="sm"
-            variant="tertiary"
+            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
           >
             <ArrowRight01Icon size={16} aria-hidden />
-          </Button>
-        </Link>
+          </Link>
+        ) : null}
       </div>
 
       <div className="mt-3">
@@ -1024,6 +1052,7 @@ function PublicStatusPageSkeleton() {
 }
 
 export default function PublicStatusPage() {
+  const canOpenScans = useCanOpenScans();
   const { slug } = useParams<{ slug: string }>();
   const { resolvedTheme, setTheme } = useTheme();
   const [data, setData] = useState<StatusPageResponse | null>(null);
@@ -1627,7 +1656,7 @@ export default function PublicStatusPage() {
                                 <PackageIcon size={15} aria-hidden />
                               </span>
                               <div className="min-w-0">
-                                {item.latest_scan_id ? (
+                                {canOpenScans && item.latest_scan_id ? (
                                   <Link
                                     href={`/scans/details/${item.latest_scan_id}`}
                                     className="block max-w-sm break-words text-left text-sm font-medium text-foreground hover:underline [overflow-wrap:anywhere]"

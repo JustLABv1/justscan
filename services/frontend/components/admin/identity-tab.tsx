@@ -869,12 +869,8 @@ export function IdentityTab() {
               {mappings.map((mapping) => (
                 <ResourceList.Item
                   key={mapping.id}
-                  title={mapping.match_value}
-                  description={
-                    mapping.org_name ??
-                    orgs.find((org) => org.id === mapping.org_id)?.name ??
-                    'Derived organization'
-                  }
+                  title={`${humanize(mapping.claim_type)} “${mapping.match_value}” (${humanize(mapping.match_type).toLowerCase()})`}
+                  description={`${mapping.effect === 'exclude' ? 'Exclude from' : 'Add to'} ${mapping.org_name ?? orgs.find((org) => org.id === mapping.org_id)?.name ?? 'derived organization'}${mapping.effect === 'exclude' ? '' : ` as ${labelFor(ROLE_LABELS, mapping.role).toLowerCase()}`}`}
                   meta={
                     <StatusTag tone="muted">
                       {mapping.effect === 'exclude'
@@ -904,12 +900,7 @@ export function IdentityTab() {
                       ]}
                     />
                   }
-                >
-                  <p className="text-xs text-muted-foreground">
-                    {humanize(mapping.claim_type)} · {humanize(mapping.match_type)} ·{' '}
-                    {humanize(mapping.effect)}
-                  </p>
-                </ResourceList.Item>
+                />
               ))}
             </ResourceList>
           </Card>
@@ -930,13 +921,8 @@ export function IdentityTab() {
               {roleOverrides.map((override) => (
                 <ResourceList.Item
                   key={override.id}
-                  title={override.match_value}
-                  description={
-                    override.org_name ??
-                    orgs.find((org) => org.id === override.org_id)?.name ??
-                    override.org_name_template ??
-                    'Derived organization'
-                  }
+                  title={`${humanize(override.claim_type)} “${override.match_value}” (${humanize(override.match_type).toLowerCase()})`}
+                  description={`Set role in ${override.org_name ?? orgs.find((org) => org.id === override.org_id)?.name ?? override.org_name_template ?? 'derived organization'} to ${labelFor(ROLE_LABELS, override.role).toLowerCase()}`}
                   meta={<StatusTag tone="muted">{labelFor(ROLE_LABELS, override.role)}</StatusTag>}
                   actions={
                     <RowActionsMenu
@@ -960,11 +946,7 @@ export function IdentityTab() {
                       ]}
                     />
                   }
-                >
-                  <p className="text-xs text-muted-foreground">
-                    {humanize(override.claim_type)} · {humanize(override.match_type)}
-                  </p>
-                </ResourceList.Item>
+                />
               ))}
             </ResourceList>
           </Card>

@@ -860,74 +860,79 @@ export function NotificationManager({
             </Card.Description>
           </Card.Header>
           <Table variant="secondary">
-            <Table.ScrollContainer className="max-h-[28rem] overflow-y-auto rounded-none border-x-0 border-b-0">
-              <Table.Content aria-label="Notification deliveries">
-                <Table.Header className="sticky top-0 z-10 bg-card">
-                  <Table.Column isRowHeader>Channel</Table.Column>
-                  <Table.Column>Event</Table.Column>
-                  <Table.Column>Status</Table.Column>
-                  <Table.Column className="text-right">When</Table.Column>
-                </Table.Header>
-                <Table.Body
-                  renderEmptyState={() => (
-                    <div className="py-8 text-center text-sm text-muted-foreground">
-                      {loading ? 'Loading deliveries…' : 'No delivery history yet.'}
-                    </div>
-                  )}
-                >
-                  {deliveries.map((delivery) => {
-                    const channelName =
-                      delivery.channel_name ??
-                      channelNames[delivery.channel_id] ??
-                      'Deleted channel';
-                    return (
-                      <Table.Row key={delivery.id} id={delivery.id}>
-                        <Table.Cell>
-                          <p className="max-w-48 truncate font-medium" title={channelName}>
-                            {channelName}
-                          </p>
-                          {delivery.rule_name ? (
-                            <p
-                              className="max-w-48 truncate text-xs text-muted-foreground"
-                              title={delivery.rule_name}
-                            >
-                              {delivery.rule_name}
+            <Table.Responsive>
+              <Table.ScrollContainer className="max-h-[28rem] overflow-y-auto rounded-none border-x-0 border-b-0">
+                <Table.Content aria-label="Notification deliveries">
+                  <Table.Header className="sticky top-0 z-10 bg-card">
+                    <Table.Column isRowHeader>Channel</Table.Column>
+                    <Table.Column>Event</Table.Column>
+                    <Table.Column>Status</Table.Column>
+                    <Table.Column className="text-right">When</Table.Column>
+                  </Table.Header>
+                  <Table.Body
+                    renderEmptyState={() => (
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        {loading ? 'Loading deliveries…' : 'No delivery history yet.'}
+                      </div>
+                    )}
+                  >
+                    {deliveries.map((delivery) => {
+                      const channelName =
+                        delivery.channel_name ??
+                        channelNames[delivery.channel_id] ??
+                        'Deleted channel';
+                      return (
+                        <Table.Row key={delivery.id} id={delivery.id}>
+                          <Table.Cell data-label="Channel">
+                            <p className="max-w-48 truncate font-medium" title={channelName}>
+                              {channelName}
                             </p>
-                          ) : null}
-                        </Table.Cell>
-                        <Table.Cell className="text-sm">
-                          {notificationEventLabel(delivery.event)}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <span title={delivery.error || undefined}>
-                            <StatusTag tone={deliveryTone(delivery.status)}>
-                              {deliveryStatusLabel(delivery.status)}
-                            </StatusTag>
-                          </span>
-                        </Table.Cell>
-                        <Table.Cell className="whitespace-nowrap text-right text-xs text-muted-foreground">
-                          <span title={fullDate(delivery.created_at)}>
-                            {timeAgo(delivery.created_at)}
-                          </span>
-                        </Table.Cell>
-                      </Table.Row>
-                    );
-                  })}
-                  {deliveriesHasMore ? (
-                    <Table.LoadMore
-                      isLoading={deliveriesLoadingMore}
-                      scrollOffset={0}
-                      onLoadMore={() => void loadMoreDeliveries()}
-                    >
-                      <Table.LoadMoreContent>
-                        <Spinner size="sm" />
-                        <span className="text-sm">Loading more deliveries…</span>
-                      </Table.LoadMoreContent>
-                    </Table.LoadMore>
-                  ) : null}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
+                            {delivery.rule_name ? (
+                              <p
+                                className="max-w-48 truncate text-xs text-muted-foreground"
+                                title={delivery.rule_name}
+                              >
+                                {delivery.rule_name}
+                              </p>
+                            ) : null}
+                          </Table.Cell>
+                          <Table.Cell data-label="Event" className="text-sm">
+                            {notificationEventLabel(delivery.event)}
+                          </Table.Cell>
+                          <Table.Cell data-label="Status">
+                            <span title={delivery.error || undefined}>
+                              <StatusTag tone={deliveryTone(delivery.status)}>
+                                {deliveryStatusLabel(delivery.status)}
+                              </StatusTag>
+                            </span>
+                          </Table.Cell>
+                          <Table.Cell
+                            data-label="When"
+                            className="whitespace-nowrap text-right text-xs text-muted-foreground"
+                          >
+                            <span title={fullDate(delivery.created_at)}>
+                              {timeAgo(delivery.created_at)}
+                            </span>
+                          </Table.Cell>
+                        </Table.Row>
+                      );
+                    })}
+                    {deliveriesHasMore ? (
+                      <Table.LoadMore
+                        isLoading={deliveriesLoadingMore}
+                        scrollOffset={0}
+                        onLoadMore={() => void loadMoreDeliveries()}
+                      >
+                        <Table.LoadMoreContent>
+                          <Spinner size="sm" />
+                          <span className="text-sm">Loading more deliveries…</span>
+                        </Table.LoadMoreContent>
+                      </Table.LoadMore>
+                    ) : null}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table.Responsive>
           </Table>
         </Card>
       </div>

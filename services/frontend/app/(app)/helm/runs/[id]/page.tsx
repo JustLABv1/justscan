@@ -434,94 +434,99 @@ export default function HelmRunDetailPage() {
       )}
 
       {!loading && items.length > 0 && (
-        <Table>
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Helm run image scans">
-              <Table.Header>
-                <Table.Column isRowHeader>Image</Table.Column>
-                <Table.Column>Status</Table.Column>
-                <Table.Column>Findings</Table.Column>
-                <Table.Column className="w-px text-right">
-                  <span className="sr-only">Actions</span>
-                </Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {items.map((item) => {
-                  const scan = item.latest_scan;
-                  const retrying = retryingScanId === scan.id;
-                  const { host, name } = splitImageRef(scan.image_name);
-                  const imageRef = `${scan.image_name}:${scan.image_tag || 'latest'}`;
-                  const source = scan.helm_source_path ? scan.helm_source_path.split(' › ')[0] : '';
-                  return (
-                    <Table.Row key={item.key} id={item.key} className="hover:bg-muted/50">
-                      <Table.Cell>
-                        <div className="min-w-0 max-w-xs space-y-0.5 lg:max-w-md xl:max-w-xl">
-                          <Link
-                            href={`/scans/details/${scan.id}`}
-                            className="block truncate text-sm font-medium text-foreground hover:underline"
-                            title={imageRef}
-                          >
-                            {name}:{scan.image_tag || 'latest'}
-                          </Link>
-                          <p
-                            className="truncate text-xs text-muted-foreground"
-                            title={scan.helm_source_path || host || undefined}
-                          >
-                            {[host, source ? `from ${source}` : null].filter(Boolean).join(' · ') ||
-                              'No source recorded'}
-                          </p>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <RunScanStatus status={scan.status} />
-                          {item.attempt_count > 1 ? (
-                            <StatusTag>{pluralize(item.attempt_count, 'attempt')}</StatusTag>
-                          ) : null}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {scan.status === 'completed' ? (
-                          <SeverityCounts
-                            critical={scan.critical_count ?? 0}
-                            high={scan.high_count ?? 0}
-                            medium={scan.medium_count ?? 0}
-                            low={scan.low_count ?? 0}
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </Table.Cell>
-                      <Table.Cell className="text-right">
-                        {scan.status === 'failed' ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            onPress={() => handleRetryScan(scan.id)}
-                            isDisabled={retrying}
-                            isPending={retrying}
-                          >
-                            Retry
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            onPress={() => router.push(`/scans/details/${scan.id}`)}
-                          >
-                            View
-                          </Button>
-                        )}
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+        <Table.Responsive>
+          <Table>
+            <Table.ScrollContainer>
+              <Table.Content aria-label="Helm run image scans">
+                <Table.Header>
+                  <Table.Column isRowHeader>Image</Table.Column>
+                  <Table.Column>Status</Table.Column>
+                  <Table.Column>Findings</Table.Column>
+                  <Table.Column className="w-px text-right">
+                    <span className="sr-only">Actions</span>
+                  </Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {items.map((item) => {
+                    const scan = item.latest_scan;
+                    const retrying = retryingScanId === scan.id;
+                    const { host, name } = splitImageRef(scan.image_name);
+                    const imageRef = `${scan.image_name}:${scan.image_tag || 'latest'}`;
+                    const source = scan.helm_source_path
+                      ? scan.helm_source_path.split(' › ')[0]
+                      : '';
+                    return (
+                      <Table.Row key={item.key} id={item.key} className="hover:bg-muted/50">
+                        <Table.Cell data-label="Image">
+                          <div className="min-w-0 max-w-xs space-y-0.5 lg:max-w-md xl:max-w-xl">
+                            <Link
+                              href={`/scans/details/${scan.id}`}
+                              className="block truncate text-sm font-medium text-foreground hover:underline"
+                              title={imageRef}
+                            >
+                              {name}:{scan.image_tag || 'latest'}
+                            </Link>
+                            <p
+                              className="truncate text-xs text-muted-foreground"
+                              title={scan.helm_source_path || host || undefined}
+                            >
+                              {[host, source ? `from ${source}` : null]
+                                .filter(Boolean)
+                                .join(' · ') || 'No source recorded'}
+                            </p>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell data-label="Status" className="whitespace-nowrap">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <RunScanStatus status={scan.status} />
+                            {item.attempt_count > 1 ? (
+                              <StatusTag>{pluralize(item.attempt_count, 'attempt')}</StatusTag>
+                            ) : null}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell data-label="Findings">
+                          {scan.status === 'completed' ? (
+                            <SeverityCounts
+                              critical={scan.critical_count ?? 0}
+                              high={scan.high_count ?? 0}
+                              medium={scan.medium_count ?? 0}
+                              low={scan.low_count ?? 0}
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell data-label="Actions" className="text-right">
+                          {scan.status === 'failed' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onPress={() => handleRetryScan(scan.id)}
+                              isDisabled={retrying}
+                              isPending={retrying}
+                            >
+                              Retry
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onPress={() => router.push(`/scans/details/${scan.id}`)}
+                            >
+                              View
+                            </Button>
+                          )}
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </Table.Responsive>
       )}
 
       {!loading && Object.keys(bySource).length > 1 && (

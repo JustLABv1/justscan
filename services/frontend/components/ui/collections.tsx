@@ -265,6 +265,38 @@ export const Table = Object.assign(
     return <div className={cn('w-full text-sm', className)} {...props} />;
   },
   {
+    /** Show labelled cards on narrow screens while retaining the accessible table on desktop.
+     * Omit cards to stack the existing table cells (label them with data-label).
+     * This keeps selection, expanded rows and action controls in a single DOM tree.
+     */
+    Responsive: function Responsive({
+      cards,
+      children,
+      breakpoint = 'lg',
+    }: {
+      cards?: React.ReactNode;
+      children: React.ReactNode;
+      breakpoint?: 'md' | 'lg' | 'xl';
+    }) {
+      if (cards === undefined) {
+        return (
+          <div data-stacked-table={breakpoint} className="min-w-0">
+            {children}
+          </div>
+        );
+      }
+      const visibility = {
+        md: ['md:hidden', 'hidden md:block'],
+        lg: ['lg:hidden', 'hidden lg:block'],
+        xl: ['xl:hidden', 'hidden xl:block'],
+      } as const;
+      return (
+        <>
+          <div className={visibility[breakpoint][0]}>{cards}</div>
+          <div className={visibility[breakpoint][1]}>{children}</div>
+        </>
+      );
+    },
     ScrollContainer: ({ className, ...props }: React.ComponentProps<'div'>) => (
       <div
         className={cn('w-full overflow-auto rounded-md border border-border', className)}

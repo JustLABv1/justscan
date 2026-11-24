@@ -20,7 +20,8 @@ import {
 import { FormAlert, StatusAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { fieldSelectTriggerClassName, nativeFieldClassName } from '@/components/ui/form-styles';
-import { PageTitle } from '@/components/ui/page-header';
+import { PageContainer, PageTitle } from '@/components/ui/page-header';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ScanDetailSkeleton } from '@/components/ui/skeleton';
 import { VulnerabilityDetailsModal } from '@/components/vulnerability-details-modal';
@@ -2403,7 +2404,7 @@ function ScanDetailContent() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-4 p-4 md:p-5">
+    <PageContainer>
       <PageTitle
         breadcrumbs={[
           { label: 'Scans', href: '/scans' },
@@ -3460,127 +3461,144 @@ function ScanDetailContent() {
               )}
             </Card.Content>
 
-            <Table variant="secondary">
-              <Table.ScrollContainer className="rounded-none border-0">
-                <Table.Content
-                  aria-label="Compliance violations"
-                  className="table-auto [&_td]:px-4 [&_td]:py-3 [&_td]:align-top [&_td]:[overflow-wrap:anywhere] [&_th]:px-4"
-                >
-                  <Table.Header>
-                    <Table.Column isRowHeader className="w-[200px]">
-                      Policy / organization
-                    </Table.Column>
-                    <Table.Column>Finding / package</Table.Column>
-                    <Table.Column>Violation</Table.Column>
-                    <Table.Column className="w-[180px]">Remediation</Table.Column>
-                    <Table.Column className="w-[130px]">Evaluated</Table.Column>
-                    <Table.Column className="w-[90px]">
-                      <span className="sr-only">Actions</span>
-                    </Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {complianceViolationRows.length === 0 ? (
-                      <Table.Row id="compliance-empty">
-                        <Table.Cell colSpan={6}>
-                          <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
-                            <ShieldKeyIcon size={24} className="text-muted-foreground" />
-                            <p className="font-medium">
-                              {complianceLoading
-                                ? 'Evaluating policies…'
-                                : complianceError
-                                  ? 'Compliance results unavailable'
-                                  : complianceByOrg.length
-                                    ? 'No violations reported'
-                                    : 'No organization policies assigned'}
-                            </p>
-                            <p className="max-w-md text-sm text-muted-foreground">
-                              {complianceByOrg.length
-                                ? 'Policy violations appear here with the affected packages and remediation.'
-                                : 'Assign an organization above to evaluate this scan against its policies.'}
-                            </p>
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ) : (
-                      complianceViolationRows.map((row) => (
-                        <Table.Row key={row.id} id={row.id}>
-                          <Table.Cell>
-                            <p className="break-words font-medium">{row.policyName}</p>
-                            <p className="mt-1 break-words text-xs text-muted-foreground">
-                              {row.orgName}
-                            </p>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Button
-                              variant="link"
-                              className="h-auto max-w-full justify-start whitespace-normal p-0 text-left font-mono text-xs"
-                              isDisabled={!row.primaryMatch}
-                              onPress={() => {
-                                if (row.primaryMatch) openVulnerabilityDetails(row.primaryMatch);
-                              }}
-                            >
-                              {row.vulnId
-                                ? `${row.vulnId}${row.matchCount > 1 ? ` (+${row.matchCount - 1})` : ''}`
-                                : 'Policy finding'}
-                            </Button>
-                            <p className="mt-1 break-all text-sm">
-                              {row.packageName || 'No package reported'}
-                            </p>
-                            <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                              {row.installedVersion || '—'}
-                            </p>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="mb-1 flex flex-wrap gap-2">
-                              {row.severity ? <SeverityBadge severity={row.severity} /> : null}
-                              <span className="text-xs text-muted-foreground">
-                                {row.ruleType || 'Policy rule'}
-                              </span>
+            <Table.Responsive>
+              <Table variant="secondary">
+                <Table.ScrollContainer className="rounded-none border-0">
+                  <Table.Content
+                    aria-label="Compliance violations"
+                    className="table-auto [&_td]:px-4 [&_td]:py-3 [&_td]:align-top [&_td]:[overflow-wrap:anywhere] [&_th]:px-4"
+                  >
+                    <Table.Header>
+                      <Table.Column isRowHeader className="w-[200px]">
+                        Policy / organization
+                      </Table.Column>
+                      <Table.Column>Finding / package</Table.Column>
+                      <Table.Column>Violation</Table.Column>
+                      <Table.Column className="w-[180px]">Remediation</Table.Column>
+                      <Table.Column className="w-[90px]">
+                        <span className="sr-only">Actions</span>
+                      </Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {complianceViolationRows.length === 0 ? (
+                        <Table.Row id="compliance-empty">
+                          <Table.Cell colSpan={5}>
+                            <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+                              <ShieldKeyIcon size={24} className="text-muted-foreground" />
+                              <p className="font-medium">
+                                {complianceLoading
+                                  ? 'Evaluating policies…'
+                                  : complianceError
+                                    ? 'Compliance results unavailable'
+                                    : complianceByOrg.length
+                                      ? 'No violations reported'
+                                      : 'No organization policies assigned'}
+                              </p>
+                              <p className="max-w-md text-sm text-muted-foreground">
+                                {complianceByOrg.length
+                                  ? 'Policy violations appear here with the affected packages and remediation.'
+                                  : 'Assign an organization above to evaluate this scan against its policies.'}
+                              </p>
                             </div>
-                            <p className="max-w-sm whitespace-normal text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
-                              {row.message}
-                            </p>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <p
-                              className={
-                                row.hasFix
-                                  ? 'text-xs font-medium text-success-foreground'
-                                  : 'text-xs text-muted-foreground'
-                              }
-                            >
-                              {row.hasFix ? 'Update available' : 'No fix reported'}
-                            </p>
-                            <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                              {row.fixedVersion || '—'}
-                            </p>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <span
-                              className="text-xs text-muted-foreground"
-                              title={fullDate(row.evaluatedAt)}
-                            >
-                              {timeAgo(row.evaluatedAt)}
-                            </span>
-                          </Table.Cell>
-                          <Table.Cell>
-                            {row.primaryMatch ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onPress={() => openVulnerabilityDetails(row.primaryMatch!)}
-                              >
-                                Details
-                              </Button>
-                            ) : null}
                           </Table.Cell>
                         </Table.Row>
-                      ))
-                    )}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+                      ) : (
+                        complianceViolationRows.map((row) => (
+                          <Table.Row key={row.id} id={row.id}>
+                            <Table.Cell data-label="Policy / organization">
+                              <p className="break-words font-medium">{row.policyName}</p>
+                              <p className="mt-1 break-words text-xs text-muted-foreground">
+                                {row.orgName}
+                              </p>
+                              <p
+                                className="mt-1 text-xs text-muted-foreground"
+                                title={fullDate(row.evaluatedAt)}
+                              >
+                                Evaluated {timeAgo(row.evaluatedAt)}
+                              </p>
+                            </Table.Cell>
+                            <Table.Cell data-label="Finding / package">
+                              <Button
+                                variant="link"
+                                className="h-auto max-w-full justify-start whitespace-normal p-0 text-left font-mono text-xs"
+                                isDisabled={!row.primaryMatch}
+                                onPress={() => {
+                                  if (row.primaryMatch) openVulnerabilityDetails(row.primaryMatch);
+                                }}
+                              >
+                                {row.vulnId
+                                  ? `${row.vulnId}${row.matchCount > 1 ? ` (+${row.matchCount - 1})` : ''}`
+                                  : 'Policy finding'}
+                              </Button>
+                              <p className="mt-1 break-all text-sm">
+                                {row.packageName || 'No package reported'}
+                              </p>
+                              <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                                {row.installedVersion || '—'}
+                              </p>
+                            </Table.Cell>
+                            <Table.Cell data-label="Violation">
+                              <div className="mb-1 flex flex-wrap gap-2">
+                                {row.severity ? <SeverityBadge severity={row.severity} /> : null}
+                                <span className="text-xs text-muted-foreground">
+                                  {row.ruleType || 'Policy rule'}
+                                </span>
+                              </div>
+                              <p className="max-w-sm whitespace-normal text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
+                                {row.message}
+                              </p>
+                            </Table.Cell>
+                            <Table.Cell data-label="Remediation">
+                              <p
+                                className={
+                                  row.hasFix
+                                    ? 'text-xs font-medium text-success-foreground'
+                                    : 'text-xs text-muted-foreground'
+                                }
+                              >
+                                {row.hasFix ? 'Update available' : 'No fix reported'}
+                              </p>
+                              <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                                {row.fixedVersion || '—'}
+                              </p>
+                            </Table.Cell>
+                            <Table.Cell data-label="Actions">
+                              {(row.primaryMatch || canMutateCurrentScan) && (
+                                <RowActionsMenu
+                                  label={`Actions for ${row.policyName}`}
+                                  items={[
+                                    ...(row.primaryMatch
+                                      ? [
+                                          {
+                                            id: 'details',
+                                            label: 'View finding details',
+                                            onAction: () =>
+                                              openVulnerabilityDetails(row.primaryMatch!),
+                                          },
+                                        ]
+                                      : []),
+                                    ...(canMutateCurrentScan
+                                      ? [
+                                          {
+                                            id: 'remove-org',
+                                            label: `Remove ${row.orgName} policies`,
+                                            variant: 'danger' as const,
+                                            onAction: () => void handleRemoveOrg(row.orgId),
+                                          },
+                                        ]
+                                      : []),
+                                  ]}
+                                />
+                              )}
+                            </Table.Cell>
+                          </Table.Row>
+                        ))
+                      )}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </Table.Responsive>
           </Card>
         </div>
       )}
@@ -3774,15 +3792,28 @@ function ScanDetailContent() {
                     <Accordion.Panel>
                       <Accordion.Body className="pt-0">
                         {imageEnv.length > 0 ? (
-                          <pre
-                            className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-foreground border border-border bg-muted/40"
-                          >
-                            {imageEnv.join('\n')}
-                          </pre>
+                          <dl className="divide-y divide-border rounded-xl border border-border bg-muted/40 px-4">
+                            {imageEnv.map((entry, index) => {
+                              const separator = entry.indexOf('=');
+                              const name = separator < 0 ? entry : entry.slice(0, separator);
+                              const value = separator < 0 ? 'Not set' : entry.slice(separator + 1);
+                              return (
+                                <div
+                                  key={`${name}:${index}`}
+                                  className="grid gap-1 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-4"
+                                >
+                                  <dt className="break-all font-mono text-xs font-medium">
+                                    {name}
+                                  </dt>
+                                  <dd className="whitespace-pre-wrap break-all font-mono text-xs text-muted-foreground">
+                                    {value || 'Empty value'}
+                                  </dd>
+                                </div>
+                              );
+                            })}
+                          </dl>
                         ) : (
-                          <div
-                            className="rounded-xl px-3 py-2 text-xs text-muted-foreground border border-border bg-muted/40"
-                          >
+                          <div className="rounded-xl px-3 py-2 text-xs text-muted-foreground border border-border bg-muted/40">
                             No environment variables were captured for this image.
                           </div>
                         )}
@@ -3820,9 +3851,7 @@ function ScanDetailContent() {
                             ))}
                           </div>
                         ) : (
-                          <div
-                            className="rounded-xl px-3 py-2 text-xs text-muted-foreground border border-border bg-muted/40"
-                          >
+                          <div className="rounded-xl px-3 py-2 text-xs text-muted-foreground border border-border bg-muted/40">
                             No labels were captured for this image.
                           </div>
                         )}
@@ -3843,9 +3872,7 @@ function ScanDetailContent() {
                     </Accordion.Heading>
                     <Accordion.Panel>
                       <Accordion.Body className="pt-0">
-                        <pre
-                          className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-foreground border border-border bg-muted/40"
-                        >
+                        <pre className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-foreground border border-border bg-muted/40">
                           {JSON.stringify(fullImageConfig, null, 2)}
                         </pre>
                       </Accordion.Body>
@@ -4226,6 +4253,6 @@ function ScanDetailContent() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
-    </div>
+    </PageContainer>
   );
 }

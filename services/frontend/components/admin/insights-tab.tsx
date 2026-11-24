@@ -43,6 +43,7 @@ import {
   SearchField,
   SearchableSelect,
   Select,
+  ResourceList,
   Table,
   TablePager,
   Tabs,
@@ -154,6 +155,12 @@ function ApiLogs() {
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [stats, setStats] = useState<APIUsageStats | null>(null);
+  const [selectedLog, setSelectedLog] = useState<APIRequestLog | null>(null);
+  const detailModal = useOverlayState();
+  const openDetails = (log: APIRequestLog) => {
+    setSelectedLog(log);
+    detailModal.open();
+  };
   const [filters, setFilters] = useState({ method: '', path: '', user: '', status: '' });
   const [dateRange, setDateRange] = useState<AdminDateRange>(null);
 
@@ -319,61 +326,98 @@ function ApiLogs() {
           />
         ) : null}
 
-        <Table variant="secondary">
-          <Table.ScrollContainer className="rounded-none border-0">
-            <Table.Content aria-label="API request logs" aria-busy={loading}>
-              <Table.Header>
-                <Table.Column isRowHeader className="px-4">
-                  Request
-                </Table.Column>
-                <Table.Column className="hidden md:table-cell">User</Table.Column>
-                <Table.Column>Status</Table.Column>
-                <Table.Column className="hidden sm:table-cell">Time taken</Table.Column>
-                <Table.Column className="px-4 text-right">When</Table.Column>
-              </Table.Header>
-              <Table.Body
-                renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    {loading ? 'Loading API logs...' : 'No API requests match your filters.'}
-                  </div>
-                )}
-              >
-                {logs.map((log) => (
-                  <Table.Row key={log.id} id={log.id}>
-                    <Table.Cell className="max-w-0 px-4 sm:w-1/2">
-                      <span
-                        className="block truncate font-mono text-xs"
-                        title={`${log.method} ${log.path}`}
-                      >
-                        <span className="font-medium text-foreground">{log.method}</span>{' '}
-                        <span className="text-muted-foreground">{log.path}</span>
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell className="hidden max-w-48 md:table-cell">
-                      <span
-                        className="block truncate text-muted-foreground"
-                        title={log.email || undefined}
-                      >
-                        {displayUser(log, log.user_id ? 'Unknown user' : 'Public visitor')}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell className="whitespace-nowrap">
-                      <StatusTag tone={statusTone(log.status_code)}>
-                        {statusText(log.status_code)}
-                      </StatusTag>
-                    </Table.Cell>
-                    <Table.Cell className="hidden whitespace-nowrap text-muted-foreground tabular-nums sm:table-cell">
-                      {log.duration_ms.toLocaleString()} ms
-                    </Table.Cell>
-                    <Table.Cell className="whitespace-nowrap px-4 text-right text-muted-foreground">
-                      <span title={fullDate(log.created_at)}>{timeAgo(log.created_at)}</span>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+        <Table.Responsive
+          cards={
+            <ResourceList aria-label="API request logs" bordered={false}>
+              {!logs.length && (
+                <li className="p-4 text-sm text-muted-foreground">
+                  {loading ? 'Loading API logs…' : 'No API requests match your filters.'}
+                </li>
+              )}
+              {logs.map((log) => (
+                <ResourceList.Item
+                  key={log.id}
+                  title={`${log.method} ${log.path}`}
+                  onClick={() => openDetails(log)}
+                  description={displayUser(log, log.user_id ? 'Unknown user' : 'Public visitor')}
+                  meta={
+                    <StatusTag tone={statusTone(log.status_code)}>
+                      {statusText(log.status_code)}
+                    </StatusTag>
+                  }
+                  actions={
+                    <Button size="sm" variant="ghost" onPress={() => openDetails(log)}>
+                      Details
+                    </Button>
+                  }
+                >
+                  <p className="text-xs text-muted-foreground">
+                    {log.duration_ms.toLocaleString()} ms · {fullDate(log.created_at)}
+                  </p>
+                </ResourceList.Item>
+              ))}
+            </ResourceList>
+          }
+        >
+          <Table variant="secondary">
+            <Table.ScrollContainer className="rounded-none border-0">
+              <Table.Content aria-label="API request logs" aria-busy={loading}>
+                <Table.Header>
+                  <Table.Column isRowHeader className="px-4">
+                    Request
+                  </Table.Column>
+                  <Table.Column className="hidden md:table-cell">User</Table.Column>
+                  <Table.Column>Status</Table.Column>
+                  <Table.Column className="hidden sm:table-cell">Time taken</Table.Column>
+                  <Table.Column className="px-4 text-right">When</Table.Column>
+                </Table.Header>
+                <Table.Body
+                  renderEmptyState={() => (
+                    <div className="py-10 text-center text-sm text-muted-foreground">
+                      {loading ? 'Loading API logs...' : 'No API requests match your filters.'}
+                    </div>
+                  )}
+                >
+                  {logs.map((log) => (
+                    <Table.Row key={log.id} id={log.id}>
+                      <Table.Cell className="max-w-0 px-4 sm:w-1/2">
+                        <button
+                          type="button"
+                          onClick={() => openDetails(log)}
+                          className="block w-full truncate text-left font-mono text-xs hover:underline focus-visible:outline focus-visible:outline-ring"
+                          aria-label={`View request ${log.method} ${log.path}`}
+                          title={`${log.method} ${log.path}`}
+                        >
+                          <span className="font-medium text-foreground">{log.method}</span>{' '}
+                          <span className="text-muted-foreground">{log.path}</span>
+                        </button>
+                      </Table.Cell>
+                      <Table.Cell className="hidden max-w-48 md:table-cell">
+                        <span
+                          className="block truncate text-muted-foreground"
+                          title={log.email || undefined}
+                        >
+                          {displayUser(log, log.user_id ? 'Unknown user' : 'Public visitor')}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell className="whitespace-nowrap">
+                        <StatusTag tone={statusTone(log.status_code)}>
+                          {statusText(log.status_code)}
+                        </StatusTag>
+                      </Table.Cell>
+                      <Table.Cell className="hidden whitespace-nowrap text-muted-foreground tabular-nums sm:table-cell">
+                        {log.duration_ms.toLocaleString()} ms
+                      </Table.Cell>
+                      <Table.Cell className="whitespace-nowrap px-4 text-right text-muted-foreground">
+                        <span title={fullDate(log.created_at)}>{timeAgo(log.created_at)}</span>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </Table.Responsive>
         <TablePager
           page={page}
           pageSize={PAGE_SIZE}
@@ -382,6 +426,53 @@ function ApiLogs() {
           noun="requests"
         />
       </Card>
+      <Modal state={detailModal}>
+        <Modal.Backdrop>
+          <Modal.Container size="lg" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>API request</Modal.Heading>
+                <Modal.CloseTrigger />
+              </Modal.Header>
+              <Modal.Body>
+                {selectedLog && (
+                  <DescriptionList
+                    items={[
+                      {
+                        label: 'Request',
+                        value: `${selectedLog.method} ${selectedLog.path}`,
+                        wide: true,
+                        mono: true,
+                      },
+                      {
+                        label: 'Status',
+                        value: (
+                          <StatusTag tone={statusTone(selectedLog.status_code)}>
+                            {statusText(selectedLog.status_code)}
+                          </StatusTag>
+                        ),
+                      },
+                      {
+                        label: 'Time taken',
+                        value: `${selectedLog.duration_ms.toLocaleString()} ms`,
+                      },
+                      {
+                        label: 'User',
+                        value: displayUser(
+                          selectedLog,
+                          selectedLog.user_id ? 'Unknown user' : 'Public visitor'
+                        ),
+                      },
+                      { label: 'Email', value: selectedLog.email || 'Not recorded' },
+                      { label: 'When', value: fullDate(selectedLog.created_at) },
+                    ]}
+                  />
+                )}
+              </Modal.Body>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </div>
   );
 }
@@ -391,6 +482,198 @@ function ApiLogs() {
 /* -------------------------------------------------------------------------- */
 
 type ScanRef = { label: string; title: string };
+
+function XrayCallDetails({
+  log,
+  registryNames,
+  scanRefs,
+}: {
+  log: AdminXRayRequestLog;
+  registryNames: Record<string, string>;
+  scanRefs: Record<string, ScanRef>;
+}) {
+  return (
+    <>
+      <DescriptionList
+        items={[
+          {
+            label: 'Request',
+            value: `${log.method} ${log.endpoint}`,
+            mono: true,
+            wide: true,
+          },
+          { label: 'Status', value: statusText(log.status_code) },
+          {
+            label: 'Time taken',
+            value: `${log.duration_ms.toLocaleString()} ms`,
+          },
+          { label: 'When', value: fullDate(log.created_at) },
+          {
+            label: 'Registry',
+            value: log.registry_id
+              ? (registryNames[log.registry_id] ?? 'Workspace registry')
+              : 'None',
+          },
+          {
+            label: 'Scan',
+            value: log.scan_id ? (
+              <Link href={`/scans/details/${log.scan_id}`} className="text-primary hover:underline">
+                {scanRefs[log.scan_id]?.label ?? 'Open scan'}
+              </Link>
+            ) : (
+              'None'
+            ),
+            hidden: !log.scan_id,
+          },
+        ]}
+      />
+      {log.error ? (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">Error</p>
+          <pre className="max-h-64 overflow-auto rounded-lg bg-muted/50 p-3 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
+            {log.error}
+          </pre>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function XrayRequestList({
+  logs,
+  loading,
+  scanRefs,
+  openDetails,
+}: {
+  logs: AdminXRayRequestLog[];
+  loading: boolean;
+  scanRefs: Record<string, ScanRef>;
+  openDetails: (log: AdminXRayRequestLog) => void;
+}) {
+  return (
+    <Table.Responsive
+      cards={
+        <ResourceList aria-label="Xray request logs" bordered={false}>
+          {!logs.length && (
+            <li className="p-4 text-sm text-muted-foreground">
+              {loading ? 'Loading Xray logs…' : 'No Xray calls match your filters.'}
+            </li>
+          )}
+          {logs.map((log) => (
+            <ResourceList.Item
+              key={log.id}
+              title={`${log.method} ${log.endpoint}`}
+              onClick={() => openDetails(log)}
+              meta={
+                <StatusTag tone={statusTone(log.status_code)}>
+                  {statusText(log.status_code)}
+                </StatusTag>
+              }
+              actions={
+                <Button size="sm" variant="ghost" onPress={() => openDetails(log)}>
+                  Details
+                </Button>
+              }
+            >
+              {log.scan_id && (
+                <Link
+                  href={`/scans/details/${log.scan_id}`}
+                  className="relative z-10 text-primary hover:underline"
+                >
+                  {scanRefs[log.scan_id]?.label ?? 'Open scan'}
+                </Link>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {log.duration_ms.toLocaleString()} ms · {fullDate(log.created_at)}
+              </p>
+              {log.error && <p className="text-xs text-destructive">{summarizeError(log.error)}</p>}
+            </ResourceList.Item>
+          ))}
+        </ResourceList>
+      }
+    >
+      <Table variant="secondary">
+        <Table.ScrollContainer className="rounded-none border-0">
+          <Table.Content aria-label="Xray request logs" aria-busy={loading}>
+            <Table.Header>
+              <Table.Column isRowHeader className="px-4">
+                Request
+              </Table.Column>
+              <Table.Column className="hidden md:table-cell">Scan</Table.Column>
+              <Table.Column>Status</Table.Column>
+              <Table.Column className="hidden sm:table-cell">Time taken</Table.Column>
+              <Table.Column className="text-right">When</Table.Column>
+              <Table.Column className="px-4">
+                <span className="sr-only">Details</span>
+              </Table.Column>
+            </Table.Header>
+            <Table.Body
+              renderEmptyState={() => (
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  {loading ? 'Loading Xray logs...' : 'No Xray calls match your filters.'}
+                </div>
+              )}
+            >
+              {logs.map((log) => {
+                const scanRef = log.scan_id ? scanRefs[log.scan_id] : undefined;
+                return (
+                  <Table.Row key={log.id} id={log.id}>
+                    <Table.Cell className="max-w-0 px-4 sm:w-[40%]">
+                      <span
+                        className="block truncate font-mono text-xs"
+                        title={`${log.method} ${log.endpoint}`}
+                      >
+                        <span className="font-medium text-foreground">{log.method}</span>{' '}
+                        <span className="text-muted-foreground">{log.endpoint}</span>
+                      </span>
+                      {log.error ? (
+                        <span
+                          className="mt-0.5 block truncate text-xs text-destructive"
+                          title={summarizeError(log.error, 400)}
+                        >
+                          {summarizeError(log.error)}
+                        </span>
+                      ) : null}
+                    </Table.Cell>
+                    <Table.Cell className="hidden max-w-48 md:table-cell">
+                      {log.scan_id ? (
+                        <Link
+                          href={`/scans/details/${log.scan_id}`}
+                          className="block truncate text-primary hover:underline"
+                          title={scanRef?.title}
+                        >
+                          {scanRef?.label ?? 'Open scan'}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell className="whitespace-nowrap">
+                      <StatusTag tone={statusTone(log.status_code)}>
+                        {statusText(log.status_code)}
+                      </StatusTag>
+                    </Table.Cell>
+                    <Table.Cell className="hidden whitespace-nowrap text-muted-foreground tabular-nums sm:table-cell">
+                      {log.duration_ms.toLocaleString()} ms
+                    </Table.Cell>
+                    <Table.Cell className="whitespace-nowrap text-right text-muted-foreground">
+                      <span title={fullDate(log.created_at)}>{timeAgo(log.created_at)}</span>
+                    </Table.Cell>
+                    <Table.Cell className="px-4 text-right">
+                      <Button size="sm" variant="ghost" onPress={() => openDetails(log)}>
+                        Details
+                      </Button>
+                    </Table.Cell>
+                  </Table.Row>
+                );
+              })}
+            </Table.Body>
+          </Table.Content>
+        </Table.ScrollContainer>
+      </Table>
+    </Table.Responsive>
+  );
+}
 
 function XrayLogs() {
   const [logs, setLogs] = useState<AdminXRayRequestLog[]>([]);
@@ -651,85 +934,12 @@ function XrayLogs() {
           />
         ) : null}
 
-        <Table variant="secondary">
-          <Table.ScrollContainer className="rounded-none border-0">
-            <Table.Content aria-label="Xray request logs" aria-busy={loading}>
-              <Table.Header>
-                <Table.Column isRowHeader className="px-4">
-                  Request
-                </Table.Column>
-                <Table.Column className="hidden md:table-cell">Scan</Table.Column>
-                <Table.Column>Status</Table.Column>
-                <Table.Column className="hidden sm:table-cell">Time taken</Table.Column>
-                <Table.Column className="text-right">When</Table.Column>
-                <Table.Column className="px-4">
-                  <span className="sr-only">Details</span>
-                </Table.Column>
-              </Table.Header>
-              <Table.Body
-                renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    {loading ? 'Loading Xray logs...' : 'No Xray calls match your filters.'}
-                  </div>
-                )}
-              >
-                {logs.map((log) => {
-                  const scanRef = log.scan_id ? scanRefs[log.scan_id] : undefined;
-                  return (
-                    <Table.Row key={log.id} id={log.id}>
-                      <Table.Cell className="max-w-0 px-4 sm:w-[40%]">
-                        <span
-                          className="block truncate font-mono text-xs"
-                          title={`${log.method} ${log.endpoint}`}
-                        >
-                          <span className="font-medium text-foreground">{log.method}</span>{' '}
-                          <span className="text-muted-foreground">{log.endpoint}</span>
-                        </span>
-                        {log.error ? (
-                          <span
-                            className="mt-0.5 block truncate text-xs text-destructive"
-                            title={summarizeError(log.error, 400)}
-                          >
-                            {summarizeError(log.error)}
-                          </span>
-                        ) : null}
-                      </Table.Cell>
-                      <Table.Cell className="hidden max-w-48 md:table-cell">
-                        {log.scan_id ? (
-                          <Link
-                            href={`/scans/details/${log.scan_id}`}
-                            className="block truncate text-primary hover:underline"
-                            title={scanRef?.title}
-                          >
-                            {scanRef?.label ?? 'Open scan'}
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
-                        <StatusTag tone={statusTone(log.status_code)}>
-                          {statusText(log.status_code)}
-                        </StatusTag>
-                      </Table.Cell>
-                      <Table.Cell className="hidden whitespace-nowrap text-muted-foreground tabular-nums sm:table-cell">
-                        {log.duration_ms.toLocaleString()} ms
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap text-right text-muted-foreground">
-                        <span title={fullDate(log.created_at)}>{timeAgo(log.created_at)}</span>
-                      </Table.Cell>
-                      <Table.Cell className="px-4 text-right">
-                        <Button size="sm" variant="ghost" onPress={() => openDetails(log)}>
-                          Details
-                        </Button>
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+        <XrayRequestList
+          logs={logs}
+          loading={loading}
+          scanRefs={scanRefs}
+          openDetails={openDetails}
+        />
         <TablePager
           page={page}
           pageSize={PAGE_SIZE}
@@ -749,52 +959,11 @@ function XrayLogs() {
               </Modal.Header>
               <Modal.Body className="space-y-4">
                 {selectedLog ? (
-                  <>
-                    <DescriptionList
-                      items={[
-                        {
-                          label: 'Request',
-                          value: `${selectedLog.method} ${selectedLog.endpoint}`,
-                          mono: true,
-                          wide: true,
-                        },
-                        { label: 'Status', value: statusText(selectedLog.status_code) },
-                        {
-                          label: 'Time taken',
-                          value: `${selectedLog.duration_ms.toLocaleString()} ms`,
-                        },
-                        { label: 'When', value: fullDate(selectedLog.created_at) },
-                        {
-                          label: 'Registry',
-                          value: selectedLog.registry_id
-                            ? (registryNames[selectedLog.registry_id] ?? 'Workspace registry')
-                            : 'None',
-                        },
-                        {
-                          label: 'Scan',
-                          value: selectedLog.scan_id ? (
-                            <Link
-                              href={`/scans/details/${selectedLog.scan_id}`}
-                              className="text-primary hover:underline"
-                            >
-                              {scanRefs[selectedLog.scan_id]?.label ?? 'Open scan'}
-                            </Link>
-                          ) : (
-                            'None'
-                          ),
-                          hidden: !selectedLog.scan_id,
-                        },
-                      ]}
-                    />
-                    {selectedLog.error ? (
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">Error</p>
-                        <pre className="max-h-64 overflow-auto rounded-lg bg-muted/50 p-3 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
-                          {selectedLog.error}
-                        </pre>
-                      </div>
-                    ) : null}
-                  </>
+                  <XrayCallDetails
+                    log={selectedLog}
+                    registryNames={registryNames}
+                    scanRefs={scanRefs}
+                  />
                 ) : null}
               </Modal.Body>
             </Modal.Dialog>

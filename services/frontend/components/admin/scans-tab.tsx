@@ -22,6 +22,7 @@ import {
   Modal,
   SearchField,
   Select,
+  ResourceList,
   Table,
   TablePager,
   useOverlayState,
@@ -291,156 +292,269 @@ export function ScansTab() {
           />
         </div>
 
-        <Table variant="secondary">
-          <Table.ScrollContainer className="rounded-none border-0">
-            <Table.Content aria-label="Admin scans" aria-busy={loading}>
-              <Table.Header>
-                <Table.Column isRowHeader className="px-4">
-                  Image
-                </Table.Column>
-                <Table.Column>Status</Table.Column>
-                <Table.Column>Findings</Table.Column>
-                <Table.Column className="hidden md:table-cell">Owner</Table.Column>
-                <Table.Column className="hidden md:table-cell">Created</Table.Column>
-                <Table.Column className="px-4 text-right">
-                  <span className="sr-only">Actions</span>
-                </Table.Column>
-              </Table.Header>
-              <Table.Body
-                renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    {loading ? 'Loading scans...' : 'No scans match your filters.'}
-                  </div>
-                )}
-              >
-                {scans.map((scan) => {
-                  const reference = `${scan.image_name}:${scan.image_tag}`;
-                  const { host, name } = splitImageRef(scan.image_name);
-                  return (
-                    <Table.Row key={scan.id} id={scan.id}>
-                      <Table.Cell className="max-w-0 px-4 sm:w-[40%]">
-                        <div className="min-w-0">
-                          <Link
-                            href={`/scans/details/${scan.id}`}
-                            className="block truncate font-medium text-foreground hover:underline"
-                            title={reference}
-                          >
-                            {name}
-                            <span className="text-muted-foreground">:{scan.image_tag}</span>
-                          </Link>
-                          {host ? (
-                            <p className="truncate text-xs text-muted-foreground" title={host}>
-                              {host}
-                            </p>
-                          ) : null}
-                          {scan.share_token ? (
-                            <p className="text-xs text-muted-foreground">
-                              Shared ·{' '}
-                              {labelFor(VISIBILITY_LABELS, scan.share_visibility || 'public')}
-                            </p>
-                          ) : null}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
-                        <StatusBadge
-                          status={scan.status}
-                          externalStatus={scan.external_status}
-                          currentStep={scan.current_step}
-                        />
-                      </Table.Cell>
-                      <Table.Cell>
-                        <SeverityCounts
-                          critical={scan.critical_count || 0}
-                          high={scan.high_count || 0}
-                          medium={scan.medium_count || 0}
-                          low={scan.low_count || 0}
-                          emptyLabel={scan.status === 'completed' ? 'No findings' : '—'}
-                        />
-                      </Table.Cell>
-                      <Table.Cell className="hidden max-w-48 md:table-cell">
-                        <span
-                          className="block truncate text-muted-foreground"
-                          title={scan.owner_email || undefined}
-                        >
-                          {scan.owner_email || scan.owner_username || 'Public visitor'}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
-                        <span title={fullDate(scan.created_at)}>{timeAgo(scan.created_at)}</span>
-                      </Table.Cell>
-                      <Table.Cell className="px-4">
-                        <div className="flex justify-end">
-                          <RowActionsMenu
-                            label={`Open actions for ${reference}`}
-                            items={[
-                              {
-                                id: 'rescan',
-                                label: 'Rescan',
-                                icon: <Refresh01Icon size={15} />,
-                                pending: actionLoadingId === `${scan.id}:rescan`,
-                                onAction: () => {
-                                  void handleRescan(scan);
+        <Table.Responsive
+          cards={
+            <ResourceList aria-label="Admin scans" bordered={false}>
+              {!scans.length && (
+                <li className="p-4 text-sm text-muted-foreground">
+                  {loading ? 'Loading scans…' : 'No scans match your filters.'}
+                </li>
+              )}
+              {scans.map((scan) => {
+                const reference = `${scan.image_name}:${scan.image_tag}`;
+                const { host, name } = splitImageRef(scan.image_name);
+                return (
+                  <ResourceList.Item
+                    key={scan.id}
+                    title={`${name}:${scan.image_tag}`}
+                    titleTooltip={reference}
+                    href={`/scans/details/${scan.id}`}
+                    description={host}
+                    meta={
+                      <StatusBadge
+                        status={scan.status}
+                        externalStatus={scan.external_status}
+                        currentStep={scan.current_step}
+                      />
+                    }
+                    actions={
+                      <RowActionsMenu
+                        label={`Open actions for ${reference}`}
+                        items={[
+                          {
+                            id: 'rescan',
+                            label: 'Rescan',
+                            icon: <Refresh01Icon size={15} />,
+                            pending: actionLoadingId === `${scan.id}:rescan`,
+                            onAction: () => {
+                              void handleRescan(scan);
+                            },
+                          },
+                          ...(scan.status === 'pending' || scan.status === 'running'
+                            ? [
+                                {
+                                  id: 'cancel',
+                                  label: 'Cancel',
+                                  icon: <Cancel01Icon size={15} />,
+                                  onAction: () => {
+                                    void handleCancel(scan);
+                                  },
                                 },
-                              },
-                              ...(scan.status === 'pending' || scan.status === 'running'
-                                ? [
-                                    {
-                                      id: 'cancel',
-                                      label: 'Cancel',
-                                      icon: <Cancel01Icon size={15} />,
-                                      onAction: () => {
-                                        void handleCancel(scan);
-                                      },
-                                    },
-                                  ]
-                                : []),
-                              ...(!scan.share_token
-                                ? [
-                                    {
-                                      id: 'share',
-                                      label: 'Create share link',
-                                      icon: <Share01Icon size={15} />,
-                                      onAction: () => {
-                                        void handleCreateShare(scan);
-                                      },
-                                    },
-                                  ]
-                                : [
-                                    {
-                                      id: 'copy-share',
-                                      label: 'Copy share link',
-                                      icon: <CopyLinkIcon size={15} />,
-                                      onAction: () => {
-                                        void handleCopyShare(scan);
-                                      },
-                                    },
-                                    {
-                                      id: 'revoke-share',
-                                      label: 'Revoke share link',
-                                      icon: <Delete01Icon size={15} />,
-                                      variant: 'danger' as const,
-                                      onAction: () => {
-                                        void handleRevokeShare(scan);
-                                      },
-                                    },
-                                  ]),
-                              {
-                                id: 'tag',
-                                label: 'Add tag',
-                                icon: <Tag01Icon size={15} />,
-                                onAction: () => openTagModal(scan),
-                              },
-                            ]}
+                              ]
+                            : []),
+                          ...(!scan.share_token
+                            ? [
+                                {
+                                  id: 'share',
+                                  label: 'Create share link',
+                                  icon: <Share01Icon size={15} />,
+                                  onAction: () => {
+                                    void handleCreateShare(scan);
+                                  },
+                                },
+                              ]
+                            : [
+                                {
+                                  id: 'copy-share',
+                                  label: 'Copy share link',
+                                  icon: <CopyLinkIcon size={15} />,
+                                  onAction: () => {
+                                    void handleCopyShare(scan);
+                                  },
+                                },
+                                {
+                                  id: 'revoke-share',
+                                  label: 'Revoke share link',
+                                  icon: <Delete01Icon size={15} />,
+                                  variant: 'danger' as const,
+                                  onAction: () => {
+                                    void handleRevokeShare(scan);
+                                  },
+                                },
+                              ]),
+                          {
+                            id: 'tag',
+                            label: 'Add tag',
+                            icon: <Tag01Icon size={15} />,
+                            onAction: () => openTagModal(scan),
+                          },
+                        ]}
+                      />
+                    }
+                  >
+                    <SeverityCounts
+                      critical={scan.critical_count || 0}
+                      high={scan.high_count || 0}
+                      medium={scan.medium_count || 0}
+                      low={scan.low_count || 0}
+                      emptyLabel={scan.status === 'completed' ? 'No findings' : '—'}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {scan.owner_email || scan.owner_username || 'Public visitor'} ·{' '}
+                      {fullDate(scan.created_at)}
+                    </p>
+                    {scan.share_token && (
+                      <p className="text-xs text-muted-foreground">
+                        Shared · {labelFor(VISIBILITY_LABELS, scan.share_visibility || 'public')}
+                      </p>
+                    )}
+                  </ResourceList.Item>
+                );
+              })}
+            </ResourceList>
+          }
+        >
+          <Table variant="secondary">
+            <Table.ScrollContainer className="rounded-none border-0">
+              <Table.Content aria-label="Admin scans" aria-busy={loading}>
+                <Table.Header>
+                  <Table.Column isRowHeader className="px-4">
+                    Image
+                  </Table.Column>
+                  <Table.Column>Status</Table.Column>
+                  <Table.Column>Findings</Table.Column>
+                  <Table.Column className="hidden md:table-cell">Owner</Table.Column>
+                  <Table.Column className="hidden md:table-cell">Created</Table.Column>
+                  <Table.Column className="px-4 text-right">
+                    <span className="sr-only">Actions</span>
+                  </Table.Column>
+                </Table.Header>
+                <Table.Body
+                  renderEmptyState={() => (
+                    <div className="py-10 text-center text-sm text-muted-foreground">
+                      {loading ? 'Loading scans...' : 'No scans match your filters.'}
+                    </div>
+                  )}
+                >
+                  {scans.map((scan) => {
+                    const reference = `${scan.image_name}:${scan.image_tag}`;
+                    const { host, name } = splitImageRef(scan.image_name);
+                    return (
+                      <Table.Row key={scan.id} id={scan.id}>
+                        <Table.Cell className="max-w-0 px-4 sm:w-[40%]">
+                          <div className="min-w-0">
+                            <Link
+                              href={`/scans/details/${scan.id}`}
+                              className="block truncate font-medium text-foreground hover:underline"
+                              title={reference}
+                            >
+                              {name}
+                              <span className="text-muted-foreground">:{scan.image_tag}</span>
+                            </Link>
+                            {host ? (
+                              <p className="truncate text-xs text-muted-foreground" title={host}>
+                                {host}
+                              </p>
+                            ) : null}
+                            {scan.share_token ? (
+                              <p className="text-xs text-muted-foreground">
+                                Shared ·{' '}
+                                {labelFor(VISIBILITY_LABELS, scan.share_visibility || 'public')}
+                              </p>
+                            ) : null}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell className="whitespace-nowrap">
+                          <StatusBadge
+                            status={scan.status}
+                            externalStatus={scan.external_status}
+                            currentStep={scan.current_step}
                           />
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <SeverityCounts
+                            critical={scan.critical_count || 0}
+                            high={scan.high_count || 0}
+                            medium={scan.medium_count || 0}
+                            low={scan.low_count || 0}
+                            emptyLabel={scan.status === 'completed' ? 'No findings' : '—'}
+                          />
+                        </Table.Cell>
+                        <Table.Cell className="hidden max-w-48 md:table-cell">
+                          <span
+                            className="block truncate text-muted-foreground"
+                            title={scan.owner_email || undefined}
+                          >
+                            {scan.owner_email || scan.owner_username || 'Public visitor'}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
+                          <span title={fullDate(scan.created_at)}>{timeAgo(scan.created_at)}</span>
+                        </Table.Cell>
+                        <Table.Cell className="px-4">
+                          <div className="flex justify-end">
+                            <RowActionsMenu
+                              label={`Open actions for ${reference}`}
+                              items={[
+                                {
+                                  id: 'rescan',
+                                  label: 'Rescan',
+                                  icon: <Refresh01Icon size={15} />,
+                                  pending: actionLoadingId === `${scan.id}:rescan`,
+                                  onAction: () => {
+                                    void handleRescan(scan);
+                                  },
+                                },
+                                ...(scan.status === 'pending' || scan.status === 'running'
+                                  ? [
+                                      {
+                                        id: 'cancel',
+                                        label: 'Cancel',
+                                        icon: <Cancel01Icon size={15} />,
+                                        onAction: () => {
+                                          void handleCancel(scan);
+                                        },
+                                      },
+                                    ]
+                                  : []),
+                                ...(!scan.share_token
+                                  ? [
+                                      {
+                                        id: 'share',
+                                        label: 'Create share link',
+                                        icon: <Share01Icon size={15} />,
+                                        onAction: () => {
+                                          void handleCreateShare(scan);
+                                        },
+                                      },
+                                    ]
+                                  : [
+                                      {
+                                        id: 'copy-share',
+                                        label: 'Copy share link',
+                                        icon: <CopyLinkIcon size={15} />,
+                                        onAction: () => {
+                                          void handleCopyShare(scan);
+                                        },
+                                      },
+                                      {
+                                        id: 'revoke-share',
+                                        label: 'Revoke share link',
+                                        icon: <Delete01Icon size={15} />,
+                                        variant: 'danger' as const,
+                                        onAction: () => {
+                                          void handleRevokeShare(scan);
+                                        },
+                                      },
+                                    ]),
+                                {
+                                  id: 'tag',
+                                  label: 'Add tag',
+                                  icon: <Tag01Icon size={15} />,
+                                  onAction: () => openTagModal(scan),
+                                },
+                              ]}
+                            />
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </Table.Responsive>
         <TablePager
           page={page}
           pageSize={PAGE_SIZE}

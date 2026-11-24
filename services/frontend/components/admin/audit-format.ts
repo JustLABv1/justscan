@@ -59,6 +59,10 @@ export function parseAuditDetails(details: string | null | undefined): {
   for (const id of extraIds) facts.push({ key: 'ref', label: 'Reference ID', value: id });
   const summary = withoutGroups
     .replace(UUID_ANYWHERE, '')
+    .replace(
+      /\b1 (scans|images|tags|runs|members|tokens)\b/g,
+      (_match, noun: string) => `1 ${noun.slice(0, -1)}`
+    )
     .replace(/\s{2,}/g, ' ')
     .replace(/\s+([,.:;])/g, '$1')
     .trim();

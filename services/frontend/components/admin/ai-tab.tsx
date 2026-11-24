@@ -633,7 +633,6 @@ export function AITab() {
                           >
                             <Label
                               className="text-sm font-medium"
-                              style={{ color: 'var(--text-secondary)' }}
                             >
                               Provider type <span className="text-destructive">*</span>
                             </Label>

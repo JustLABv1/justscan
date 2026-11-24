@@ -27,6 +27,7 @@ import {
   Modal,
   SearchField,
   Select,
+  ResourceList,
   Table,
   TablePager,
   useOverlayState,
@@ -290,95 +291,172 @@ export function UsersTab() {
             />
           </div>
 
-          <Table variant="secondary">
-            <Table.ScrollContainer className="rounded-none border-0">
-              <Table.Content aria-label="Users" aria-busy={loading}>
-                <Table.Header>
-                  <Table.Column isRowHeader className="px-4">
-                    User
-                  </Table.Column>
-                  <Table.Column>Role</Table.Column>
-                  <Table.Column>Status</Table.Column>
-                  <Table.Column className="hidden md:table-cell">Last active</Table.Column>
-                  <Table.Column className="px-4 text-right">
-                    <span className="sr-only">Actions</span>
-                  </Table.Column>
-                </Table.Header>
-                <Table.Body
-                  renderEmptyState={() => (
-                    <div className="py-10 text-center text-sm text-muted-foreground">
-                      {loading ? 'Loading users...' : 'No users match your filters.'}
-                    </div>
-                  )}
-                >
-                  {pagedUsers.map((user) => (
-                    <Table.Row key={user.id} id={user.id}>
-                      <Table.Cell className="max-w-0 px-4 sm:w-[45%]">
-                        <div className="min-w-0" title={`Created ${fullDate(user.created_at)}`}>
-                          <p className="truncate font-medium">{user.username}</p>
-                          <p className="truncate text-xs text-muted-foreground">{user.email}</p>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
+          <Table.Responsive
+            cards={
+              <ResourceList aria-label="Users" bordered={false}>
+                {!pagedUsers.length && (
+                  <li className="p-4 text-sm text-muted-foreground">
+                    {loading ? 'Loading users…' : 'No users match your filters.'}
+                  </li>
+                )}
+                {pagedUsers.map((user) => (
+                  <ResourceList.Item
+                    key={user.id}
+                    title={user.username}
+                    description={user.email}
+                    meta={
+                      <>
                         <Chip size="sm" color={user.role === 'admin' ? 'accent' : 'default'}>
                           {labelFor(ROLE_LABELS, user.role)}
                         </Chip>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
                         <StatusTag tone={user.disabled ? 'danger' : 'success'}>
                           {user.disabled ? 'Disabled' : 'Active'}
                         </StatusTag>
-                      </Table.Cell>
-                      <Table.Cell className="hidden text-muted-foreground md:table-cell">
-                        <span title={user.last_login_at ? fullDate(user.last_login_at) : undefined}>
-                          {user.last_login_at ? timeAgo(user.last_login_at) : 'Never signed in'} ·{' '}
-                          {userAuthLabel(user.last_login_method || user.auth_type)}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell className="px-4">
-                        <div className="flex justify-end">
-                          <RowActionsMenu
-                            label={`Open actions for ${user.username}`}
-                            items={[
-                              {
-                                id: 'edit',
-                                label: 'Edit user',
-                                icon: <PencilEdit01Icon size={15} />,
-                                onAction: () => openEdit(user),
-                              },
-                              {
-                                id: 'toggle',
-                                label: user.disabled ? 'Enable user' : 'Disable user',
-                                icon: <Refresh01Icon size={15} />,
-                                pending: pendingAction === `toggle:${user.id}`,
-                                disabled:
-                                  pendingAction !== null && pendingAction !== `toggle:${user.id}`,
-                                onAction: () => {
-                                  void handleToggleDisable(user);
+                      </>
+                    }
+                    actions={
+                      <RowActionsMenu
+                        label={`Open actions for ${user.username}`}
+                        items={[
+                          {
+                            id: 'edit',
+                            label: 'Edit user',
+                            icon: <PencilEdit01Icon size={15} />,
+                            onAction: () => openEdit(user),
+                          },
+                          {
+                            id: 'toggle',
+                            label: user.disabled ? 'Enable user' : 'Disable user',
+                            icon: <Refresh01Icon size={15} />,
+                            pending: pendingAction === `toggle:${user.id}`,
+                            disabled:
+                              pendingAction !== null && pendingAction !== `toggle:${user.id}`,
+                            onAction: () => {
+                              void handleToggleDisable(user);
+                            },
+                          },
+                          {
+                            id: 'delete',
+                            label: 'Delete user',
+                            icon: <Delete01Icon size={15} />,
+                            variant: 'danger',
+                            pending: pendingAction === `delete:${user.id}`,
+                            disabled:
+                              pendingAction !== null && pendingAction !== `delete:${user.id}`,
+                            onAction: () => {
+                              void handleDelete(user);
+                            },
+                          },
+                        ]}
+                      />
+                    }
+                  >
+                    <p className="text-xs text-muted-foreground">
+                      Created {fullDate(user.created_at)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {user.last_login_at
+                        ? `Last active ${fullDate(user.last_login_at)}`
+                        : 'Never signed in'}{' '}
+                      · {userAuthLabel(user.last_login_method || user.auth_type)}
+                    </p>
+                  </ResourceList.Item>
+                ))}
+              </ResourceList>
+            }
+          >
+            <Table variant="secondary">
+              <Table.ScrollContainer className="rounded-none border-0">
+                <Table.Content aria-label="Users" aria-busy={loading}>
+                  <Table.Header>
+                    <Table.Column isRowHeader className="px-4">
+                      User
+                    </Table.Column>
+                    <Table.Column>Role</Table.Column>
+                    <Table.Column>Status</Table.Column>
+                    <Table.Column className="hidden md:table-cell">Last active</Table.Column>
+                    <Table.Column className="px-4 text-right">
+                      <span className="sr-only">Actions</span>
+                    </Table.Column>
+                  </Table.Header>
+                  <Table.Body
+                    renderEmptyState={() => (
+                      <div className="py-10 text-center text-sm text-muted-foreground">
+                        {loading ? 'Loading users...' : 'No users match your filters.'}
+                      </div>
+                    )}
+                  >
+                    {pagedUsers.map((user) => (
+                      <Table.Row key={user.id} id={user.id}>
+                        <Table.Cell className="max-w-0 px-4 sm:w-[45%]">
+                          <div className="min-w-0" title={`Created ${fullDate(user.created_at)}`}>
+                            <p className="truncate font-medium">{user.username}</p>
+                            <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell className="whitespace-nowrap">
+                          <Chip size="sm" color={user.role === 'admin' ? 'accent' : 'default'}>
+                            {labelFor(ROLE_LABELS, user.role)}
+                          </Chip>
+                        </Table.Cell>
+                        <Table.Cell className="whitespace-nowrap">
+                          <StatusTag tone={user.disabled ? 'danger' : 'success'}>
+                            {user.disabled ? 'Disabled' : 'Active'}
+                          </StatusTag>
+                        </Table.Cell>
+                        <Table.Cell className="hidden text-muted-foreground md:table-cell">
+                          <span
+                            title={user.last_login_at ? fullDate(user.last_login_at) : undefined}
+                          >
+                            {user.last_login_at ? timeAgo(user.last_login_at) : 'Never signed in'} ·{' '}
+                            {userAuthLabel(user.last_login_method || user.auth_type)}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell className="px-4">
+                          <div className="flex justify-end">
+                            <RowActionsMenu
+                              label={`Open actions for ${user.username}`}
+                              items={[
+                                {
+                                  id: 'edit',
+                                  label: 'Edit user',
+                                  icon: <PencilEdit01Icon size={15} />,
+                                  onAction: () => openEdit(user),
                                 },
-                              },
-                              {
-                                id: 'delete',
-                                label: 'Delete user',
-                                icon: <Delete01Icon size={15} />,
-                                variant: 'danger',
-                                pending: pendingAction === `delete:${user.id}`,
-                                disabled:
-                                  pendingAction !== null && pendingAction !== `delete:${user.id}`,
-                                onAction: () => {
-                                  void handleDelete(user);
+                                {
+                                  id: 'toggle',
+                                  label: user.disabled ? 'Enable user' : 'Disable user',
+                                  icon: <Refresh01Icon size={15} />,
+                                  pending: pendingAction === `toggle:${user.id}`,
+                                  disabled:
+                                    pendingAction !== null && pendingAction !== `toggle:${user.id}`,
+                                  onAction: () => {
+                                    void handleToggleDisable(user);
+                                  },
                                 },
-                              },
-                            ]}
-                          />
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+                                {
+                                  id: 'delete',
+                                  label: 'Delete user',
+                                  icon: <Delete01Icon size={15} />,
+                                  variant: 'danger',
+                                  pending: pendingAction === `delete:${user.id}`,
+                                  disabled:
+                                    pendingAction !== null && pendingAction !== `delete:${user.id}`,
+                                  onAction: () => {
+                                    void handleDelete(user);
+                                  },
+                                },
+                              ]}
+                            />
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </Table.Responsive>
           <TablePager
             page={effectivePage}
             pageSize={PAGE_SIZE}

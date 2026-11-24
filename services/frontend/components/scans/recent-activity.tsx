@@ -101,20 +101,7 @@ export function RecentActivityRangePicker({
         <button
           type="button"
           onClick={() => onClear?.()}
-          className="rounded-lg px-2.5 py-1 text-xs font-medium transition-all duration-150"
-          style={
-            value == null
-              ? {
-                  background: 'color-mix(in srgb, var(--primary) 20%, transparent)',
-                  color: 'color-mix(in srgb, var(--primary) 78%, white)',
-                  border: '1px solid color-mix(in srgb, var(--primary) 28%, transparent)',
-                }
-              : {
-                  background: 'var(--row-hover)',
-                  color: 'var(--text-muted)',
-                  border: '1px solid var(--surface-border)',
-                }
-          }
+          className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${value == null ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'}`}
           aria-pressed={value == null}
           aria-label={clearLabel}
           title={clearLabel}
@@ -131,20 +118,7 @@ export function RecentActivityRangePicker({
             key={option.id}
             type="button"
             onClick={() => onChange(option.id)}
-            className="rounded-lg px-2.5 py-1 text-xs font-medium transition-all duration-150"
-            style={
-              isActive
-                ? {
-                    background: 'color-mix(in srgb, var(--primary) 20%, transparent)',
-                    color: 'color-mix(in srgb, var(--primary) 78%, white)',
-                    border: '1px solid color-mix(in srgb, var(--primary) 28%, transparent)',
-                  }
-                : {
-                    background: 'var(--row-hover)',
-                    color: 'var(--text-muted)',
-                    border: '1px solid var(--surface-border)',
-                  }
-            }
+            className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${isActive ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'}`}
             aria-pressed={isActive}
             aria-label={option.label}
             title={option.label}
@@ -163,9 +137,7 @@ export function RecentActivityRow({ scan }: { scan: Scan }) {
   return (
     <Link
       href={`/scans/details/${scan.id}`}
-      className="flex items-start justify-between gap-3 rounded-xl p-3 transition-colors duration-150 group"
-      onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
-      onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
+      className="flex items-start justify-between gap-3 rounded-xl p-3 transition-colors duration-150 group hover:bg-muted/50"
     >
       <div className="min-w-0 flex-1">
         <p className="truncate font-mono text-sm text-foreground transition-colors group-hover:text-foreground dark:group-hover:text-white">

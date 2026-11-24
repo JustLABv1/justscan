@@ -450,73 +450,115 @@ export function MCPAdminTab() {
           />
         ) : null}
 
-        <Table variant="secondary">
-          <Table.ScrollContainer className="rounded-none border-0">
-            <Table.Content aria-label="MCP activity" aria-busy={activityLoading}>
-              <Table.Header>
-                <Table.Column isRowHeader className="px-4">
-                  Tool
-                </Table.Column>
-                <Table.Column>User</Table.Column>
-                <Table.Column>Status</Table.Column>
-                <Table.Column className="hidden md:table-cell">Details</Table.Column>
-                <Table.Column className="px-4 text-right">Time</Table.Column>
-              </Table.Header>
-              <Table.Body
-                renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    {activityLoading ? 'Loading MCP activity...' : 'No MCP activity found.'}
-                  </div>
-                )}
-              >
-                {activity.map((entry) => {
-                  const status = STATUS_DISPLAY[entry.status] ?? {
-                    label: humanize(entry.status),
-                    tone: 'neutral' as const,
-                  };
-                  return (
-                    <Table.Row key={entry.id} id={entry.id}>
-                      <Table.Cell className="max-w-0 px-4 sm:w-[30%]">
-                        <span className="block truncate font-medium" title={entry.tool_name}>
-                          {toolLabel(entry.tool_name)}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell className="max-w-48">
-                        <span
-                          className="block truncate text-muted-foreground"
-                          title={entry.email || undefined}
-                        >
-                          {displayUser(entry)}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
-                        <StatusTag tone={status.tone}>{status.label}</StatusTag>
-                        {entry.error_code ? (
-                          <span
-                            className="block text-xs text-muted-foreground"
-                            title={entry.error_code}
-                          >
-                            {humanize(entry.error_code)}
+        <Table.Responsive
+          cards={
+            <ResourceList aria-label="MCP activity" bordered={false}>
+              {!activity.length && (
+                <li className="p-4 text-sm text-muted-foreground">
+                  {activityLoading ? 'Loading MCP activity…' : 'No MCP activity found.'}
+                </li>
+              )}
+              {activity.map((entry) => {
+                const status = STATUS_DISPLAY[entry.status] ?? {
+                  label: humanize(entry.status),
+                  tone: 'neutral' as const,
+                };
+                return (
+                  <ResourceList.Item
+                    key={entry.id}
+                    title={toolLabel(entry.tool_name)}
+                    titleTooltip={entry.tool_name}
+                    description={displayUser(entry)}
+                    meta={<StatusTag tone={status.tone}>{status.label}</StatusTag>}
+                  >
+                    <p className="text-xs text-muted-foreground">{entry.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {[
+                        labelFor(TRANSPORT_LABELS, entry.transport),
+                        entry.action ? (entry.replayed ? 'Repeated action' : 'Action') : 'Read',
+                        `${entry.duration_ms.toLocaleString()} ms`,
+                      ].join(' · ')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{fullDate(entry.created_at)}</p>
+                    {entry.error_code && (
+                      <p className="text-xs text-destructive">{humanize(entry.error_code)}</p>
+                    )}
+                  </ResourceList.Item>
+                );
+              })}
+            </ResourceList>
+          }
+        >
+          <Table variant="secondary">
+            <Table.ScrollContainer className="rounded-none border-0">
+              <Table.Content aria-label="MCP activity" aria-busy={activityLoading}>
+                <Table.Header>
+                  <Table.Column isRowHeader className="px-4">
+                    Tool
+                  </Table.Column>
+                  <Table.Column>User</Table.Column>
+                  <Table.Column>Status</Table.Column>
+                  <Table.Column className="hidden md:table-cell">Details</Table.Column>
+                  <Table.Column className="px-4 text-right">Time</Table.Column>
+                </Table.Header>
+                <Table.Body
+                  renderEmptyState={() => (
+                    <div className="py-10 text-center text-sm text-muted-foreground">
+                      {activityLoading ? 'Loading MCP activity...' : 'No MCP activity found.'}
+                    </div>
+                  )}
+                >
+                  {activity.map((entry) => {
+                    const status = STATUS_DISPLAY[entry.status] ?? {
+                      label: humanize(entry.status),
+                      tone: 'neutral' as const,
+                    };
+                    return (
+                      <Table.Row key={entry.id} id={entry.id}>
+                        <Table.Cell className="max-w-0 px-4 sm:w-[30%]">
+                          <span className="block truncate font-medium" title={entry.tool_name}>
+                            {toolLabel(entry.tool_name)}
                           </span>
-                        ) : null}
-                      </Table.Cell>
-                      <Table.Cell className="hidden text-muted-foreground md:table-cell">
-                        {[
-                          labelFor(TRANSPORT_LABELS, entry.transport),
-                          entry.action ? (entry.replayed ? 'Repeated action' : 'Action') : 'Read',
-                          `${entry.duration_ms.toLocaleString()} ms`,
-                        ].join(' · ')}
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap px-4 text-right text-muted-foreground">
-                        <span title={fullDate(entry.created_at)}>{timeAgo(entry.created_at)}</span>
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+                        </Table.Cell>
+                        <Table.Cell className="max-w-48">
+                          <span
+                            className="block truncate text-muted-foreground"
+                            title={entry.email || undefined}
+                          >
+                            {displayUser(entry)}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell className="whitespace-nowrap">
+                          <StatusTag tone={status.tone}>{status.label}</StatusTag>
+                          {entry.error_code ? (
+                            <span
+                              className="block text-xs text-muted-foreground"
+                              title={entry.error_code}
+                            >
+                              {humanize(entry.error_code)}
+                            </span>
+                          ) : null}
+                        </Table.Cell>
+                        <Table.Cell className="hidden text-muted-foreground md:table-cell">
+                          {[
+                            labelFor(TRANSPORT_LABELS, entry.transport),
+                            entry.action ? (entry.replayed ? 'Repeated action' : 'Action') : 'Read',
+                            `${entry.duration_ms.toLocaleString()} ms`,
+                          ].join(' · ')}
+                        </Table.Cell>
+                        <Table.Cell className="whitespace-nowrap px-4 text-right text-muted-foreground">
+                          <span title={fullDate(entry.created_at)}>
+                            {timeAgo(entry.created_at)}
+                          </span>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </Table.Responsive>
         <TablePager
           page={activityPage}
           pageSize={PAGE_SIZE}

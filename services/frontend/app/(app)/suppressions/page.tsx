@@ -425,146 +425,145 @@ export default function SuppressionsPage() {
           >
             <div>
               <Table variant="secondary">
-                <Table.ScrollContainer className="rounded-none border-0">
-                  <Table.Content aria-label="Suppressions" className="[&_td]:py-3">
-                    <Table.Header>
-                      <Table.Column isRowHeader>Vulnerability</Table.Column>
-                      <Table.Column className="hidden md:table-cell">Status</Table.Column>
-                      <Table.Column>Reason</Table.Column>
-                      <Table.Column className="w-px whitespace-nowrap text-right">
-                        <span className="sr-only">Actions</span>
-                      </Table.Column>
-                    </Table.Header>
-                    <Table.Body>
-                      {suppressions.map((s) => {
-                        const imageCount = s.applies_image_count ?? 0;
-                        const expired =
-                          s.expires_at !== null && now !== null && new Date(s.expires_at) < now;
-                        return (
-                          <Table.Row id={s.id} key={s.id}>
-                            <Table.Cell>
-                              <div className="flex min-w-0 flex-col items-start gap-1">
-                                <a
-                                  href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="font-mono text-sm font-medium text-primary hover:underline"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {s.vuln_id}
-                                </a>
-                                <button
-                                  type="button"
-                                  className="text-left text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
-                                  onClick={() => openAppliesImagesModal(s)}
-                                  title={
-                                    s.image_digest
-                                      ? `Image digest ${shortDigest(s.image_digest)}`
-                                      : undefined
-                                  }
-                                >
-                                  Applies to {pluralize(imageCount, 'image')}
-                                </button>
-                                <div className="flex flex-wrap items-center gap-1.5 md:hidden">
+                <Table.Responsive>
+                  <Table.ScrollContainer className="rounded-none border-0">
+                    <Table.Content aria-label="Suppressions" className="[&_td]:py-3">
+                      <Table.Header>
+                        <Table.Column isRowHeader>Vulnerability</Table.Column>
+                        <Table.Column className="hidden md:table-cell">Status</Table.Column>
+                        <Table.Column>Reason</Table.Column>
+                        <Table.Column className="w-px whitespace-nowrap text-right">
+                          <span className="sr-only">Actions</span>
+                        </Table.Column>
+                      </Table.Header>
+                      <Table.Body>
+                        {suppressions.map((s) => {
+                          const imageCount = s.applies_image_count ?? 0;
+                          const expired =
+                            s.expires_at !== null && now !== null && new Date(s.expires_at) < now;
+                          return (
+                            <Table.Row id={s.id} key={s.id}>
+                              <Table.Cell data-label="Vulnerability">
+                                <div className="flex min-w-0 flex-col items-start gap-1">
+                                  <a
+                                    href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-mono text-sm font-medium text-primary hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {s.vuln_id}
+                                  </a>
+                                  <button
+                                    type="button"
+                                    className="text-left text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
+                                    onClick={() => openAppliesImagesModal(s)}
+                                    title={
+                                      s.image_digest
+                                        ? `Image digest ${shortDigest(s.image_digest)}`
+                                        : undefined
+                                    }
+                                  >
+                                    Applies to {pluralize(imageCount, 'image')}
+                                  </button>
+                                </div>
+                              </Table.Cell>
+                              <Table.Cell data-label="Status" className="hidden md:table-cell">
+                                <div className="flex flex-col items-start gap-1.5">
                                   <StatusBadge status={s.status} />
-                                  <SuppressionSourceBadge source={s.source} />
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <SuppressionSourceBadge source={s.source} />
+                                    <OwnershipBadge
+                                      ownerType={s.owner_type}
+                                      ownerOrgId={s.owner_org_id}
+                                      orgNamesById={orgNamesById}
+                                    />
+                                  </div>
                                 </div>
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell className="hidden md:table-cell">
-                              <div className="flex flex-col items-start gap-1.5">
-                                <StatusBadge status={s.status} />
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  <SuppressionSourceBadge source={s.source} />
-                                  <OwnershipBadge
-                                    ownerType={s.owner_type}
-                                    ownerOrgId={s.owner_org_id}
-                                    orgNamesById={orgNamesById}
-                                  />
-                                </div>
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <div className="max-w-xl space-y-1 text-sm">
-                                <p
-                                  className="line-clamp-2 text-foreground"
-                                  title={s.justification || undefined}
-                                >
-                                  {s.justification || 'No reason given'}
-                                </p>
-                                {s.xray_policy_name || s.xray_watch_name ? (
-                                  <p className="text-xs text-muted-foreground">
-                                    {[s.xray_policy_name, s.xray_watch_name]
-                                      .filter(Boolean)
-                                      .join(' · ')}
+                              </Table.Cell>
+                              <Table.Cell data-label="Reason">
+                                <div className="max-w-xl space-y-1 text-sm">
+                                  <p
+                                    className="line-clamp-2 text-foreground"
+                                    title={s.justification || undefined}
+                                  >
+                                    {s.justification || 'No reason given'}
                                   </p>
-                                ) : null}
-                                <p className="text-xs text-muted-foreground">
-                                  {s.username ? `${s.username} · ` : ''}
-                                  <span title={fullDate(s.created_at)}>
-                                    Added {timeAgo(s.created_at)}
-                                  </span>
-                                  {' · '}
-                                  {s.expires_at ? (
-                                    <span
-                                      className={expired ? 'text-destructive' : undefined}
-                                      title={fullDate(s.expires_at)}
-                                    >
-                                      {expired ? 'Expired' : 'Expires'}{' '}
-                                      {formatDateOnly(s.expires_at)}
+                                  {s.xray_policy_name || s.xray_watch_name ? (
+                                    <p className="text-xs text-muted-foreground">
+                                      {[s.xray_policy_name, s.xray_watch_name]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    </p>
+                                  ) : null}
+                                  <p className="text-xs text-muted-foreground">
+                                    {s.username ? `${s.username} · ` : ''}
+                                    <span title={fullDate(s.created_at)}>
+                                      Added {timeAgo(s.created_at)}
                                     </span>
-                                  ) : (
-                                    'Never expires'
-                                  )}
-                                </p>
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell>
-                              {canManageAccess(s) || canMutateSuppression(s) ? (
-                                <div className="flex items-center justify-end">
-                                  <RowActionsMenu
-                                    label={`Actions for ${s.vuln_id}`}
-                                    items={[
-                                      ...(canManageAccess(s)
-                                        ? [
-                                            {
-                                              id: 'manage-access',
-                                              label: 'Manage access',
-                                              icon: <Shield01Icon size={14} />,
-                                              onAction: () => openShareModal(s),
-                                            },
-                                          ]
-                                        : []),
-                                      ...(canMutateSuppression(s)
-                                        ? [
-                                            {
-                                              id: 'remove',
-                                              label: 'Remove suppression',
-                                              icon: <Delete01Icon size={14} />,
-                                              variant: 'danger' as const,
-                                              pending: deletingId === s.id,
-                                              disabled: deletingId !== null && deletingId !== s.id,
-                                              onAction: () => {
-                                                void handleDelete(s);
-                                              },
-                                            },
-                                          ]
-                                        : []),
-                                    ]}
-                                  />
+                                    {' · '}
+                                    {s.expires_at ? (
+                                      <span
+                                        className={expired ? 'text-destructive' : undefined}
+                                        title={fullDate(s.expires_at)}
+                                      >
+                                        {expired ? 'Expired' : 'Expires'}{' '}
+                                        {formatDateOnly(s.expires_at)}
+                                      </span>
+                                    ) : (
+                                      'Never expires'
+                                    )}
+                                  </p>
                                 </div>
-                              ) : (
-                                <span className="whitespace-nowrap text-xs text-muted-foreground">
-                                  Read only
-                                </span>
-                              )}
-                            </Table.Cell>
-                          </Table.Row>
-                        );
-                      })}
-                    </Table.Body>
-                  </Table.Content>
-                </Table.ScrollContainer>
+                              </Table.Cell>
+                              <Table.Cell data-label="Actions">
+                                {canManageAccess(s) || canMutateSuppression(s) ? (
+                                  <div className="flex items-center justify-end">
+                                    <RowActionsMenu
+                                      label={`Actions for ${s.vuln_id}`}
+                                      items={[
+                                        ...(canManageAccess(s)
+                                          ? [
+                                              {
+                                                id: 'manage-access',
+                                                label: 'Manage access',
+                                                icon: <Shield01Icon size={14} />,
+                                                onAction: () => openShareModal(s),
+                                              },
+                                            ]
+                                          : []),
+                                        ...(canMutateSuppression(s)
+                                          ? [
+                                              {
+                                                id: 'remove',
+                                                label: 'Remove suppression',
+                                                icon: <Delete01Icon size={14} />,
+                                                variant: 'danger' as const,
+                                                pending: deletingId === s.id,
+                                                disabled:
+                                                  deletingId !== null && deletingId !== s.id,
+                                                onAction: () => {
+                                                  void handleDelete(s);
+                                                },
+                                              },
+                                            ]
+                                          : []),
+                                      ]}
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="whitespace-nowrap text-xs text-muted-foreground">
+                                    Read only
+                                  </span>
+                                )}
+                              </Table.Cell>
+                            </Table.Row>
+                          );
+                        })}
+                      </Table.Body>
+                    </Table.Content>
+                  </Table.ScrollContainer>
+                </Table.Responsive>
                 <TablePager
                   page={page}
                   pageSize={LIMIT}

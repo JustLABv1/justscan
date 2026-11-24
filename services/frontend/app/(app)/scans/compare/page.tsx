@@ -23,53 +23,64 @@ function VulnTable({ vulns, emptyText }: { vulns: Vulnerability[]; emptyText: st
   }
   return (
     <Table variant="secondary">
-      <Table.ScrollContainer>
-        <Table.Content aria-label="Scan comparison vulnerabilities" className="[&_td]:align-top">
-          <Table.Header>
-            <Table.Column isRowHeader>CVE ID</Table.Column>
-            <Table.Column>Package</Table.Column>
-            <Table.Column>Severity</Table.Column>
-            <Table.Column>Version</Table.Column>
-            <Table.Column className="text-right">CVSS</Table.Column>
-          </Table.Header>
-          <Table.Body>
-            {vulns.map((v, i) => (
-              <Table.Row
-                key={v.id ?? i}
-                id={v.id ?? `${v.vuln_id || 'row'}-${i}`}
-                className="hover:bg-muted/50"
-              >
-                <Table.Cell>
-                  {v.vuln_id ? (
-                    <a
-                      href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="whitespace-nowrap font-mono text-xs text-primary hover:underline"
-                    >
-                      {v.vuln_id}
-                    </a>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </Table.Cell>
-                <Table.Cell className="text-sm text-foreground [overflow-wrap:anywhere]">
-                  {v.pkg_name}
-                </Table.Cell>
-                <Table.Cell>
-                  <SeverityBadge severity={(v.severity || 'UNKNOWN').toUpperCase()} />
-                </Table.Cell>
-                <Table.Cell className="break-all font-mono text-xs text-muted-foreground">
-                  {v.installed_version}
-                </Table.Cell>
-                <Table.Cell className="text-right font-mono text-xs text-muted-foreground">
-                  {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Content>
-      </Table.ScrollContainer>
+      <Table.Responsive>
+        <Table.ScrollContainer>
+          <Table.Content aria-label="Scan comparison vulnerabilities" className="[&_td]:align-top">
+            <Table.Header>
+              <Table.Column isRowHeader>CVE ID</Table.Column>
+              <Table.Column>Package</Table.Column>
+              <Table.Column>Severity</Table.Column>
+              <Table.Column>Version</Table.Column>
+              <Table.Column className="text-right">CVSS</Table.Column>
+            </Table.Header>
+            <Table.Body>
+              {vulns.map((v, i) => (
+                <Table.Row
+                  key={v.id ?? i}
+                  id={v.id ?? `${v.vuln_id || 'row'}-${i}`}
+                  className="hover:bg-muted/50"
+                >
+                  <Table.Cell data-label="CVE">
+                    {v.vuln_id ? (
+                      <a
+                        href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="whitespace-nowrap font-mono text-xs text-primary hover:underline"
+                      >
+                        {v.vuln_id}
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </Table.Cell>
+                  <Table.Cell
+                    data-label="Package"
+                    className="text-sm text-foreground [overflow-wrap:anywhere]"
+                  >
+                    {v.pkg_name}
+                  </Table.Cell>
+                  <Table.Cell data-label="Severity">
+                    <SeverityBadge severity={(v.severity || 'UNKNOWN').toUpperCase()} />
+                  </Table.Cell>
+                  <Table.Cell
+                    data-label="Version"
+                    className="break-all font-mono text-xs text-muted-foreground"
+                  >
+                    {v.installed_version}
+                  </Table.Cell>
+                  <Table.Cell
+                    data-label="CVSS"
+                    className="text-right font-mono text-xs text-muted-foreground"
+                  >
+                    {v.cvss_score ? v.cvss_score.toFixed(1) : '-'}
+                  </Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table.Content>
+        </Table.ScrollContainer>
+      </Table.Responsive>
     </Table>
   );
 }

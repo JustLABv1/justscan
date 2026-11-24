@@ -201,7 +201,6 @@ function ReportSnapshot({
               ['Started', formatDate(scan.started_at)],
               ['Completed', formatDate(scan.completed_at)],
               ['Freshness', item ? `${item.freshness_hours}h` : '—'],
-              ['Scan ID', scan.scan_id],
             ] as [string, string][]
           ).map(([label, value]) => (
             <tr key={label}>
@@ -222,8 +221,8 @@ function ReportSnapshot({
                   padding: '6px 10px',
                   color: '#111827',
                   borderBottom: '1px solid #e5e7eb',
-                  fontFamily: label === 'Scan ID' ? 'monospace' : 'inherit',
-                  fontSize: label === 'Scan ID' ? 11 : 12,
+                  fontFamily: 'inherit',
+                  fontSize: 12,
                   wordBreak: 'break-all',
                 }}
               >
@@ -673,6 +672,7 @@ function StatusReportContent() {
         }
         * { box-sizing: border-box; }
         body { margin: 0; padding: 0; background: #fff; color-scheme: light; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); color: #111827; }
+        .status-report { --primary: #374151; --primary-foreground: #ffffff; }
         .status-report table { table-layout: fixed; }
         .status-report th, .status-report td, .status-report a { overflow-wrap: anywhere; }
       `}</style>

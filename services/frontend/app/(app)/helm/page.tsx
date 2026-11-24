@@ -364,7 +364,7 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
 
       await loadHistory();
       toast.success(
-        `${result.scans.length} image${result.scans.length === 1 ? '' : 's'} queued in Helm run ${result.run.id.slice(0, 8)}`
+        `${result.scans.length} image${result.scans.length === 1 ? '' : 's'} queued for scanning`
       );
       router.push(`/helm/runs/${result.run.id}`);
     } catch (err: unknown) {
@@ -1238,6 +1238,42 @@ function HelmRunHistory({
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
+          <div className="flex items-center gap-2 lg:hidden">
+            <Select
+              aria-label="Sort Helm runs"
+              className="min-w-0 flex-1"
+              value={String(sortDescriptor.column)}
+              onChange={(column) =>
+                setSortDescriptor((current) => ({ ...current, column: String(column) }))
+              }
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="chart">Chart</ListBox.Item>
+                  <ListBox.Item id="status">Status</ListBox.Item>
+                  <ListBox.Item id="images">Progress</ListBox.Item>
+                  <ListBox.Item id="critical">Findings</ListBox.Item>
+                  <ListBox.Item id="started">Started</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            <Button
+              variant="secondary"
+              aria-label={`Sort ${sortDescriptor.direction === 'ascending' ? 'descending' : 'ascending'}`}
+              onPress={() =>
+                setSortDescriptor((current) => ({
+                  ...current,
+                  direction: current.direction === 'ascending' ? 'descending' : 'ascending',
+                }))
+              }
+            >
+              {sortDescriptor.direction === 'ascending' ? 'Ascending' : 'Descending'}
+            </Button>
+          </div>
         </div>
         {sortedRuns.length === 0 ? (
           <div className="p-4">
@@ -1256,170 +1292,179 @@ function HelmRunHistory({
             />
           </div>
         ) : (
-          <Table variant="secondary">
-            <Table.ScrollContainer>
-              <Table.Content
-                aria-label="Recent Helm runs"
-                sortDescriptor={sortDescriptor}
-                onSortChange={setSortDescriptor}
-              >
-                <Table.Header>
-                  <Table.Column id="chart" allowsSorting isRowHeader>
-                    {({ sortDirection }) => (
-                      <Table.SortableColumnHeader sortDirection={sortDirection}>
-                        Chart
-                      </Table.SortableColumnHeader>
-                    )}
-                  </Table.Column>
-                  <Table.Column id="status" allowsSorting>
-                    {({ sortDirection }) => (
-                      <Table.SortableColumnHeader sortDirection={sortDirection}>
-                        Status
-                      </Table.SortableColumnHeader>
-                    )}
-                  </Table.Column>
-                  <Table.Column id="images" allowsSorting className="hidden md:table-cell">
-                    {({ sortDirection }) => (
-                      <Table.SortableColumnHeader sortDirection={sortDirection}>
-                        Progress
-                      </Table.SortableColumnHeader>
-                    )}
-                  </Table.Column>
-                  <Table.Column id="critical" allowsSorting>
-                    {({ sortDirection }) => (
-                      <Table.SortableColumnHeader sortDirection={sortDirection}>
-                        Findings
-                      </Table.SortableColumnHeader>
-                    )}
-                  </Table.Column>
-                  <Table.Column id="started" allowsSorting className="hidden md:table-cell">
-                    {({ sortDirection }) => (
-                      <Table.SortableColumnHeader sortDirection={sortDirection}>
-                        Started
-                      </Table.SortableColumnHeader>
-                    )}
-                  </Table.Column>
-                  <Table.Column className="w-px text-right">
-                    <span className="sr-only">Actions</span>
-                  </Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {pagedRuns.map((run) => {
-                    const status = getRunStatus(run);
-                    const progress = [
-                      `${run.completed_images}/${run.total_images} images`,
-                      run.failed_images > 0 ? `${run.failed_images} failed` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ');
-                    return (
-                      <Table.Row key={run.id} id={run.id} className="hover:bg-muted/50">
-                        <Table.Cell>
-                          <div className="min-w-0 max-w-xs space-y-0.5 xl:max-w-md">
-                            <Link
-                              href={`/helm/runs/${run.id}`}
-                              className="block truncate text-sm font-medium text-foreground hover:underline"
-                              title={run.chart_name || run.chart_url}
-                            >
-                              {getRunChartLabel(run)}
-                            </Link>
-                            <p
-                              className="truncate text-xs text-muted-foreground"
-                              title={run.chart_url}
-                            >
-                              {[
-                                run.chart_version ? `v${run.chart_version}` : null,
-                                run.chart_url.replace(/^oci:\/\//, ''),
-                                isAdmin && run.owner_username ? run.owner_username : null,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </p>
-                            <p className="text-xs text-muted-foreground md:hidden">
-                              {progress} · {timeAgo(run.created_at)}
-                            </p>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="whitespace-nowrap">
-                          <StatusLabel tone={statusTone(status)} label={RUN_STATUS_LABEL[status]} />
-                        </Table.Cell>
-                        <Table.Cell className="hidden whitespace-nowrap text-sm text-muted-foreground tabular-nums md:table-cell">
-                          {progress}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <SeverityCounts
-                            critical={run.critical_count}
-                            high={run.high_count}
-                            medium={run.medium_count}
-                            low={run.low_count}
-                          />
-                        </Table.Cell>
-                        <Table.Cell className="hidden whitespace-nowrap text-xs text-muted-foreground md:table-cell">
-                          <span title={fullDate(run.created_at)}>{timeAgo(run.created_at)}</span>
-                        </Table.Cell>
-                        <Table.Cell className="text-right">
-                          <div className="flex justify-end">
-                            <RowActionsMenu
-                              label={`Open actions for ${getRunChartLabel(run)}`}
-                              items={[
-                                {
-                                  id: 'open',
-                                  label: 'Open run',
-                                  icon: <EyeIcon size={15} />,
-                                  onAction: () => router.push(`/helm/runs/${run.id}`),
-                                },
-                                {
-                                  id: 'report',
-                                  label: 'Generate report',
-                                  icon: <FileValidationIcon size={15} />,
-                                  disabled: run.active_images > 0 || run.total_images === 0,
-                                  onAction: () =>
-                                    router.push(
-                                      `/reports/print?helmRun=${encodeURIComponent(run.id)}`
-                                    ),
-                                },
-                                {
-                                  id: 'share',
-                                  label: actionRunId === run.id ? 'Sharing...' : 'Share all scans',
-                                  icon: <Share01Icon size={15} />,
-                                  disabled:
-                                    actionRunId === run.id ||
-                                    run.total_images === 0 ||
-                                    (run.completed_images === 0 && run.failed_images === 0),
-                                  onAction: () => onShareRun(run),
-                                },
-                                {
-                                  id: 'copy-share-link',
-                                  label:
-                                    actionRunId === run.id
-                                      ? 'Preparing link...'
-                                      : 'Copy share link',
-                                  icon: <CopyLinkIcon size={15} />,
-                                  disabled:
-                                    actionRunId === run.id ||
-                                    run.total_images === 0 ||
-                                    (run.completed_images === 0 && run.failed_images === 0),
-                                  onAction: () => onCopyShareLink(run),
-                                },
-                                {
-                                  id: 'delete',
-                                  label: actionRunId === run.id ? 'Deleting...' : 'Delete run',
-                                  icon: <Delete01Icon size={15} />,
-                                  variant: 'danger',
-                                  disabled: actionRunId === run.id,
-                                  onAction: () => onDeleteRun(run),
-                                },
-                              ]}
+          <Table.Responsive>
+            <Table variant="secondary">
+              <Table.ScrollContainer>
+                <Table.Content
+                  aria-label="Recent Helm runs"
+                  sortDescriptor={sortDescriptor}
+                  onSortChange={setSortDescriptor}
+                >
+                  <Table.Header>
+                    <Table.Column id="chart" allowsSorting isRowHeader>
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Chart
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column id="status" allowsSorting>
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Status
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column id="images" allowsSorting className="hidden md:table-cell">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Progress
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column id="critical" allowsSorting>
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Findings
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column id="started" allowsSorting className="hidden md:table-cell">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Started
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column className="w-px text-right">
+                      <span className="sr-only">Actions</span>
+                    </Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {pagedRuns.map((run) => {
+                      const status = getRunStatus(run);
+                      const progress = [
+                        `${run.completed_images}/${run.total_images} images`,
+                        run.failed_images > 0 ? `${run.failed_images} failed` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ');
+                      return (
+                        <Table.Row key={run.id} id={run.id} className="hover:bg-muted/50">
+                          <Table.Cell data-label="Chart">
+                            <div className="min-w-0 max-w-xs space-y-0.5 xl:max-w-md">
+                              <Link
+                                href={`/helm/runs/${run.id}`}
+                                className="block truncate text-sm font-medium text-foreground hover:underline"
+                                title={run.chart_name || run.chart_url}
+                              >
+                                {getRunChartLabel(run)}
+                              </Link>
+                              <p
+                                className="truncate text-xs text-muted-foreground"
+                                title={run.chart_url}
+                              >
+                                {[
+                                  run.chart_version ? `v${run.chart_version}` : null,
+                                  run.chart_url.replace(/^oci:\/\//, ''),
+                                  isAdmin && run.owner_username ? run.owner_username : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </p>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell data-label="Status" className="whitespace-nowrap">
+                            <StatusLabel
+                              tone={statusTone(status)}
+                              label={RUN_STATUS_LABEL[status]}
                             />
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    );
-                  })}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+                          </Table.Cell>
+                          <Table.Cell
+                            data-label="Progress"
+                            className="whitespace-nowrap text-sm text-muted-foreground tabular-nums"
+                          >
+                            {progress}
+                          </Table.Cell>
+                          <Table.Cell data-label="Findings">
+                            <SeverityCounts
+                              critical={run.critical_count}
+                              high={run.high_count}
+                              medium={run.medium_count}
+                              low={run.low_count}
+                            />
+                          </Table.Cell>
+                          <Table.Cell
+                            data-label="Started"
+                            className="whitespace-nowrap text-xs text-muted-foreground"
+                          >
+                            <span title={fullDate(run.created_at)}>{timeAgo(run.created_at)}</span>
+                          </Table.Cell>
+                          <Table.Cell data-label="Actions" className="text-right">
+                            <div className="flex justify-end">
+                              <RowActionsMenu
+                                label={`Open actions for ${getRunChartLabel(run)}`}
+                                items={[
+                                  {
+                                    id: 'open',
+                                    label: 'Open run',
+                                    icon: <EyeIcon size={15} />,
+                                    onAction: () => router.push(`/helm/runs/${run.id}`),
+                                  },
+                                  {
+                                    id: 'report',
+                                    label: 'Generate report',
+                                    icon: <FileValidationIcon size={15} />,
+                                    disabled: run.active_images > 0 || run.total_images === 0,
+                                    onAction: () =>
+                                      router.push(
+                                        `/reports/print?helmRun=${encodeURIComponent(run.id)}`
+                                      ),
+                                  },
+                                  {
+                                    id: 'share',
+                                    label:
+                                      actionRunId === run.id ? 'Sharing...' : 'Share all scans',
+                                    icon: <Share01Icon size={15} />,
+                                    disabled:
+                                      actionRunId === run.id ||
+                                      run.total_images === 0 ||
+                                      (run.completed_images === 0 && run.failed_images === 0),
+                                    onAction: () => onShareRun(run),
+                                  },
+                                  {
+                                    id: 'copy-share-link',
+                                    label:
+                                      actionRunId === run.id
+                                        ? 'Preparing link...'
+                                        : 'Copy share link',
+                                    icon: <CopyLinkIcon size={15} />,
+                                    disabled:
+                                      actionRunId === run.id ||
+                                      run.total_images === 0 ||
+                                      (run.completed_images === 0 && run.failed_images === 0),
+                                    onAction: () => onCopyShareLink(run),
+                                  },
+                                  {
+                                    id: 'delete',
+                                    label: actionRunId === run.id ? 'Deleting...' : 'Delete run',
+                                    icon: <Delete01Icon size={15} />,
+                                    variant: 'danger',
+                                    disabled: actionRunId === run.id,
+                                    onAction: () => onDeleteRun(run),
+                                  },
+                                ]}
+                              />
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      );
+                    })}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </Table.Responsive>
         )}
         {sortedRuns.length > 0 ? (
           <TablePager

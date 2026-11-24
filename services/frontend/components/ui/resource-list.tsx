@@ -1,5 +1,6 @@
 import * as React from 'react';
 import Link from 'next/link';
+import { FramePanel, FrameRow } from '@/components/panelui/frame';
 import { cn } from '@/lib/utils';
 
 /**
@@ -26,18 +27,23 @@ import { cn } from '@/lib/utils';
 function ResourceListRoot({
   className,
   bordered = true,
+  children,
   ...props
 }: React.ComponentProps<'ul'> & { bordered?: boolean }) {
   return (
-    <ul
+    <FramePanel
+      render={<ul {...props} />}
       data-slot="resource-list"
       className={cn(
         'flex flex-col divide-y divide-border',
-        bordered && 'overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10',
+        bordered
+          ? 'overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10'
+          : 'bg-transparent',
         className
       )}
-      {...props}
-    />
+    >
+      {children}
+    </FramePanel>
   );
 }
 
@@ -111,11 +117,12 @@ function ResourceListItem({
   );
 
   return (
-    <li
+    <FrameRow
+      render={<li />}
       data-slot="resource-list-item"
       data-selected={selected ? '' : undefined}
       className={cn(
-        'relative flex flex-col gap-3 px-4 py-3 text-sm sm:flex-row sm:items-center',
+        'relative flex flex-col items-stretch gap-3 px-4 py-3 text-sm sm:flex-row sm:items-center',
         pressable && 'transition-colors hover:bg-muted/50 has-[:focus-visible]:bg-muted/50',
         selected && 'bg-muted/60',
         TONE_EDGE[tone],
@@ -139,7 +146,7 @@ function ResourceListItem({
           {actions}
         </div>
       ) : null}
-    </li>
+    </FrameRow>
   );
 }
 

@@ -815,16 +815,15 @@ function ReportVulnerabilitySection({
             }}
           >
             <colgroup>
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '27%' }} />
-              <col style={{ width: '18%' }} />
-              <col style={{ width: '18%' }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '28%' }} />
+              <col style={{ width: '32%' }} />
               <col style={{ width: '14%' }} />
               <col style={{ width: '9%' }} />
             </colgroup>
             <thead>
               <tr style={{ background: '#f9fafb' }}>
-                {['CVE ID', 'Package', 'Installed', 'Fixed In', 'Severity', 'CVSS'].map((h) => (
+                {['CVE ID', 'Package', 'Version', 'Severity', 'CVSS'].map((h) => (
                   <th
                     key={h}
                     style={{
@@ -883,34 +882,35 @@ function ReportVulnerabilitySection({
                         style={{
                           padding: '6px 8px',
                           border: '1px solid #e5e7eb',
-                          fontFamily: 'monospace',
                           fontSize: 12,
-                          color: '#6b7280',
                           overflowWrap: 'anywhere',
                         }}
                       >
                         {finding.packages.map((item) => (
-                          <div key={`${item.name}-${item.installedVersion}`}>
-                            {item.installedVersion || '-'}
-                          </div>
-                        ))}
-                      </td>
-                      <td
-                        style={{
-                          padding: '6px 8px',
-                          border: '1px solid #e5e7eb',
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                          color: '#15803d',
-                          fontWeight: finding.packages.some((item) => item.fixedVersion)
-                            ? 600
-                            : 400,
-                          overflowWrap: 'anywhere',
-                        }}
-                      >
-                        {finding.packages.map((item) => (
-                          <div key={`${item.name}-${item.fixedVersion}`}>
-                            {item.fixedVersion || '-'}
+                          <div
+                            key={`${item.name}-${item.installedVersion}-${item.fixedVersion}`}
+                            style={{ marginBottom: finding.packages.length > 1 ? 6 : 0 }}
+                          >
+                            {finding.packages.length > 1 && (
+                              <div style={{ fontWeight: 600 }}>{item.name || 'Package'}</div>
+                            )}
+                            <div style={{ color: '#6b7280' }}>
+                              Installed:{' '}
+                              <span style={{ fontFamily: 'monospace' }}>
+                                {item.installedVersion || '—'}
+                              </span>
+                            </div>
+                            <div style={{ color: item.fixedVersion ? '#15803d' : '#6b7280' }}>
+                              Fixed in:{' '}
+                              <span
+                                style={{
+                                  fontFamily: 'monospace',
+                                  fontWeight: item.fixedVersion ? 600 : 400,
+                                }}
+                              >
+                                {item.fixedVersion || 'No fix reported'}
+                              </span>
+                            </div>
                           </div>
                         ))}
                       </td>
@@ -942,7 +942,7 @@ function ReportVulnerabilitySection({
                       filters.showPolicyDetails ||
                       finding.affectedImages.length > 0) && (
                       <tr style={{ background: detailBackground }}>
-                        <td colSpan={6} className="report-detail-cell">
+                        <td colSpan={5} className="report-detail-cell">
                           <div style={{ marginBottom: 5 }}>
                             <strong style={{ color: '#111827' }}>Affected images:</strong>{' '}
                             {finding.affectedImages.join(' · ')}
@@ -1631,13 +1631,14 @@ function ScanSection({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr auto',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) auto',
             gap: 6,
             alignItems: 'center',
           }}
         >
           <input
             aria-label="Custom field label"
+            className="min-w-0 w-full"
             type="text"
             value={newCustomField.label}
             onChange={(e) => setNewCustomField((f) => ({ ...f, label: e.target.value }))}
@@ -1652,6 +1653,7 @@ function ScanSection({
           />
           <input
             aria-label="Custom field value"
+            className="min-w-0 w-full"
             type="text"
             value={newCustomField.value}
             onChange={(e) => setNewCustomField((f) => ({ ...f, value: e.target.value }))}
@@ -2306,7 +2308,7 @@ function PrintReport() {
         html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
         body { font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); }
         .report-detail-cell { padding: 5px 10px 8px; border: 1px solid #e5e7eb; border-top: none; color: #4b5563; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word; }
-        .report-workspace { margin: 0 auto; max-width: 178mm; padding: 24px 16px 32px; }
+        .report-workspace { --primary: #374151; --primary-foreground: #ffffff; margin: 0 auto; max-width: 178mm; padding: 24px 16px 32px; }
         .report-document { width: 100%; }
         .report-table-scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .report-filter-panel { display: none; }

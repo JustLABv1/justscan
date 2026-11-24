@@ -17,7 +17,7 @@ const drilldownHeaderMeta = {
   total: { Icon: Shield01Icon, className: 'bg-default text-foreground' },
   completed: { Icon: CheckmarkCircle02Icon, className: 'bg-success/10 text-success-foreground' },
   watchlist: { Icon: Clock01Icon, className: 'bg-warning/10 text-warning-foreground' },
-  watchlist_attention: { Icon: Clock01Icon, className: 'bg-danger/10 text-danger' },
+  watchlist_attention: { Icon: Clock01Icon, className: 'bg-destructive/10 text-destructive' },
 } satisfies Record<DashboardDrilldownKey, { Icon: typeof Shield01Icon; className: string }>;
 
 function WatchlistModalRow({ item }: { item: WatchlistItem }) {
@@ -97,7 +97,7 @@ function WatchlistModalList({
   if (watchlistError) {
     return (
       <Card variant="secondary">
-        <Card.Content className="py-8 text-center text-sm text-danger">
+        <Card.Content className="py-8 text-center text-sm text-destructive">
           {watchlistError}
         </Card.Content>
       </Card>

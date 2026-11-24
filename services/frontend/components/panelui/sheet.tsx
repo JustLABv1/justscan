@@ -92,7 +92,9 @@ import { useRender } from '@base-ui/react/use-render';
 import type { ElementType as RenderElementType } from 'react';
 
 /** Draws a part as another element, or composes it with a component: `render={<a href="/" />}`. */
-type RenderProp<Tag extends RenderElementType> = { render?: useRender.ComponentProps<Tag>['render'] };
+type RenderProp<Tag extends RenderElementType> = {
+  render?: useRender.ComponentProps<Tag>['render'];
+};
 
 /*
  * One curve for every movement: the sheet arriving, the one behind it stepping
@@ -116,7 +118,8 @@ const sheetVariants = tv({
      * distance to every edge is one number, and the corner radius below is
      * that number's companion.
      */
-    viewport: 'pointer-events-none fixed inset-0 z-50 flex [--sheet-gap:0.5rem] sm:[--sheet-gap:0.75rem]',
+    viewport:
+      'pointer-events-none fixed inset-0 z-50 flex [--sheet-gap:0.5rem] sm:[--sheet-gap:0.75rem]',
     popup: [
       'group/sheet pointer-events-auto relative flex min-h-0 flex-col bg-popover text-popover-foreground outline-none',
       'shadow-[0_24px_64px_-16px_rgb(0_0_0/0.3)] ring-1 ring-foreground/[0.06] dark:ring-foreground/10',
@@ -303,8 +306,16 @@ const sheetVariants = tv({
           '-mx-(--sheet-gap) -mt-[max(var(--sheet-gap),env(safe-area-inset-top))] max-w-[calc(100%+2*var(--sheet-gap))] rounded-t-none sm:mx-0 sm:max-w-2xl',
       },
     },
-    { side: 'left', attached: true, class: { popup: '-my-(--sheet-gap) -ms-(--sheet-gap) rounded-s-none' } },
-    { side: 'right', attached: true, class: { popup: '-my-(--sheet-gap) -me-(--sheet-gap) rounded-e-none' } },
+    {
+      side: 'left',
+      attached: true,
+      class: { popup: '-my-(--sheet-gap) -ms-(--sheet-gap) rounded-s-none' },
+    },
+    {
+      side: 'right',
+      attached: true,
+      class: { popup: '-my-(--sheet-gap) -me-(--sheet-gap) rounded-e-none' },
+    },
   ],
   defaultVariants: { side: 'bottom', size: 'auto' },
 });
@@ -438,7 +449,9 @@ function SheetFrame({
   // while a second sheet is open.
   const opened = useRef(new Set<SheetHandle>());
   const live = useRef({ isOpen, setOpen });
-  live.current = { isOpen, setOpen };
+  useIsomorphicLayoutEffect(() => {
+    live.current = { isOpen, setOpen };
+  }, [isOpen, setOpen]);
   const handle = useMemo<SheetHandle>(
     () => ({
       isOpen: () => live.current.isOpen,
@@ -449,7 +462,10 @@ function SheetFrame({
     }),
     []
   );
-  useEffect(() => (nested && parent ? parent.register(handle) : undefined), [nested, parent, handle]);
+  useEffect(
+    () => (nested && parent ? parent.register(handle) : undefined),
+    [nested, parent, handle]
+  );
 
   const context = useMemo<SheetContextValue>(
     () => ({
@@ -480,13 +496,20 @@ function SheetFrame({
         onOpenChange={(next, details) => {
           // The primitive has a switch for a press outside and none for
           // Escape or a swipe, so those are refused here.
-          if (!next && !dismissible && details.reason !== 'close-press' && details.reason !== 'imperative-action') {
+          if (
+            !next &&
+            !dismissible &&
+            details.reason !== 'close-press' &&
+            details.reason !== 'imperative-action'
+          ) {
             return;
           }
           setOpen(next);
         }}
       >
-        {typeof children === 'function' ? ({ payload }: { payload: unknown }) => children(payload) : children}
+        {typeof children === 'function'
+          ? ({ payload }: { payload: unknown }) => children(payload)
+          : children}
       </Drawer.Root>
     </SheetContext.Provider>
   );
@@ -555,7 +578,14 @@ export interface SheetNextProps extends Omit<SheetContentProps, 'children' | 'in
  * takes `Sheet.Content`'s props and draws its own content, so its children are
  * the header, body and footer.
  */
-function SheetNext({ name, children, side, dismissible, onOpenChange, ...content }: SheetNextProps) {
+function SheetNext({
+  name,
+  children,
+  side,
+  dismissible,
+  onOpenChange,
+  ...content
+}: SheetNextProps) {
   const parent = useSheet('Sheet.Next');
   return (
     <SheetFrame
@@ -566,7 +596,11 @@ function SheetNext({ name, children, side, dismissible, onOpenChange, ...content
     >
       {(payload) => (
         <SheetContent {...content}>
-          {typeof children === 'function' ? <NextParts render={children} payload={payload} /> : children}
+          {typeof children === 'function' ? (
+            <NextParts render={children} payload={payload} />
+          ) : (
+            children
+          )}
         </SheetContent>
       )}
     </SheetFrame>
@@ -651,7 +685,9 @@ function SheetContent({
 
   const inside = (
     <>
-      {(showGrabber ?? (vertical && sheet.dismissible)) ? <div aria-hidden className={slots.grabber()} /> : null}
+      {(showGrabber ?? (vertical && sheet.dismissible)) ? (
+        <div aria-hidden className={slots.grabber()} />
+      ) : null}
       {corner ? <CloseButton className={slots.closeCorner()} /> : null}
       {children}
     </>
@@ -680,7 +716,10 @@ function SheetContent({
         />
       )}
       <Drawer.Viewport className={slots.viewport()}>
-        <Drawer.Popup className={slots.popup({ className: [vertical && slots.stacked(), className] })} {...props}>
+        <Drawer.Popup
+          className={slots.popup({ className: [vertical && slots.stacked(), className] })}
+          {...props}
+        >
           {/* The popup is portalled out from under the provider, so the
               context is given again for the parts inside it. */}
           <SheetContext.Provider value={context}>{inside}</SheetContext.Provider>
@@ -739,7 +778,9 @@ function SheetTitle({ className, ...props }: SheetTitleProps) {
   const { inline } = useSheet('Sheet.Title');
   const slots = sheetVariants();
   if (inline) return <h2 className={slots.title({ className })} {...props} />;
-  return <Drawer.Content render={<Drawer.Title className={slots.title({ className })} {...props} />} />;
+  return (
+    <Drawer.Content render={<Drawer.Title className={slots.title({ className })} {...props} />} />
+  );
 }
 SheetTitle.displayName = 'Sheet.Title';
 
@@ -750,7 +791,11 @@ function SheetDescription({ className, ...props }: SheetDescriptionProps) {
   const { inline } = useSheet('Sheet.Description');
   const slots = sheetVariants();
   if (inline) return <p className={slots.description({ className })} {...props} />;
-  return <Drawer.Content render={<Drawer.Description className={slots.description({ className })} {...props} />} />;
+  return (
+    <Drawer.Content
+      render={<Drawer.Description className={slots.description({ className })} {...props} />}
+    />
+  );
 }
 SheetDescription.displayName = 'Sheet.Description';
 
@@ -831,7 +876,11 @@ function SheetClose({ render, icon = false, children, ...props }: SheetCloseProp
 SheetClose.displayName = 'Sheet.Close';
 
 /** The round button with a cross in it. */
-function CloseButton({ className, 'aria-label': label = 'Close', ...props }: ComponentProps<'button'>) {
+function CloseButton({
+  className,
+  'aria-label': label = 'Close',
+  ...props
+}: ComponentProps<'button'>) {
   const { inline } = useSheet('Sheet.Close');
   const slots = sheetVariants();
   const glyph = (
@@ -847,7 +896,12 @@ function CloseButton({ className, 'aria-label': label = 'Close', ...props }: Com
       <path d="M6 6l12 12M18 6L6 18" />
     </svg>
   );
-  const shared = { 'data-slot': 'sheet-close', 'aria-label': label, className: slots.close({ className }), ...props };
+  const shared = {
+    'data-slot': 'sheet-close',
+    'aria-label': label,
+    className: slots.close({ className }),
+    ...props,
+  };
   if (inline) {
     return (
       <button type="button" {...shared}>
@@ -872,11 +926,14 @@ interface SlidesContextValue {
 const SlidesContext = createContext<SlidesContextValue | null>(null);
 
 /** The rounded frame of a slide: the slide itself in a deck, inside its row in a column. */
-const frameOf = (slide: HTMLElement) => slide.querySelector<HTMLElement>('[data-slide-frame]') ?? slide;
+const frameOf = (slide: HTMLElement) =>
+  slide.querySelector<HTMLElement>('[data-slide-frame]') ?? slide;
 const SlideIndexContext = createContext(0);
 
 function reduceMotion() {
-  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return (
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
 }
 
 export interface SheetSlidesProps extends Omit<ComponentProps<'div'>, 'onChange'> {
@@ -926,7 +983,9 @@ function SheetSlides({
   const [internal, setInternal] = useState(defaultIndex);
   const current = Math.min(Math.max(index ?? internal, 0), Math.max(count - 1, 0));
   const live = useRef({ current, onIndexChange, controlled: index !== undefined });
-  live.current = { current, onIndexChange, controlled: index !== undefined };
+  useIsomorphicLayoutEffect(() => {
+    live.current = { current, onIndexChange, controlled: index !== undefined };
+  }, [current, onIndexChange, index]);
 
   const slideAt = (at: number) =>
     viewport.current?.querySelectorAll<HTMLElement>('[data-slot=sheet-slide]')[at] ?? null;
@@ -941,7 +1000,13 @@ function SheetSlides({
       const frame = frameOf(slide).getBoundingClientRect();
       const above = frame.top - box.top;
       const below = frame.bottom - box.bottom;
-      const by = snap ? above - (box.height - frame.height) / 2 : above < 0 ? above - 8 : below > 0 ? below + 8 : 0;
+      const by = snap
+        ? above - (box.height - frame.height) / 2
+        : above < 0
+          ? above - 8
+          : below > 0
+            ? below + 8
+            : 0;
       if (by === 0) return;
       const behavior = smooth && !reduceMotion() ? 'smooth' : 'auto';
       if (!snap) {
@@ -1020,7 +1085,9 @@ function SheetSlides({
     }
   };
   const goNow = useRef(go);
-  goNow.current = go;
+  useIsomorphicLayoutEffect(() => {
+    goNow.current = go;
+  });
 
   /*
    * A wheel or a trackpad turns a deck one slide per gesture. Left to the
@@ -1062,7 +1129,9 @@ function SheetSlides({
 
   const keys = (event: KeyboardEvent<HTMLDivElement>) => {
     const step =
-      event.key === 'ArrowDown' || event.key === 'PageDown' || (event.key === ' ' && !event.shiftKey)
+      event.key === 'ArrowDown' ||
+      event.key === 'PageDown' ||
+      (event.key === ' ' && !event.shiftKey)
         ? 1
         : event.key === 'ArrowUp' || event.key === 'PageUp' || (event.key === ' ' && event.shiftKey)
           ? -1
@@ -1077,7 +1146,13 @@ function SheetSlides({
   };
 
   const context = useMemo<SlidesContextValue>(
-    () => ({ snap, count, current, choose: settle, pressable: !snap && onIndexChange !== undefined }),
+    () => ({
+      snap,
+      count,
+      current,
+      choose: settle,
+      pressable: !snap && onIndexChange !== undefined,
+    }),
     [snap, count, current, settle, onIndexChange]
   );
 
@@ -1097,10 +1172,14 @@ function SheetSlides({
           aria-label={label}
           onKeyDown={keys}
           className={slots.slidesViewport({
-            className: snap ? 'min-h-[min(60dvh,32rem)] snap-y snap-mandatory [container-type:size]' : undefined,
+            className: snap
+              ? 'min-h-[min(60dvh,32rem)] snap-y snap-mandatory [container-type:size]'
+              : undefined,
           })}
         >
-          <ScrollArea.Content className={slots.slidesContent({ className: snap ? 'py-1.5' : 'gap-2 pb-3 pt-1' })}>
+          <ScrollArea.Content
+            className={slots.slidesContent({ className: snap ? 'py-1.5' : 'gap-2 pb-3 pt-1' })}
+          >
             {slides.map((slide, at) => (
               <SlideIndexContext.Provider key={at} value={at}>
                 {slide}
@@ -1159,14 +1238,21 @@ function SheetSlide({
       !slides.snap && !selected && slides.pressable && 'group-hover/slide:ring-foreground/25',
       // Chosen in a column: a ring in the info colour, the theme's colour for
       // something switched on, clear of the slide's edge.
-      !slides.snap && selected && 'shadow-none ring-2 ring-[var(--info)] ring-offset-2 ring-offset-popover',
+      !slides.snap &&
+        selected &&
+        'shadow-none ring-2 ring-[var(--info)] ring-offset-2 ring-offset-popover',
       className,
     ],
   });
   const frameStyle = aspect ? { ...style, aspectRatio: aspect } : style;
 
   const frame = (
-    <div data-slide-frame="" data-current={selected ? '' : undefined} className={frameClass} style={frameStyle}>
+    <div
+      data-slide-frame=""
+      data-current={selected ? '' : undefined}
+      className={frameClass}
+      style={frameStyle}
+    >
       {children}
     </div>
   );
@@ -1185,7 +1271,9 @@ function SheetSlide({
           <>
             <span
               aria-hidden="true"
-              className={slots.slideNumber({ className: selected ? 'text-[var(--info)]' : undefined })}
+              className={slots.slideNumber({
+                className: selected ? 'text-[var(--info)]' : undefined,
+              })}
             >
               {at + 1}
             </span>

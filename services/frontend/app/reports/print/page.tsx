@@ -9,6 +9,7 @@ import {
   useOverlayState,
 } from '@/components/ui';
 import { getToken, req, type ApiRequestOptions, subscribeToAuth } from '@/lib/api';
+import { humanize, labelFor, SCAN_PROVIDER_LABELS, shortDigest } from '@/lib/labels';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -329,7 +330,7 @@ function statusChipColors(status: string): { background: string; color: string; 
 }
 
 function formatStatusLabel(status: string): string {
-  return status.replace(/_/g, ' ').toUpperCase();
+  return humanize(status);
 }
 
 function normalizeVulnId(value?: string | null): string {
@@ -680,7 +681,9 @@ function ReportFilterControls({
         </NumberField.Group>
       </NumberField>
 
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Severity</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Severity
+      </p>
       {SEVS.map((s) => (
         <label
           key={s}
@@ -724,9 +727,7 @@ function ReportFilterControls({
               >
                 {({ isSelected }) => (
                   <>
-                    <Switch.Control
-                      className={`shrink-0 ${isSelected ? 'bg-info' : 'bg-muted'}`}
-                    >
+                    <Switch.Control className={`shrink-0 ${isSelected ? 'bg-info' : 'bg-muted'}`}>
                       <Switch.Thumb className="bg-white" />
                     </Switch.Control>
                     <Switch.Content className="min-w-0">
@@ -740,11 +741,7 @@ function ReportFilterControls({
         </div>
       ))}
 
-      <Button
-        className="mt-5 w-full "
-        variant="primary"
-        onPress={() => window.print()}
-      >
+      <Button className="mt-5 w-full " variant="primary" onPress={() => window.print()}>
         Save as PDF
       </Button>
     </div>
@@ -813,7 +810,7 @@ function ReportVulnerabilitySection({
           fontWeight: 700,
           color: '#111827',
           marginBottom: 10,
-          textTransform: 'uppercase',
+          textTransform: 'none',
           letterSpacing: '0.05em',
           borderBottom: '2px solid var(--primary)',
           paddingBottom: 6,
@@ -859,7 +856,7 @@ function ReportVulnerabilitySection({
                       fontWeight: 600,
                       color: '#374151',
                       fontSize: 12,
-                      textTransform: 'uppercase',
+                      textTransform: 'none',
                       letterSpacing: '0.04em',
                     }}
                   >
@@ -1051,7 +1048,7 @@ function ReportVulnerabilitySection({
                                         fontSize: '12px',
                                         fontWeight: 700,
                                         color: '#92400e',
-                                        textTransform: 'uppercase',
+                                        textTransform: 'none',
                                         letterSpacing: '0.06em',
                                       }}
                                     >
@@ -1246,6 +1243,7 @@ function ScanSection({
           </p>
           {scan.image_digest && (
             <p
+              title={scan.image_digest}
               style={{
                 fontFamily: 'monospace',
                 fontSize: 12,
@@ -1254,7 +1252,7 @@ function ScanSection({
                 wordBreak: 'break-all',
               }}
             >
-              {scan.image_digest}
+              {shortDigest(scan.image_digest)}
             </p>
           )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -1270,7 +1268,7 @@ function ScanSection({
                   border: '1px solid #fca5a5',
                 }}
               >
-                C: {scan.critical_count}
+                Critical: {scan.critical_count}
               </span>
             )}
             {scan.high_count > 0 && (
@@ -1285,7 +1283,7 @@ function ScanSection({
                   border: '1px solid #fed7aa',
                 }}
               >
-                H: {scan.high_count}
+                High: {scan.high_count}
               </span>
             )}
             {scan.medium_count > 0 && (
@@ -1300,7 +1298,7 @@ function ScanSection({
                   border: '1px solid #fde68a',
                 }}
               >
-                M: {scan.medium_count}
+                Medium: {scan.medium_count}
               </span>
             )}
             {scan.low_count > 0 && (
@@ -1315,7 +1313,7 @@ function ScanSection({
                   border: '1px solid #bfdbfe',
                 }}
               >
-                L: {scan.low_count}
+                Low: {scan.low_count}
               </span>
             )}
           </div>
@@ -1410,7 +1408,7 @@ function ScanSection({
                   [
                     'Provider / Source',
                     [
-                      scan.scan_provider === 'artifactory_xray' ? 'Artifactory Xray' : 'Trivy',
+                      labelFor(SCAN_PROVIDER_LABELS, scan.scan_provider || 'trivy'),
                       scan.scan_source === 'uploaded_archive'
                         ? 'Uploaded archive'
                         : filters.hideRegistryData
@@ -1585,7 +1583,8 @@ function ScanSection({
           <strong style={{ color: '#111827' }}>Policy summary</strong>
           {scan.compliance_summary && (
             <p style={{ margin: '4px 0 0', color: '#374151' }}>
-              Organization policies: {scan.compliance_summary.status.toUpperCase()} ·{' '}
+              Organization policies:{' '}
+              {scan.compliance_summary.status === 'pass' ? 'Passed' : 'Failed'} ·{' '}
               {scan.compliance_summary.pass_count} passed · {scan.compliance_summary.fail_count}{' '}
               failed
               {scan.compliance_summary.failed_policy_names?.length
@@ -1624,7 +1623,7 @@ function ScanSection({
             fontWeight: 700,
             color: '#374151',
             marginBottom: 8,
-            textTransform: 'uppercase',
+            textTransform: 'none',
             letterSpacing: '0.05em',
           }}
         >
@@ -1732,7 +1731,7 @@ function ScanSection({
               fontWeight: 700,
               color: '#111827',
               marginBottom: 10,
-              textTransform: 'uppercase',
+              textTransform: 'none',
               letterSpacing: '0.05em',
               borderBottom: '2px solid var(--primary)',
               paddingBottom: 6,
@@ -1841,7 +1840,7 @@ function ScanSection({
                       fontSize: 12,
                       fontWeight: 700,
                       color: '#5b21b6',
-                      textTransform: 'uppercase',
+                      textTransform: 'none',
                       letterSpacing: '0.06em',
                     }}
                   >
@@ -2115,11 +2114,11 @@ function ScanSection({
                       </td>
                       <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>
                         {v.suppression
-                          ? (statusLabel[v.suppression.status] ?? v.suppression.status)
+                          ? (statusLabel[v.suppression.status] ?? humanize(v.suppression.status))
                           : '-'}
                       </td>
                       <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>
-                        {v.suppression?.source ?? 'local'}
+                        {humanize(v.suppression?.source ?? 'local')}
                       </td>
                       <td
                         style={{
@@ -2178,7 +2177,7 @@ function PrintReport() {
     showComments: true,
     showDescription: true,
     showReferences: true,
-    showScanId: true,
+    showScanId: false,
     showStarted: true,
     showCompleted: true,
     showTrivyVersion: true,
@@ -2333,6 +2332,8 @@ function PrintReport() {
             word-break: break-word;
           }
           .report-table-scroll { overflow: visible; }
+          thead { display: table-header-group; }
+          tr { break-inside: avoid; page-break-inside: avoid; }
         }
         * { box-sizing: border-box; }
         html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
@@ -2492,7 +2493,7 @@ function PrintReport() {
                     fontWeight: 700,
                     color: '#111827',
                     marginBottom: 10,
-                    textTransform: 'uppercase',
+                    textTransform: 'none',
                     letterSpacing: '0.05em',
                     borderBottom: '2px solid var(--primary)',
                     paddingBottom: 6,
@@ -2510,6 +2511,11 @@ function PrintReport() {
                       tableLayout: 'fixed',
                     }}
                   >
+                    <colgroup>
+                      {[34, 22, 11, 11, 11, 11].map((width, index) => (
+                        <col key={index} style={{ width: `${width}%` }} />
+                      ))}
+                    </colgroup>
                     <thead>
                       <tr style={{ background: '#f9fafb' }}>
                         {['Image', 'Status', 'Critical', 'High', 'Medium', 'Low'].map((h) => (
@@ -2522,7 +2528,7 @@ function PrintReport() {
                               fontWeight: 600,
                               color: '#374151',
                               fontSize: 12,
-                              textTransform: 'uppercase',
+                              textTransform: 'none',
                               letterSpacing: '0.04em',
                             }}
                           >

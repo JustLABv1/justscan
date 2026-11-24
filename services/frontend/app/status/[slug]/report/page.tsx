@@ -1,6 +1,15 @@
 'use client';
 
-import { ApiError, getStatusPageBySlug, getStatusPageTrackedScan, listStatusPageItemVulnerabilities, StatusPageItem, StatusPageScanSummary, Vulnerability } from '@/lib/api';
+import {
+  ApiError,
+  getStatusPageBySlug,
+  getStatusPageTrackedScan,
+  listStatusPageItemVulnerabilities,
+  StatusPageItem,
+  StatusPageScanSummary,
+  Vulnerability,
+} from '@/lib/api';
+import { humanize, labelFor, pluralize, SCAN_PROVIDER_LABELS } from '@/lib/labels';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 
@@ -28,18 +37,20 @@ function formatDate(value?: string | null) {
 function SeverityBadge({ severity }: { severity: string }) {
   const config = SEV_COLORS[severity] ?? SEV_COLORS.UNKNOWN;
   return (
-    <span style={{
-      display: 'inline-block',
-      padding: '2px 8px',
-      borderRadius: '999px',
-      fontSize: '12px',
-      fontWeight: 700,
-      background: config.bg,
-      color: config.fg,
-      letterSpacing: '0.04em',
-      whiteSpace: 'nowrap',
-    }}>
-      {severity}
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '2px 8px',
+        borderRadius: '999px',
+        fontSize: '12px',
+        fontWeight: 700,
+        background: config.bg,
+        color: config.fg,
+        letterSpacing: '0.04em',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {humanize(severity)}
     </span>
   );
 }
@@ -52,7 +63,7 @@ async function fetchAllVulnerabilities(
   hasFix: boolean,
   minCvss: number,
   sortBy: string,
-  sortDir: 'asc' | 'desc',
+  sortDir: 'asc' | 'desc'
 ) {
   const all: Vulnerability[] = [];
   let page = 1;
@@ -68,7 +79,7 @@ async function fetchAllVulnerabilities(
       hasFix || undefined,
       minCvss || undefined,
       sortBy,
-      sortDir,
+      sortDir
     );
 
     const items = response.data ?? [];
@@ -80,6 +91,432 @@ async function fetchAllVulnerabilities(
   }
 
   return all;
+}
+
+function ReportHeader({
+  pageName,
+  scan,
+  findingCount,
+}: {
+  pageName: string;
+  scan: StatusPageScanSummary;
+  findingCount: number;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 16,
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        borderBottom: '2px solid #e5e7eb',
+        paddingBottom: 20,
+        marginBottom: 28,
+      }}
+    >
+      <div style={{ borderLeft: '5px solid var(--primary)', paddingLeft: 16 }}>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>
+          JustScan Status Report
+        </h1>
+        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6b7280' }}>{pageName}</p>
+        <p
+          style={{
+            margin: '8px 0 0',
+            fontFamily: 'monospace',
+            fontSize: 12,
+            color: '#6b7280',
+            wordBreak: 'break-all',
+          }}
+        >
+          {scan.image_name}:{scan.image_tag}
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+        <span
+          style={{
+            background: 'color-mix(in srgb, var(--primary) 18%, white)',
+            color: 'color-mix(in srgb, var(--primary) 82%, black)',
+            fontWeight: 700,
+            fontSize: 12,
+            padding: '4px 12px',
+            borderRadius: 999,
+            border: '1px solid color-mix(in srgb, var(--primary) 62%, white)',
+          }}
+        >
+          {pluralize(findingCount, 'finding')}
+        </span>
+        <span style={{ fontSize: 12, color: '#6b7280' }}>
+          Generated {formatDate(new Date().toISOString())}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ReportSnapshot({
+  item,
+  scan,
+}: {
+  item: StatusPageItem | null;
+  scan: StatusPageScanSummary;
+}) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <p
+        style={{
+          margin: '0 0 10px',
+          fontSize: 13,
+          fontWeight: 700,
+          color: '#111827',
+          textTransform: 'none',
+          letterSpacing: '0.05em',
+          borderBottom: '2px solid var(--primary)',
+          paddingBottom: 6,
+          display: 'inline-block',
+        }}
+      >
+        Scan snapshot
+      </p>
+      <table
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: 12,
+          border: '1px solid #e5e7eb',
+        }}
+      >
+        <tbody>
+          {(
+            [
+              ['Observed', formatDate(scan.observed_at)],
+              ['Status', humanize(item?.status ?? scan.scan_status)],
+              ['Scan state', humanize(scan.scan_status)],
+              ['External state', humanize(scan.external_status) || '—'],
+              ['Provider', labelFor(SCAN_PROVIDER_LABELS, scan.scan_provider) || '—'],
+              ['Current step', humanize(scan.current_step) || '—'],
+              ['Started', formatDate(scan.started_at)],
+              ['Completed', formatDate(scan.completed_at)],
+              ['Freshness', item ? `${item.freshness_hours}h` : '—'],
+              ['Scan ID', scan.scan_id],
+            ] as [string, string][]
+          ).map(([label, value]) => (
+            <tr key={label}>
+              <td
+                style={{
+                  width: 140,
+                  padding: '6px 10px',
+                  fontWeight: 600,
+                  color: '#374151',
+                  background: '#f9fafb',
+                  borderBottom: '1px solid #e5e7eb',
+                }}
+              >
+                {label}
+              </td>
+              <td
+                style={{
+                  padding: '6px 10px',
+                  color: '#111827',
+                  borderBottom: '1px solid #e5e7eb',
+                  fontFamily: label === 'Scan ID' ? 'monospace' : 'inherit',
+                  fontSize: label === 'Scan ID' ? 11 : 12,
+                  wordBreak: 'break-all',
+                }}
+              >
+                {value}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ReportFilters({ filterSummary }: { filterSummary: string[] }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <p
+        style={{
+          margin: '0 0 10px',
+          fontSize: 13,
+          fontWeight: 700,
+          color: '#111827',
+          textTransform: 'none',
+          letterSpacing: '0.05em',
+          borderBottom: '2px solid var(--primary)',
+          paddingBottom: 6,
+          display: 'inline-block',
+        }}
+      >
+        Applied filters
+      </p>
+      {filterSummary.length > 0 ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {filterSummary.map((part) => (
+            <span
+              key={part}
+              style={{
+                background: '#f5f3ff',
+                color: 'color-mix(in srgb, var(--primary) 82%, black)',
+                border: '1px solid #ddd6fe',
+                borderRadius: 999,
+                padding: '4px 10px',
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              {part}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>
+          No additional filters were applied.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ReportSeveritySummary({
+  severityCounts,
+  findingCount,
+}: {
+  severityCounts: Record<string, number>;
+  findingCount: number;
+}) {
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <p
+        style={{
+          margin: '0 0 10px',
+          fontSize: 13,
+          fontWeight: 700,
+          color: '#111827',
+          textTransform: 'none',
+          letterSpacing: '0.05em',
+          borderBottom: '2px solid var(--primary)',
+          paddingBottom: 6,
+          display: 'inline-block',
+        }}
+      >
+        Severity summary
+      </p>
+      <table
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: 12,
+          tableLayout: 'fixed',
+        }}
+      >
+        <thead>
+          <tr style={{ background: '#f9fafb' }}>
+            {(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'] as const).map((severityKey) => (
+              <th
+                key={humanize(severityKey)}
+                style={{
+                  padding: '8px',
+                  textAlign: 'center',
+                  border: '1px solid #e5e7eb',
+                  fontWeight: 700,
+                  color: SEV_COLORS[severityKey].bg,
+                }}
+              >
+                {humanize(severityKey)}
+              </th>
+            ))}
+            <th
+              style={{
+                padding: '8px',
+                textAlign: 'center',
+                border: '1px solid #e5e7eb',
+                fontWeight: 700,
+                color: '#374151',
+              }}
+            >
+              Total
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            {(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'] as const).map((severityKey) => (
+              <td
+                key={humanize(severityKey)}
+                style={{
+                  padding: '10px 8px',
+                  textAlign: 'center',
+                  border: '1px solid #e5e7eb',
+                  fontWeight: 800,
+                  fontSize: 20,
+                  color: severityCounts[severityKey] > 0 ? SEV_COLORS[severityKey].bg : '#9ca3af',
+                }}
+              >
+                {severityCounts[severityKey]}
+              </td>
+            ))}
+            <td
+              style={{
+                padding: '10px 8px',
+                textAlign: 'center',
+                border: '1px solid #e5e7eb',
+                fontWeight: 800,
+                fontSize: 20,
+              }}
+            >
+              {findingCount}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ReportFindings({ vulns }: { vulns: Vulnerability[] }) {
+  return (
+    <div>
+      <p
+        style={{
+          margin: '0 0 10px',
+          fontSize: 13,
+          fontWeight: 700,
+          color: '#111827',
+          textTransform: 'none',
+          letterSpacing: '0.05em',
+          borderBottom: '2px solid var(--primary)',
+          paddingBottom: 6,
+          display: 'inline-block',
+        }}
+      >
+        Vulnerabilities
+      </p>
+      {vulns.length === 0 ? (
+        <p style={{ fontSize: 13, color: '#6b7280', fontStyle: 'italic' }}>
+          No vulnerabilities match the current filters.
+        </p>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <colgroup>
+            {[30, 20, 14, 14, 14, 8].map((width, index) => (
+              <col key={index} style={{ width: `${width}%` }} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr style={{ background: '#f9fafb' }}>
+              {['CVE ID', 'Package', 'Installed', 'Fixed in', 'Severity', 'CVSS'].map((header) => (
+                <th
+                  key={header}
+                  style={{
+                    padding: '7px 10px',
+                    textAlign: 'left',
+                    border: '1px solid #e5e7eb',
+                    fontWeight: 600,
+                    color: '#374151',
+                    fontSize: 12,
+                    textTransform: 'none',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {vulns.map((vuln, index) => (
+              <tr key={vuln.id} style={{ background: index % 2 === 0 ? '#fff' : '#fafafa' }}>
+                <td
+                  style={{
+                    padding: '8px 10px',
+                    border: '1px solid #e5e7eb',
+                    verticalAlign: 'top',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span
+                      style={{
+                        color: 'var(--primary)',
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {vuln.vuln_id || '—'}
+                    </span>
+                    {vuln.title && (
+                      <span style={{ color: '#6b7280', fontSize: 12, lineHeight: 1.45 }}>
+                        {vuln.title}
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td
+                  style={{
+                    padding: '8px 10px',
+                    border: '1px solid #e5e7eb',
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    verticalAlign: 'top',
+                  }}
+                >
+                  {vuln.pkg_name}
+                </td>
+                <td
+                  style={{
+                    padding: '8px 10px',
+                    border: '1px solid #e5e7eb',
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    color: '#6b7280',
+                    verticalAlign: 'top',
+                  }}
+                >
+                  {vuln.installed_version || '—'}
+                </td>
+                <td
+                  style={{
+                    padding: '8px 10px',
+                    border: '1px solid #e5e7eb',
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    color: '#15803d',
+                    verticalAlign: 'top',
+                  }}
+                >
+                  {vuln.fixed_version || '—'}
+                </td>
+                <td
+                  style={{
+                    padding: '8px 10px',
+                    border: '1px solid #e5e7eb',
+                    verticalAlign: 'top',
+                  }}
+                >
+                  <SeverityBadge severity={vuln.severity} />
+                </td>
+                <td
+                  style={{
+                    padding: '8px 10px',
+                    border: '1px solid #e5e7eb',
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    verticalAlign: 'top',
+                  }}
+                >
+                  {vuln.cvss_score != null ? vuln.cvss_score.toFixed(1) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
 }
 
 function StatusReportContent() {
@@ -99,7 +536,7 @@ function StatusReportContent() {
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [error, setError] = useState('');
 
-  const requestError = !scanId ? 'Missing scanId query parameter.' : '';
+  const requestError = !scanId ? 'Choose a scan from the status page to create a report.' : '';
 
   useEffect(() => {
     if (!scanId) return;
@@ -116,17 +553,31 @@ function StatusReportContent() {
 
         setPageName(page.page.name);
         setScan(trackedScan);
-        const matched = (page.items ?? []).find(candidate => (
-          candidate.image_name === trackedScan.image_name && candidate.image_tag === trackedScan.image_tag
-        )) ?? null;
+        const matched =
+          (page.items ?? []).find(
+            (candidate) =>
+              candidate.image_name === trackedScan.image_name &&
+              candidate.image_tag === trackedScan.image_tag
+          ) ?? null;
         setItem(matched);
-        const findings = await fetchAllVulnerabilities(slug, scanId, severity, pkg, hasFix, minCvss, sortBy, sortDir);
+        const findings = await fetchAllVulnerabilities(
+          slug,
+          scanId,
+          severity,
+          pkg,
+          hasFix,
+          minCvss,
+          sortBy,
+          sortDir
+        );
         if (cancelled) return;
         setVulns(findings);
         setError('');
       } catch (err: unknown) {
         if (cancelled) return;
-        setError(err instanceof ApiError || err instanceof Error ? err.message : 'Failed to load report');
+        setError(
+          err instanceof ApiError || err instanceof Error ? err.message : 'Failed to load report'
+        );
       }
     }
 
@@ -146,27 +597,62 @@ function StatusReportContent() {
 
   const filterSummary = useMemo(() => {
     const parts: string[] = [];
-    if (severity) parts.push(`Severity: ${severity}`);
+    if (severity) parts.push(`Severity: ${humanize(severity)}`);
     if (pkg) parts.push(`Package: ${pkg}`);
     if (minCvss > 0) parts.push(`Min CVSS: ${minCvss.toFixed(1)}`);
-    if (hasFix) parts.push('Has Fix only');
-    parts.push(`Sort: ${sortBy} ${sortDir}`);
+    if (hasFix) parts.push('Fix available only');
+    parts.push(`Sort: ${humanize(sortBy)} (${sortDir === 'asc' ? 'ascending' : 'descending'})`);
     return parts;
   }, [severity, pkg, minCvss, hasFix, sortBy, sortDir]);
 
   if (requestError) {
-    return <div style={{ padding: '40px', color: '#dc2626', fontFamily: 'sans-serif' }}><strong>Error:</strong> {requestError}</div>;
+    return (
+      <div style={{ padding: '40px', color: '#dc2626', fontFamily: 'sans-serif' }}>
+        <strong>Error:</strong> {requestError}
+      </div>
+    );
   }
 
   if (error) {
-    return <div style={{ padding: '40px', color: '#dc2626', fontFamily: "var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif)" }}><strong>Error:</strong> {error}</div>;
+    return (
+      <div
+        style={{
+          padding: '40px',
+          color: '#dc2626',
+          fontFamily:
+            "var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif)",
+        }}
+      >
+        <strong>Error:</strong> {error}
+      </div>
+    );
   }
 
   if (!scan) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: "var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif)", color: '#6b7280', gap: 12 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          fontFamily:
+            "var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif)",
+          color: '#6b7280',
+          gap: 12,
+        }}
+      >
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <div style={{ width: 20, height: 20, border: '2px solid #e5e7eb', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <div
+          style={{
+            width: 20,
+            height: 20,
+            border: '2px solid #e5e7eb',
+            borderTopColor: 'var(--primary)',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+          }}
+        />
         Loading report…
       </div>
     );
@@ -179,9 +665,14 @@ function StatusReportContent() {
           @page { size: A4; margin: 1.5cm; }
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .print\\:hidden { display: none !important; }
+          thead { display: table-header-group; }
+          tr { break-inside: avoid; page-break-inside: avoid; }
+          .status-report { padding: 0 !important; }
         }
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; background: #fff; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); color: #111827; }
+        body { margin: 0; padding: 0; background: #fff; color-scheme: light; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); color: #111827; }
+        .status-report table { table-layout: fixed; }
+        .status-report th, .status-report td, .status-report a { overflow-wrap: anywhere; }
       `}</style>
 
       <button
@@ -198,7 +689,8 @@ function StatusReportContent() {
           fontSize: 13,
           fontWeight: 700,
           color: '#fff',
-          background: 'linear-gradient(135deg,var(--primary),color-mix(in srgb, var(--primary) 82%, black))',
+          background:
+            'linear-gradient(135deg,var(--primary),color-mix(in srgb, var(--primary) 82%, black))',
           boxShadow: '0 0 18px color-mix(in srgb, var(--primary) 28%, transparent)',
           cursor: 'pointer',
         }}
@@ -206,127 +698,15 @@ function StatusReportContent() {
         Save as PDF
       </button>
 
-      <div style={{ width: '100%', maxWidth: '186mm', margin: '0 auto', padding: '28px 0 40px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: 20, marginBottom: 28 }}>
-          <div style={{ borderLeft: '5px solid var(--primary)', paddingLeft: 16 }}>
-            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>JustScan Status Report</h1>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6b7280' }}>{pageName}</p>
-            <p style={{ margin: '8px 0 0', fontFamily: 'monospace', fontSize: 12, color: '#6b7280', wordBreak: 'break-all' }}>
-              {scan.image_name}:{scan.image_tag}
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-            <span style={{ background: 'color-mix(in srgb, var(--primary) 18%, white)', color: 'color-mix(in srgb, var(--primary) 82%, black)', fontWeight: 700, fontSize: 12, padding: '4px 12px', borderRadius: 999, border: '1px solid color-mix(in srgb, var(--primary) 62%, white)' }}>
-              {vulns.length.toLocaleString()} findings
-            </span>
-            <span style={{ fontSize: 12, color: '#6b7280' }}>Generated {formatDate(new Date().toISOString())}</span>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 24 }}>
-          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--primary)', paddingBottom: 6, display: 'inline-block' }}>
-            Scan Snapshot
-          </p>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, border: '1px solid #e5e7eb' }}>
-            <tbody>
-              {([
-                ['Observed', formatDate(scan.observed_at)],
-                ['Status', item?.status ?? scan.scan_status],
-                ['Scan state', scan.scan_status],
-                ['External state', scan.external_status || '—'],
-                ['Provider', scan.scan_provider || '—'],
-                ['Current step', scan.current_step || '—'],
-                ['Started', formatDate(scan.started_at)],
-                ['Completed', formatDate(scan.completed_at)],
-                ['Freshness', item ? `${item.freshness_hours}h` : '—'],
-                ['Scan ID', scan.scan_id],
-              ] as [string, string][]).map(([label, value]) => (
-                <tr key={label}>
-                  <td style={{ width: 140, padding: '6px 10px', fontWeight: 600, color: '#374151', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>{label}</td>
-                  <td style={{ padding: '6px 10px', color: '#111827', borderBottom: '1px solid #e5e7eb', fontFamily: label === 'Scan ID' ? 'monospace' : 'inherit', fontSize: label === 'Scan ID' ? 11 : 12, wordBreak: 'break-all' }}>{value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div style={{ marginBottom: 24 }}>
-          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--primary)', paddingBottom: 6, display: 'inline-block' }}>
-            Applied Filters
-          </p>
-          {filterSummary.length > 0 ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {filterSummary.map(part => (
-                <span key={part} style={{ background: '#f5f3ff', color: 'color-mix(in srgb, var(--primary) 82%, black)', border: '1px solid #ddd6fe', borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>{part}</span>
-              ))}
-            </div>
-          ) : (
-            <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>No additional filters were applied.</p>
-          )}
-        </div>
-
-        <div style={{ marginBottom: 28 }}>
-          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--primary)', paddingBottom: 6, display: 'inline-block' }}>
-            Severity Summary
-          </p>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
-            <thead>
-              <tr style={{ background: '#f9fafb' }}>
-                {(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'] as const).map(severityKey => (
-                  <th key={severityKey} style={{ padding: '8px', textAlign: 'center', border: '1px solid #e5e7eb', fontWeight: 700, color: SEV_COLORS[severityKey].bg }}>{severityKey}</th>
-                ))}
-                <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #e5e7eb', fontWeight: 700, color: '#374151' }}>TOTAL</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                {(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'] as const).map(severityKey => (
-                  <td key={severityKey} style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #e5e7eb', fontWeight: 800, fontSize: 20, color: severityCounts[severityKey] > 0 ? SEV_COLORS[severityKey].bg : '#9ca3af' }}>
-                    {severityCounts[severityKey]}
-                  </td>
-                ))}
-                <td style={{ padding: '10px 8px', textAlign: 'center', border: '1px solid #e5e7eb', fontWeight: 800, fontSize: 20 }}>{vulns.length}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div>
-          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--primary)', paddingBottom: 6, display: 'inline-block' }}>
-            Vulnerabilities
-          </p>
-          {vulns.length === 0 ? (
-            <p style={{ fontSize: 13, color: '#6b7280', fontStyle: 'italic' }}>No vulnerabilities match the current filters.</p>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: '#f9fafb' }}>
-                  {['CVE ID', 'Package', 'Installed', 'Fixed In', 'Severity', 'CVSS'].map(header => (
-                    <th key={header} style={{ padding: '7px 10px', textAlign: 'left', border: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{header}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {vulns.map((vuln, index) => (
-                  <tr key={vuln.id} style={{ background: index % 2 === 0 ? '#fff' : '#fafafa' }}>
-                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', verticalAlign: 'top' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <span style={{ color: 'var(--primary)', fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>{vuln.vuln_id || '—'}</span>
-                        {vuln.title && <span style={{ color: '#6b7280', fontSize: 12, lineHeight: 1.45 }}>{vuln.title}</span>}
-                      </div>
-                    </td>
-                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, verticalAlign: 'top' }}>{vuln.pkg_name}</td>
-                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#6b7280', verticalAlign: 'top' }}>{vuln.installed_version || '—'}</td>
-                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, color: '#15803d', verticalAlign: 'top' }}>{vuln.fixed_version || '—'}</td>
-                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', verticalAlign: 'top' }}><SeverityBadge severity={vuln.severity} /></td>
-                    <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontFamily: 'monospace', fontSize: 12, verticalAlign: 'top' }}>{vuln.cvss_score ? vuln.cvss_score.toFixed(1) : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+      <div
+        className="status-report"
+        style={{ width: '100%', maxWidth: '180mm', margin: '0 auto', padding: '72px 16px 40px' }}
+      >
+        <ReportHeader pageName={pageName} scan={scan} findingCount={vulns.length} />
+        <ReportSnapshot item={item} scan={scan} />
+        <ReportFilters filterSummary={filterSummary} />
+        <ReportSeveritySummary severityCounts={severityCounts} findingCount={vulns.length} />
+        <ReportFindings vulns={vulns} />
       </div>
     </>
   );
@@ -334,7 +714,22 @@ function StatusReportContent() {
 
 export default function StatusReportPage() {
   return (
-    <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#6b7280' }}>Loading…</div>}>
+    <Suspense
+      fallback={
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100vh',
+            fontFamily: 'sans-serif',
+            color: '#6b7280',
+          }}
+        >
+          Loading…
+        </div>
+      }
+    >
       <StatusReportContent />
     </Suspense>
   );

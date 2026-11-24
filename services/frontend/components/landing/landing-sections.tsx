@@ -183,7 +183,7 @@ export function LandingFinalCta() {
 
 export function LandingFooter() {
   return (
-    <footer className="relative border-t border-divider/60 px-5 py-10 sm:px-6">
+    <footer className="relative border-t border-border/60 px-5 py-10 sm:px-6">
       <div className="mx-auto flex max-w-7xl flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
           <Logo size={26} />

@@ -81,7 +81,7 @@ export function LandingIntelligenceSection() {
             </Link>
           </div>
           <div
-            className="mt-10 flex flex-wrap gap-x-7 gap-y-4 border-t border-divider/70 pt-5"
+            className="mt-10 flex flex-wrap gap-x-7 gap-y-4 border-t border-border/70 pt-5"
             aria-label="CVE intelligence highlights"
           >
             <div className="grid gap-0.5">
@@ -161,7 +161,7 @@ export function LandingIntelligenceSection() {
                 <ArrowUpRight01Icon aria-hidden size={14} />
               </Link>
             </div>
-            <Card.Footer className="flex items-center justify-between gap-3 border-t border-divider/60 px-5 py-4">
+            <Card.Footer className="flex items-center justify-between gap-3 border-t border-border/60 px-5 py-4">
               <span className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Shield01Icon aria-hidden className="text-primary" size={15} />
                 Original scan verdicts stay immutable

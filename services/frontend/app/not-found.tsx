@@ -1,4 +1,4 @@
-import { buttonVariants } from '@/components/ui';
+import { Button } from '@/components/ui';
 import { ArrowLeft01Icon, Search01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 
@@ -15,10 +15,12 @@ export default function NotFound() {
           The page may have moved, or the link may no longer be available.
         </p>
         <div className="mt-6">
-          <Link href="/" className={buttonVariants()}>
-            <ArrowLeft01Icon size={15} />
-            Go home
-          </Link>
+          <Button asChild>
+            <Link href="/">
+              <ArrowLeft01Icon size={15} />
+              Go home
+            </Link>
+          </Button>
         </div>
       </section>
     </main>

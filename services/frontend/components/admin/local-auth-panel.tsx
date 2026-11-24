@@ -70,7 +70,7 @@ export function LocalAuthPanel({ hasEnabledOIDCProvider, providersLoading }: Loc
       <Card.Content>
         <div aria-label="Access controls" className="grid gap-3 sm:grid-cols-2" role="group">
           <Switch
-            className="rounded-lg border border-divider p-3"
+            className="rounded-lg border border-border p-3"
             isSelected={signInEnabled}
             isDisabled={saving}
             onChange={setSignInEnabled}
@@ -86,7 +86,7 @@ export function LocalAuthPanel({ hasEnabledOIDCProvider, providersLoading }: Loc
             </Description>
           </Switch>
           <Switch
-            className="rounded-lg border border-divider p-3"
+            className="rounded-lg border border-border p-3"
             isSelected={signUpEnabled}
             isDisabled={saving}
             onChange={setSignUpEnabled}
@@ -102,7 +102,7 @@ export function LocalAuthPanel({ hasEnabledOIDCProvider, providersLoading }: Loc
             </Description>
           </Switch>
           <Switch
-            className="rounded-lg border border-divider p-3"
+            className="rounded-lg border border-border p-3"
             isSelected={localAuthEnabled}
             isDisabled={saving || (!canDisableLocalAuth && localAuthEnabled)}
             onChange={setLocalAuthEnabled}
@@ -118,7 +118,7 @@ export function LocalAuthPanel({ hasEnabledOIDCProvider, providersLoading }: Loc
             </Description>
           </Switch>
           <Switch
-            className="rounded-lg border border-divider p-3"
+            className="rounded-lg border border-border p-3"
             isSelected={ssoOnly}
             isDisabled={saving || (!canDisableLocalAuth && !ssoOnly)}
             onChange={setSsoOnly}
@@ -142,7 +142,7 @@ export function LocalAuthPanel({ hasEnabledOIDCProvider, providersLoading }: Loc
           />
         ) : null}
       </Card.Content>
-      <Card.Footer className="justify-end border-t border-divider">
+      <Card.Footer className="justify-end border-t border-border">
         <Button variant="primary" onPress={handleSave} isDisabled={saving}>
           {saving ? 'Saving...' : 'Save access controls'}
         </Button>

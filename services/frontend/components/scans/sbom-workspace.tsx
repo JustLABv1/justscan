@@ -71,7 +71,7 @@ function PackageNode({ data }: NodeProps<Node<PackageNodeData>>) {
       <Handle
         type="target"
         position={Position.Left}
-        className="!border-divider !bg-surface-secondary"
+        className="!border-border !bg-surface-secondary"
       />
       <div className="flex items-start justify-between gap-2">
         <span className="max-w-36 truncate text-sm font-medium">
@@ -85,7 +85,7 @@ function PackageNode({ data }: NodeProps<Node<PackageNodeData>>) {
       <Handle
         type="source"
         position={Position.Right}
-        className="!border-divider !bg-surface-secondary"
+        className="!border-border !bg-surface-secondary"
       />
     </div>
   );
@@ -653,7 +653,7 @@ export function SBOMWorkspace({
                   </ReactFlow>
                 </div>
                 {graph.truncated ? (
-                  <div className="border-t border-divider px-4 py-3 text-sm text-warning-foreground">
+                  <div className="border-t border-border px-4 py-3 text-sm text-warning-foreground">
                     Graph is capped for performance. Open a package from inventory to inspect its
                     immediate neighborhood.
                   </div>
@@ -735,7 +735,7 @@ export function SBOMWorkspace({
                           {selected.vulnerabilities.map((vulnerability: Vulnerability) => (
                             <div
                               key={vulnerability.id}
-                              className="rounded-xl border border-divider p-3"
+                              className="rounded-xl border border-border p-3"
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <span className="font-mono text-sm">{vulnerability.vuln_id}</span>
@@ -777,7 +777,7 @@ export function SBOMWorkspace({
 
 function Detail({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="rounded-xl border border-divider p-3">
+    <div className="rounded-xl border border-border p-3">
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="mt-1 break-words">{value || '—'}</dd>
     </div>

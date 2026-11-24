@@ -12,6 +12,7 @@ import { StatusAlert } from '@/components/ui/form-alert';
 import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { useClientAuth } from '@/hooks/use-client-auth';
 import { useOrgDirectory } from '@/hooks/use-org-name-map';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
@@ -20,7 +21,6 @@ import {
   bulkWatchlistAction,
   deleteWatchlistItem,
   getDefaultScannerCapabilities,
-  getTokenType,
   getWorkScope,
   listRegistriesWithCapabilities,
   listWatchlist,
@@ -288,7 +288,7 @@ export default function WatchlistPage() {
   const shareModal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
-  const isPlatformAdmin = getTokenType() === 'admin';
+  const { isPlatformAdmin } = useClientAuth();
   const orgRoleById = useMemo(
     () => new Map(orgs.map((org) => [org.id, org.current_user_role] as const)),
     [orgs]

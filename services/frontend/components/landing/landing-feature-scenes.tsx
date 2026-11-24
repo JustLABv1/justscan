@@ -63,7 +63,7 @@ function StageFrame({
   return (
     <Surface
       aria-label={label}
-      className={`landing-stage landing-technical-grid relative isolate overflow-hidden rounded-xl border border-divider/80 ${className}`}
+      className={`landing-stage landing-technical-grid relative isolate overflow-hidden rounded-xl border border-border/80 ${className}`}
       variant="secondary"
     >
       <div aria-hidden className="landing-stage-glow pointer-events-none absolute inset-0 -z-10" />
@@ -123,7 +123,7 @@ function RemediationScene() {
         {rows.map(([cve, severity, fixed], index) => (
           <div
             key={cve}
-            className="landing-finding-row grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-divider/70 bg-surface/80 px-3 py-3"
+            className="landing-finding-row grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-border/70 bg-surface/80 px-3 py-3"
             style={{ animationDelay: `${index * 1.15}s` }}
           >
             <div className="min-w-0">
@@ -138,7 +138,7 @@ function RemediationScene() {
             </div>
             <div className="text-right">
               <p
-                className={severity === 'critical' ? 'text-xs text-danger' : 'text-xs text-warning-foreground'}
+                className={severity === 'critical' ? 'text-xs text-destructive' : 'text-xs text-warning-foreground'}
               >
                 {severity}
               </p>
@@ -158,7 +158,7 @@ function RemediationScene() {
 function CoverageScene() {
   return (
     <div className="relative flex min-h-64 items-center justify-center overflow-hidden p-5 sm:min-h-72">
-      <div className="landing-radar relative size-44 rounded-full border border-divider/80 sm:size-48">
+      <div className="landing-radar relative size-44 rounded-full border border-border/80 sm:size-48">
         <span aria-hidden className="landing-radar-ring inset-[18%]" />
         <span aria-hidden className="landing-radar-ring inset-[36%]" />
         <span aria-hidden className="landing-radar-cross landing-radar-cross-x" />
@@ -181,7 +181,7 @@ function CoverageScene() {
           size={24}
         />
       </div>
-      <div className="absolute bottom-5 left-5 rounded-lg border border-divider/70 bg-surface/90 px-3 py-2 shadow-sm">
+      <div className="absolute bottom-5 left-5 rounded-lg border border-border/70 bg-surface/90 px-3 py-2 shadow-sm">
         <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Watchlist</p>
         <p className="mt-1 font-mono text-xs text-foreground">payments:release</p>
       </div>
@@ -208,11 +208,11 @@ export function LandingFeatureOverviewSection() {
         <div className="mt-14 grid gap-4 lg:grid-cols-12">
           <LandingReveal className="lg:col-span-7">
             <Card
-              className="h-full overflow-hidden border-divider/80 bg-surface/70 p-0"
+              className="h-full overflow-hidden border-border/80 bg-surface/70 p-0"
               variant="default"
             >
               <ScanPipelineScene />
-              <Card.Footer className="block border-t border-divider/70 p-6 sm:p-7">
+              <Card.Footer className="block border-t border-border/70 p-6 sm:p-7">
                 <div className="flex items-center gap-2 text-primary">
                   <WorkflowSquare06Icon aria-hidden size={18} />
                   <span className="text-xs font-semibold uppercase tracking-[0.16em]">
@@ -232,11 +232,11 @@ export function LandingFeatureOverviewSection() {
 
           <LandingReveal className="lg:col-span-5" delay={0.04}>
             <Card
-              className="h-full overflow-hidden border-divider/80 bg-surface/70 p-0"
+              className="h-full overflow-hidden border-border/80 bg-surface/70 p-0"
               variant="default"
             >
               <RemediationScene />
-              <Card.Footer className="block border-t border-divider/70 p-6 sm:p-7">
+              <Card.Footer className="block border-t border-border/70 p-6 sm:p-7">
                 <h3 className="text-xl font-semibold text-foreground">Move fixable risk first.</h3>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Severity, package, fixed version, and policy context stay in one decision surface.
@@ -247,11 +247,11 @@ export function LandingFeatureOverviewSection() {
 
           <LandingReveal className="lg:col-span-5" delay={0.03}>
             <Card
-              className="h-full overflow-hidden border-divider/80 bg-surface/70 p-0"
+              className="h-full overflow-hidden border-border/80 bg-surface/70 p-0"
               variant="default"
             >
               <CoverageScene />
-              <Card.Footer className="block border-t border-divider/70 p-6 sm:p-7">
+              <Card.Footer className="block border-t border-border/70 p-6 sm:p-7">
                 <h3 className="text-xl font-semibold text-foreground">
                   Keep important images watched.
                 </h3>
@@ -264,11 +264,11 @@ export function LandingFeatureOverviewSection() {
 
           <LandingReveal className="lg:col-span-7" delay={0.06}>
             <Card
-              className="flex h-full flex-col justify-between border-divider/80 bg-surface/70"
+              className="flex h-full flex-col justify-between border-border/80 bg-surface/70"
               variant="default"
             >
               <Card.Header>
-                <div className="flex size-11 items-center justify-center rounded-xl border border-divider/70 bg-surface-secondary text-primary">
+                <div className="flex size-11 items-center justify-center rounded-xl border border-border/70 bg-surface-secondary text-primary">
                   <Shield01Icon aria-hidden size={21} />
                 </div>
               </Card.Header>
@@ -296,13 +296,13 @@ export function LandingFeatureOverviewSection() {
 function CliScene() {
   return (
     <StageFrame className="min-h-[430px]" label="Animated JustScan CLI scan">
-      <div className="flex items-center justify-between border-b border-divider/70 px-4 py-3 sm:px-5">
+      <div className="flex items-center justify-between border-b border-border/70 px-4 py-3 sm:px-5">
         <div className="flex items-center gap-2">
-          <span className="size-2.5 rounded-full bg-danger/70" />
+          <span className="size-2.5 rounded-full bg-destructive/70" />
           <span className="size-2.5 rounded-full bg-warning/70" />
           <span className="size-2.5 rounded-full bg-success/70" />
         </div>
-        <div className="flex items-center gap-2 rounded-md border border-divider/70 bg-surface/70 px-3 py-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-md border border-border/70 bg-surface/70 px-3 py-1 text-xs text-muted-foreground">
           <CommandLineIcon aria-hidden size={12} />
           justscan · pipeline
         </div>
@@ -416,7 +416,7 @@ function GitOpsScene() {
     <StageFrame className="min-h-[470px] p-5 sm:p-7 lg:p-9" label="Animated GitOps discovery flow">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-xl border border-divider/80 bg-surface text-primary">
+          <div className="flex size-10 items-center justify-center rounded-xl border border-border/80 bg-surface text-primary">
             <GitBranchIcon aria-hidden size={19} />
           </div>
           <div>
@@ -438,7 +438,7 @@ function GitOpsScene() {
           ].map(([file, image], index) => (
             <div
               key={file}
-              className="landing-manifest-row rounded-xl border border-divider/70 bg-surface/80 p-3"
+              className="landing-manifest-row rounded-xl border border-border/70 bg-surface/80 p-3"
               style={{ animationDelay: `${index * 0.7}s` }}
             >
               <p className="flex items-center gap-2 truncate font-mono text-xs text-muted-foreground">
@@ -457,8 +457,8 @@ function GitOpsScene() {
           <span className="landing-gitops-packet top-[78%]" style={{ animationDelay: '2.2s' }} />
         </div>
 
-        <div className="relative rounded-xl border border-divider/80 bg-surface/85 p-4">
-          <div className="flex items-center gap-2 border-b border-divider/70 pb-3">
+        <div className="relative rounded-xl border border-border/80 bg-surface/85 p-4">
+          <div className="flex items-center gap-2 border-b border-border/70 pb-3">
             <FileSearchIcon aria-hidden className="text-primary" size={17} />
             <p className="text-xs font-semibold text-foreground">Discovered workloads</p>
           </div>
@@ -476,7 +476,7 @@ function GitOpsScene() {
                 <span
                   className={
                     tone === 'danger'
-                      ? 'text-xs text-danger'
+                      ? 'text-xs text-destructive'
                       : tone === 'success'
                         ? 'text-xs text-success-foreground'
                         : 'text-xs text-primary'
@@ -498,11 +498,11 @@ function GitOpsScene() {
       </div>
 
       <div className="mt-7 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span className="rounded-md border border-divider/70 bg-surface/65 px-2.5 py-1.5">
+        <span className="rounded-md border border-border/70 bg-surface/65 px-2.5 py-1.5">
           Discover
         </span>
         <ArrowRight01Icon aria-hidden size={13} />
-        <span className="rounded-md border border-divider/70 bg-surface/65 px-2.5 py-1.5">
+        <span className="rounded-md border border-border/70 bg-surface/65 px-2.5 py-1.5">
           Scan
         </span>
         <ArrowRight01Icon aria-hidden size={13} />
@@ -530,7 +530,7 @@ export function LandingGitOpsSection() {
           <GitOpsScene />
         </LandingReveal>
         <LandingReveal className="mt-4" delay={0.08}>
-          <div className="grid overflow-hidden rounded-xl border border-divider/70 bg-surface/60 md:grid-cols-3">
+          <div className="grid overflow-hidden rounded-xl border border-border/70 bg-surface/60 md:grid-cols-3">
             {[
               [
                 '01',
@@ -551,7 +551,7 @@ export function LandingGitOpsSection() {
               <div
                 key={number}
                 className={`p-6 sm:p-7 ${
-                  index > 0 ? 'border-t border-divider/70 md:border-l md:border-t-0' : ''
+                  index > 0 ? 'border-t border-border/70 md:border-l md:border-t-0' : ''
                 }`}
               >
                 <span className="font-mono text-xs text-primary">{number}</span>
@@ -591,7 +591,7 @@ function CollectorScene() {
       {nodes.map(([label, position, delay]) => (
         <div
           key={label}
-          className={`landing-collector-node absolute ${position} rounded-xl border border-divider/75 bg-surface/90 px-3 py-2 shadow-sm`}
+          className={`landing-collector-node absolute ${position} rounded-xl border border-border/75 bg-surface/90 px-3 py-2 shadow-sm`}
           style={{ animationDelay: delay }}
         >
           <span className="flex items-center gap-2 text-xs font-medium text-foreground sm:text-xs">
@@ -618,7 +618,7 @@ function CollectorScene() {
 export function LandingCollectorsSection() {
   return (
     <section id="collectors" className="scroll-mt-24 px-5 py-20 sm:px-6 lg:py-28">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-xl border border-divider/70 bg-surface/55 p-5 sm:p-8 lg:p-12">
+      <div className="mx-auto max-w-7xl overflow-hidden rounded-xl border border-border/70 bg-surface/55 p-5 sm:p-8 lg:p-12">
         <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-14">
           <LandingReveal className="lg:col-span-5">
             <Chip color="accent" size="sm" variant="soft">

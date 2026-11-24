@@ -184,19 +184,74 @@ const SEVERITY_COUNT_TONES: Record<'critical' | 'high' | 'medium' | 'low', Badge
   low: 'default',
 };
 
+const SEVERITY_LEVEL_LABELS = {
+  critical: 'Critical',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+} as const;
+
 export function SevCount({
   count,
   level,
+  labeled = false,
 }: {
   count: number;
   level: 'critical' | 'high' | 'medium' | 'low';
+  /** Show "3 High" instead of a bare number. Use where no column header names the severity. */
+  labeled?: boolean;
 }) {
   const tone = count > 0 ? SEVERITY_COUNT_TONES[level] : 'default';
+  const description = `${count.toLocaleString()} ${SEVERITY_LEVEL_LABELS[level].toLowerCase()}`;
 
   return (
-    <Chip className="min-w-10 justify-center tabular-nums" color={tone} size="sm" variant="soft">
-      {count}
+    <Chip
+      aria-label={description}
+      className="min-w-10 justify-center tabular-nums"
+      color={tone}
+      size="sm"
+      title={description}
+      variant="soft"
+    >
+      {labeled ? `${count.toLocaleString()} ${SEVERITY_LEVEL_LABELS[level]}` : count}
     </Chip>
+  );
+}
+
+/**
+ * Severity counts for one scan or image: only the non-zero levels, labelled,
+ * or a short muted text when there is nothing to count.
+ */
+export function SeverityCounts({
+  critical,
+  high,
+  medium,
+  low,
+  emptyLabel = 'No findings',
+}: {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  emptyLabel?: string;
+}) {
+  const levels = (
+    [
+      ['critical', critical],
+      ['high', high],
+      ['medium', medium],
+      ['low', low],
+    ] as const
+  ).filter(([, count]) => count > 0);
+  if (levels.length === 0) {
+    return <span className="text-xs text-muted-foreground">{emptyLabel}</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {levels.map(([level, count]) => (
+        <SevCount key={level} count={count} level={level} labeled />
+      ))}
+    </div>
   );
 }
 

@@ -3,7 +3,7 @@
 import { useToast } from '@/components/toast';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { adminUpdateAuthSettings, getAdminSettings } from '@/lib/api/admin';
-import { Button, Card, Description, Label, Switch } from '@/components/ui';
+import { SettingsSection, SettingRow, Switch } from '@/components/ui';
 import { useEffect, useState } from 'react';
 
 interface LocalAuthPanelProps {
@@ -34,19 +34,25 @@ export function LocalAuthPanel({ hasEnabledOIDCProvider, providersLoading }: Loc
 
   const canDisableLocalAuth = providersLoading || hasEnabledOIDCProvider;
 
-  async function handleSave() {
-    if ((!localAuthEnabled || ssoOnly) && !canDisableLocalAuth) {
+  async function handleSave(key: string, value: boolean) {
+    const next = {
+      local_auth_enabled: localAuthEnabled,
+      sign_in_enabled: signInEnabled,
+      sign_up_enabled: signUpEnabled,
+      sso_only: ssoOnly,
+      [key]: value,
+    };
+    if ((!next.local_auth_enabled || next.sso_only) && !hasEnabledOIDCProvider) {
       toast.error('Enable an identity provider before disabling local authentication');
       return;
     }
     setSaving(true);
     try {
-      await adminUpdateAuthSettings({
-        local_auth_enabled: localAuthEnabled,
-        sign_in_enabled: signInEnabled,
-        sign_up_enabled: signUpEnabled,
-        sso_only: ssoOnly,
-      });
+      await adminUpdateAuthSettings(next);
+      setLocalAuthEnabled(next.local_auth_enabled);
+      setSignInEnabled(next.sign_in_enabled);
+      setSignUpEnabled(next.sign_up_enabled);
+      setSsoOnly(next.sso_only);
       toast.success('Authentication settings updated');
     } catch (error: unknown) {
       toast.error(
@@ -60,93 +66,87 @@ export function LocalAuthPanel({ hasEnabledOIDCProvider, providersLoading }: Loc
   if (loading) return null;
 
   return (
-    <Card>
-      <Card.Header>
-        <Card.Title>Sign-in and sign-up controls</Card.Title>
-        <Card.Description>
-          Control who can access JustScan and how new accounts are created.
-        </Card.Description>
-      </Card.Header>
-      <Card.Content>
-        <div aria-label="Access controls" className="grid gap-3 sm:grid-cols-2" role="group">
-          <Switch
-            className="rounded-lg border border-border p-3"
-            isSelected={signInEnabled}
-            isDisabled={saving}
-            onChange={setSignInEnabled}
-          >
-            <Switch.Content>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-              <Label>Allow sign-in</Label>
-            </Switch.Content>
-            <Description className="mt-0.5 ms-12 block text-xs leading-4">
-              Allow users to start a session.
-            </Description>
-          </Switch>
-          <Switch
-            className="rounded-lg border border-border p-3"
-            isSelected={signUpEnabled}
-            isDisabled={saving}
-            onChange={setSignUpEnabled}
-          >
-            <Switch.Content>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-              <Label>Allow self-service sign-up</Label>
-            </Switch.Content>
-            <Description className="mt-0.5 ms-12 block text-xs leading-4">
-              Allow visitors to create local accounts.
-            </Description>
-          </Switch>
-          <Switch
-            className="rounded-lg border border-border p-3"
-            isSelected={localAuthEnabled}
-            isDisabled={saving || (!canDisableLocalAuth && localAuthEnabled)}
-            onChange={setLocalAuthEnabled}
-          >
-            <Switch.Content>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-              <Label>Enable local authentication</Label>
-            </Switch.Content>
-            <Description className="mt-0.5 ms-12 block text-xs leading-4">
-              Allow username and password sign-in.
-            </Description>
-          </Switch>
-          <Switch
-            className="rounded-lg border border-border p-3"
-            isSelected={ssoOnly}
-            isDisabled={saving || (!canDisableLocalAuth && !ssoOnly)}
-            onChange={setSsoOnly}
-          >
-            <Switch.Content>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-              <Label>Show SSO login only</Label>
-            </Switch.Content>
-            <Description className="mt-0.5 ms-12 block text-xs leading-4">
-              Hide password fields and offer identity providers only.
-            </Description>
-          </Switch>
-        </div>
-        {!providersLoading && !hasEnabledOIDCProvider ? (
+    <SettingsSection
+      title="Sign-in and sign-up controls"
+      description="Control who can access JustScan and how new accounts are created."
+    >
+      <SettingRow
+        label="Allow sign-in"
+        description="Allow users to start a session."
+        htmlFor="auth-sign_in_enabled"
+      >
+        <Switch
+          id="auth-sign_in_enabled"
+          aria-label="Allow sign-in"
+          isSelected={signInEnabled}
+          isDisabled={saving}
+          onChange={(value) => void handleSave('sign_in_enabled', value)}
+        >
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+        </Switch>
+      </SettingRow>
+      <SettingRow
+        label="Allow self-service sign-up"
+        description="Allow visitors to create local accounts."
+        htmlFor="auth-sign_up_enabled"
+      >
+        <Switch
+          id="auth-sign_up_enabled"
+          aria-label="Allow self-service sign-up"
+          isSelected={signUpEnabled}
+          isDisabled={saving}
+          onChange={(value) => void handleSave('sign_up_enabled', value)}
+        >
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+        </Switch>
+      </SettingRow>
+      <SettingRow
+        label="Enable local authentication"
+        description="Allow username and password sign-in."
+        htmlFor="auth-local_auth_enabled"
+      >
+        <Switch
+          id="auth-local_auth_enabled"
+          aria-label="Enable local authentication"
+          isSelected={localAuthEnabled}
+          isDisabled={saving || providersLoading || (!canDisableLocalAuth && localAuthEnabled)}
+          onChange={(value) => void handleSave('local_auth_enabled', value)}
+        >
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+        </Switch>
+      </SettingRow>
+      <SettingRow
+        label="Show SSO login only"
+        description="Hide password fields and offer identity providers only."
+        htmlFor="auth-sso_only"
+      >
+        <Switch
+          id="auth-sso_only"
+          aria-label="Show SSO login only"
+          isSelected={ssoOnly}
+          isDisabled={saving || providersLoading || (!canDisableLocalAuth && !ssoOnly)}
+          onChange={(value) => void handleSave('sso_only', value)}
+        >
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+        </Switch>
+      </SettingRow>
+      {!providersLoading && !hasEnabledOIDCProvider && (
+        <div className="p-4">
           <StatusAlert
             status="warning"
             title="An identity provider is required before password sign-in can be hidden"
-            description="Enable an OIDC provider below first to disable local authentication or show SSO login only."
+            description="Enable an OIDC provider first to disable local authentication or show SSO login only."
           />
-        ) : null}
-      </Card.Content>
-      <Card.Footer className="justify-end border-t border-border">
-        <Button variant="primary" onPress={handleSave} isDisabled={saving}>
-          {saving ? 'Saving...' : 'Save access controls'}
-        </Button>
-      </Card.Footer>
-    </Card>
+        </div>
+      )}
+    </SettingsSection>
   );
 }

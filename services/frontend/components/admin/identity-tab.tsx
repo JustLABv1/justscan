@@ -42,6 +42,7 @@ import {
   Disclosure,
   Input,
   ListBox,
+  Label,
   Modal,
   SearchField,
   Select,
@@ -1067,10 +1068,10 @@ export function IdentityTab() {
               )}
 
               <div className="space-y-2">
-                <Disclosure isExpanded>
+                <Disclosure>
                   <Disclosure.Heading>
                     <Disclosure.Trigger className="flex w-full items-center justify-between rounded-xl border border-border/60 px-3 py-2 text-sm font-medium">
-                      ID token claims
+                      View raw ID token claims
                       <Disclosure.Indicator />
                     </Disclosure.Trigger>
                   </Disclosure.Heading>
@@ -1085,7 +1086,7 @@ export function IdentityTab() {
                 <Disclosure>
                   <Disclosure.Heading>
                     <Disclosure.Trigger className="flex w-full items-center justify-between rounded-xl border border-border/60 px-3 py-2 text-sm font-medium">
-                      UserInfo claims
+                      View raw UserInfo claims
                       <Disclosure.Indicator />
                     </Disclosure.Trigger>
                   </Disclosure.Heading>
@@ -1114,20 +1115,28 @@ export function IdentityTab() {
             className="grid gap-3 lg:grid-cols-[1fr_1fr_auto] lg:items-end"
             onSubmit={handlePreview}
           >
-            <TextArea
-              value={previewGroupsInput}
-              onChange={(event) => setPreviewGroupsInput(event.target.value)}
-              variant="secondary"
-              placeholder="groups (comma or newline separated)"
-              rows={4}
-            />
-            <TextArea
-              value={previewRolesInput}
-              onChange={(event) => setPreviewRolesInput(event.target.value)}
-              variant="secondary"
-              placeholder="roles (comma or newline separated)"
-              rows={4}
-            />
+            <div className="space-y-2">
+              <Label htmlFor="preview-groups">Group claims</Label>
+              <TextArea
+                id="preview-groups"
+                value={previewGroupsInput}
+                onChange={(event) => setPreviewGroupsInput(event.target.value)}
+                variant="secondary"
+                placeholder="groups (comma or newline separated)"
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="preview-roles">Role claims</Label>
+              <TextArea
+                id="preview-roles"
+                value={previewRolesInput}
+                onChange={(event) => setPreviewRolesInput(event.target.value)}
+                variant="secondary"
+                placeholder="roles (comma or newline separated)"
+                rows={4}
+              />
+            </div>
             <Button type="submit" variant="secondary" isDisabled={previewLoading}>
               {previewLoading ? 'Running...' : 'Run Preview'}
             </Button>

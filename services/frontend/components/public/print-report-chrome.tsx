@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 
-export const PRINT_PALETTE = {
+const PRINT_PALETTE = {
   paper: '#ffffff',
   text: '#111827',
   muted: '#6b7280',

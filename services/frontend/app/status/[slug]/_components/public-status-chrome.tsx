@@ -1,24 +1,15 @@
 'use client';
 
+import { Alert, Card } from '@/components/ui';
 import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
-import { StatusTag } from '@/components/ui/status-dot';
-import { Logo } from '@/components/logo';
+import type { StatusDotTone } from '@/components/ui/status-dot';
 import type { StatusPageUpdate } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
-import { Alert, Button, Card } from '@/components/ui';
-import {
-  Clock01Icon,
-  Globe02Icon,
-  LockIcon,
-  Moon02Icon,
-  Refresh01Icon,
-  SecurityLockIcon,
-  Sun01Icon,
-} from 'hugeicons-react';
+import { cn } from '@/lib/utils';
 
-type StatusTone = {
+export type OverallStatusTone = {
   label: string;
-  color: string;
+  tone: StatusDotTone;
   description: string;
 };
 
@@ -26,14 +17,17 @@ export type StatusMetric = {
   key: string;
   label: string;
   value: number;
-  color?: 'success' | 'warning' | 'danger' | 'accent' | 'default';
+  color?: 'success' | 'warning' | 'danger' | 'accent';
 };
 
-function visibilityIcon(visibility: 'private' | 'public' | 'authenticated') {
-  if (visibility === 'public') return <Globe02Icon size={14} aria-hidden />;
-  if (visibility === 'authenticated') return <SecurityLockIcon size={14} aria-hidden />;
-  return <LockIcon size={14} aria-hidden />;
-}
+const TONE_RING: Record<StatusDotTone, string> = {
+  danger: 'bg-destructive/15 text-destructive',
+  warning: 'bg-warning/15 text-warning',
+  success: 'bg-success/15 text-success',
+  accent: 'bg-info/15 text-info',
+  neutral: 'bg-muted text-muted-foreground',
+  muted: 'bg-muted text-muted-foreground/60',
+};
 
 function updateStatus(level: StatusPageUpdate['level']) {
   if (level === 'incident') return 'danger' as const;
@@ -41,134 +35,45 @@ function updateStatus(level: StatusPageUpdate['level']) {
   return 'accent' as const;
 }
 
-export function PublicStatusHeader({
-  pageName,
-  visibility,
-  latestObservedAt,
-  refreshing,
-  isDark,
-  mounted,
-  onRefresh,
-  onToggleTheme,
-}: {
-  pageName: string;
-  visibility: 'private' | 'public' | 'authenticated';
-  latestObservedAt: string | null;
-  refreshing: boolean;
-  isDark: boolean;
-  mounted: boolean;
-  onRefresh: () => void;
-  onToggleTheme: () => void;
-}) {
-  return (
-    <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
-      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-8 shrink-0 items-center justify-center">
-            <Logo size={20} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">JustScan Status</p>
-            <h1 className="truncate text-sm font-semibold text-foreground" title={pageName}>
-              {pageName}
-            </h1>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <StatusTag className="hidden capitalize sm:inline-flex">
-            {visibilityIcon(visibility)}
-            {visibility}
-          </StatusTag>
-          <StatusTag className="hidden lg:inline-flex">
-            <Clock01Icon size={14} aria-hidden />
-            Updated {latestObservedAt ? timeAgo(latestObservedAt) : 'pending'}
-          </StatusTag>
-          {mounted ? (
-            <Button
-              isIconOnly
-              aria-label="Toggle theme"
-              size="sm"
-              variant="tertiary"
-              onPress={onToggleTheme}
-            >
-              {isDark ? <Sun01Icon size={16} aria-hidden /> : <Moon02Icon size={16} aria-hidden />}
-            </Button>
-          ) : null}
-          <Button
-            isIconOnly
-            aria-label="Refresh status page"
-            isPending={refreshing}
-            size="sm"
-            variant="secondary"
-            onPress={onRefresh}
-          >
-            <Refresh01Icon size={16} aria-hidden />
-          </Button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
+/** Overall verdict for the page, with only the non-zero image counts. */
 export function OverallStatusBanner({
   tone,
-  healthyCount,
-  issueCount,
-  exposedCount,
-  runningCount,
-  secondsRemaining,
-  refreshing,
-  autoRefreshPaused,
-  staleAfterHours,
+  facts,
 }: {
-  tone: StatusTone;
-  healthyCount: number;
-  issueCount: number;
-  exposedCount: number;
-  runningCount: number;
-  secondsRemaining: number;
-  refreshing: boolean;
-  autoRefreshPaused: boolean;
-  staleAfterHours: number;
+  tone: OverallStatusTone;
+  facts: Array<{ label: string; value: number }>;
 }) {
+  const visibleFacts = facts.filter((fact) => fact.value > 0);
   return (
     <Card className="gap-0 overflow-hidden py-0">
       <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span
-            className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full"
-            style={{ background: `color-mix(in srgb, ${tone.color} 14%, transparent)` }}
+            aria-hidden
+            className={cn(
+              'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full',
+              TONE_RING[tone.tone]
+            )}
           >
-            <span className="size-2.5 rounded-full" style={{ background: tone.color }} />
+            <span className="size-2.5 rounded-full bg-current" />
           </span>
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-foreground">{tone.label}</h2>
             <p className="mt-0.5 text-sm leading-6 text-muted-foreground">{tone.description}</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground lg:justify-end">
-          <span>
-            <strong className="font-semibold text-foreground">{healthyCount}</strong> healthy
-          </span>
-          <span>
-            <strong className="font-semibold text-foreground">{issueCount}</strong> issues
-          </span>
-          <span>
-            <strong className="font-semibold text-foreground">{exposedCount}</strong> exposed
-          </span>
-          <span>
-            <strong className="font-semibold text-foreground">{runningCount}</strong> scanning
-          </span>
-          <span>
-            {refreshing
-              ? 'Refreshing now'
-              : autoRefreshPaused
-                ? 'Auto-refresh paused'
-                : `Refresh in ${secondsRemaining}s`}
-          </span>
-          <span>Stale after {staleAfterHours}h</span>
-        </div>
+        {visibleFacts.length > 0 ? (
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground lg:justify-end">
+            {visibleFacts.map((fact) => (
+              <span key={fact.label}>
+                <strong className="font-semibold tabular-nums text-foreground">
+                  {fact.value.toLocaleString()}
+                </strong>{' '}
+                {fact.label}
+              </span>
+            ))}
+          </p>
+        ) : null}
       </div>
     </Card>
   );
@@ -176,9 +81,11 @@ export function OverallStatusBanner({
 
 export function StatusMetrics({
   metrics,
+  selectedKey,
   onSelect,
 }: {
   metrics: StatusMetric[];
+  selectedKey?: string;
   onSelect?: (key: string) => void;
 }) {
   return (
@@ -188,8 +95,11 @@ export function StatusMetrics({
           key={metric.key}
           label={metric.label}
           value={metric.value.toLocaleString()}
-          tone={metric.color ?? undefined}
-          onPress={onSelect ? () => onSelect(metric.key) : undefined}
+          tone={metric.value > 0 ? metric.color : undefined}
+          selected={selectedKey === metric.key}
+          onPress={
+            onSelect && metric.key.startsWith('status:') ? () => onSelect(metric.key) : undefined
+          }
         />
       ))}
     </StatStrip>
@@ -201,14 +111,9 @@ export function ActiveStatusUpdates({ updates }: { updates: StatusPageUpdate[] }
 
   return (
     <section aria-labelledby="status-updates-heading" className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <h2 id="status-updates-heading" className="text-sm font-semibold text-foreground">
-          Active updates
-        </h2>
-        <span className="text-xs text-muted-foreground">
-          {updates.length} active {updates.length === 1 ? 'notice' : 'notices'}
-        </span>
-      </div>
+      <h2 id="status-updates-heading" className="text-sm font-semibold text-foreground">
+        {updates.length === 1 ? 'Current update' : 'Current updates'}
+      </h2>
       <div className="grid gap-2 lg:grid-cols-2">
         {updates.map((update) => (
           <Alert

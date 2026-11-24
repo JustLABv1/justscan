@@ -217,7 +217,7 @@ function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item:
 
   return (
     <StatusLabel
-      className="min-w-0 lg:w-56"
+      className="min-w-0 max-w-56 lg:w-56"
       tone={posture.tone}
       label={posture.label}
       title={policyTitle}

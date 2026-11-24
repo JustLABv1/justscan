@@ -4,10 +4,7 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { PageHeader } from '@/components/ui/page-header';
-import {
-  getAdminTabMeta,
-  resolveAdminTab,
-} from '@/app/(app)/admin/_components/admin-tabs';
+import { getAdminTabMeta, resolveAdminTab } from '@/app/(app)/admin/_components/admin-tabs';
 
 interface AdminPageShellProps {
   children: ReactNode;
@@ -27,7 +24,7 @@ export function AdminPageShell({ children, actions }: AdminPageShellProps) {
 
   return (
     <div className="px-4 py-6 md:px-6 xl:py-7">
-      <div className="space-y-5">
+      <div className="space-y-4">
         <PageHeader title={title} description={description} actions={actions} />
         {children}
       </div>

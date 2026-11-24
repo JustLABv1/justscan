@@ -6,7 +6,7 @@ export default function AdminNotificationsPage() {
     <AdminPageShell>
       <NotificationManager
         basePath="/api/v1/admin/notifications"
-        heading="System Notifications"
+        heading="System notifications"
         description="Configure platform-wide channels, matching rules, queue retries, and delivery history."
       />
     </AdminPageShell>

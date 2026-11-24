@@ -1,6 +1,9 @@
 'use client';
 
-import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
+import { FilterToolbar } from '@/components/ui/filter-toolbar';
+import { StatusTag } from '@/components/ui/status-dot';
+import { AUTH_TYPE_LABELS, ROLE_LABELS, labelFor } from '@/lib/labels';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
@@ -19,13 +22,13 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
-  Input,
+  Chip,
   ListBox,
   Modal,
-  Pagination,
   SearchField,
   Select,
   Table,
+  TablePager,
   useOverlayState,
 } from '@/components/ui';
 import {
@@ -39,13 +42,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const PAGE_SIZE = 10;
 
-const USER_AUTH_LABEL: Record<string, string> = {
-  local: 'Local',
-  oidc: 'OIDC',
-};
-
 function userAuthLabel(authType?: string) {
-  return USER_AUTH_LABEL[authType ?? 'local'] ?? (authType ? authType.toUpperCase() : 'Unknown');
+  return labelFor(AUTH_TYPE_LABELS, authType || 'local');
 }
 
 export function UsersTab() {
@@ -206,316 +204,284 @@ export function UsersTab() {
     effectivePage * PAGE_SIZE
   );
 
-  const paginationItems = useMemo(() => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const items: Array<number | 'ellipsis'> = [1];
-    if (effectivePage > 3) items.push('ellipsis');
-    const start = Math.max(2, effectivePage - 1);
-    const end = Math.min(totalPages - 1, effectivePage + 1);
-    for (let i = start; i <= end; i += 1) items.push(i);
-    if (effectivePage < totalPages - 2) items.push('ellipsis');
-    items.push(totalPages);
-    return items;
-  }, [effectivePage, totalPages]);
-
   return (
-    <div className="space-y-4">
-      {error ? (
-        <StatusAlert status="danger" title="Users failed to load" description={error} />
-      ) : null}
-
-      <div className="flex justify-end">
-        <Button onPress={openCreate} variant="secondary">
+    <AdminPageShell
+      actions={
+        <Button size="sm" onPress={openCreate}>
           <PlusSignIcon size={15} />
-          Add User
+          Add user
         </Button>
-      </div>
+      }
+    >
+      <div className="space-y-4">
+        {error ? (
+          <StatusAlert status="danger" title="Users failed to load" description={error} />
+        ) : null}
 
-      <Card className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <SearchField name="admin-users-search" variant="secondary" className="w-full sm:max-w-sm">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                aria-label="Filter admin users"
-                placeholder="Filter users by name, email, or auth..."
-                value={searchQuery}
-                onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                  setPage(1);
-                }}
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            <Select
-              aria-label="Filter users by role"
-              value={roleFilter}
-              onChange={(value) => {
-                setRoleFilter(String(value) as 'all' | 'admin' | 'user');
-                setPage(1);
-              }}
-              variant="secondary"
-              className="w-full sm:w-36"
-            >
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="all">All roles</ListBox.Item>
-                  <ListBox.Item id="admin">Admin</ListBox.Item>
-                  <ListBox.Item id="user">User</ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
-            <Select
-              aria-label="Filter users by status"
-              value={statusFilter}
-              onChange={(value) => {
-                setStatusFilter(String(value) as 'all' | 'active' | 'disabled');
-                setPage(1);
-              }}
-              variant="secondary"
-              className="w-full sm:w-36"
-            >
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="all">All status</ListBox.Item>
-                  <ListBox.Item id="active">Active</ListBox.Item>
-                  <ListBox.Item id="disabled">Disabled</ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-        </div>
-
-        <Table variant="secondary">
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Admin users" className="min-w-[980px]">
-              <Table.Header>
-                <Table.Column isRowHeader>Username</Table.Column>
-                <Table.Column>Email</Table.Column>
-                <Table.Column>Auth</Table.Column>
-                <Table.Column>Role</Table.Column>
-                <Table.Column>Status</Table.Column>
-                <Table.Column>Last Login</Table.Column>
-                <Table.Column>Created</Table.Column>
-                <Table.Column className="text-right">Actions</Table.Column>
-              </Table.Header>
-              <Table.Body
-                renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    {loading ? 'Loading users...' : 'No users match your filters.'}
-                  </div>
-                )}
-              >
-                {pagedUsers.map((user) => (
-                  <Table.Row key={user.id} id={user.id} className="hover:bg-[var(--row-hover)]">
-                    <Table.Cell className="font-medium">{user.username}</Table.Cell>
-                    <Table.Cell className="text-xs text-muted-foreground">{user.email}</Table.Cell>
-                    <Table.Cell>
-                      <StatusTag>{userAuthLabel(user.auth_type)}</StatusTag>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <StatusTag>{user.role}</StatusTag>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <StatusTag tone={toneFromChipColor(user.disabled ? 'danger' : 'success')}>
-                        {user.disabled ? 'Disabled' : 'Active'}
-                      </StatusTag>
-                    </Table.Cell>
-                    <Table.Cell className="text-xs text-muted-foreground">
-                      {user.last_login_at ? (
-                        <div className="space-y-0.5">
-                          <p title={fullDate(user.last_login_at)}>{timeAgo(user.last_login_at)}</p>
-                          <p className="text-xs text-muted-foreground">
-                            via{' '}
-                            {userAuthLabel(user.last_login_method || user.auth_type).toLowerCase()}
-                          </p>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">Never</span>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell className="text-xs text-muted-foreground">
-                      <span title={fullDate(user.created_at)}>{timeAgo(user.created_at)}</span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex justify-end">
-                        <RowActionsMenu
-                          label={`Open actions for ${user.username}`}
-                          items={[
-                            {
-                              id: 'toggle',
-                              label: user.disabled ? 'Enable user' : 'Disable user',
-                              icon: <Refresh01Icon size={15} />,
-                              pending: pendingAction === `toggle:${user.id}`,
-                              disabled:
-                                pendingAction !== null && pendingAction !== `toggle:${user.id}`,
-                              onAction: () => {
-                                void handleToggleDisable(user);
-                              },
-                            },
-                            {
-                              id: 'edit',
-                              label: 'Edit user',
-                              icon: <PencilEdit01Icon size={15} />,
-                              onAction: () => openEdit(user),
-                            },
-                            {
-                              id: 'delete',
-                              label: 'Delete user',
-                              icon: <Delete01Icon size={15} />,
-                              variant: 'danger',
-                              pending: pendingAction === `delete:${user.id}`,
-                              disabled:
-                                pendingAction !== null && pendingAction !== `delete:${user.id}`,
-                              onAction: () => {
-                                void handleDelete(user);
-                              },
-                            },
-                          ]}
-                        />
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-          <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
-              Showing {filteredUsers.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
-              {Math.min(effectivePage * PAGE_SIZE, filteredUsers.length)} of {filteredUsers.length}
-            </span>
-            <Pagination size="sm" className="justify-self-center">
-              <Pagination.Content>
-                <Pagination.Item>
-                  <Pagination.Previous
-                    isDisabled={effectivePage === 1}
-                    onPress={() => setPage((previous) => Math.max(1, previous - 1))}
+        <Card className="gap-0 overflow-hidden py-0">
+          <div className="border-b border-border p-4">
+            <FilterToolbar
+              search={
+                <SearchField
+                  aria-label="Filter users"
+                  name="admin-users-search"
+                  variant="secondary"
+                  value={searchQuery}
+                  onChange={(value) => {
+                    setSearchQuery(value);
+                    setPage(1);
+                  }}
+                >
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input placeholder="Filter by name, email, or sign-in method..." />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+              }
+              filters={
+                <>
+                  <Select
+                    aria-label="Filter users by role"
+                    value={roleFilter}
+                    onChange={(value) => {
+                      setRoleFilter(String(value) as 'all' | 'admin' | 'user');
+                      setPage(1);
+                    }}
+                    variant="secondary"
+                    className="w-full sm:w-36"
                   >
-                    <Pagination.PreviousIcon />
-                    <span>Previous</span>
-                  </Pagination.Previous>
-                </Pagination.Item>
-                {paginationItems.map((item, index) =>
-                  item === 'ellipsis' ? (
-                    <Pagination.Item key={`users-ellipsis-${index}`}>
-                      <Pagination.Ellipsis />
-                    </Pagination.Item>
-                  ) : (
-                    <Pagination.Item key={`users-page-${item}`}>
-                      <Pagination.Link
-                        isActive={item === effectivePage}
-                        onPress={() => setPage(item)}
-                      >
-                        {item}
-                      </Pagination.Link>
-                    </Pagination.Item>
-                  )
-                )}
-                <Pagination.Item>
-                  <Pagination.Next
-                    isDisabled={effectivePage === totalPages}
-                    onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-                  >
-                    <span>Next</span>
-                    <Pagination.NextIcon />
-                  </Pagination.Next>
-                </Pagination.Item>
-              </Pagination.Content>
-            </Pagination>
-            <div />
-          </Table.Footer>
-        </Table>
-      </Card>
-
-      <Modal state={modal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>{isCreate ? 'Add User' : 'Edit User'}</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
-                <form id="user-form" onSubmit={handleSubmit} className="space-y-4">
-                  {formError ? (
-                    <StatusAlert
-                      status="danger"
-                      title="User could not be saved"
-                      description={formError}
-                    />
-                  ) : null}
-                  <Input
-                    value={formUsername}
-                    onChange={(e) => setFormUsername(e.target.value)}
-                    placeholder="username"
-                    required
-                    aria-label="Username"
-                  />
-                  <Input
-                    type="email"
-                    value={formEmail}
-                    onChange={(e) => setFormEmail(e.target.value)}
-                    placeholder="user@example.com"
-                    required
-                    aria-label="Email"
-                  />
-                  <Select value={formRole} onChange={(value) => setFormRole(String(value))}>
                     <Select.Trigger>
                       <Select.Value />
                       <Select.Indicator />
                     </Select.Trigger>
                     <Select.Popover>
                       <ListBox>
-                        <ListBox.Item id="user">User</ListBox.Item>
+                        <ListBox.Item id="all">All roles</ListBox.Item>
                         <ListBox.Item id="admin">Admin</ListBox.Item>
+                        <ListBox.Item id="user">User</ListBox.Item>
                       </ListBox>
                     </Select.Popover>
                   </Select>
-                  <FormField
-                    autoComplete={editingUser?.auth_type === 'oidc' ? 'off' : 'new-password'}
-                    description={
-                      editingUser?.auth_type === 'oidc'
-                        ? 'Password changes are disabled for OIDC users.'
-                        : !isCreate
-                          ? 'Leave blank to keep unchanged.'
-                          : undefined
-                    }
-                    disabled={Boolean(editingUser?.auth_type === 'oidc')}
-                    label="Password"
-                    name="user-password"
-                    onChange={(event) => setFormPassword(event.target.value)}
-                    placeholder={isCreate ? 'Password' : '••••••••'}
-                    required={isCreate}
-                    type="password"
-                    value={formPassword}
-                  />
-                </form>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="secondary" onPress={modal.close}>
-                  Cancel
-                </Button>
-                <Button type="submit" form="user-form" isPending={saving} variant="primary">
-                  <Shield01Icon size={14} />
-                  {isCreate ? 'Create' : 'Save'}
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-      {confirmDialog}
-    </div>
+                  <Select
+                    aria-label="Filter users by status"
+                    value={statusFilter}
+                    onChange={(value) => {
+                      setStatusFilter(String(value) as 'all' | 'active' | 'disabled');
+                      setPage(1);
+                    }}
+                    variant="secondary"
+                    className="w-full sm:w-36"
+                  >
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="all">All statuses</ListBox.Item>
+                        <ListBox.Item id="active">Active</ListBox.Item>
+                        <ListBox.Item id="disabled">Disabled</ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </>
+              }
+            />
+          </div>
+
+          <Table variant="secondary">
+            <Table.ScrollContainer className="rounded-none border-0">
+              <Table.Content aria-label="Users" aria-busy={loading}>
+                <Table.Header>
+                  <Table.Column isRowHeader className="px-4">
+                    User
+                  </Table.Column>
+                  <Table.Column>Role</Table.Column>
+                  <Table.Column>Status</Table.Column>
+                  <Table.Column className="hidden md:table-cell">Last active</Table.Column>
+                  <Table.Column className="px-4 text-right">
+                    <span className="sr-only">Actions</span>
+                  </Table.Column>
+                </Table.Header>
+                <Table.Body
+                  renderEmptyState={() => (
+                    <div className="py-10 text-center text-sm text-muted-foreground">
+                      {loading ? 'Loading users...' : 'No users match your filters.'}
+                    </div>
+                  )}
+                >
+                  {pagedUsers.map((user) => (
+                    <Table.Row key={user.id} id={user.id}>
+                      <Table.Cell className="max-w-0 px-4 sm:w-[45%]">
+                        <div className="min-w-0" title={`Created ${fullDate(user.created_at)}`}>
+                          <p className="truncate font-medium">{user.username}</p>
+                          <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell className="whitespace-nowrap">
+                        <Chip size="sm" color={user.role === 'admin' ? 'accent' : 'default'}>
+                          {labelFor(ROLE_LABELS, user.role)}
+                        </Chip>
+                      </Table.Cell>
+                      <Table.Cell className="whitespace-nowrap">
+                        <StatusTag tone={user.disabled ? 'danger' : 'success'}>
+                          {user.disabled ? 'Disabled' : 'Active'}
+                        </StatusTag>
+                      </Table.Cell>
+                      <Table.Cell className="hidden text-muted-foreground md:table-cell">
+                        <span title={user.last_login_at ? fullDate(user.last_login_at) : undefined}>
+                          {user.last_login_at ? timeAgo(user.last_login_at) : 'Never signed in'} ·{' '}
+                          {userAuthLabel(user.last_login_method || user.auth_type)}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell className="px-4">
+                        <div className="flex justify-end">
+                          <RowActionsMenu
+                            label={`Open actions for ${user.username}`}
+                            items={[
+                              {
+                                id: 'edit',
+                                label: 'Edit user',
+                                icon: <PencilEdit01Icon size={15} />,
+                                onAction: () => openEdit(user),
+                              },
+                              {
+                                id: 'toggle',
+                                label: user.disabled ? 'Enable user' : 'Disable user',
+                                icon: <Refresh01Icon size={15} />,
+                                pending: pendingAction === `toggle:${user.id}`,
+                                disabled:
+                                  pendingAction !== null && pendingAction !== `toggle:${user.id}`,
+                                onAction: () => {
+                                  void handleToggleDisable(user);
+                                },
+                              },
+                              {
+                                id: 'delete',
+                                label: 'Delete user',
+                                icon: <Delete01Icon size={15} />,
+                                variant: 'danger',
+                                pending: pendingAction === `delete:${user.id}`,
+                                disabled:
+                                  pendingAction !== null && pendingAction !== `delete:${user.id}`,
+                                onAction: () => {
+                                  void handleDelete(user);
+                                },
+                              },
+                            ]}
+                          />
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+          <TablePager
+            page={effectivePage}
+            pageSize={PAGE_SIZE}
+            total={filteredUsers.length}
+            onPageChange={setPage}
+            noun="users"
+          />
+        </Card>
+
+        <Modal state={modal}>
+          <Modal.Backdrop isDismissable={false}>
+            <Modal.Container size="md" placement="center">
+              <Modal.Dialog>
+                <Modal.Header>
+                  <Modal.Heading>{isCreate ? 'Add user' : 'Edit user'}</Modal.Heading>
+                  <Modal.CloseTrigger />
+                </Modal.Header>
+                <Modal.Body>
+                  <form id="user-form" onSubmit={handleSubmit} className="space-y-4">
+                    {formError ? (
+                      <StatusAlert
+                        status="danger"
+                        title="User could not be saved"
+                        description={formError}
+                      />
+                    ) : null}
+                    {!isCreate && editingUser ? (
+                      <p className="text-sm text-muted-foreground">
+                        Created {fullDate(editingUser.created_at)} ·{' '}
+                        {userAuthLabel(editingUser.auth_type)}
+                      </p>
+                    ) : null}
+                    <FormField
+                      label="Username"
+                      name="user-username"
+                      value={formUsername}
+                      onChange={(e) => setFormUsername(e.target.value)}
+                      placeholder="username"
+                      required
+                    />
+                    <FormField
+                      label="Email"
+                      name="user-email"
+                      type="email"
+                      value={formEmail}
+                      onChange={(e) => setFormEmail(e.target.value)}
+                      placeholder="user@example.com"
+                      required
+                    />
+                    <div className="space-y-1.5">
+                      <span className="block text-sm font-medium">Role</span>
+                      <Select
+                        aria-label="Role"
+                        value={formRole}
+                        onChange={(value) => setFormRole(String(value))}
+                      >
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="user">User</ListBox.Item>
+                            <ListBox.Item id="admin">Admin</ListBox.Item>
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                    </div>
+                    <FormField
+                      autoComplete={editingUser?.auth_type === 'oidc' ? 'off' : 'new-password'}
+                      description={
+                        editingUser?.auth_type === 'oidc'
+                          ? 'Password changes are disabled for OIDC users.'
+                          : !isCreate
+                            ? 'Leave blank to keep unchanged.'
+                            : undefined
+                      }
+                      disabled={Boolean(editingUser?.auth_type === 'oidc')}
+                      label="Password"
+                      name="user-password"
+                      onChange={(event) => setFormPassword(event.target.value)}
+                      placeholder={isCreate ? 'Password' : '••••••••'}
+                      required={isCreate}
+                      type="password"
+                      value={formPassword}
+                    />
+                  </form>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="secondary" onPress={modal.close}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" form="user-form" isPending={saving} variant="primary">
+                    <Shield01Icon size={14} />
+                    {isCreate ? 'Create' : 'Save'}
+                  </Button>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
+        {confirmDialog}
+      </div>
+    </AdminPageShell>
   );
 }

@@ -3,7 +3,7 @@
 import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { RecentActivityRange, RecentActivityRangePicker } from '@/components/scans/recent-activity';
 import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
-import { StatusBadge } from '@/components/ui/badges';
+import { SeverityCounts, StatusBadge } from '@/components/ui/badges';
 import { RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { Scan, WatchlistItem } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
@@ -208,42 +208,13 @@ function CompactScanRow({ scan, showActions = false }: { scan: Scan; showActions
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">Started {timeAgo(eventTime)}</span>
             <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
-            {scan.critical_count > 0 && (
-              <span
-                className="rounded-md px-1.5 py-0.5 text-xs font-mono"
-                style={{
-                  color: '#f87171',
-                  background: 'rgba(239,68,68,0.12)',
-                  border: '1px solid rgba(239,68,68,0.2)',
-                }}
-              >
-                C:{scan.critical_count}
-              </span>
-            )}
-            {scan.high_count > 0 && (
-              <span
-                className="rounded-md px-1.5 py-0.5 text-xs font-mono"
-                style={{
-                  color: '#fb923c',
-                  background: 'rgba(249,115,22,0.12)',
-                  border: '1px solid rgba(249,115,22,0.2)',
-                }}
-              >
-                H:{scan.high_count}
-              </span>
-            )}
-            {scan.medium_count > 0 && (
-              <span
-                className="rounded-md px-1.5 py-0.5 text-xs font-mono"
-                style={{
-                  color: '#fbbf24',
-                  background: 'rgba(245,158,11,0.12)',
-                  border: '1px solid rgba(245,158,11,0.2)',
-                }}
-              >
-                M:{scan.medium_count}
-              </span>
-            )}
+            <SeverityCounts
+              critical={scan.critical_count}
+              high={scan.high_count}
+              medium={scan.medium_count}
+              low={scan.low_count ?? 0}
+              emptyLabel=""
+            />
           </div>
         </div>
 
@@ -400,9 +371,7 @@ export function DashboardDrilldownModal({
                   </div>
 
                   {scansError ? (
-                    <p className="py-8 text-center text-sm" style={{ color: '#f87171' }}>
-                      {scansError}
-                    </p>
+                    <p className="py-8 text-center text-sm text-destructive">{scansError}</p>
                   ) : scansLoading ? (
                     <div className="space-y-1.5">
                       {Array.from({ length: 6 }).map((_, index) => (

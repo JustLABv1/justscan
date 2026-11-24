@@ -1,6 +1,7 @@
 'use client';
 
-import { StatusBadge } from '@/components/ui/badges';
+import { SeverityCounts, StatusBadge } from '@/components/ui/badges';
+import { summarizeError } from '@/lib/labels';
 import type { Scan } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import Link from 'next/link';
@@ -79,24 +80,6 @@ export function scanContextLabel(scan: Scan): string {
     return 'Artifactory Xray';
   }
   return 'Built-in scanner';
-}
-
-function SeverityPill({
-  count,
-  label,
-  tone,
-}: {
-  count: number;
-  label: string;
-  tone: { color: string; background: string; border: string };
-}) {
-  if (count <= 0) return null;
-
-  return (
-    <span className="text-xs font-mono px-1.5 py-0.5 rounded-md" style={tone}>
-      {label}:{count}
-    </span>
-  );
 }
 
 export function RecentActivityRangePicker({
@@ -200,37 +183,19 @@ export function RecentActivityRow({ scan }: { scan: Scan }) {
           </span>
         </div>
         {scan.error_message ? (
-          <p className="mt-1 line-clamp-2 text-xs text-destructive">{scan.error_message}</p>
+          <p className="mt-1 line-clamp-2 text-xs text-destructive" title={scan.error_message}>
+            {summarizeError(scan.error_message)}
+          </p>
         ) : null}
       </div>
 
       <div className="ml-2 flex shrink-0 flex-wrap items-center justify-end gap-1">
-        <SeverityPill
-          count={scan.critical_count}
-          label="C"
-          tone={{
-            color: '#f87171',
-            background: 'rgba(239,68,68,0.12)',
-            border: '1px solid rgba(239,68,68,0.18)',
-          }}
-        />
-        <SeverityPill
-          count={scan.high_count}
-          label="H"
-          tone={{
-            color: '#fb923c',
-            background: 'rgba(249,115,22,0.12)',
-            border: '1px solid rgba(249,115,22,0.18)',
-          }}
-        />
-        <SeverityPill
-          count={scan.medium_count}
-          label="M"
-          tone={{
-            color: '#fbbf24',
-            background: 'rgba(245,158,11,0.12)',
-            border: '1px solid rgba(245,158,11,0.18)',
-          }}
+        <SeverityCounts
+          critical={scan.critical_count}
+          high={scan.high_count}
+          medium={scan.medium_count}
+          low={scan.low_count ?? 0}
+          emptyLabel=""
         />
       </div>
     </Link>

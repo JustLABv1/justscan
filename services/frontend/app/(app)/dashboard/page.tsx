@@ -13,7 +13,7 @@ import {
   RecentActivityRange,
 } from '@/components/scans/recent-activity';
 import { StatusAlert } from '@/components/ui/form-alert';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { DashboardLoadingSkeleton } from '@/components/ui/skeleton';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useWorkScope } from '@/hooks/use-work-scope';
@@ -575,7 +575,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1800px] space-y-4 p-4 md:p-5">
+    <PageContainer size="full">
       <PageHeader
         title="Overview"
         description="Vulnerability exposure, organizational policy signals, and scan coverage for the current workspace."
@@ -674,13 +674,6 @@ export default function DashboardPage() {
           </div>
           <div className="divide-y divide-border border-t border-border">
             {[
-              {
-                label: 'Severe findings',
-                detail: 'Critical + high across scan history',
-                value: criticalHighCount,
-                tone: 'danger',
-                href: '/scans?sort=risk_desc',
-              },
               {
                 label: 'CVE confirmation',
                 detail: 'Images awaiting confirmation',
@@ -804,6 +797,6 @@ export default function DashboardPage() {
         watchlistError={watchlistError}
         recentActivityHref={recentActivityHref}
       />
-    </div>
+    </PageContainer>
   );
 }

@@ -4,14 +4,15 @@ import { StatusTag } from '@/components/ui/status-dot';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Container } from 'lucide-react';
-import { Button, Card, Table } from '@/components/ui';
-import { StatusBadge } from '@/components/ui/badges';
+import { Button, Card, ResourceList } from '@/components/ui';
+import { SeverityCounts, StatusBadge } from '@/components/ui/badges';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { listScanImages, type ImageOverview } from '@/lib/api';
 import { isAbortError } from '@/lib/utils';
-import { fullDate, timeAgo } from '@/lib/time';
+import { timeAgo } from '@/lib/time';
+import { pluralize, splitImageRef } from '@/lib/labels';
 
 /** Current image posture, deliberately separate from historical dashboard totals. */
 export function DashboardImageReview({
@@ -99,140 +100,78 @@ function ImageReview({ refreshKey, activeScans }: { refreshKey: number; activeSc
           />
         </div>
       ) : null}
-      <Table>
-        <Table.ScrollContainer className="rounded-none border-x-0 border-b-0">
-          <Table.Content
-            aria-label="Dashboard image health"
-            className="min-w-[680px] table-fixed [&_td]:px-4 [&_td]:py-3 [&_th]:px-4"
-          >
-            <Table.Header>
-              <Table.Column isRowHeader className="w-auto">
-                Image
-              </Table.Column>
-              <Table.Column className="w-[200px]">Findings</Table.Column>
-              <Table.Column className="w-[150px]">State</Table.Column>
-              <Table.Column className="w-[110px]">Last scan</Table.Column>
-            </Table.Header>
-            <Table.Body>
-              {loading ? (
-                Array.from({ length: 5 }, (_, i) => (
-                  <Table.Row key={i} id={`loading-${i}`}>
-                    <Table.Cell colSpan={4}>
-                      <div className="h-9 animate-pulse rounded bg-muted" />
-                    </Table.Cell>
-                  </Table.Row>
-                ))
-              ) : error && images.length === 0 ? (
-                <Table.Row id="unavailable">
-                  <Table.Cell colSpan={4}>
-                    <p className="py-10 text-center text-sm text-muted-foreground">
-                      Image health is unavailable. Retry above to reload.
-                    </p>
-                  </Table.Cell>
-                </Table.Row>
-              ) : images.length === 0 ? (
-                <Table.Row id="empty">
-                  <Table.Cell colSpan={4}>
-                    <div className="flex flex-col items-center gap-2 py-12 text-center">
-                      <Container className="size-6 text-muted-foreground" />
-                      <p className="text-sm font-medium">No scanned images yet</p>
-                      <p className="text-xs text-muted-foreground">
-                        Run a scan to start tracking image health.
-                      </p>
-                      <Button asChild size="sm" variant="outline">
-                        <Link href="/scans/new">Start a scan</Link>
-                      </Button>
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ) : (
-                images.map(renderImageHealthRow)
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
+      {loading ? (
+        <ul className="divide-y divide-border border-t border-border" aria-busy>
+          {Array.from({ length: 5 }, (_, i) => (
+            <li key={i} className="px-4 py-3">
+              <div className="h-9 animate-pulse rounded bg-muted" />
+            </li>
+          ))}
+        </ul>
+      ) : error && images.length === 0 ? (
+        <p className="border-t border-border py-10 text-center text-sm text-muted-foreground">
+          Image health is unavailable. Retry above to reload.
+        </p>
+      ) : images.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 border-t border-border py-12 text-center">
+          <Container className="size-6 text-muted-foreground" />
+          <p className="text-sm font-medium">No scanned images yet</p>
+          <p className="text-xs text-muted-foreground">
+            Run a scan to start tracking image health.
+          </p>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/scans/new">Start a scan</Link>
+          </Button>
+        </div>
+      ) : (
+        <ResourceList
+          bordered={false}
+          className="border-t border-border"
+          aria-label="Dashboard image health"
+        >
+          {images.map(renderImageHealthRow)}
+        </ResourceList>
+      )}
       <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
         {error
           ? 'Current image counts unavailable'
-          : `Showing ${images.length} of ${total} images · Rated findings from each image’s health scan.`}
+          : `Showing ${images.length} of ${pluralize(total, 'image')} · findings from each image’s latest health scan`}
       </div>
     </Card>
   );
 }
 
 function renderImageHealthRow(image: ImageOverview) {
-  const counts = [
-    image.health_critical_count,
-    image.health_high_count,
-    image.health_medium_count,
-    image.health_low_count,
-  ];
-  const total = counts.reduce((sum, count) => sum + count, 0);
-  const colors = [
-    'var(--destructive)',
-    'var(--color-orange-500)',
-    'var(--warning)',
-    'var(--color-blue-500)',
-  ];
-  const label = `${counts[0]} critical, ${counts[1]} high, ${counts[2]} medium, ${counts[3]} low`;
+  const { host, name } = splitImageRef(image.image_name);
+  const needsAttention = image.health_policy_failed || image.health_critical_count > 0;
   return (
-    <Table.Row key={image.image_name} id={image.image_name} textValue={image.image_name}>
-      <Table.Cell>
-        <Link
-          href={`/scans?image=${encodeURIComponent(image.image_name)}`}
-          className="flex min-w-0 items-center gap-2 rounded-sm outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/40">
-            <Container className="size-4 text-muted-foreground" />
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-medium" title={image.image_name}>
-              {image.image_name}
-            </span>
-            <span className="block truncate font-mono text-xs text-muted-foreground">
-              {image.health_tag} · {image.tag_count} tags
-            </span>
-          </span>
-        </Link>
-      </Table.Cell>
-      <Table.Cell>
-        <p className="text-xs tabular-nums" title={label}>
-          <span
-            className={
-              counts[0] + counts[1] > 0 ? 'font-medium text-destructive' : 'text-foreground'
-            }
-          >
-            {counts[0] + counts[1]} critical + high
-          </span>
-          <span className="ml-2 text-muted-foreground">{total} rated</span>
-        </p>
-        <div
-          role="img"
-          aria-label={label}
-          className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-muted"
-        >
-          {counts.map((count, i) =>
-            count > 0 ? (
-              <span
-                key={i}
-                style={{ width: `${(count / total) * 100}%`, backgroundColor: colors[i] }}
-              />
-            ) : null
-          )}
-        </div>
-      </Table.Cell>
-      <Table.Cell>
-        <div className="flex flex-wrap gap-1">
+    <ResourceList.Item
+      key={image.image_name}
+      href={`/scans?image=${encodeURIComponent(image.image_name)}`}
+      tone={needsAttention ? 'danger' : 'default'}
+      media={
+        <span className="flex size-8 items-center justify-center rounded-lg border border-border bg-muted/40">
+          <Container className="size-4 text-muted-foreground" />
+        </span>
+      }
+      title={name}
+      titleTooltip={image.image_name}
+      description={[image.health_tag, host, timeAgo(image.latest_scan_at)]
+        .filter(Boolean)
+        .join(' · ')}
+      meta={
+        <>
+          <SeverityCounts
+            critical={image.health_critical_count}
+            high={image.health_high_count}
+            medium={image.health_medium_count}
+            low={image.health_low_count}
+            emptyLabel={image.health_status === 'failed' ? 'No results' : 'No findings'}
+          />
           <StatusBadge status={image.health_status} externalStatus={image.health_external_status} />
           {image.health_policy_failed ? <StatusTag tone="danger">Policy failed</StatusTag> : null}
-        </div>
-      </Table.Cell>
-      <Table.Cell>
-        <span className="text-xs text-muted-foreground" title={fullDate(image.latest_scan_at)}>
-          {timeAgo(image.latest_scan_at)}
-        </span>
-      </Table.Cell>
-    </Table.Row>
+        </>
+      }
+    />
   );
 }

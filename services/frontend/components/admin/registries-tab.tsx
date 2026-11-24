@@ -1,9 +1,20 @@
 'use client';
 
-import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
+import { useToast } from '@/components/toast';
+import { FilterToolbar } from '@/components/ui/filter-toolbar';
+import { StatusDot, StatusTag, type StatusDotTone } from '@/components/ui/status-dot';
+import {
+  AUTH_TYPE_LABELS,
+  HEALTH_LABELS,
+  SCAN_PROVIDER_LABELS,
+  labelFor,
+  summarizeError,
+} from '@/lib/labels';
+import { fullDate } from '@/lib/time';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { XrayModeSelector } from '@/components/registries/xray-mode-selector';
-import { StatusAlert } from '@/components/ui/form-alert';
+import { FormAlert, StatusAlert } from '@/components/ui/form-alert';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
   adminCreateGlobalRegistry,
@@ -13,27 +24,39 @@ import {
   adminUnsetDefaultRegistry,
   adminUpdateGlobalRegistry,
 } from '@/lib/api/admin';
-import type { Registry, RegistryWithHealth, ScanProvider, XrayMode } from '@/lib/api/types/registries';
+import type {
+  Registry,
+  RegistryWithHealth,
+  ScanProvider,
+  XrayMode,
+} from '@/lib/api/types/registries';
 import { deferEffect } from '@/lib/defer-effect';
-import { Button, Card, Chip, Input, ListBox, Modal, SearchField, Select, Table, useOverlayState } from '@/components/ui';
+import {
+  Button,
+  Card,
+  Chip,
+  Input,
+  ListBox,
+  Modal,
+  ResourceList,
+  SearchField,
+  Select,
+  useOverlayState,
+} from '@/components/ui';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Shield01Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-function Banner({ type, text }: { type: 'success' | 'error'; text: string }) {
-  return (
-    <StatusAlert
-      status={type === 'success' ? 'success' : 'danger'}
-      title={type === 'success' ? 'Registry updated' : 'Registry action failed'}
-      description={text}
-    />
-  );
-}
+const HEALTH_TONES: Record<string, StatusDotTone> = {
+  healthy: 'success',
+  unhealthy: 'danger',
+  unknown: 'muted',
+};
 
 export function RegistriesTab() {
   const [registries, setRegistries] = useState<RegistryWithHealth[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const toast = useToast();
   const [search, setSearch] = useState('');
 
   const [editingRegistry, setEditingRegistry] = useState<RegistryWithHealth | null>(null);
@@ -71,11 +94,12 @@ export function RegistriesTab() {
 
   const filteredRegistries = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return registries.filter((registry) =>
-      q.length === 0 ||
-      registry.name.toLowerCase().includes(q) ||
-      registry.url.toLowerCase().includes(q) ||
-      registry.scan_provider.toLowerCase().includes(q)
+    return registries.filter(
+      (registry) =>
+        q.length === 0 ||
+        registry.name.toLowerCase().includes(q) ||
+        registry.url.toLowerCase().includes(q) ||
+        registry.scan_provider.toLowerCase().includes(q)
     );
   }, [registries, search]);
 
@@ -155,8 +179,10 @@ export function RegistriesTab() {
         name: name.trim(),
         url: url.trim(),
         xray_url: scanProvider === 'artifactory_xray' ? xrayUrl.trim() || undefined : undefined,
-        xray_artifactory_id: scanProvider === 'artifactory_xray' ? xrayArtifactoryId.trim() || 'default' : undefined,
-        xray_repository: scanProvider === 'artifactory_xray' ? xrayRepository.trim() || undefined : undefined,
+        xray_artifactory_id:
+          scanProvider === 'artifactory_xray' ? xrayArtifactoryId.trim() || 'default' : undefined,
+        xray_repository:
+          scanProvider === 'artifactory_xray' ? xrayRepository.trim() || undefined : undefined,
         xray_mode: scanProvider === 'artifactory_xray' ? xrayMode : undefined,
         auth_type: authType,
         scan_provider: scanProvider,
@@ -172,10 +198,11 @@ export function RegistriesTab() {
 
       modal.close();
       await load();
-      setSuccess(editingRegistry ? 'Registry updated' : 'Registry created');
-      setTimeout(() => setSuccess(''), 2500);
+      toast.success(editingRegistry ? 'Registry updated' : 'Registry created');
     } catch (saveError: unknown) {
-      setFormError(saveError instanceof Error ? saveError.message : 'Failed to save global registry');
+      setFormError(
+        saveError instanceof Error ? saveError.message : 'Failed to save global registry'
+      );
     } finally {
       setSaving(false);
     }
@@ -193,10 +220,9 @@ export function RegistriesTab() {
     try {
       await adminDeleteGlobalRegistry(id);
       await load();
-      setSuccess('Registry deleted');
-      setTimeout(() => setSuccess(''), 2500);
+      toast.success('Registry deleted');
     } catch (deleteError: unknown) {
-      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete registry');
+      toast.error(deleteError instanceof Error ? deleteError.message : 'Failed to delete registry');
     }
   }
 
@@ -208,234 +234,388 @@ export function RegistriesTab() {
         await adminSetDefaultRegistry(registry.id);
       }
       await load();
-      setSuccess(registry.is_default ? 'Default registry cleared' : 'Default registry updated');
-      setTimeout(() => setSuccess(''), 2500);
+      toast.success(registry.is_default ? 'Default registry cleared' : 'Default registry updated');
     } catch (defaultError: unknown) {
-      setError(defaultError instanceof Error ? defaultError.message : 'Failed to update default registry');
+      toast.error(
+        defaultError instanceof Error ? defaultError.message : 'Failed to update default registry'
+      );
     }
   }
 
   return (
-    <div className="space-y-4">
-      {error && <Banner type="error" text={error} />}
-      {success && <Banner type="success" text={success} />}
+    <AdminPageShell
+      actions={
+        <Button size="sm" onPress={openCreate}>
+          <PlusSignIcon size={15} />
+          Add registry
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        {error ? (
+          <StatusAlert status="danger" title="Registries failed to load" description={error} />
+        ) : null}
 
-      <Card className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <SearchField name="admin-registry-search" variant="secondary" className="w-full sm:max-w-sm">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                placeholder="Filter registries by name, endpoint, or provider..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-          <Button variant="secondary" onPress={openCreate}>
-            <PlusSignIcon size={15} />
-            Add Registry
-          </Button>
-        </div>
+        <Card className="gap-0 overflow-hidden py-0">
+          <div className="border-b border-border p-4">
+            <FilterToolbar
+              search={
+                <SearchField
+                  aria-label="Filter registries"
+                  name="admin-registry-search"
+                  variant="secondary"
+                  className="w-full sm:max-w-md"
+                  value={search}
+                  onChange={setSearch}
+                >
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input placeholder="Filter by name, URL, or provider..." />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+              }
+            />
+          </div>
 
-        <Table variant="secondary">
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Global registries" className="min-w-[1080px]">
-              <Table.Header>
-                <Table.Column isRowHeader>Registry</Table.Column>
-                <Table.Column>Endpoint</Table.Column>
-                <Table.Column>Provider</Table.Column>
-                <Table.Column>Auth</Table.Column>
-                <Table.Column>Health</Table.Column>
-                <Table.Column>Default</Table.Column>
-                <Table.Column className="text-right">Actions</Table.Column>
-              </Table.Header>
-              <Table.Body
-                renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    {loading ? 'Loading registries...' : 'No registries found.'}
-                  </div>
-                )}
-              >
-                {filteredRegistries.map((registry) => (
-                  <Table.Row key={registry.id} id={registry.id}>
-                    <Table.Cell>
-                      <p className="font-medium">{registry.name}</p>
-                      <p className="text-xs text-muted-foreground">{registry.id}</p>
-                    </Table.Cell>
-                    <Table.Cell className="font-mono text-xs text-muted-foreground">{registry.url}</Table.Cell>
-                    <Table.Cell className="text-xs text-muted-foreground">
-                      {registry.scan_provider === 'artifactory_xray' ? 'Artifactory Xray' : 'Trivy'}
-                    </Table.Cell>
-                    <Table.Cell className="text-xs text-muted-foreground uppercase tracking-[0.1em]">{registry.auth_type}</Table.Cell>
-                    <Table.Cell>
-                      <StatusTag tone={toneFromChipColor(registry.health_status === 'healthy' ? 'success' : registry.health_status === 'unhealthy' ? 'danger' : 'default')}>
-                        {registry.health_status}
-                      </StatusTag>
-                    </Table.Cell>
-                    <Table.Cell>
-                      {registry.is_default ? (
-                        <StatusTag tone="accent">Default</StatusTag>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex justify-end">
-                        <RowActionsMenu
-                          label={`Open actions for registry ${registry.name}`}
-                          items={[
-                            {
-                              id: 'toggle-default',
-                              label: registry.is_default ? 'Unset default' : 'Set as default',
-                              icon: <Shield01Icon size={15} />,
-                              onAction: () => {
-                                void handleSetDefault(registry);
-                              },
+          {filteredRegistries.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+              {loading
+                ? 'Loading registries...'
+                : registries.length === 0
+                  ? 'No global registries yet. Add one to share it with every workspace.'
+                  : 'No registries match your filter.'}
+            </p>
+          ) : (
+            <ResourceList bordered={false} aria-label="Global registries">
+              {filteredRegistries.map((registry) => {
+                const tone = HEALTH_TONES[registry.health_status] ?? 'muted';
+                return (
+                  <ResourceList.Item
+                    key={registry.id}
+                    media={<StatusDot tone={tone} />}
+                    title={registry.name}
+                    tone={registry.health_status === 'unhealthy' ? 'danger' : 'default'}
+                    description={
+                      <span title={registry.url}>
+                        {registry.url} ·{' '}
+                        {labelFor(SCAN_PROVIDER_LABELS, registry.scan_provider || 'trivy')} ·{' '}
+                        {labelFor(AUTH_TYPE_LABELS, registry.auth_type || 'none')}
+                      </span>
+                    }
+                    meta={
+                      <>
+                        {registry.is_default ? (
+                          <Chip size="sm" color="accent">
+                            Default
+                          </Chip>
+                        ) : null}
+                        <span
+                          title={
+                            [
+                              registry.health_message,
+                              registry.last_health_check_at
+                                ? `Checked ${fullDate(registry.last_health_check_at)}`
+                                : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' · ') || undefined
+                          }
+                        >
+                          <StatusTag tone={tone}>
+                            {labelFor(HEALTH_LABELS, registry.health_status)}
+                          </StatusTag>
+                        </span>
+                      </>
+                    }
+                    actions={
+                      <RowActionsMenu
+                        label={`Open actions for registry ${registry.name}`}
+                        items={[
+                          {
+                            id: 'edit',
+                            label: 'Edit registry',
+                            icon: <PencilEdit01Icon size={15} />,
+                            onAction: () => openEdit(registry),
+                          },
+                          {
+                            id: 'toggle-default',
+                            label: registry.is_default ? 'Unset default' : 'Set as default',
+                            icon: <Shield01Icon size={15} />,
+                            onAction: () => {
+                              void handleSetDefault(registry);
                             },
-                            {
-                              id: 'edit',
-                              label: 'Edit registry',
-                              icon: <PencilEdit01Icon size={15} />,
-                              onAction: () => openEdit(registry),
+                          },
+                          {
+                            id: 'delete',
+                            label: 'Delete registry',
+                            icon: <Delete01Icon size={15} />,
+                            variant: 'danger',
+                            onAction: () => {
+                              void handleDelete(registry.id, registry.name);
                             },
-                            {
-                              id: 'delete',
-                              label: 'Delete registry',
-                              icon: <Delete01Icon size={15} />,
-                              variant: 'danger',
-                              onAction: () => {
-                                void handleDelete(registry.id, registry.name);
-                              },
-                            },
-                          ]}
-                        />
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
-      </Card>
+                          },
+                        ]}
+                      />
+                    }
+                  >
+                    {registry.health_status === 'unhealthy' && registry.health_message ? (
+                      <p
+                        className="truncate text-xs text-destructive"
+                        title={registry.health_message}
+                      >
+                        {summarizeError(registry.health_message)}
+                      </p>
+                    ) : null}
+                  </ResourceList.Item>
+                );
+              })}
+            </ResourceList>
+          )}
+        </Card>
 
-      <Modal state={modal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="lg" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>{editingRegistry ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Configure global registry connectivity in three guided steps.
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Chip variant={registryStep === 0 ? 'primary' : 'soft'} color={registryStep === 0 ? 'accent' : 'default'}>1. Basics</Chip>
-                    <Chip variant={registryStep === 1 ? 'primary' : 'soft'} color={registryStep === 1 ? 'accent' : 'default'}>2. Scanner</Chip>
-                    <Chip variant={registryStep === 2 ? 'primary' : 'soft'} color={registryStep === 2 ? 'accent' : 'default'}>3. Credentials</Chip>
-                  </div>
-                <form id="global-registry-form" onSubmit={handleSubmit} className="space-y-4">
-                  {formError && <p className="text-sm text-danger">{formError}</p>}
-
-                  {registryStep === 0 && (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="space-y-1 min-w-0"><p className="text-xs text-muted-foreground">{requiredLabel('Registry Name')}</p><Input className="w-full" variant="secondary" placeholder="Production Docker Hub Mirror" value={name} onChange={(event) => setName(event.target.value)} required /></div>
-                      <div className="space-y-1 min-w-0"><p className="text-xs text-muted-foreground">{requiredLabel('Registry URL')}</p><Input className="w-full" variant="secondary" placeholder="https://registry.example.com" value={url} onChange={(event) => setUrl(event.target.value)} required /></div>
+        <Modal state={modal}>
+          <Modal.Backdrop isDismissable={false}>
+            <Modal.Container size="lg" placement="center">
+              <Modal.Dialog>
+                <Modal.Header>
+                  <Modal.Heading>
+                    {editingRegistry ? 'Edit registry' : 'Add registry'}
+                  </Modal.Heading>
+                  <Modal.CloseTrigger />
+                </Modal.Header>
+                <Modal.Body>
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Configure global registry connectivity in three guided steps.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Chip
+                        variant={registryStep === 0 ? 'primary' : 'soft'}
+                        color={registryStep === 0 ? 'accent' : 'default'}
+                      >
+                        1. Basics
+                      </Chip>
+                      <Chip
+                        variant={registryStep === 1 ? 'primary' : 'soft'}
+                        color={registryStep === 1 ? 'accent' : 'default'}
+                      >
+                        2. Scanner
+                      </Chip>
+                      <Chip
+                        variant={registryStep === 2 ? 'primary' : 'soft'}
+                        color={registryStep === 2 ? 'accent' : 'default'}
+                      >
+                        3. Credentials
+                      </Chip>
                     </div>
-                  )}
+                    <form id="global-registry-form" onSubmit={handleSubmit} className="space-y-4">
+                      {formError ? (
+                        <FormAlert title="Registry not saved" description={formError} />
+                      ) : null}
 
-                  {registryStep === 1 && (
-                    <div className="space-y-3">
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div className="space-y-1 min-w-0">
-                          <p className="text-xs text-muted-foreground">Scan Provider</p>
-                          <Select className="w-full" value={scanProvider} onChange={(value) => setScanProvider(value as ScanProvider)} variant="secondary">
-                            <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                <ListBox.Item id="trivy">Trivy</ListBox.Item>
-                                <ListBox.Item id="artifactory_xray">Artifactory Xray</ListBox.Item>
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
-                        </div>
-                        <div className="space-y-1 min-w-0">
-                          <p className="text-xs text-muted-foreground">Authentication Type</p>
-                          <Select className="w-full" value={authType} onChange={(value) => setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')} variant="secondary">
-                            <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                <ListBox.Item id="none">None</ListBox.Item>
-                                <ListBox.Item id="basic">Basic</ListBox.Item>
-                                <ListBox.Item id="token">Token</ListBox.Item>
-                                <ListBox.Item id="aws_ecr">AWS ECR</ListBox.Item>
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
-                        </div>
-                      </div>
-                      {scanProvider === 'artifactory_xray' && (
+                      {registryStep === 0 && (
                         <div className="grid gap-3 md:grid-cols-2">
-                          <div className="space-y-1 min-w-0 md:col-span-2"><p className="text-xs text-muted-foreground">{requiredLabel('Xray URL')}</p><Input className="w-full" variant="secondary" placeholder="https://xray.example.com" value={xrayUrl} onChange={(event) => setXrayUrl(event.target.value)} required /></div>
-                          <div className="space-y-1 min-w-0"><p className="text-xs text-muted-foreground">Artifactory ID</p><Input className="w-full" variant="secondary" placeholder="default" value={xrayArtifactoryId} onChange={(event) => setXrayArtifactoryId(event.target.value)} /></div>
-                          <div className="space-y-1 min-w-0"><p className="text-xs text-muted-foreground">Repository Key</p><Input className="w-full" variant="secondary" placeholder="docker-remote" value={xrayRepository} onChange={(event) => setXrayRepository(event.target.value)} /></div>
-                          <div className="md:col-span-2"><XrayModeSelector value={xrayMode} onChange={setXrayMode} /></div>
+                          <div className="space-y-1 min-w-0">
+                            <p className="text-xs text-muted-foreground">
+                              {requiredLabel('Registry name')}
+                            </p>
+                            <Input
+                              className="w-full"
+                              variant="secondary"
+                              placeholder="Production Docker Hub Mirror"
+                              value={name}
+                              onChange={(event) => setName(event.target.value)}
+                              required
+                            />
+                          </div>
+                          <div className="space-y-1 min-w-0">
+                            <p className="text-xs text-muted-foreground">
+                              {requiredLabel('Registry URL')}
+                            </p>
+                            <Input
+                              className="w-full"
+                              variant="secondary"
+                              placeholder="https://registry.example.com"
+                              value={url}
+                              onChange={(event) => setUrl(event.target.value)}
+                              required
+                            />
+                          </div>
                         </div>
                       )}
-                    </div>
-                  )}
 
-                  {registryStep === 2 && (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="space-y-1 min-w-0">
-                        <p className="text-xs text-muted-foreground">Username</p>
-                        <Input
-                          className="w-full"
-                          variant="secondary"
-                          placeholder={editingRegistry ? 'Leave blank to keep current username' : 'Username'}
-                          value={username}
-                          onChange={(event) => setUsername(event.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1 min-w-0">
-                        <p className="text-xs text-muted-foreground">{editingRegistry ? 'Password / Token' : requiredLabel('Password / Token')}</p>
-                        <Input
-                          className="w-full"
-                          type="password"
-                          variant="secondary"
-                          placeholder={editingRegistry ? 'Leave blank to keep existing secret' : 'Password / Token'}
-                          value={password}
-                          onChange={(event) => setPassword(event.target.value)}
-                          required={!editingRegistry && authType !== 'none'}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </form>
-                </div>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button type="button" variant="secondary" onPress={modal.close}>Cancel</Button>
-                {registryStep > 0 && <Button type="button" variant="secondary" onPress={() => setRegistryStep((current) => Math.max(current - 1, 0))}>Back</Button>}
-                {registryStep < 2 ? (
-                  <Button type="button" variant="primary" onPress={handleRegistryPrimaryAction}>Next</Button>
-                ) : (
-                  <Button type="button" variant="primary" isDisabled={saving} onPress={handleRegistryPrimaryAction}>
-                    {saving ? 'Saving...' : editingRegistry ? 'Save Registry' : 'Create Registry'}
+                      {registryStep === 1 && (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div className="space-y-1 min-w-0">
+                              <p className="text-xs text-muted-foreground">Scan provider</p>
+                              <Select
+                                aria-label="Scan provider"
+                                className="w-full"
+                                value={scanProvider}
+                                onChange={(value) => setScanProvider(value as ScanProvider)}
+                                variant="secondary"
+                              >
+                                <Select.Trigger>
+                                  <Select.Value />
+                                  <Select.Indicator />
+                                </Select.Trigger>
+                                <Select.Popover>
+                                  <ListBox>
+                                    <ListBox.Item id="trivy">Trivy</ListBox.Item>
+                                    <ListBox.Item id="artifactory_xray">
+                                      Artifactory Xray
+                                    </ListBox.Item>
+                                  </ListBox>
+                                </Select.Popover>
+                              </Select>
+                            </div>
+                            <div className="space-y-1 min-w-0">
+                              <p className="text-xs text-muted-foreground">Authentication</p>
+                              <Select
+                                aria-label="Authentication"
+                                className="w-full"
+                                value={authType}
+                                onChange={(value) =>
+                                  setAuthType(value as 'none' | 'basic' | 'token' | 'aws_ecr')
+                                }
+                                variant="secondary"
+                              >
+                                <Select.Trigger>
+                                  <Select.Value />
+                                  <Select.Indicator />
+                                </Select.Trigger>
+                                <Select.Popover>
+                                  <ListBox>
+                                    <ListBox.Item id="none">No authentication</ListBox.Item>
+                                    <ListBox.Item id="basic">Username and password</ListBox.Item>
+                                    <ListBox.Item id="token">Token</ListBox.Item>
+                                    <ListBox.Item id="aws_ecr">AWS ECR</ListBox.Item>
+                                  </ListBox>
+                                </Select.Popover>
+                              </Select>
+                            </div>
+                          </div>
+                          {scanProvider === 'artifactory_xray' && (
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <div className="space-y-1 min-w-0 md:col-span-2">
+                                <p className="text-xs text-muted-foreground">
+                                  {requiredLabel('Xray URL')}
+                                </p>
+                                <Input
+                                  className="w-full"
+                                  variant="secondary"
+                                  placeholder="https://xray.example.com"
+                                  value={xrayUrl}
+                                  onChange={(event) => setXrayUrl(event.target.value)}
+                                  required
+                                />
+                              </div>
+                              <div className="space-y-1 min-w-0">
+                                <p className="text-xs text-muted-foreground">Artifactory ID</p>
+                                <Input
+                                  className="w-full"
+                                  variant="secondary"
+                                  placeholder="default"
+                                  value={xrayArtifactoryId}
+                                  onChange={(event) => setXrayArtifactoryId(event.target.value)}
+                                />
+                              </div>
+                              <div className="space-y-1 min-w-0">
+                                <p className="text-xs text-muted-foreground">Repository key</p>
+                                <Input
+                                  className="w-full"
+                                  variant="secondary"
+                                  placeholder="docker-remote"
+                                  value={xrayRepository}
+                                  onChange={(event) => setXrayRepository(event.target.value)}
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <XrayModeSelector value={xrayMode} onChange={setXrayMode} />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {registryStep === 2 && (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="space-y-1 min-w-0">
+                            <p className="text-xs text-muted-foreground">Username</p>
+                            <Input
+                              className="w-full"
+                              variant="secondary"
+                              placeholder={
+                                editingRegistry
+                                  ? 'Leave blank to keep current username'
+                                  : 'Username'
+                              }
+                              value={username}
+                              onChange={(event) => setUsername(event.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1 min-w-0">
+                            <p className="text-xs text-muted-foreground">
+                              {editingRegistry
+                                ? 'Password or token'
+                                : requiredLabel('Password or token')}
+                            </p>
+                            <Input
+                              className="w-full"
+                              type="password"
+                              variant="secondary"
+                              placeholder={
+                                editingRegistry
+                                  ? 'Leave blank to keep existing secret'
+                                  : 'Password or token'
+                              }
+                              value={password}
+                              onChange={(event) => setPassword(event.target.value)}
+                              required={!editingRegistry && authType !== 'none'}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </form>
+                  </div>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button type="button" variant="secondary" onPress={modal.close}>
+                    Cancel
                   </Button>
-                )}
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+                  {registryStep > 0 && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onPress={() => setRegistryStep((current) => Math.max(current - 1, 0))}
+                    >
+                      Back
+                    </Button>
+                  )}
+                  {registryStep < 2 ? (
+                    <Button type="button" variant="primary" onPress={handleRegistryPrimaryAction}>
+                      Next
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      isDisabled={saving}
+                      onPress={handleRegistryPrimaryAction}
+                    >
+                      {saving ? 'Saving...' : editingRegistry ? 'Save registry' : 'Create registry'}
+                    </Button>
+                  )}
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
 
-      {confirmDialog}
-    </div>
+        {confirmDialog}
+      </div>
+    </AdminPageShell>
   );
 }

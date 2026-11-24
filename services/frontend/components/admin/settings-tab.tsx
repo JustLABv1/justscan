@@ -9,34 +9,22 @@ import {
   updateRateLimit,
   updateRegisterRateLimit,
 } from '@/lib/api/admin';
-import { Button, Card, Input, Link, Modal, Switch, TextArea, useOverlayState } from '@/components/ui';
+import {
+  Button,
+  Input,
+  Link,
+  Modal,
+  SettingRow,
+  SettingsSection,
+  SettingUnit,
+  Switch,
+  TextArea,
+  useOverlayState,
+} from '@/components/ui';
 import { useEffect, useState } from 'react';
 
 const DEFAULT_MAINTENANCE_MESSAGE =
   'JustScan is currently undergoing maintenance. Please check back shortly.';
-
-function SettingRow({
-  title,
-  description,
-  input,
-  action,
-}: {
-  title: string;
-  description: string;
-  input: React.ReactNode;
-  action: React.ReactNode;
-}) {
-  return (
-    <div className="grid gap-3 rounded-xl border border-divider/60 bg-content2/30 p-3 lg:grid-cols-[1fr_auto_auto] lg:items-end">
-      <div>
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <div className="lg:w-[190px]">{input}</div>
-      <div>{action}</div>
-    </div>
-  );
-}
 
 export function SettingsTab() {
   const toast = useToast();
@@ -51,8 +39,7 @@ export function SettingsTab() {
   const maintenanceModal = useOverlayState();
 
   const [savingPublic, setSavingPublic] = useState(false);
-  const [savingRl, setSavingRl] = useState(false);
-  const [savingRegisterRl, setSavingRegisterRl] = useState(false);
+  const [savingRateLimits, setSavingRateLimits] = useState(false);
   const [savingMaintenance, setSavingMaintenance] = useState(false);
 
   useEffect(() => {
@@ -123,7 +110,7 @@ export function SettingsTab() {
     try {
       await setPublicScanEnabled(enabled);
       setPublicScanEnabledState(enabled);
-      toast.success(`Public scanning ${enabled ? 'enabled' : 'disabled'} successfully`);
+      toast.success(`Public scanning ${enabled ? 'enabled' : 'disabled'}`);
     } catch (toggleError: unknown) {
       toast.error(toggleError instanceof Error ? toggleError.message : 'Failed to update setting');
     } finally {
@@ -131,189 +118,181 @@ export function SettingsTab() {
     }
   }
 
-  async function handleSaveRateLimit() {
-    const value = parseInt(rateLimitInput, 10);
-    if (isNaN(value) || value < 1 || value > 1000) {
-      toast.error('Rate limit must be between 1 and 1000');
-      return;
-    }
-    setSavingRl(true);
-    try {
-      await updateRateLimit(value);
-      setRateLimitState(value);
-      toast.success('Rate limit updated');
-    } catch (saveError: unknown) {
-      toast.error(saveError instanceof Error ? saveError.message : 'Failed to update rate limit');
-    } finally {
-      setSavingRl(false);
-    }
-  }
+  const rateLimitDirty = rateLimitInput !== String(rateLimit);
+  const registerRateLimitDirty = registerRateLimitInput !== String(registerRateLimit);
+  const rateLimitsDirty = rateLimitDirty || registerRateLimitDirty;
 
-  async function handleSaveRegisterRateLimit() {
-    const value = parseInt(registerRateLimitInput, 10);
-    if (isNaN(value) || value < 1 || value > 1000) {
-      toast.error('Registration rate limit must be between 1 and 1000');
+  async function handleSaveRateLimits() {
+    const scanValue = parseInt(rateLimitInput, 10);
+    const registerValue = parseInt(registerRateLimitInput, 10);
+    if (rateLimitDirty && (isNaN(scanValue) || scanValue < 1 || scanValue > 1000)) {
+      toast.error('Public scan limit must be between 1 and 1000');
       return;
     }
-    setSavingRegisterRl(true);
+    if (
+      registerRateLimitDirty &&
+      (isNaN(registerValue) || registerValue < 1 || registerValue > 1000)
+    ) {
+      toast.error('Sign-up limit must be between 1 and 1000');
+      return;
+    }
+    setSavingRateLimits(true);
     try {
-      await updateRegisterRateLimit(value);
-      setRegisterRateLimitState(value);
-      toast.success('Registration rate limit updated');
+      if (rateLimitDirty) {
+        await updateRateLimit(scanValue);
+        setRateLimitState(scanValue);
+      }
+      if (registerRateLimitDirty) {
+        await updateRegisterRateLimit(registerValue);
+        setRegisterRateLimitState(registerValue);
+      }
+      toast.success('Rate limits saved');
     } catch (saveError: unknown) {
-      toast.error(
-        saveError instanceof Error ? saveError.message : 'Failed to update registration rate limit'
-      );
+      toast.error(saveError instanceof Error ? saveError.message : 'Failed to update rate limits');
     } finally {
-      setSavingRegisterRl(false);
+      setSavingRateLimits(false);
     }
   }
 
   return (
     <div className="space-y-4">
-      <div>
-        <Card className="space-y-4">
-          <div>
-            <h2 className="text-base font-semibold">Access & Exposure</h2>
-            <p className="text-sm text-muted-foreground">Public endpoints and throttling policies.</p>
-          </div>
+      <SettingsSection
+        title="Public access"
+        description="What people can do without signing in. Changes save immediately."
+      >
+        <SettingRow
+          label="Public scanning"
+          description={
+            <>
+              Anyone can scan public images at{' '}
+              <Link href="/scan" target="_blank" rel="noreferrer">
+                /scan
+              </Link>{' '}
+              without an account.
+            </>
+          }
+        >
+          <Switch
+            aria-label="Public scanning"
+            isDisabled={publicScanEnabled === null || savingPublic}
+            isSelected={Boolean(publicScanEnabled)}
+            onChange={(enabled) => void handleTogglePublicScan(enabled)}
+          >
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+          </Switch>
+        </SettingRow>
+      </SettingsSection>
 
-          <div className="rounded-xl border border-divider/60 bg-content2/30 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium">Public Scanning</p>
-                <p className="text-xs text-muted-foreground">
-                  Allow unauthenticated users to scan at{' '}
-                  <Link href="/scan" target="_blank" rel="noreferrer">
-                    /scan
-                  </Link>
-                  .
-                </p>
-              </div>
-              {publicScanEnabled === null ? (
-                <p className="text-xs text-muted-foreground">Loading...</p>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span
-                    className={
-                      publicScanEnabled ? 'text-xs font-medium text-success-foreground' : 'text-xs font-medium text-danger'
-                    }
-                  >
-                    {publicScanEnabled ? 'Enabled' : 'Disabled'}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    isDisabled={savingPublic}
-                    onPress={() => handleTogglePublicScan(!publicScanEnabled)}
-                  >
-                    {savingPublic ? 'Saving...' : publicScanEnabled ? 'Disable' : 'Enable'}
-                  </Button>
-                </div>
-              )}
-            </div>
+      <SettingsSection
+        title="Maintenance"
+        description="Take JustScan offline for everyone except admins."
+      >
+        <SettingRow
+          label="Maintenance mode"
+          description="Non-admin users see the maintenance page instead of the app."
+        >
+          <Switch
+            aria-label="Maintenance mode"
+            isDisabled={savingMaintenance}
+            isSelected={maintenanceEnabled}
+            onChange={(enabled) => void handleToggleMaintenance(enabled)}
+          >
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+          </Switch>
+        </SettingRow>
+        <SettingRow
+          label="Maintenance message"
+          description={<span className="line-clamp-2">{maintenanceMessage}</span>}
+        >
+          <Button
+            size="sm"
+            variant="secondary"
+            isDisabled={savingMaintenance}
+            onPress={() => {
+              setMaintenanceDraft(maintenanceMessage);
+              maintenanceModal.open();
+            }}
+          >
+            Edit message
+          </Button>
+        </SettingRow>
+        {maintenanceEnabled ? (
+          <div className="px-4 py-3">
+            <StatusAlert status="warning" title="The maintenance page is active" />
           </div>
+        ) : null}
+      </SettingsSection>
 
-          <div className="rounded-xl border border-divider/60 bg-content2/30 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium">Maintenance Mode</p>
-                <p className="text-xs text-muted-foreground">
-                  Route non-admin users to the maintenance page.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="tertiary"
-                  isDisabled={savingMaintenance}
-                  onPress={() => {
-                    setMaintenanceDraft(maintenanceMessage);
-                    maintenanceModal.open();
-                  }}
-                >
-                  Edit message
-                </Button>
-                <Switch
-                  isDisabled={savingMaintenance}
-                  isSelected={maintenanceEnabled}
-                  onChange={handleToggleMaintenance}
-                >
-                  <Switch.Content>
-                    <Switch.Control>
-                      <Switch.Thumb />
-                    </Switch.Control>
-                    {maintenanceEnabled ? 'Enabled' : 'Disabled'}
-                  </Switch.Content>
-                </Switch>
-              </div>
-            </div>
-            {maintenanceEnabled ? (
-              <StatusAlert className="mt-3" status="warning" title="Maintenance page is active" />
-            ) : null}
-          </div>
-
-          <SettingRow
-            title="Public Scan Rate Limit"
-            description="Max public scans per IP per hour."
-            input={
-              <Input
-                type="number"
-                min={1}
-                max={1000}
-                placeholder="Per hour"
-                variant="secondary"
-                value={rateLimitInput}
-                onChange={(e) => setRateLimitInput(e.target.value)}
-              />
-            }
-            action={
+      <SettingsSection
+        title="Rate limits"
+        description="Requests allowed from one IP address per hour."
+        footer={
+          rateLimitsDirty ? (
+            <>
               <Button
                 size="sm"
-                variant="secondary"
-                onPress={handleSaveRateLimit}
-                isDisabled={savingRl || rateLimitInput === String(rateLimit)}
+                variant="ghost"
+                isDisabled={savingRateLimits}
+                onPress={() => {
+                  setRateLimitInput(String(rateLimit));
+                  setRegisterRateLimitInput(String(registerRateLimit));
+                }}
               >
-                {savingRl ? 'Saving...' : 'Save'}
+                Discard
               </Button>
-            }
-          />
-
-          <SettingRow
-            title="Registration Rate Limit"
-            description="Max new accounts per IP per hour."
-            input={
-              <Input
-                type="number"
-                min={1}
-                max={1000}
-                placeholder="Per hour"
-                variant="secondary"
-                value={registerRateLimitInput}
-                onChange={(e) => setRegisterRateLimitInput(e.target.value)}
-              />
-            }
-            action={
-              <Button
-                size="sm"
-                variant="secondary"
-                onPress={handleSaveRegisterRateLimit}
-                isDisabled={savingRegisterRl || registerRateLimitInput === String(registerRateLimit)}
-              >
-                {savingRegisterRl ? 'Saving...' : 'Save'}
+              <Button size="sm" isDisabled={savingRateLimits} onPress={handleSaveRateLimits}>
+                {savingRateLimits ? 'Saving...' : 'Save changes'}
               </Button>
-            }
+            </>
+          ) : null
+        }
+      >
+        <SettingRow
+          label="Public scans"
+          description="Scans one visitor can start without signing in."
+          htmlFor="settings-public-scan-limit"
+        >
+          <Input
+            id="settings-public-scan-limit"
+            type="number"
+            min={1}
+            max={1000}
+            inputMode="numeric"
+            className="w-24 text-right tabular-nums"
+            value={rateLimitInput}
+            onChange={(e) => setRateLimitInput(e.target.value)}
           />
-        </Card>
-
-      </div>
+          <SettingUnit>per hour</SettingUnit>
+        </SettingRow>
+        <SettingRow
+          label="Sign-ups"
+          description="New accounts one visitor can create."
+          htmlFor="settings-register-limit"
+        >
+          <Input
+            id="settings-register-limit"
+            type="number"
+            min={1}
+            max={1000}
+            inputMode="numeric"
+            className="w-24 text-right tabular-nums"
+            value={registerRateLimitInput}
+            onChange={(e) => setRegisterRateLimitInput(e.target.value)}
+          />
+          <SettingUnit>per hour</SettingUnit>
+        </SettingRow>
+      </SettingsSection>
 
       <Modal state={maintenanceModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog>
               <Modal.Header>
-                <Modal.Heading>Edit Maintenance Message</Modal.Heading>
+                <Modal.Heading>Edit maintenance message</Modal.Heading>
                 <p className="text-sm text-muted-foreground">
                   This plain-text message is shown on the public maintenance page.
                 </p>

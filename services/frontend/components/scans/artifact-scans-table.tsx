@@ -366,11 +366,12 @@ function ArtifactHistoryRows({
             <Table.Cell />
             <Table.Cell>
               <Link
-                className="font-mono text-xs text-muted-foreground hover:text-primary"
+                className="whitespace-nowrap text-xs text-muted-foreground hover:text-primary"
                 href={`/scans/details/${scan.id}`}
                 onClick={(event) => event.stopPropagation()}
+                title={fullDate(scan.created_at)}
               >
-                {scan.id.slice(0, 8)}…
+                Scan {timeAgo(scan.created_at)}
               </Link>
             </Table.Cell>
             <Table.Cell>
@@ -385,7 +386,7 @@ function ArtifactHistoryRows({
                     className="text-xs text-muted-foreground"
                     title="Approximate position among visible queued scans for this provider in this workspace"
                   >
-                    Queue ~#{scan.queue_position}
+                    About {ordinal(scan.queue_position)} in queue
                   </span>
                 )}
                 <PolicyFailureChip summary={scan.compliance_summary} />
@@ -482,6 +483,16 @@ function ArtifactHistoryRows({
       }}
     </Table.Collection>
   );
+}
+
+/** 1 → "1st", 2 → "2nd", 11 → "11th". */
+function ordinal(value: number) {
+  const mod100 = value % 100;
+  const suffix =
+    mod100 >= 11 && mod100 <= 13
+      ? 'th'
+      : (({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[value % 10] ?? 'th');
+  return `${value}${suffix}`;
 }
 
 export function ArtifactScansTable({
@@ -601,7 +612,7 @@ export function ArtifactScansTable({
       <Table.ScrollContainer>
         <Table.Content
           aria-label="Latest scans by image and tag"
-          className={hideImageName ? 'min-w-[760px] table-auto' : 'min-w-[980px] table-auto'}
+          className="table-auto [&_td]:align-top"
           expandedKeys={expandedKeys}
           treeColumn="expander"
           onExpandedChange={setExpandedKeys}
@@ -738,11 +749,11 @@ export function ArtifactScansTable({
                               summary={artifact.intelligence_summary}
                             />
                           </div>
-                          <p className="mt-1 font-mono text-xs text-muted-foreground">
-                            {artifact.latest_scan_id.slice(0, 8)}…{' '}
-                            <span className="font-sans" title={fullDate(artifact.latest_scan_at)}>
-                              · {timeAgo(artifact.latest_scan_at)}
-                            </span>
+                          <p
+                            className="mt-1 text-xs text-muted-foreground"
+                            title={fullDate(artifact.latest_scan_at)}
+                          >
+                            Last scanned {timeAgo(artifact.latest_scan_at)}
                           </p>
                         </Link>
                       </Table.Cell>

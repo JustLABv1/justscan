@@ -1,35 +1,21 @@
 'use client';
 import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
 import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
+import { FormAlert } from '@/components/ui/form-alert';
+import { StatusTag } from '@/components/ui/status-dot';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { compareScans, listScans, Scan, ScanComparison, Vulnerability } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
-import { Button, Card, ListBox, Select, Table } from '@/components/ui';
+import { humanize } from '@/lib/labels';
+import { timeAgo } from '@/lib/time';
+import { SeverityBadge } from '@/components/ui/badges';
+import { Button, Card, ListBox, Select, Spinner, Table } from '@/components/ui';
 import { ArrowLeft01Icon } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 
 const selectTriggerCls = fieldSelectTriggerClassName;
-
-function SevBadge({ sev }: { sev: string }) {
-  const cfg: Record<string, { color: string; bg: string }> = {
-    CRITICAL: { color: '#f87171', bg: 'rgba(239,68,68,0.12)' },
-    HIGH: { color: '#fb923c', bg: 'rgba(249,115,22,0.12)' },
-    MEDIUM: { color: '#fbbf24', bg: 'rgba(245,158,11,0.12)' },
-    LOW: { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)' },
-    UNKNOWN: { color: '#a1a1aa', bg: 'rgba(161,161,170,0.08)' },
-  };
-  const c = cfg[sev.toUpperCase()] ?? cfg.UNKNOWN;
-  return (
-    <span
-      className="text-xs font-semibold px-2 py-0.5 rounded-md"
-      style={{ color: c.color, background: c.bg }}
-    >
-      {sev}
-    </span>
-  );
-}
 
 function VulnTable({ vulns, emptyText }: { vulns: Vulnerability[]; emptyText: string }) {
   if (vulns.length === 0) {
@@ -38,7 +24,7 @@ function VulnTable({ vulns, emptyText }: { vulns: Vulnerability[]; emptyText: st
   return (
     <Table variant="secondary">
       <Table.ScrollContainer>
-        <Table.Content aria-label="Scan comparison vulnerabilities" className="min-w-[760px]">
+        <Table.Content aria-label="Scan comparison vulnerabilities" className="[&_td]:align-top">
           <Table.Header>
             <Table.Column isRowHeader>CVE ID</Table.Column>
             <Table.Column>Package</Table.Column>
@@ -51,7 +37,7 @@ function VulnTable({ vulns, emptyText }: { vulns: Vulnerability[]; emptyText: st
               <Table.Row
                 key={v.id ?? i}
                 id={v.id ?? `${v.vuln_id || 'row'}-${i}`}
-                className="hover:bg-[var(--row-hover)]"
+                className="hover:bg-muted/50"
               >
                 <Table.Cell>
                   {v.vuln_id ? (
@@ -59,7 +45,7 @@ function VulnTable({ vulns, emptyText }: { vulns: Vulnerability[]; emptyText: st
                       href={`https://nvd.nist.gov/vuln/detail/${v.vuln_id}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-mono text-xs text-primary dark:text-primary hover:underline"
+                      className="whitespace-nowrap font-mono text-xs text-primary hover:underline"
                     >
                       {v.vuln_id}
                     </a>
@@ -67,13 +53,13 @@ function VulnTable({ vulns, emptyText }: { vulns: Vulnerability[]; emptyText: st
                     <span className="text-muted-foreground">-</span>
                   )}
                 </Table.Cell>
-                <Table.Cell className="font-mono text-xs text-foreground">
+                <Table.Cell className="text-sm text-foreground [overflow-wrap:anywhere]">
                   {v.pkg_name}
                 </Table.Cell>
                 <Table.Cell>
-                  <SevBadge sev={v.severity} />
+                  <SeverityBadge severity={(v.severity || 'UNKNOWN').toUpperCase()} />
                 </Table.Cell>
-                <Table.Cell className="font-mono text-xs text-muted-foreground">
+                <Table.Cell className="break-all font-mono text-xs text-muted-foreground">
                   {v.installed_version}
                 </Table.Cell>
                 <Table.Cell className="text-right font-mono text-xs text-muted-foreground">
@@ -101,7 +87,7 @@ function ScanSelector({
 }) {
   return (
     <div className="space-y-1.5 flex-1">
-      <label className="text-sm font-medium text-muted-foreground dark:text-foreground">{label}</label>
+      <label className="text-sm font-medium text-foreground">{label}</label>
       <Select
         value={value || '__none__'}
         onChange={(nextValue) =>
@@ -118,8 +104,7 @@ function ScanSelector({
             <ListBox.Item id="__none__">Select a scan…</ListBox.Item>
             {scans.map((s) => (
               <ListBox.Item key={s.id} id={s.id}>
-                {s.image_name}:{s.image_tag} - {new Date(s.created_at).toLocaleDateString()} (
-                {s.status})
+                {s.image_name}:{s.image_tag} · {timeAgo(s.created_at)} · {humanize(s.status)}
               </ListBox.Item>
             ))}
           </ListBox>
@@ -188,11 +173,40 @@ function ComparePageInner() {
     runCompare(scanA, scanB);
   }
 
+  const sections = result
+    ? [
+        {
+          key: 'added',
+          title: 'New vulnerabilities',
+          count: `+${result.summary.added_count}`,
+          tone: 'danger' as const,
+          vulns: result.added,
+          empty: 'No new vulnerabilities.',
+        },
+        {
+          key: 'removed',
+          title: 'Resolved vulnerabilities',
+          count: `−${result.summary.removed_count}`,
+          tone: 'success' as const,
+          vulns: result.removed,
+          empty: 'No vulnerabilities were resolved.',
+        },
+        {
+          key: 'unchanged',
+          title: 'Unchanged',
+          count: String(result.summary.unchanged_count),
+          tone: 'muted' as const,
+          vulns: result.unchanged,
+          empty: 'No unchanged vulnerabilities.',
+        },
+      ]
+    : [];
+
   return (
-    <div className="p-6 space-y-5">
+    <PageContainer size="default">
       <PageHeader
-        title="Scan Comparison"
-        description="Compare two scans to see which vulnerabilities were added or resolved."
+        title="Compare scans"
+        description="See which vulnerabilities were added or resolved between two scans."
         actions={
           <Button onPress={() => router.push('/scans')} variant="secondary">
             <ArrowLeft01Icon size={15} />
@@ -201,57 +215,29 @@ function ComparePageInner() {
         }
       />
 
-      {/* Selectors */}
       <Card>
-        <div className="flex flex-col sm:flex-row gap-4 items-end">
+        <Card.Content className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end">
           {scansLoading ? (
-            <div className="flex-1 flex items-center justify-center py-4">
-              <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+            <div className="flex flex-1 items-center justify-center py-4">
+              <Spinner size="sm" />
             </div>
           ) : (
             <>
-              <ScanSelector
-                label="Scan A (baseline)"
-                value={scanA}
-                onChange={setScanA}
-                scans={scans}
-              />
-              <div className="flex items-center justify-center pb-2.5 text-muted-foreground font-bold select-none shrink-0">
-                vs
-              </div>
-              <ScanSelector
-                label="Scan B (compare to)"
-                value={scanB}
-                onChange={setScanB}
-                scans={scans}
-              />
+              <ScanSelector label="Baseline scan" value={scanA} onChange={setScanA} scans={scans} />
+              <ScanSelector label="Compare with" value={scanB} onChange={setScanB} scans={scans} />
             </>
           )}
           <Button onClick={handleCompare} isDisabled={loading || !scanA || !scanB}>
-            {loading && (
-              <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            )}
+            {loading ? <Spinner size="sm" /> : null}
             Compare
           </Button>
-        </div>
+        </Card.Content>
       </Card>
 
-      {error && (
-        <div
-          className="rounded-xl px-4 py-3 text-sm"
-          style={{
-            background: 'rgba(239,68,68,0.08)',
-            border: '1px solid rgba(239,68,68,0.18)',
-            color: '#f87171',
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error ? <FormAlert description={error} /> : null}
 
-      {result && (
+      {result ? (
         <>
-          {/* Summary bar */}
           <StatStrip>
             <StatStripItem
               label="New vulnerabilities"
@@ -259,77 +245,44 @@ function ComparePageInner() {
               hint={
                 result.summary.added_critical > 0 || result.summary.added_high > 0
                   ? [
-                      result.summary.added_critical > 0 ? `${result.summary.added_critical} critical` : '',
+                      result.summary.added_critical > 0
+                        ? `${result.summary.added_critical} critical`
+                        : '',
                       result.summary.added_high > 0 ? `${result.summary.added_high} high` : '',
-                    ].filter(Boolean).join(' · ')
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
                   : 'No critical or high findings added'
               }
               tone="danger"
             />
-            <StatStripItem label="Resolved vulnerabilities" value={result.summary.removed_count} hint="Removed since the earlier scan" tone="success" />
-            <StatStripItem label="Unchanged" value={result.summary.unchanged_count} hint="Present in both scans" />
+            <StatStripItem
+              label="Resolved vulnerabilities"
+              value={result.summary.removed_count}
+              hint="Removed since the baseline scan"
+              tone="success"
+            />
+            <StatStripItem
+              label="Unchanged"
+              value={result.summary.unchanged_count}
+              hint="Present in both scans"
+            />
           </StatStrip>
 
-          {/* Added */}
-          <Card>
-            <div className="flex items-center gap-3">
-              <h2 className="text-sm font-semibold text-foreground">
-                New Vulnerabilities
-              </h2>
-              <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                style={{
-                  color: '#f87171',
-                  background: 'rgba(239,68,68,0.12)',
-                  border: '1px solid rgba(239,68,68,0.2)',
-                }}
-              >
-                +{result.summary.added_count}
-              </span>
-            </div>
-            <VulnTable vulns={result.added} emptyText="No new vulnerabilities - great!" />
-          </Card>
-
-          {/* Removed */}
-          <Card>
-            <div className="flex items-center gap-3">
-              <h2 className="text-sm font-semibold text-foreground">
-                Resolved Vulnerabilities
-              </h2>
-              <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                style={{
-                  color: '#34d399',
-                  background: 'rgba(16,185,129,0.12)',
-                  border: '1px solid rgba(16,185,129,0.2)',
-                }}
-              >
-                -{result.summary.removed_count}
-              </span>
-            </div>
-            <VulnTable vulns={result.removed} emptyText="No vulnerabilities were resolved." />
-          </Card>
-
-          {/* Unchanged */}
-          <Card>
-            <div className="flex items-center gap-3">
-              <h2 className="text-sm font-semibold text-foreground">Unchanged</h2>
-              <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                style={{
-                  color: '#a1a1aa',
-                  background: 'rgba(161,161,170,0.08)',
-                  border: '1px solid rgba(161,161,170,0.15)',
-                }}
-              >
-                {result.summary.unchanged_count}
-              </span>
-            </div>
-            <VulnTable vulns={result.unchanged} emptyText="No unchanged vulnerabilities." />
-          </Card>
+          {sections.map((section) => (
+            <Card key={section.key}>
+              <Card.Header className="flex flex-row items-center gap-2">
+                <Card.Title className="text-sm">{section.title}</Card.Title>
+                <StatusTag tone={section.tone}>{section.count}</StatusTag>
+              </Card.Header>
+              <Card.Content className="px-0">
+                <VulnTable vulns={section.vulns} emptyText={section.empty} />
+              </Card.Content>
+            </Card>
+          ))}
         </>
-      )}
-    </div>
+      ) : null}
+    </PageContainer>
   );
 }
 

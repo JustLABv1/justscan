@@ -58,6 +58,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { fullDate } from '@/lib/time';
 
 type MetricTone = 'neutral' | 'danger' | 'success';
 
@@ -403,7 +404,7 @@ export default function ImageScansPage() {
   if (!imageName)
     return (
       <PageContainer>
-        <Card className="p-6 text-sm text-danger">This image reference is invalid.</Card>
+        <Card className="p-6 text-sm text-destructive">This image reference is invalid.</Card>
       </PageContainer>
     );
 
@@ -458,7 +459,7 @@ export default function ImageScansPage() {
                   <div
                     aria-busy="true"
                     aria-live="polite"
-                    className="flex items-start gap-3 rounded-xl border border-danger/20 bg-danger/5 p-3"
+                    className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-3"
                     role="status"
                   >
                     <Spinner aria-label="Deleting scan history" color="danger" size="md" />
@@ -487,7 +488,10 @@ export default function ImageScansPage() {
                       </>
                     ) : (
                       <>
-                        This removes scan <strong>{pendingDelete?.scan.id.slice(0, 8)}…</strong>{' '}
+                        This removes the scan from{' '}
+                        <strong>
+                          {pendingDelete ? fullDate(pendingDelete.scan.created_at) : ''}
+                        </strong>{' '}
                         from{' '}
                         <strong>
                           {imageName}:{pendingDelete?.scan.image_tag}
@@ -609,7 +613,7 @@ export default function ImageScansPage() {
             </SearchField>
             <Select
               aria-label="Latest state"
-              className="min-w-[180px]"
+              className="w-full sm:w-44"
               value={status || '__all__'}
               onChange={(value) => setStatus(value === '__all__' ? '' : String(value ?? ''))}
               variant="secondary"
@@ -630,7 +634,7 @@ export default function ImageScansPage() {
             </Select>
             <Select
               aria-label="Current risk"
-              className="min-w-[170px]"
+              className="w-full sm:w-44"
               value={critical || '__all__'}
               onChange={(value) =>
                 setCritical((value === '__all__' ? '' : (value ?? '')) as '' | 'yes' | 'no')
@@ -651,7 +655,7 @@ export default function ImageScansPage() {
             </Select>
             <Select
               aria-label="Policy result"
-              className="min-w-[180px]"
+              className="w-full sm:w-44"
               value={policy || '__all__'}
               onChange={(value) =>
                 setPolicy((value === '__all__' ? '' : (value ?? '')) as '' | 'fail')
@@ -675,7 +679,7 @@ export default function ImageScansPage() {
             <Disclosure.Body className={filterDisclosureBodyClassName}>
               <Select
                 aria-label="Time range"
-                className="min-w-[180px] flex-1"
+                className="w-full sm:flex-1"
                 value={range || '__all__'}
                 onChange={(value) =>
                   setRange((value === '__all__' ? '' : (value ?? '')) as '' | RecentActivityRange)
@@ -716,9 +720,11 @@ export default function ImageScansPage() {
           </Disclosure.Content>
         </Disclosure>
       </Card>
-      {error ? <Card className="border-danger/40 p-4 text-sm text-danger">{error}</Card> : null}
+      {error ? (
+        <Card className="border-destructive/40 p-4 text-sm text-destructive">{error}</Card>
+      ) : null}
       <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-divider px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div>
             <h2 className="text-sm font-semibold">Tags</h2>
             <p className="mt-1 text-xs text-muted-foreground">

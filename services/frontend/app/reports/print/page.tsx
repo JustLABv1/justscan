@@ -9,8 +9,8 @@ import {
   useOverlayState,
 } from '@/components/ui';
 import { getToken, req, type ApiRequestOptions, subscribeToAuth } from '@/lib/api';
-import { humanize, labelFor, SCAN_PROVIDER_LABELS, shortDigest } from '@/lib/labels';
-import Image from 'next/image';
+import { humanize, labelFor, SCAN_PROVIDER_LABELS } from '@/lib/labels';
+import { PrintReportBrand, PrintReportFooter } from '@/components/public/print-report-chrome';
 import { useSearchParams } from 'next/navigation';
 import {
   Fragment,
@@ -272,28 +272,6 @@ function SevBadge({ s }: { s: string }) {
       }}
     >
       {s}
-    </span>
-  );
-}
-
-function BrandMark({ size = 34 }: { size?: number }) {
-  const imageSize = Math.round(size * 1.55);
-  return (
-    <span
-      className="report-brand-mark"
-      style={{
-        height: size,
-        width: size,
-      }}
-    >
-      <Image
-        src="/justscan-logo.png"
-        alt="JustScan logo"
-        width={imageSize}
-        height={imageSize}
-        style={{ filter: 'invert(1)', height: imageSize, maxWidth: 'none', width: imageSize }}
-        priority={size > 20}
-      />
     </span>
   );
 }
@@ -1241,20 +1219,6 @@ function ScanSection({
           >
             {imageRef}
           </p>
-          {scan.image_digest && (
-            <p
-              title={scan.image_digest}
-              style={{
-                fontFamily: 'monospace',
-                fontSize: 12,
-                color: '#9ca3af',
-                margin: '0 0 6px',
-                wordBreak: 'break-all',
-              }}
-            >
-              {shortDigest(scan.image_digest)}
-            </p>
-          )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {scan.critical_count > 0 && (
               <span
@@ -1363,6 +1327,9 @@ function ScanSection({
           <tbody>
             {(
               [
+                ...(scan.image_digest
+                  ? [['Digest', scan.image_digest, true] as [string, string, boolean]]
+                  : []),
                 ...(filters.showScanId
                   ? [['Scan ID', scan.id, true] as [string, string, boolean]]
                   : []),
@@ -2338,7 +2305,6 @@ function PrintReport() {
         * { box-sizing: border-box; }
         html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
         body { font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); }
-        .report-brand-mark { align-items: center; display: inline-flex; flex-shrink: 0; justify-content: center; overflow: hidden; }
         .report-detail-cell { padding: 5px 10px 8px; border: 1px solid #e5e7eb; border-top: none; color: #4b5563; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word; }
         .report-workspace { margin: 0 auto; max-width: 178mm; padding: 24px 16px 32px; }
         .report-document { width: 100%; }
@@ -2372,36 +2338,7 @@ function PrintReport() {
               }}
             >
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
-                  <BrandMark />
-                  <div>
-                    <p
-                      style={{
-                        margin: 0,
-                        color: '#111827',
-                        fontSize: 16,
-                        fontWeight: 800,
-                        letterSpacing: '-0.02em',
-                      }}
-                    >
-                      JustScan
-                    </p>
-                    <a
-                      href="https://justlab.app/en/justscan"
-                      style={{
-                        display: 'block',
-                        marginTop: 1,
-                        color: '#6b7280',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        letterSpacing: '0.02em',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      justlab.app/en/justscan
-                    </a>
-                  </div>
-                </div>
+                <PrintReportBrand />
                 <div style={{ borderLeft: '5px solid var(--primary)', paddingLeft: 16 }}>
                   <h1
                     style={{
@@ -2628,33 +2565,11 @@ function PrintReport() {
             ))}
 
             {/* Footer */}
-            <div
-              style={{
-                borderTop: '1px solid #e5e7eb',
-                paddingTop: 12,
-                marginTop: 8,
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: 12,
-                color: '#9ca3af',
-              }}
-            >
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  color: '#6b7280',
-                  fontWeight: 600,
-                }}
-              >
-                <BrandMark size={18} />
-                JustScan Security Report · https://justlab.app/en/justscan
-              </span>
+            <PrintReportFooter>
               <span style={{ maxWidth: '65%', textAlign: 'right', overflowWrap: 'anywhere' }}>
                 {data.map((d) => `${d.scan.image_name}:${d.scan.image_tag}`).join(', ')}
               </span>
-            </div>
+            </PrintReportFooter>
           </div>
           <FilterPanel f={filters} onChange={setFilters} />
         </div>

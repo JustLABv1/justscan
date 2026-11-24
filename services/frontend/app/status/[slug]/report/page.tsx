@@ -1,4 +1,5 @@
 'use client';
+import { PrintReportBrand, PrintReportFooter } from '@/components/public/print-report-chrome';
 
 import {
   ApiError,
@@ -116,6 +117,7 @@ function ReportHeader({
       }}
     >
       <div style={{ borderLeft: '5px solid var(--primary)', paddingLeft: 16 }}>
+        <PrintReportBrand />
         <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>
           JustScan Status Report
         </h1>
@@ -707,6 +709,7 @@ function StatusReportContent() {
         <ReportFilters filterSummary={filterSummary} />
         <ReportSeveritySummary severityCounts={severityCounts} findingCount={vulns.length} />
         <ReportFindings vulns={vulns} />
+        <PrintReportFooter />
       </div>
     </>
   );

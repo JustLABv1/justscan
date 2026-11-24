@@ -114,25 +114,25 @@ func filterSuppressedVulnerabilitiesForOrg(
 		return nil, err
 	}
 
-	xrayByVuln := map[string]*models.XraySuppression{}
+	xrayIndex := effectivesuppressions.XraySuppressionIndex{}
 	if scan.ScanProvider == models.ScanProviderArtifactoryXray {
-		xrayByVuln, err = effectivesuppressions.LoadXraySuppressionsByScan(ctx, db, scan.ID)
+		xrayIndex, err = effectivesuppressions.LoadXraySuppressionsByScan(ctx, db, scan.ID)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return filterSuppressedVulnerabilities(vulns, localByVuln, xrayByVuln), nil
+	return filterSuppressedVulnerabilities(vulns, localByVuln, xrayIndex), nil
 }
 
 func filterSuppressedVulnerabilities(
 	vulns []models.Vulnerability,
 	localByVuln map[string]*models.Suppression,
-	xrayByVuln map[string]*models.XraySuppression,
+	xrayIndex effectivesuppressions.XraySuppressionIndex,
 ) []models.Vulnerability {
 	filtered := make([]models.Vulnerability, 0, len(vulns))
 	for i := range vulns {
-		if effectivesuppressions.MergeEffectiveSuppression(localByVuln[vulns[i].VulnID], xrayByVuln[vulns[i].VulnID]) != nil {
+		if effectivesuppressions.MergeEffectiveSuppression(localByVuln[vulns[i].VulnID], xrayIndex.Match(&vulns[i])) != nil {
 			continue
 		}
 		filtered = append(filtered, vulns[i])

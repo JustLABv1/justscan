@@ -3,6 +3,7 @@ package compliance
 import (
 	"testing"
 
+	effectivesuppressions "justscan-backend/functions/suppressions"
 	"justscan-backend/pkg/models"
 )
 
@@ -72,7 +73,7 @@ func TestPolicyIncludeSuppressedTrueStillFailsOnSuppressedVulnerability(t *testi
 		map[string]*models.Suppression{
 			"CVE-2026-31789": {VulnID: "CVE-2026-31789"},
 		},
-		map[string]*models.XraySuppression{},
+		effectivesuppressions.XraySuppressionIndex{},
 	)
 	if len(filtered) != 0 {
 		t.Fatalf("expected suppression-aware filtered list to be empty, got %d vulnerabilities", len(filtered))
@@ -102,7 +103,7 @@ func TestPolicyExcludeSuppressedPassesWhenOnlyViolationsSuppressed(t *testing.T)
 		map[string]*models.Suppression{
 			"CVE-2026-31789": {VulnID: "CVE-2026-31789"},
 		},
-		map[string]*models.XraySuppression{},
+		effectivesuppressions.XraySuppressionIndex{},
 	)
 
 	status, violations := EvaluatePolicy(policy, filtered)
@@ -130,7 +131,7 @@ func TestPolicyExcludeSuppressedStillFailsWhenUnsuppressedViolationExists(t *tes
 		map[string]*models.Suppression{
 			"CVE-2026-31789": {VulnID: "CVE-2026-31789"},
 		},
-		map[string]*models.XraySuppression{},
+		effectivesuppressions.XraySuppressionIndex{},
 	)
 
 	status, violations := EvaluatePolicy(policy, filtered)
@@ -158,7 +159,7 @@ func TestPolicyExcludeSuppressedExpiredSuppressionDoesNotExcludeWhenNotEffective
 
 	// Expired suppressions are expected to be dropped by effective suppression loaders.
 	// Simulate that effective map behavior by passing no suppression entry.
-	filtered := filterSuppressedVulnerabilities(vulns, map[string]*models.Suppression{}, map[string]*models.XraySuppression{})
+	filtered := filterSuppressedVulnerabilities(vulns, map[string]*models.Suppression{}, effectivesuppressions.XraySuppressionIndex{})
 
 	status, violations := EvaluatePolicy(policy, filtered)
 	if status != "fail" {

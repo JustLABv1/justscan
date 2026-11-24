@@ -57,7 +57,7 @@ export function FloatingAIChat() {
               onPress={state.open}
               variant="primary"
             >
-              <span aria-hidden className="text-xs font-bold tracking-[0.12em]">
+              <span aria-hidden className="text-xs font-bold">
                 AI
               </span>
             </Button>

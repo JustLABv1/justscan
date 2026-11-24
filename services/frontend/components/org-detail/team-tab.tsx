@@ -1,16 +1,19 @@
 import { OrgInvite, OrgMember, OrgRole } from '@/lib/api';
-import { timeAgo, timeUntil } from '@/lib/time';
+import { displayUser, labelFor, pluralize, ROLE_LABELS } from '@/lib/labels';
+import { fullDate, timeAgo, timeUntil } from '@/lib/time';
 import {
   Avatar,
   Button,
   Card,
   ListBox,
+  ResourceList,
   SearchField,
   Select,
-  Table,
-  type SortDescriptor,
+  Spinner,
 } from '@/components/ui';
-import { Delete01Icon, PlusSignIcon } from 'hugeicons-react';
+import { RowActionsMenu, type RowActionItem } from '@/components/ui/row-actions-menu';
+import { StatusTag } from '@/components/ui/status-dot';
+import { Copy01Icon, Crown03Icon, Delete01Icon, PlusSignIcon } from 'hugeicons-react';
 import { useMemo, useState } from 'react';
 
 interface OrgTeamTabProps {
@@ -37,18 +40,26 @@ interface OrgTeamTabProps {
   featureDisabledReason?: string;
 }
 
+const EDITABLE_ROLES = ['viewer', 'editor', 'admin'] as const;
+const ROLE_ORDER: Record<string, number> = { owner: 0, admin: 1, editor: 2, viewer: 3 };
+
+/** "Joined yesterday" rather than "Joined Yesterday"; dates keep their capitals. */
+function relativeLower(value: string | null | undefined) {
+  const text = timeAgo(value);
+  return /^(Just now|Yesterday)$/.test(text) ? text.toLowerCase() : text;
+}
+
+function memberName(member: OrgMember) {
+  return displayUser(member, 'Unknown member');
+}
+
 function memberInitials(member: OrgMember) {
-  const base = member.username || member.email || member.user_id;
-  const words = base
+  const words = memberName(member)
     .replace(/@.*/, '')
     .split(/[\s._-]+/)
     .filter(Boolean)
     .slice(0, 2);
-
-  if (words.length === 0) {
-    return 'U';
-  }
-
+  if (words.length === 0) return 'U';
   return words.map((word) => word[0]?.toUpperCase() || '').join('');
 }
 
@@ -73,299 +84,241 @@ export function OrgTeamTab({
   featureDisabledReason,
 }: OrgTeamTabProps) {
   const [memberSearch, setMemberSearch] = useState('');
-  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
-    column: 'user',
-    direction: 'ascending',
-  });
-
-  const filteredMembers = useMemo(() => {
-    const query = memberSearch.trim().toLowerCase();
-    if (!query) {
-      return members;
-    }
-
-    return members.filter((member) => {
-      const displayName = member.username || member.email || member.user_id;
-      return [displayName, member.email, member.user_id, member.role]
-        .filter((value): value is string => Boolean(value))
-        .some((value) => value.toLowerCase().includes(query));
-    });
-  }, [memberSearch, members]);
+  const query = memberSearch.trim().toLowerCase();
 
   const sortedMembers = useMemo(() => {
-    const direction = sortDescriptor.direction === 'descending' ? -1 : 1;
-    const column = String(sortDescriptor.column ?? 'user');
-
-    return [...filteredMembers].sort((a, b) => {
-      if (column === 'joined') {
-        const first = Date.parse(a.joined_at || '') || 0;
-        const second = Date.parse(b.joined_at || '') || 0;
-        return (first - second) * direction;
-      }
-
-      const first =
-        column === 'role' ? a.role : (a.username || a.email || a.user_id).toLocaleLowerCase();
-      const second =
-        column === 'role' ? b.role : (b.username || b.email || b.user_id).toLocaleLowerCase();
-
-      return first.localeCompare(second) * direction;
-    });
-  }, [filteredMembers, sortDescriptor]);
+    const filtered = query
+      ? members.filter((member) =>
+          [memberName(member), member.email, labelFor(ROLE_LABELS, member.role)]
+            .filter((value): value is string => Boolean(value))
+            .some((value) => value.toLowerCase().includes(query))
+        )
+      : members;
+    return [...filtered].sort(
+      (a, b) =>
+        (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9) ||
+        memberName(a).localeCompare(memberName(b), undefined, { sensitivity: 'base' })
+    );
+  }, [members, query]);
 
   const filteredInvites = useMemo(() => {
-    const query = memberSearch.trim().toLowerCase();
     if (!query) return invites;
     return invites.filter((invite) =>
-      [invite.email, invite.role].some((value) => value.toLowerCase().includes(query))
+      [invite.email, labelFor(ROLE_LABELS, invite.role)].some((value) =>
+        value.toLowerCase().includes(query)
+      )
     );
-  }, [invites, memberSearch]);
+  }, [invites, query]);
+
+  const showSearch = members.length + invites.length > 6 || Boolean(memberSearch);
+  const memberSummary = [
+    pluralize(members.length, 'member'),
+    invites.length > 0 ? pluralize(invites.length, 'pending invite') : null,
+    currentOrgRole
+      ? `you are ${labelFor(ROLE_LABELS, currentOrgRole).toLowerCase()}`
+      : isSystemAdmin
+        ? 'platform admin access'
+        : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold">Members</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {currentOrgRole
-                ? `Your role: ${currentOrgRole}`
-                : isSystemAdmin
-                  ? 'Platform admin access'
-                  : 'Organization members'}
-            </p>
-          </div>
-          {canManageMembers && (
-            <Button
-              onClick={onOpenInviteModal}
-              isDisabled={
-                Boolean(featureDisabledReason) ||
-                pendingMemberAction !== null ||
-                pendingInviteAction !== null
-              }
-            >
-              <PlusSignIcon size={14} />
-              Invite Member
-            </Button>
-          )}
-        </div>
-        {featureDisabledReason && (
-          <p className="text-xs text-warning-foreground mt-1">{featureDisabledReason}</p>
-        )}
-
+    <Card>
+      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
         <div>
-          {membersLoading ? (
-            <div className="flex justify-center py-8">
-              <div className="size-6 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
-            </div>
-          ) : members.length === 0 && invites.length === 0 ? (
-            <div className="px-6 py-8 text-sm text-muted-foreground text-center">
-              No members or pending invites.
-            </div>
-          ) : (
-            <div className="space-y-3">
+          <Card.Title>Members</Card.Title>
+          <Card.Description>{membersLoading ? 'Loading members…' : memberSummary}</Card.Description>
+          {featureDisabledReason ? (
+            <p className="mt-1 text-xs text-warning-foreground">{featureDisabledReason}</p>
+          ) : null}
+        </div>
+        {canManageMembers ? (
+          <Button
+            onClick={onOpenInviteModal}
+            isDisabled={
+              Boolean(featureDisabledReason) ||
+              pendingMemberAction !== null ||
+              pendingInviteAction !== null
+            }
+          >
+            <PlusSignIcon size={14} />
+            Invite member
+          </Button>
+        ) : null}
+      </Card.Header>
+
+      <Card.Content className="space-y-4">
+        {membersLoading ? (
+          <div className="flex justify-center py-8" role="status">
+            <Spinner />
+            <span className="sr-only">Loading members</span>
+          </div>
+        ) : members.length === 0 && invites.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No members or pending invites.
+          </p>
+        ) : (
+          <>
+            {showSearch ? (
               <SearchField name="org-members-search" variant="secondary">
                 <SearchField.Group>
                   <SearchField.SearchIcon />
                   <SearchField.Input
-                    placeholder="Search members by name, email, role..."
+                    aria-label="Search members"
+                    placeholder="Search members by name, email, or role..."
                     value={memberSearch}
                     onChange={(event) => setMemberSearch(event.target.value)}
                   />
                   <SearchField.ClearButton />
                 </SearchField.Group>
               </SearchField>
+            ) : null}
 
-              <Table variant="secondary">
-                <Table.ScrollContainer>
-                  <Table.Content
-                    aria-label="Organization members"
-                    className="min-w-[720px]"
-                    sortDescriptor={sortDescriptor}
-                    onSortChange={setSortDescriptor}
-                  >
-                    <Table.Header>
-                      <Table.Column id="user" allowsSorting isRowHeader>
-                        User
-                      </Table.Column>
-                      <Table.Column id="role" allowsSorting>
-                        Role
-                      </Table.Column>
-                      <Table.Column id="joined" allowsSorting>
-                        Joined
-                      </Table.Column>
-                      <Table.Column>Status</Table.Column>
-                      <Table.Column className="text-right">Actions</Table.Column>
-                    </Table.Header>
-                    <Table.Body>
-                      {sortedMembers.length === 0 && filteredInvites.length === 0 ? (
-                        <Table.Row id="empty">
-                          <Table.Cell colSpan={5}>
-                            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                              No members match this search.
-                            </div>
-                          </Table.Cell>
-                        </Table.Row>
-                      ) : (
+            {sortedMembers.length === 0 && filteredInvites.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No members match this search.
+              </p>
+            ) : (
+              <ResourceList aria-label="Organization members">
+                {sortedMembers.map((member) => {
+                  const name = memberName(member);
+                  const menuItems: RowActionItem[] = [];
+                  if (canTransferOwnership && member.role !== 'owner') {
+                    menuItems.push({
+                      id: 'transfer',
+                      label: 'Make owner',
+                      icon: <Crown03Icon size={15} />,
+                      pending: pendingMemberAction === `transfer:${member.user_id}`,
+                      disabled: pendingMemberAction !== null,
+                      onAction: () => void onTransferOwnership(member),
+                    });
+                  }
+                  if (canManageMembers && member.role !== 'owner') {
+                    menuItems.push({
+                      id: 'remove',
+                      label: 'Remove from organization',
+                      icon: <Delete01Icon size={15} />,
+                      variant: 'danger',
+                      pending: pendingMemberAction === `remove:${member.user_id}`,
+                      disabled: pendingMemberAction !== null,
+                      onAction: () => void onRemoveMember(member),
+                    });
+                  }
+                  return (
+                    <ResourceList.Item
+                      key={member.user_id}
+                      media={
+                        <Avatar color="accent" size="sm" variant="soft">
+                          <Avatar.Fallback>{memberInitials(member)}</Avatar.Fallback>
+                        </Avatar>
+                      }
+                      title={name}
+                      description={
                         <>
-                          {sortedMembers.map((member) => (
-                            <Table.Row
-                              key={member.user_id}
-                              id={member.user_id}
-                              className="transition-colors hover:bg-[var(--row-hover)]"
-                            >
-                              <Table.Cell>
-                                <div className="flex items-center gap-3">
-                                  <Avatar color="accent" size="sm" variant="soft">
-                                    <Avatar.Fallback>{memberInitials(member)}</Avatar.Fallback>
-                                  </Avatar>
-                                  <div>
-                                    <p className="font-medium text-foreground">
-                                      {member.username || member.email || member.user_id}
-                                    </p>
-                                    {member.email && (
-                                      <p className="text-xs text-muted-foreground mt-0.5">{member.email}</p>
-                                    )}
-                                  </div>
-                                </div>
-                              </Table.Cell>
-                              <Table.Cell>
-                                {canEditRoles && member.role !== 'owner' ? (
-                                  <Select
-                                    value={member.role}
-                                    isDisabled={pendingMemberAction !== null}
-                                    onChange={(value) =>
-                                      void onMemberRoleChange(
-                                        member,
-                                        String(value) as Extract<
-                                          OrgRole,
-                                          'admin' | 'editor' | 'viewer'
-                                        >
-                                      )
-                                    }
-                                  >
-                                    <Select.Trigger
-                                      className={`${inputClassName} max-w-[140px] text-sm`}
-                                    >
-                                      <Select.Value />
-                                      <Select.Indicator />
-                                    </Select.Trigger>
-                                    <Select.Popover>
-                                      <ListBox>
-                                        <ListBox.Item id="viewer">viewer</ListBox.Item>
-                                        <ListBox.Item id="editor">editor</ListBox.Item>
-                                        <ListBox.Item id="admin">admin</ListBox.Item>
-                                      </ListBox>
-                                    </Select.Popover>
-                                  </Select>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-primary/10 text-primary border-primary/20">
-                                    {member.role}
-                                  </span>
-                                )}
-                              </Table.Cell>
-                              <Table.Cell className="text-xs text-muted-foreground">
-                                {timeAgo(member.joined_at)}
-                              </Table.Cell>
-                              <Table.Cell>
-                                <span className="text-xs text-success-foreground">Active</span>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <div className="flex items-center justify-end gap-2">
-                                  {canTransferOwnership && member.role !== 'owner' && (
-                                    <Button
-                                      onClick={() => void onTransferOwnership(member)}
-                                      isDisabled={pendingMemberAction !== null}
-                                      isPending={
-                                        pendingMemberAction === `transfer:${member.user_id}`
-                                      }
-                                      variant="secondary"
-                                    >
-                                      Make owner
-                                    </Button>
-                                  )}
-                                  {canManageMembers && member.role !== 'owner' && (
-                                    <Button
-                                      onClick={() => void onRemoveMember(member)}
-                                      aria-label={`Remove ${member.username || member.email || 'member'}`}
-                                      isDisabled={pendingMemberAction !== null}
-                                      isPending={pendingMemberAction === `remove:${member.user_id}`}
-                                      variant="danger-soft"
-                                      isIconOnly
-                                    >
-                                      <Delete01Icon size={15} />
-                                    </Button>
-                                  )}
-                                </div>
-                              </Table.Cell>
-                            </Table.Row>
-                          ))}
-                          {filteredInvites.map((invite) => (
-                            <Table.Row
-                              key={invite.id}
-                              id={`invite-${invite.id}`}
-                              className="bg-surface-secondary/40"
-                            >
-                              <Table.Cell>
-                                <div className="flex items-center gap-3">
-                                  <Avatar color="warning" size="sm" variant="soft">
-                                    <Avatar.Fallback>
-                                      {invite.email.charAt(0).toUpperCase()}
-                                    </Avatar.Fallback>
-                                  </Avatar>
-                                  <div>
-                                    <p className="font-medium text-foreground">
-                                      {invite.email}
-                                    </p>
-                                    <p className="mt-0.5 text-xs text-muted-foreground">Invitation pending</p>
-                                  </div>
-                                </div>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <span className="inline-flex rounded-full border border-warning/20 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning-foreground">
-                                  {invite.role}
-                                </span>
-                              </Table.Cell>
-                              <Table.Cell className="text-xs text-muted-foreground">—</Table.Cell>
-                              <Table.Cell>
-                                <span className="text-xs text-warning-foreground">
-                                  Expires {timeUntil(invite.expires_at)}
-                                </span>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <div className="flex items-center justify-end gap-2">
-                                  <Button
-                                    onPress={() => void onCopyInviteLink(invite)}
-                                    isDisabled={pendingInviteAction !== null}
-                                    size="sm"
-                                    variant="secondary"
-                                  >
-                                    Copy link
-                                  </Button>
-                                  {canManageMembers ? (
-                                    <Button
-                                      onPress={() => void onRevokeInvite(invite)}
-                                      isDisabled={pendingInviteAction !== null}
-                                      isPending={pendingInviteAction === invite.id}
-                                      size="sm"
-                                      variant="danger"
-                                    >
-                                      Revoke
-                                    </Button>
-                                  ) : null}
-                                </div>
-                              </Table.Cell>
-                            </Table.Row>
-                          ))}
+                          {member.email && member.email !== name ? `${member.email} · ` : ''}
+                          <span title={fullDate(member.joined_at)}>
+                            Joined {relativeLower(member.joined_at)}
+                          </span>
                         </>
-                      )}
-                    </Table.Body>
-                  </Table.Content>
-                </Table.ScrollContainer>
-              </Table>
-            </div>
-          )}
-        </div>
-      </Card>
-    </div>
+                      }
+                      meta={
+                        canEditRoles && member.role !== 'owner' ? (
+                          <Select
+                            aria-label={`Role for ${name}`}
+                            value={member.role}
+                            isDisabled={pendingMemberAction !== null}
+                            onChange={(value) =>
+                              void onMemberRoleChange(
+                                member,
+                                String(value) as Extract<OrgRole, 'admin' | 'editor' | 'viewer'>
+                              )
+                            }
+                          >
+                            <Select.Trigger className={`${inputClassName} w-32 text-sm`}>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox>
+                                {EDITABLE_ROLES.map((role) => (
+                                  <ListBox.Item key={role} id={role} textValue={ROLE_LABELS[role]}>
+                                    {ROLE_LABELS[role]}
+                                  </ListBox.Item>
+                                ))}
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                        ) : (
+                          <StatusTag tone={member.role === 'owner' ? 'accent' : undefined}>
+                            {labelFor(ROLE_LABELS, member.role)}
+                          </StatusTag>
+                        )
+                      }
+                      actions={
+                        menuItems.length > 0 ? (
+                          <RowActionsMenu label={`Actions for ${name}`} items={menuItems} />
+                        ) : null
+                      }
+                    />
+                  );
+                })}
+                {filteredInvites.length > 0 ? (
+                  <ResourceList.Section title="Pending invitations">
+                    {filteredInvites.map((invite) => (
+                      <ResourceList.Item
+                        key={invite.id}
+                        tone="warning"
+                        media={
+                          <Avatar color="warning" size="sm" variant="soft">
+                            <Avatar.Fallback>
+                              {invite.email.charAt(0).toUpperCase()}
+                            </Avatar.Fallback>
+                          </Avatar>
+                        }
+                        title={invite.email}
+                        description={
+                          <span title={fullDate(invite.expires_at)}>
+                            Invited as {labelFor(ROLE_LABELS, invite.role).toLowerCase()} · expires{' '}
+                            {timeUntil(invite.expires_at)}
+                          </span>
+                        }
+                        actions={
+                          <RowActionsMenu
+                            label={`Actions for the invite to ${invite.email}`}
+                            items={[
+                              {
+                                id: 'copy',
+                                label: 'Copy invite link',
+                                icon: <Copy01Icon size={15} />,
+                                disabled: pendingInviteAction !== null,
+                                onAction: () => void onCopyInviteLink(invite),
+                              },
+                              ...(canManageMembers
+                                ? [
+                                    {
+                                      id: 'revoke',
+                                      label: 'Revoke invite',
+                                      icon: <Delete01Icon size={15} />,
+                                      variant: 'danger' as const,
+                                      pending: pendingInviteAction === invite.id,
+                                      disabled: pendingInviteAction !== null,
+                                      onAction: () => void onRevokeInvite(invite),
+                                    },
+                                  ]
+                                : []),
+                            ]}
+                          />
+                        }
+                      />
+                    ))}
+                  </ResourceList.Section>
+                ) : null}
+              </ResourceList>
+            )}
+          </>
+        )}
+      </Card.Content>
+    </Card>
   );
 }

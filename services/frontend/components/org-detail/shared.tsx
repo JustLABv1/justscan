@@ -10,6 +10,8 @@ import {
 import { typedChartConfigFromSeries } from '@/components/ui/chart-adapter';
 import { OrgPolicy, OrgRiskScore, Scan, TrendPoint } from '@/lib/api';
 import { Chip } from '@/components/ui';
+import { StatusTag } from '@/components/ui/status-dot';
+import { humanize } from '@/lib/labels';
 
 export type OrgScanItem = Scan & {
   compliance: { policy_id: string; policy_name: string; status: string; evaluated_at?: string }[];
@@ -18,63 +20,52 @@ export type OrgScanItem = Scan & {
   external_ref?: string;
 };
 
-export function RulePill({ rule }: { rule: OrgPolicy['rules'][number] }) {
-  const base = 'inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border';
+const RULE_SEVERITY_LABELS: Record<string, string> = {
+  CRITICAL: 'critical',
+  HIGH: 'high',
+  MEDIUM: 'medium',
+  LOW: 'low',
+  UNKNOWN: 'unknown-severity',
+};
+
+function ruleSeverity(severity?: string) {
+  const key = String(severity ?? '').toUpperCase();
+  return RULE_SEVERITY_LABELS[key] ?? (key ? key.toLowerCase() : 'any');
+}
+
+/** A policy rule as one readable sentence, e.g. "No more than 0 critical findings". */
+export function describePolicyRule(rule: OrgPolicy['rules'][number]): string {
   switch (rule.type) {
     case 'max_cvss':
-      return (
-        <span className={`${base} bg-destructive/10 text-destructive border-destructive/20`}>
-          CVSS &lt; {rule.value}
-        </span>
-      );
+      return `CVSS below ${rule.value ?? '—'}`;
     case 'max_count':
-      return (
-        <span className={`${base} bg-orange-500/10 text-orange-400 border-orange-500/20`}>
-          {rule.value} {rule.severity}
-        </span>
-      );
+      return `At most ${rule.value ?? 0} ${ruleSeverity(rule.severity)} findings`;
     case 'max_total':
-      return (
-        <span className={`${base} bg-warning/10 text-warning-foreground border-warning/20`}>
-          Total ≤ {rule.value}
-        </span>
-      );
+      return `At most ${rule.value ?? 0} findings in total`;
     case 'require_fix':
-      return (
-        <span className={`${base} bg-info/10 text-info-foreground border-info/20`}>
-          Fix req. {rule.severity}
-        </span>
-      );
+      return `Fixes required for ${ruleSeverity(rule.severity)} findings`;
     case 'blocked_cve':
-      return (
-        <span className={`${base} bg-destructive/10 text-destructive border-destructive/20`}>
-          Block {rule.cve_id}
-        </span>
-      );
+      return rule.cve_id ? `Blocks ${rule.cve_id}` : 'Blocks a specific CVE';
     case 'xray_policy_block':
-      return (
-        <span className={`${base} bg-destructive/10 text-destructive border-destructive/20`}>
-          No Xray Blocking
-        </span>
-      );
+      return 'No Xray policy blocks';
     default:
-      return (
-        <span className={`${base} bg-muted/10 text-muted-foreground border-border/20`}>
-          {rule.type}
-        </span>
-      );
+      return humanize(rule.type);
   }
 }
 
-export function StatusBadge({ status }: { status: string }) {
+const RULE_TONES: Record<string, string> = {
+  max_cvss: 'danger',
+  max_count: 'warning',
+  max_total: 'warning',
+  require_fix: 'accent',
+  blocked_cve: 'danger',
+  xray_policy_block: 'danger',
+};
+
+export function RulePill({ rule }: { rule: OrgPolicy['rules'][number] }) {
   return (
-    <Chip
-      size="sm"
-      variant="soft"
-      color={status === 'completed' ? 'success' : status === 'failed' ? 'danger' : 'default'}
-    >
-      <span aria-hidden className="size-1.5 rounded-full bg-current" />
-      {status}
+    <Chip size="sm" variant="soft" color={RULE_TONES[rule.type] ?? 'default'}>
+      {describePolicyRule(rule)}
     </Chip>
   );
 }
@@ -123,26 +114,14 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1 rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-success-foreground dark:text-success-foreground">
-          <span className="size-1.5 rounded-full bg-success" />
-          {totalPass} pass
-        </span>
-        <span className="inline-flex items-center gap-1 rounded-full border border-destructive/25 bg-destructive/10 px-2 py-0.5 text-destructive dark:text-destructive">
-          <span className="size-1.5 rounded-full bg-destructive" />
-          {totalFail} fail
-        </span>
-        <span>{passRate}% pass rate</span>
-        <span className="text-muted-foreground">•</span>
-        <span>{activeDays}/30 active days</span>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <StatusTag tone="success">{totalPass} passed</StatusTag>
+        <StatusTag tone="danger">{totalFail} failed</StatusTag>
+        <StatusTag>{passRate}% pass rate</StatusTag>
+        <StatusTag>{activeDays} of 30 days with evaluations</StatusTag>
       </div>
 
-      <div
-        className="h-44 w-full overflow-hidden rounded-xl p-2"
-        style={{
-          background: 'var(--surface-secondary)',
-        }}
-      >
+      <div className="h-44 w-full overflow-hidden rounded-xl bg-muted/40 p-2">
         <EvilBarChart
           data={last30Days}
           config={config}

@@ -1,14 +1,15 @@
 'use client';
-import { StatusDot, StatusTag, type StatusDotTone } from '@/components/ui/status-dot';
+import { StatusDot, type StatusDotTone } from '@/components/ui/status-dot';
 import { FormAlert } from '@/components/ui/form-alert';
 import { PublicBackdrop } from '@/components/public/public-backdrop';
-import { PublicNavbar } from '@/components/public/public-navbar';
+import { PublicPage, PublicPageHeader } from '@/components/public/public-page';
+import { ScanModeSwitch } from '@/components/public/scan-mode-switch';
+import { FormField } from '@/components/ui/form-field';
 import {
   createPublicHelmScans,
   extractPublicHelmImages,
   getPublicHelmScanRun,
   getPublicSettings,
-  getToken,
   HelmExtractResponse,
   PublicSettings,
   Scan,
@@ -28,19 +29,8 @@ import {
   timeAgo,
   updateHelmPublicHistoryEntry,
 } from '@/lib/publicScanHistory';
-import {
-  Alert,
-  Button,
-  Card,
-  Checkbox,
-  Input,
-  Table,
-  Select,
-  ListBox,
-  Label,
-} from '@/components/ui';
-import { ArrowRight01Icon, IrisScanIcon, PackageIcon } from 'hugeicons-react';
-import { useTheme } from 'next-themes';
+import { Button, Card, Checkbox, Chip, Input, Label, ListBox, Select } from '@/components/ui';
+import { ArrowRight01Icon, PackageIcon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -158,9 +148,6 @@ function HelmHistoryList({
 
 export default function PublicHelmScanPage() {
   const router = useRouter();
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   // Form
   const [chartUrl, setChartUrl] = useState('');
@@ -184,7 +171,6 @@ export default function PublicHelmScanPage() {
   const [helmHistory, setHelmHistory] = useState<PublicHelmRunHistoryEntry[]>([]);
   const [settings, setSettings] = useState<PublicSettings | null>(null);
 
-  const isDark = mounted && resolvedTheme === 'dark';
   const isOCI = chartUrl.startsWith('oci://');
   const selectedImages = images.filter((img) => selected.has(img.id));
   const hasInvalidSelection = selectedImages.some((img) => img.edited_ref.trim() === '');
@@ -225,8 +211,6 @@ export default function PublicHelmScanPage() {
     }
 
     const cancelDeferred = deferEffect(() => {
-      setMounted(true);
-      setIsLoggedIn(!!getToken());
       void getPublicSettings()
         .then(setSettings)
         .catch(() =>
@@ -343,369 +327,256 @@ export default function PublicHelmScanPage() {
     router.push(`/public/scan/helm/runs/${run.id}`);
   }
 
-  return (
-    <div className="relative isolate min-h-screen overflow-hidden bg-background text-foreground">
-      <PublicBackdrop />
-      <section>
-        <PublicNavbar
-          leadingActions={
-            step === 'review' ? (
-              <Button
-                variant="secondary"
-                onPress={() => {
-                  setStep('form');
-                  setImages([]);
-                  setSelected(new Set());
-                }}
-              >
-                Change chart
-              </Button>
-            ) : undefined
-          }
-          title={
-            step === 'review' || step === 'scanning'
-              ? `Review ${chartInfo.name || 'chart images'}`
-              : 'Scan a Helm chart'
-          }
-          isDark={isDark}
-          isLoggedIn={isLoggedIn}
-          onToggleTheme={() => setTheme(isDark ? 'light' : 'dark')}
-          alternateAction={{
-            href: '/public/scan/image',
-            label: 'Scan Image',
-            icon: <IrisScanIcon size={16} />,
-            hideOnMobile: true,
-          }}
-        />
+  function changeChart() {
+    setStep('form');
+    setImages([]);
+    setSelected(new Set());
+  }
 
-        <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6">
-          <div className="space-y-6">
-            {(step === 'form' || step === 'extracting') && (
-              <div className="mx-auto w-full max-w-2xl space-y-10 py-6 sm:py-14">
-                <div className="space-y-6">
-                  <div className="space-y-4 text-center">
-                    <p className="mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
-                      <StatusDot tone="success" className="size-1.5" />
-                      Free to use · No account needed
-                    </p>
-                    <h1 className="bg-gradient-to-b from-foreground to-foreground/60 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-5xl">
-                      Find vulnerabilities in a Helm chart
-                    </h1>
-                    <p className="mx-auto max-w-lg text-sm text-muted-foreground sm:text-base">
-                      We extract the images a chart deploys so you can scan them together.
-                    </p>
-                  </div>
+  const reviewing = step === 'review' || step === 'scanning';
+  const allSelected = images.length > 0 && selected.size === images.length;
 
-                  {isDisabled ? (
-                    <FormAlert
-                      title="Public Helm scanning is unavailable"
-                      description={disabledMessage}
-                    />
-                  ) : (
-                    <form onSubmit={handleExtract} className="space-y-3">
-                      <div className="flex items-center gap-2 rounded-2xl border border-input bg-card/80 p-2 shadow-lg shadow-black/10 backdrop-blur transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30">
-                        <PackageIcon
-                          aria-hidden
-                          size={18}
-                          className="ml-2.5 shrink-0 text-muted-foreground"
-                        />
-                        <input
-                          id="helm-chart-url"
-                          type="text"
-                          value={chartUrl}
-                          onChange={(e) => setChartUrl(e.target.value)}
-                          placeholder="oci://registry.example.com/charts/app"
-                          aria-label="Chart source"
-                          aria-describedby="helm-chart-hint"
-                          disabled={step === 'extracting'}
-                          required
-                          autoComplete="off"
-                          spellCheck={false}
-                          className="h-12 min-w-0 flex-1 bg-transparent px-1 font-mono text-base sm:text-lg text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-60"
-                        />
-                        <Button
-                          type="submit"
-                          isDisabled={
-                            step === 'extracting' ||
-                            !chartUrl.trim() ||
-                            (!isOCI && !chartName.trim())
-                          }
-                          isPending={step === 'extracting'}
-                        >
-                          {step === 'extracting' ? 'Extracting…' : 'Extract images'}
-                        </Button>
-                      </div>
-                      <p id="helm-chart-hint" className="text-xs text-muted-foreground">
-                        A public HTTP chart repository (https://charts.example.com) or an oci://
-                        chart reference · {settings?.rate_limit_per_hour ?? 5} free scans per hour
-                      </p>
+  if (!reviewing) {
+    return (
+      <PublicPage
+        title="Scan a Helm chart"
+        backdrop={<PublicBackdrop />}
+        contentClassName="max-w-2xl space-y-10 py-12 sm:py-16"
+      >
+        <div className="space-y-6">
+          <div className="space-y-4 text-center">
+            <ScanModeSwitch active="helm" />
+            <p className="mx-auto flex w-fit items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
+              <StatusDot tone="success" className="size-1.5" />
+              Free to use · No account needed
+            </p>
+            <h1 className="bg-gradient-to-b from-foreground to-foreground/60 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-5xl">
+              Find vulnerabilities in a Helm chart
+            </h1>
+            <p className="mx-auto max-w-lg text-sm text-muted-foreground sm:text-base">
+              We find the images a chart deploys so you can scan them together.
+            </p>
+          </div>
 
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {!isOCI ? (
-                          <div className="space-y-1.5">
-                            <label
-                              htmlFor="helm-chart-name"
-                              className="block text-xs font-medium text-muted-foreground"
-                            >
-                              Chart name
-                            </label>
-                            <Input
-                              id="helm-chart-name"
-                              value={chartName}
-                              onChange={(e) => setChartName(e.target.value)}
-                              placeholder="nginx"
-                              disabled={step === 'extracting'}
-                              required
-                              className="w-full"
-                            />
-                          </div>
-                        ) : null}
-                        <div className="space-y-1.5">
-                          <label
-                            htmlFor="helm-chart-version"
-                            className="block text-xs font-medium text-muted-foreground"
-                          >
-                            Version (optional)
-                          </label>
-                          <Input
-                            id="helm-chart-version"
-                            value={chartVersion}
-                            onChange={(e) => setChartVersion(e.target.value)}
-                            placeholder={
-                              isOCI ? 'Overrides the tag in the reference' : 'Latest available'
-                            }
-                            disabled={step === 'extracting'}
-                            className="w-full"
-                          />
-                        </div>
-                      </div>
-
-                      {extractError ? (
-                        <FormAlert title="Couldn’t extract images" description={extractError} />
-                      ) : null}
-                    </form>
-                  )}
-                </div>
-
-                {helmHistory.length > 0 ? (
-                  <HelmHistoryList history={helmHistory} onOpenRun={openRun} />
-                ) : null}
+          {isDisabled ? (
+            <FormAlert title="Public Helm scanning is unavailable" description={disabledMessage} />
+          ) : (
+            <form onSubmit={handleExtract} className="space-y-3">
+              <div className="flex items-center gap-2 rounded-2xl border border-input bg-card/80 p-2 shadow-lg shadow-foreground/5 backdrop-blur transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
+                <PackageIcon
+                  aria-hidden
+                  size={18}
+                  className="ml-2.5 shrink-0 text-muted-foreground"
+                />
+                <input
+                  id="helm-chart-url"
+                  type="text"
+                  value={chartUrl}
+                  onChange={(e) => setChartUrl(e.target.value)}
+                  placeholder="oci://registry.example.com/charts/app"
+                  aria-label="Chart source"
+                  aria-describedby="helm-chart-hint"
+                  disabled={step === 'extracting'}
+                  required
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="h-12 min-w-0 flex-1 bg-transparent px-1 font-mono text-base text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-60 sm:text-lg"
+                />
+                <Button
+                  type="submit"
+                  isDisabled={
+                    step === 'extracting' || !chartUrl.trim() || (!isOCI && !chartName.trim())
+                  }
+                  isPending={step === 'extracting'}
+                >
+                  {step === 'extracting' ? 'Finding images…' : 'Find images'}
+                </Button>
               </div>
-            )}
+              <p id="helm-chart-hint" className="text-xs text-muted-foreground">
+                A public chart repository (https://charts.example.com) or an oci:// chart reference
+                · {settings?.rate_limit_per_hour ?? 5} free scans per hour
+              </p>
 
-            {/* Step 2 - Review images */}
-            {(step === 'review' || step === 'scanning') && (
-              <Card className="gap-0 p-5 sm:p-6">
-                <div className="space-y-4">
-                  {/* Chart info */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
-                        {chartInfo.name || 'Chart'}
-                        {chartInfo.version && (
-                          <span
-                            className="ml-2 text-xs px-2 py-0.5 rounded-full font-mono"
-                            style={{
-                              background: 'color-mix(in srgb, var(--primary) 10%, transparent)',
-                              color: 'var(--primary)',
-                              border:
-                                '1px solid color-mix(in srgb, var(--primary) 20%, transparent)',
-                            }}
-                          >
-                            v{chartInfo.version}
-                          </span>
-                        )}
-                      </p>
-                      <p
-                        className="text-xs mt-0.5 font-mono truncate max-w-xs"
-                        style={{ color: 'var(--text-faint)' }}
-                      >
-                        {chartUrl}
-                      </p>
-                    </div>
-                  </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {!isOCI ? (
+                  <FormField
+                    id="helm-chart-name"
+                    label="Chart name"
+                    value={chartName}
+                    onChange={(e) => setChartName(e.target.value)}
+                    placeholder="nginx"
+                    disabled={step === 'extracting'}
+                    required
+                  />
+                ) : null}
+                <FormField
+                  id="helm-chart-version"
+                  label="Version (optional)"
+                  value={chartVersion}
+                  onChange={(e) => setChartVersion(e.target.value)}
+                  placeholder={isOCI ? 'Overrides the tag in the reference' : 'Latest available'}
+                  disabled={step === 'extracting'}
+                />
+              </div>
 
-                  <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
-                    Override any extracted image reference before scanning. Selected rows will use
-                    the edited values.
-                  </p>
+              {extractError ? (
+                <FormAlert title="Couldn’t find the chart’s images" description={extractError} />
+              ) : null}
+            </form>
+          )}
+        </div>
 
-                  {/* Image list */}
-                  <Table className="rounded-xl overflow-hidden">
-                    <Table.ScrollContainer>
-                      <Table.Content
-                        aria-label="Extracted Helm images"
-                        className="min-w-[720px] table-fixed [&_td]:py-3"
-                        selectionMode="multiple"
-                        selectedKeys={selected}
-                        onSelectionChange={(keys) => {
-                          if (keys === 'all') {
-                            setSelected(new Set(images.map((image) => image.id)));
-                            return;
-                          }
-                          setSelected(new Set(Array.from(keys, (key) => String(key))));
-                        }}
-                      >
-                        <Table.Header>
-                          <Table.Column className="w-12">
-                            <Checkbox
-                              aria-label={
-                                selected.size === images.length && images.length > 0
-                                  ? 'Deselect all images'
-                                  : 'Select all images'
-                              }
-                              isSelected={images.length > 0 && selected.size === images.length}
-                              isIndeterminate={selected.size > 0 && selected.size < images.length}
-                              slot="selection"
-                              variant="secondary"
-                            >
-                              <Checkbox.Content>
-                                <Checkbox.Control>
-                                  <Checkbox.Indicator />
-                                </Checkbox.Control>
-                              </Checkbox.Content>
-                            </Checkbox>
-                          </Table.Column>
-                          <Table.Column isRowHeader className="w-[62%] min-w-[440px]">
-                            Image Reference
-                          </Table.Column>
-                          <Table.Column className="w-[38%] min-w-[320px]">
-                            Parsed / Source
-                          </Table.Column>
-                        </Table.Header>
-                        <Table.Body>
-                          {images.map((img) => {
-                            const parsed = parseHelmImageRef(img.edited_ref);
-                            return (
-                              <Table.Row key={img.id} id={img.id}>
-                                <Table.Cell onClick={(event) => event.stopPropagation()}>
-                                  <Checkbox
-                                    aria-label={`Select ${img.edited_ref || 'image'}`}
-                                    slot="selection"
-                                    variant="secondary"
-                                  >
-                                    <Checkbox.Content>
-                                      <Checkbox.Control>
-                                        <Checkbox.Indicator />
-                                      </Checkbox.Control>
-                                    </Checkbox.Content>
-                                  </Checkbox>
-                                </Table.Cell>
-                                <Table.Cell>
-                                  <Input
-                                    value={img.edited_ref}
-                                    onChange={(event) =>
-                                      updateEditedRef(img.id, event.target.value)
-                                    }
-                                    onClick={(event) => event.stopPropagation()}
-                                    aria-label="Image reference"
-                                    variant="secondary"
-                                    className="w-full bg-transparent text-sm font-mono font-medium border-0 shadow-none"
-                                    placeholder="registry.example.com/org/image:tag"
-                                  />
-                                </Table.Cell>
-                                <Table.Cell>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <p
-                                        className="text-xs font-mono truncate"
-                                        style={{ color: 'var(--text-faint)' }}
-                                      >
-                                        {parsed.name || 'Enter an image reference'}
-                                      </p>
-                                      <StatusTag className="font-mono">
-                                        {parsed.tag || '-'}
-                                      </StatusTag>
-                                    </div>
-                                    {img.source_path ? (
-                                      <p
-                                        className="text-xs mt-1 font-mono truncate"
-                                        style={{ color: 'var(--text-faint)' }}
-                                      >
-                                        {getHelmImageSourceLabel(img)}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                </Table.Cell>
-                              </Table.Row>
-                            );
-                          })}
-                        </Table.Body>
-                      </Table.Content>
-                    </Table.ScrollContainer>
-                  </Table>
+        {helmHistory.length > 0 ? (
+          <HelmHistoryList history={helmHistory} onOpenRun={openRun} />
+        ) : null}
+      </PublicPage>
+    );
+  }
 
-                  {/* Platform & scan button */}
-                  <div className="space-y-3 border-t border-divider/50 pt-4">
-                    <Select
-                      aria-label="Image platform"
-                      className="w-full sm:max-w-xs"
-                      value={platform || '__auto_platform__'}
+  return (
+    <PublicPage title={`Review ${chartInfo.name || 'chart images'}`} contentClassName="max-w-3xl">
+      <PublicPageHeader
+        eyebrow="Choose the images to scan"
+        title={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            {chartInfo.name || 'Helm chart'}
+            {chartInfo.version ? (
+              <Chip size="sm" variant="soft" className="font-mono">
+                v{chartInfo.version}
+              </Chip>
+            ) : null}
+          </span>
+        }
+        titleTooltip={chartInfo.name || 'Helm chart'}
+        subtitle={
+          <span className="font-mono text-xs" title={chartUrl}>
+            {chartUrl}
+          </span>
+        }
+        actions={[{ label: 'Change chart', onPress: changeChart, disabled: step === 'scanning' }]}
+      />
+
+      <Card className="gap-0 overflow-hidden py-0">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <Checkbox
+            isSelected={allSelected}
+            isIndeterminate={selected.size > 0 && !allSelected}
+            isDisabled={step === 'scanning' || images.length === 0}
+            onChange={(value) =>
+              setSelected(value ? new Set(images.map((image) => image.id)) : new Set())
+            }
+          >
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+            <span className="text-sm font-medium">Select all</span>
+          </Checkbox>
+          <span className="text-sm tabular-nums text-muted-foreground">
+            {selected.size} of {images.length} selected
+          </span>
+        </div>
+        {images.length === 0 ? (
+          <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+            No container images were found in this chart.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border" aria-label="Images found in the chart">
+            {images.map((img) => {
+              const isChecked = selected.has(img.id);
+              const parsed = parseHelmImageRef(img.edited_ref);
+              const facts = [
+                img.source_path ? getHelmImageSourceLabel(img) : '',
+                parsed.tag ? `tag ${parsed.tag}` : '',
+              ]
+                .filter(Boolean)
+                .join(' · ');
+              return (
+                <li key={img.id} className="flex items-start gap-3 px-4 py-3">
+                  <div className="pt-2">
+                    <Checkbox
+                      aria-label={`Scan ${img.edited_ref || 'this image'}`}
+                      isSelected={isChecked}
                       isDisabled={step === 'scanning'}
                       onChange={(value) =>
-                        setPlatform(value === '__auto_platform__' ? '' : String(value ?? ''))
+                        setSelected((current) => {
+                          const next = new Set(current);
+                          if (value) next.add(img.id);
+                          else next.delete(img.id);
+                          return next;
+                        })
                       }
-                    >
-                      <Label>Platform</Label>
-                      <Select.Trigger>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          {PLATFORMS.map((item) => (
-                            <ListBox.Item
-                              id={item.value || '__auto_platform__'}
-                              key={item.value || '__auto_platform__'}
-                            >
-                              {item.label}
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-
-                    {scanError ? (
-                      <Alert status="danger">
-                        <Alert.Indicator />
-                        <Alert.Content>
-                          <Alert.Title>Unable to create Helm run</Alert.Title>
-                          <Alert.Description>{scanError}</Alert.Description>
-                        </Alert.Content>
-                      </Alert>
-                    ) : null}
-
-                    {step === 'scanning' ? (
-                      <Alert status="accent">
-                        <Alert.Indicator />
-                        <Alert.Content>
-                          <Alert.Title>Creating Helm run</Alert.Title>
-                          <Alert.Description>
-                            Queueing the selected images now. This can take a few seconds before the
-                            run detail page is ready.
-                          </Alert.Description>
-                        </Alert.Content>
-                      </Alert>
-                    ) : null}
-
-                    <Button
-                      onPress={handleScan}
-                      isDisabled={selected.size === 0 || step === 'scanning' || hasInvalidSelection}
-                      isPending={step === 'scanning'}
-                      fullWidth
-                      size="lg"
-                    >
-                      {step === 'scanning'
-                        ? 'Creating Helm run…'
-                        : `Scan ${selected.size} image${selected.size !== 1 ? 's' : ''}`}
-                    </Button>
+                    />
                   </div>
-                </div>
-              </Card>
-            )}
-          </div>
-        </main>
-      </section>
-    </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <Input
+                      value={img.edited_ref}
+                      onChange={(event) => updateEditedRef(img.id, event.target.value)}
+                      aria-label="Image reference"
+                      disabled={step === 'scanning'}
+                      className="w-full font-mono"
+                      placeholder="registry.example.com/org/image:tag"
+                      aria-invalid={isChecked && !img.edited_ref.trim() ? true : undefined}
+                    />
+                    {facts ? (
+                      <p className="truncate font-mono text-xs text-muted-foreground" title={facts}>
+                        {facts}
+                      </p>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <div className="space-y-4 border-t border-border p-4">
+          <p className="text-sm text-muted-foreground">
+            You can edit a reference before scanning, for example to pick a different tag.
+          </p>
+          <Select
+            aria-label="Image platform"
+            className="w-full sm:max-w-xs"
+            value={platform || '__auto_platform__'}
+            isDisabled={step === 'scanning'}
+            onChange={(value) =>
+              setPlatform(value === '__auto_platform__' ? '' : String(value ?? ''))
+            }
+          >
+            <Label>Platform</Label>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {PLATFORMS.map((item) => (
+                  <ListBox.Item
+                    id={item.value || '__auto_platform__'}
+                    key={item.value || '__auto_platform__'}
+                  >
+                    {item.label}
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+
+          {scanError ? (
+            <FormAlert title="The scans couldn’t be started" description={scanError} />
+          ) : null}
+
+          <Button
+            onPress={handleScan}
+            isDisabled={selected.size === 0 || step === 'scanning' || hasInvalidSelection}
+            isPending={step === 'scanning'}
+            fullWidth
+            size="lg"
+          >
+            {step === 'scanning'
+              ? 'Starting scans…'
+              : `Scan ${selected.size} image${selected.size !== 1 ? 's' : ''}`}
+          </Button>
+        </div>
+      </Card>
+    </PublicPage>
   );
 }

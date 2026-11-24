@@ -1,107 +1,43 @@
 'use client';
-import { Logo } from '@/components/logo';
-import { ApiError, getSharedScan, getToken, Scan } from '@/lib/api';
+import { HelmImageList, HelmProgress, helmTotals } from '@/components/public/helm-image-list';
+import { PublicPage, PublicPageHeader } from '@/components/public/public-page';
+import { SeveritySummary } from '@/components/public/public-scan-result';
+import { ScanDetailsDisclosure } from '@/components/public/scan-details';
+import { buttonVariants, Card, Skeleton } from '@/components/ui';
+import { ApiError, getSharedScan, Scan } from '@/lib/api';
+import { pluralize } from '@/lib/labels';
 import { fullDate, timeAgo } from '@/lib/time';
-import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
-import { StatusTag, type StatusDotTone } from '@/components/ui/status-dot';
-import { useTheme } from 'next-themes';
+import { Copy01Icon, Tick02Icon } from 'hugeicons-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 
-// ── Severity / status helpers ────────────────────────────────────────
-
-const SEV: Record<string, string> = {
-  critical: 'text-destructive font-bold',
-  high: 'text-orange-400',
-  medium: 'text-warning-foreground',
-  low: 'text-info-foreground',
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const tone: StatusDotTone =
-    status === 'completed'
-      ? 'success'
-      : status === 'failed'
-        ? 'danger'
-        : status === 'running'
-          ? 'accent'
-          : status === 'cancelled'
-            ? 'warning'
-            : 'neutral';
-  return (
-    <StatusTag tone={tone} className="whitespace-nowrap text-sm capitalize text-foreground">
-      {status === 'pending' ? 'queued' : status}
-    </StatusTag>
-  );
+/** Chart name from a chart reference such as oci://registry/charts/app:1.2.3. */
+function chartNameFromUrl(url: string) {
+  const last =
+    url
+      .replace(/^oci:\/\//, '')
+      .replace(/\/+$/, '')
+      .split('/')
+      .pop() ?? '';
+  return last.split(':')[0];
 }
 
-function SevCount({ count, cls }: { count: number; cls: string }) {
+function LoadingState() {
   return (
-    <span className={`font-mono text-sm tabular-nums ${count ? cls : 'text-muted-foreground'}`}>
-      {count || '—'}
-    </span>
+    <PublicPage title="Shared Helm chart scan">
+      <div role="status" aria-live="polite" className="space-y-6">
+        <span className="sr-only">Loading shared Helm chart scan</span>
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-8 w-72" />
+        </div>
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    </PublicPage>
   );
 }
-
-function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return <div className="size-9" />;
-  const isDark = resolvedTheme === 'dark';
-  return (
-    <button
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="size-9 flex items-center justify-center rounded-xl transition-colors"
-      style={{
-        background: 'var(--row-hover)',
-        border: '1px solid var(--border-subtle)',
-        color: 'var(--text-muted)',
-      }}
-      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-    >
-      {isDark ? (
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="5" />
-          <line x1="12" y1="1" x2="12" y2="3" />
-          <line x1="12" y1="21" x2="12" y2="23" />
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-          <line x1="1" y1="12" x2="3" y2="12" />
-          <line x1="21" y1="12" x2="23" y2="12" />
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-        </svg>
-      ) : (
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-      )}
-    </button>
-  );
-}
-
-// ── Main content (needs Suspense for useSearchParams) ────────────────
 
 function HelmGroupContent() {
   const { token } = useParams<{ token: string }>();
@@ -111,13 +47,7 @@ function HelmGroupContent() {
   const [scans, setScans] = useState<Scan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsLoggedIn(!!getToken());
-  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -133,431 +63,130 @@ function HelmGroupContent() {
         for (const r of results) {
           if ('__error' in (r as Record<string, unknown>)) {
             const err = (r as { __error: unknown; __token: string }).__error;
-            const tok = (r as { __error: unknown; __token: string }).__token;
             if (err instanceof ApiError && err.status === 401) {
               router.push(
                 `/login?returnUrl=/shared/helm/${token}${searchParams.toString() ? '?' + searchParams.toString() : ''}`
               );
               return;
             }
-            // Skip individual failed tokens (e.g. token revoked), don't fail whole group
-            console.warn('Failed to load scan for token', tok, err);
+            // Skip individual failed tokens (e.g. a revoked link); don't fail the whole group.
           } else {
             validScans.push(r as Scan);
           }
         }
         if (validScans.length === 0) {
-          setError('No scans could be loaded. The share links may have been revoked.');
+          setError(
+            'The owner may have turned off these share links, or the link may be wrong. Ask them for a new one.'
+          );
         } else {
           setScans(validScans);
         }
       })
-      .catch((e) => setError(e.message))
+      .catch(() => setError('The shared scan could not be loaded. Try again in a moment.'))
       .finally(() => setLoading(false));
   }, [token, router]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Derived values ────────────────────────────────────────────────
   const firstScan = scans[0];
   const chartUrl = firstScan?.helm_chart ?? '';
   const isOCI = chartUrl.startsWith('oci://');
-  const displayUrl = chartUrl.replace(/^oci:\/\//, '') || 'Helm Chart Scan';
-
-  const totalImages = scans.length;
-  const completed = scans.filter((s) => s.status === 'completed').length;
-  const failed = scans.filter((s) => s.status === 'failed').length;
-  const pending = scans.filter((s) => s.status === 'pending' || s.status === 'running').length;
-  const totalCritical = scans.reduce((a, s) => a + (s.critical_count ?? 0), 0);
-  const totalHigh = scans.reduce((a, s) => a + (s.high_count ?? 0), 0);
-  const totalMedium = scans.reduce((a, s) => a + (s.medium_count ?? 0), 0);
-  const totalLow = scans.reduce((a, s) => a + (s.low_count ?? 0), 0);
-
+  const chartTitle = firstScan?.helm_chart_name || chartNameFromUrl(chartUrl) || 'Helm chart scan';
+  const chartVersion = firstScan?.helm_chart_version;
+  const totals = helmTotals(scans);
   const mostRecentAt = scans.length > 0 ? scans[0].created_at : null;
-  const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
 
-  function handleCopyLink() {
-    navigator.clipboard.writeText(pageUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
   }
 
-  if (loading)
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: 'var(--app-bg)' }}
-      >
-        <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-          <span className="size-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-          Loading helm chart scan…
-        </div>
-      </div>
-    );
+  if (loading) return <LoadingState />;
 
-  if (error)
+  if (error) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: 'var(--app-bg)' }}
-      >
-        <div className="text-center space-y-3">
-          <p className="text-destructive dark:text-destructive text-sm">{error}</p>
-          <Link href="/" className="text-primary dark:text-primary text-sm hover:underline">
-            ← Back to home
+      <PublicPage title="Shared Helm chart scan">
+        <div className="mx-auto max-w-md space-y-4 py-16 text-center">
+          <h1 className="text-xl font-semibold">This shared scan isn’t available</h1>
+          <p className="text-sm text-muted-foreground">{error}</p>
+          <Link href="/" className={buttonVariants()}>
+            Go home
           </Link>
         </div>
-      </div>
+      </PublicPage>
     );
+  }
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--app-bg)' }}>
-      {/* Nav */}
-      <nav
-        className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 h-14"
-        style={{
-          background: 'var(--nav-bg)',
-          borderBottom: '1px solid var(--border-subtle)',
-          backdropFilter: 'blur(12px)',
-        }}
-      >
-        <Link href="/" className="flex items-center gap-2.5 select-none">
-          <Logo size={22} className="text-[color-mix(in srgb, var(--primary) 78%, white)]" />
-          <span
-            className="font-semibold text-sm tracking-tight"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            JustScan
+    <PublicPage title={chartTitle}>
+      <PublicPageHeader
+        eyebrow="Shared Helm chart scan"
+        title={chartVersion ? `${chartTitle} ${chartVersion}` : chartTitle}
+        subtitle={
+          <span title={mostRecentAt ? fullDate(mostRecentAt) : undefined}>
+            {pluralize(totals.images, 'image')}
+            {mostRecentAt ? ` · scanned ${timeAgo(mostRecentAt)}` : ''}
           </span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          {isLoggedIn ? (
-            <Link href="/scans" className="btn-primary-sm">
-              Dashboard →
-            </Link>
-          ) : (
-            <Link href="/login" className="btn-primary-sm">
-              Sign in →
-            </Link>
-          )}
+        }
+        actions={[
+          {
+            label: copied ? 'Link copied' : 'Copy link',
+            icon: copied ? <Tick02Icon size={15} /> : <Copy01Icon size={15} />,
+            onPress: handleCopyLink,
+          },
+        ]}
+      />
+
+      <SeveritySummary
+        counts={totals.counts}
+        context={`Across ${pluralize(totals.images, 'image')}:`}
+        status={<HelmProgress totals={totals} />}
+      />
+
+      <Card className="gap-0 overflow-hidden py-0">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-base font-semibold">Images</h2>
+          <p className="text-sm text-muted-foreground">
+            Open an image to see its full vulnerability report.
+          </p>
         </div>
-      </nav>
+        <HelmImageList
+          showSourceLine
+          emptyLabel="No images were shared for this chart."
+          items={scans.map((scan) => ({
+            key: scan.id,
+            scan,
+            href:
+              scan.share_token && (scan.status === 'completed' || scan.status === 'failed')
+                ? `/shared/${scan.share_token}`
+                : undefined,
+          }))}
+        />
+      </Card>
 
-      {/* Content */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Header */}
-        <div className="space-y-3">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                {/* Helm package icon */}
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="color-mix(in srgb, var(--primary) 78%, white)"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="shrink-0"
-                >
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
-                <h1
-                  className="text-xl font-semibold truncate"
-                  style={{ color: 'var(--text-primary)' }}
-                  title={chartUrl}
-                >
-                  {displayUrl}
-                </h1>
-                {chartUrl && (
-                  <span
-                    className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium"
-                    style={{
-                      background: isOCI
-                        ? 'color-mix(in srgb, var(--primary) 10%, transparent)'
-                        : 'rgba(59,130,246,0.1)',
-                      color: isOCI ? 'color-mix(in srgb, var(--primary) 78%, white)' : '#60a5fa',
-                      border: `1px solid ${isOCI ? 'color-mix(in srgb, var(--primary) 20%, transparent)' : 'rgba(59,130,246,0.2)'}`,
-                    }}
-                  >
-                    {isOCI ? 'OCI' : 'HTTP'}
-                  </span>
-                )}
-              </div>
-              <div
-                className="flex items-center gap-3 mt-1.5 text-xs"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                <span>
-                  {totalImages} image{totalImages !== 1 ? 's' : ''}
-                </span>
-                {mostRecentAt && (
-                  <span title={fullDate(mostRecentAt)}>· Scanned {timeAgo(mostRecentAt)}</span>
-                )}
-              </div>
-            </div>
-
-            {/* Copy link button */}
-            <button
-              onClick={handleCopyLink}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl font-medium transition-all shrink-0"
-              style={{
-                background: copied
-                  ? 'rgba(34,197,94,0.12)'
-                  : 'color-mix(in srgb, var(--primary) 10%, transparent)',
-                border: `1px solid ${copied ? 'rgba(34,197,94,0.25)' : 'color-mix(in srgb, var(--primary) 20%, transparent)'}`,
-                color: copied ? '#4ade80' : 'color-mix(in srgb, var(--primary) 78%, white)',
-              }}
-            >
-              {copied ? (
-                <>
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                  </svg>
-                  Copy link
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Aggregate severity notice */}
-          {(totalCritical > 0 || totalHigh > 0) && (
-            <div
-              className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm"
-              style={{
-                background: 'rgba(239,68,68,0.07)',
-                border: '1px solid rgba(239,68,68,0.18)',
-              }}
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#f87171"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-              <span style={{ color: '#f87171' }}>
-                {totalCritical > 0 && (
-                  <>
-                    <strong>{totalCritical}</strong> critical{totalHigh > 0 ? ', ' : ''}
-                  </>
-                )}
-                {totalHigh > 0 && (
-                  <>
-                    <strong>{totalHigh}</strong> high
-                  </>
-                )}{' '}
-                vulnerabilit{totalCritical + totalHigh !== 1 ? 'ies' : 'y'} found across {completed}{' '}
-                image{completed !== 1 ? 's' : ''}
-              </span>
-            </div>
-          )}
-          {totalCritical === 0 && totalHigh === 0 && completed > 0 && (
-            <div
-              className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm"
-              style={{
-                background: 'rgba(16,185,129,0.07)',
-                border: '1px solid rgba(16,185,129,0.18)',
-              }}
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#34d399"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              <span style={{ color: '#34d399' }}>No critical or high vulnerabilities found</span>
-            </div>
-          )}
-        </div>
-
-        {/* Stats row */}
-        <StatStrip>
-          <StatStripItem label="Images" value={totalImages} />
-          <StatStripItem label="Completed" value={completed} tone="success" />
-          {pending > 0 && <StatStripItem label="Running" value={pending} tone="accent" />}
-          {failed > 0 && <StatStripItem label="Failed" value={failed} tone="danger" />}
-          {totalCritical > 0 && (
-            <StatStripItem label="Critical" value={totalCritical} tone="danger" />
-          )}
-          {totalHigh > 0 && <StatStripItem label="High" value={totalHigh} tone="warning" />}
-          {totalMedium > 0 && <StatStripItem label="Medium" value={totalMedium} tone="warning" />}
-          {totalLow > 0 && <StatStripItem label="Low" value={totalLow} />}
-        </StatStrip>
-
-        {/* Image list */}
-        <div
-          className="rounded-xl overflow-hidden"
-          style={{ border: '1px solid var(--border-subtle)' }}
-        >
-          {/* Table header */}
-          <div
-            className="px-4 py-2.5 text-xs font-medium uppercase tracking-wide hidden sm:grid"
-            style={{
-              gridTemplateColumns: '1fr 120px 1fr 60px 60px 60px 60px 110px',
-              background: 'var(--table-header-bg)',
-              borderBottom: '1px solid var(--border-subtle)',
-              color: 'var(--text-muted)',
-            }}
-          >
-            <span>Image</span>
-            <span>Tag</span>
-            <span>Source</span>
-            <span className="text-center">C</span>
-            <span className="text-center">H</span>
-            <span className="text-center">M</span>
-            <span className="text-center">L</span>
-            <span className="text-right">Status</span>
-          </div>
-
-          {/* Rows */}
-          {scans.map((scan, i) => {
-            const href = scan.share_token ? `/shared/${scan.share_token}` : '#';
-            const isLinkable =
-              !!scan.share_token && (scan.status === 'completed' || scan.status === 'failed');
-            const Row = isLinkable ? Link : 'div';
-            return (
-              <Row
-                key={scan.id}
-                // @ts-expect-error — href only passed to Link
-                href={isLinkable ? href : undefined}
-                className={`flex flex-col sm:grid items-center px-4 py-3 gap-2 transition-colors ${isLinkable ? 'hover:bg-primary/5 cursor-pointer group' : ''}`}
-                style={{
-                  gridTemplateColumns: '1fr 120px 1fr 60px 60px 60px 60px 110px',
-                  borderBottom: i < scans.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                  background: 'var(--card-bg)',
-                }}
-              >
-                {/* Mobile label */}
-                <span
-                  className="sm:hidden text-xs font-medium"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  Image
-                </span>
-
-                <span
-                  className={`text-sm font-mono truncate transition-colors ${isLinkable ? 'group-hover:text-primary' : ''}`}
-                  style={{ color: 'var(--text-primary)' }}
-                  title={scan.image_name}
-                >
-                  {scan.image_name}
-                </span>
-                <span
-                  className="text-xs font-mono truncate"
-                  style={{ color: 'var(--text-muted)' }}
-                  title={scan.image_tag}
-                >
-                  {scan.image_tag || 'latest'}
-                </span>
-                <span
-                  className="text-xs truncate"
-                  style={{ color: 'var(--text-faint)' }}
-                  title={scan.helm_source_path ?? ''}
-                >
-                  {scan.helm_source_path ? scan.helm_source_path.split(' › ')[0] : '—'}
-                </span>
-                <span className="text-center sm:block flex gap-1 items-center">
-                  <SevCount count={scan.critical_count ?? 0} cls={SEV.critical} />
-                </span>
-                <span className="text-center sm:block flex gap-1 items-center">
-                  <SevCount count={scan.high_count ?? 0} cls={SEV.high} />
-                </span>
-                <span className="text-center sm:block flex gap-1 items-center">
-                  <SevCount count={scan.medium_count ?? 0} cls={SEV.medium} />
-                </span>
-                <span className="text-center sm:block flex gap-1 items-center">
-                  <SevCount count={scan.low_count ?? 0} cls={SEV.low} />
-                </span>
-                <span className="flex justify-end items-center gap-2">
-                  <StatusBadge status={scan.status} />
-                  {isLinkable && (
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ color: 'var(--text-faint)' }}
-                    >
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  )}
-                </span>
-              </Row>
-            );
-          })}
-        </div>
-
-        {/* Footer note */}
-        <p className="text-xs text-center" style={{ color: 'var(--text-faint)' }}>
-          Powered by{' '}
-          <Link href="/" className="hover:underline" style={{ color: 'var(--text-muted)' }}>
-            JustScan
-          </Link>{' '}
-          · Click an image row to view its full vulnerability report
-        </p>
-      </div>
-    </div>
+      {chartUrl ? (
+        <ScanDetailsDisclosure
+          items={[
+            { label: 'Chart source', value: chartUrl, mono: true, wide: true },
+            { label: 'Repository type', value: isOCI ? 'OCI registry' : 'Chart repository' },
+            {
+              label: 'Last scanned',
+              value: mostRecentAt ? fullDate(mostRecentAt) : null,
+              hidden: !mostRecentAt,
+            },
+          ]}
+        />
+      ) : null}
+    </PublicPage>
   );
 }
 
 export default function SharedHelmGroupPage() {
   return (
-    <Suspense
-      fallback={
-        <div
-          className="min-h-screen flex items-center justify-center"
-          style={{ background: 'var(--app-bg)' }}
-        >
-          <span className="size-5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-        </div>
-      }
-    >
+    <Suspense fallback={<LoadingState />}>
       <HelmGroupContent />
     </Suspense>
   );

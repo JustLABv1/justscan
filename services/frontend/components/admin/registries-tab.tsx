@@ -133,7 +133,7 @@ export function RegistriesTab() {
   function requiredLabel(text: string) {
     return (
       <span>
-        {text} <span className="text-danger">*</span>
+        {text} <span className="text-destructive">*</span>
       </span>
     );
   }

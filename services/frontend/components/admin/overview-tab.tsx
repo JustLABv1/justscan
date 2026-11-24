@@ -1,7 +1,8 @@
 'use client';
 
 import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
-import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
+import { StatusDot, StatusTag } from '@/components/ui/status-dot';
+import { auditActor, parseAuditDetails } from '@/components/admin/audit-format';
 import {
   Bar as EvilBar,
   EvilBarChart,
@@ -32,7 +33,8 @@ import type { AdminDashboard, AdminDashboardVulnerabilityTrendPoint } from '@/li
 import { APP_COPYRIGHT, APP_FRONTEND_VERSION } from '@/lib/build-info';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Button, Card, Link, Skeleton } from '@/components/ui';
+import { Button, Card, DescriptionList, Link, ResourceList, Skeleton } from '@/components/ui';
+import { eventLabel, pluralize } from '@/lib/labels';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 function formatCompact(value: number) {
@@ -63,7 +65,7 @@ function ScanVolumeChart({ data }: { data: { date: string; value: number }[] }) 
         className="h-full !aspect-auto"
         chartProps={{ margin: { top: 8, right: 8, left: -18, bottom: 0 } }}
       >
-        <EvilLineGrid stroke="rgba(161,161,170,0.15)" />
+        <EvilLineGrid stroke="var(--border)" />
         <EvilLineXAxis
           dataKey="date"
           tickFormatter={(value: string) => formatChartDate(value)}
@@ -100,7 +102,7 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
           className="h-full !aspect-auto"
           stackType="stacked"
         >
-          <EvilBarGrid stroke="rgba(161,161,170,0.15)" vertical={false} />
+          <EvilBarGrid stroke="var(--border)" vertical={false} />
           <EvilBarXAxis dataKey="label" />
           <EvilBarYAxis />
           <EvilBarTooltip variant="frosted-glass" roundness="lg" />
@@ -122,59 +124,6 @@ function VulnerabilityTrendBars({ data }: { data: AdminDashboardVulnerabilityTre
         ))}
       </div>
     </div>
-  );
-}
-
-function SummaryTile({
-  label,
-  value,
-  hint,
-  hintClassName,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  hintClassName?: string;
-}) {
-  return <StatStripItem label={label} value={value} hint={hint} />;
-}
-
-function AttentionRow({
-  href,
-  label,
-  detail,
-  count,
-  tone,
-}: {
-  href: string;
-  label: string;
-  detail: string;
-  count: number;
-  tone: 'danger' | 'warning' | 'default';
-}) {
-  return (
-    <Card variant="secondary" className="p-0">
-      <Link href={href} className="flex items-center justify-between gap-4 px-4 py-3 no-underline">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">{label}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
-        </div>
-        <StatusTag tone={toneFromChipColor(tone === undefined ? 'default' : tone)}>
-          {count}
-        </StatusTag>
-      </Link>
-    </Card>
-  );
-}
-
-function ConfigurationLink({ href, label, value }: { href: string; label: string; value: number }) {
-  return (
-    <Card variant="secondary" className="p-0">
-      <Link href={href} className="flex items-center justify-between gap-3 px-4 py-3 no-underline">
-        <span className="text-sm font-medium text-foreground">{label}</span>
-        <StatusTag>{value}</StatusTag>
-      </Link>
-    </Card>
   );
 }
 
@@ -216,17 +165,15 @@ export function OverviewTab() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="border border-divider/70">
-              <Card.Content className="space-y-2">
-                <Skeleton className="h-3 w-20 rounded-full" />
-                <Skeleton className="h-8 w-16 rounded-lg" />
-                <Skeleton className="h-3 w-24 rounded-full" />
-              </Card.Content>
-            </Card>
+        <StatStrip>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="space-y-2 bg-card px-4 py-3.5">
+              <Skeleton className="h-3 w-20 rounded-full" />
+              <Skeleton className="h-7 w-16 rounded-lg" />
+              <Skeleton className="h-3 w-24 rounded-full" />
+            </div>
           ))}
-        </div>
+        </StatStrip>
         <div className="grid gap-4 xl:grid-cols-2">
           <ChartSkeleton />
           <ChartSkeleton />
@@ -268,13 +215,19 @@ export function OverviewTab() {
       : 0;
   const workerIssues =
     dashboard.scanner_health.stale_workers + dashboard.scanner_health.error_workers;
-  const attentionItems = [
+  const attentionItems: Array<{
+    href: string;
+    label: string;
+    detail: string;
+    count: number;
+    tone: 'danger' | 'warning';
+  }> = [
     ...(failedScans > 0
       ? [
           {
             href: '/admin/scans?status=failed',
             label: 'Failed scans',
-            detail: 'Review failed work and retry or investigate the affected jobs.',
+            detail: 'Retry or investigate the affected jobs.',
             count: failedScans,
             tone: 'danger' as const,
           },
@@ -284,8 +237,8 @@ export function OverviewTab() {
       ? [
           {
             href: '/admin/scans',
-            label: 'Blocked policies',
-            detail: 'Review scans that require a policy decision or operational follow-up.',
+            label: 'Scans blocked by policy',
+            detail: 'These scans need a policy decision or operational follow-up.',
             count: dashboard.queues.blocked_policies,
             tone: 'warning' as const,
           },
@@ -307,351 +260,242 @@ export function OverviewTab() {
           {
             href: '/admin/insights',
             label: 'API errors in the last 24 hours',
-            detail: 'Inspect request telemetry and error patterns before they affect users.',
+            detail: 'Inspect request logs before the errors affect users.',
             count: dashboard.insights.api_error_requests_24h,
             tone: 'warning' as const,
           },
         ]
       : []),
+    ...(dashboard.insights.xray_error_requests_24h > 0
+      ? [
+          {
+            href: '/admin/insights?section=xray',
+            label: 'Xray request errors in the last 24 hours',
+            detail: 'Calls to Artifactory Xray failed; check credentials and connectivity.',
+            count: dashboard.insights.xray_error_requests_24h,
+            tone: 'warning' as const,
+          },
+        ]
+      : []),
   ];
+  const activeScans = dashboard.queues.running + dashboard.queues.pending;
+  const criticalFindings = dashboard.severity_totals.critical ?? 0;
 
   return (
-    <div className="space-y-5">
-      <Card className="border border-divider/70">
-        <Card.Header className="flex items-start justify-between gap-3">
-          <div>
-            <Card.Title>Platform health</Card.Title>
-            <Card.Description>
-              A concise view of what needs attention across the system right now.
-            </Card.Description>
-          </div>
-          <StatusTag tone={toneFromChipColor(attentionItems.length === 0 ? 'success' : 'warning')}>
-            {attentionItems.length === 0 ? 'No immediate attention' : 'Attention needed'}
-          </StatusTag>
-        </Card.Header>
-        <Card.Content className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Queue</p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">
-              {dashboard.queues.running + dashboard.queues.pending} active
-            </p>
-            <p className="text-xs text-muted-foreground">{dashboard.queues.pending} pending</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Scanner workers</p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">
-              {dashboard.scanner_health.healthy_workers} healthy
-            </p>
-            <p className="text-xs text-muted-foreground">{workerIssues} need review</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Public scanning</p>
-            <p className="mt-1 text-xl font-semibold">
-              {dashboard.public_scan_enabled ? 'Enabled' : 'Disabled'}
-            </p>
-            <p className="text-xs text-muted-foreground">System exposure setting</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">API error rate</p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">{telemetryErrorRate}%</p>
-            <p className="text-xs text-muted-foreground">Last 24 hours</p>
-          </div>
-        </Card.Content>
-      </Card>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <Card className="border border-divider/70">
-          <Card.Header>
-            <Card.Title>Needs attention</Card.Title>
-            <Card.Description>
-              Follow the highest-signal issues without hunting through pages.
-            </Card.Description>
-          </Card.Header>
-          <Card.Content className="space-y-2">
-            {attentionItems.length > 0 ? (
-              attentionItems.map((item) => <AttentionRow key={item.label} {...item} />)
-            ) : (
-              <div className="rounded-xl border border-divider/70 bg-surface-secondary px-3 py-5 text-sm text-muted-foreground">
-                The scan queue, local workers, and API telemetry do not report an immediate issue.
-              </div>
-            )}
-          </Card.Content>
-        </Card>
-
-        <Card className="border border-divider/70">
-          <Card.Header>
-            <Card.Title>Configuration coverage</Card.Title>
-            <Card.Description>Open the service you want to manage directly.</Card.Description>
-          </Card.Header>
-          <Card.Content className="space-y-2">
-            <ConfigurationLink
-              href="/admin/users"
-              label="Users"
-              value={dashboard.admin_counts.users}
-            />
-            <ConfigurationLink
-              href="/admin/tokens"
-              label="Service tokens"
-              value={dashboard.admin_counts.tokens}
-            />
-            <ConfigurationLink
-              href="/admin/identity"
-              label="Identity providers"
-              value={dashboard.admin_counts.identity_providers}
-            />
-            <ConfigurationLink
-              href="/admin/notifications"
-              label="Active channels"
-              value={dashboard.admin_counts.active_channels}
-            />
-            <ConfigurationLink
-              href="/admin/registries"
-              label="Global registries"
-              value={dashboard.admin_counts.global_registries}
-            />
-          </Card.Content>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryTile
-          label="Total Scans"
+    <div className="space-y-4">
+      <StatStrip>
+        <StatStripItem
+          label="Scans"
           value={dashboard.total_scans.toLocaleString()}
-          hint={`${dashboard.queues.running + dashboard.queues.pending} active in queue`}
-          hintClassName={
-            dashboard.queues.running + dashboard.queues.pending > 0
-              ? 'text-primary'
-              : 'text-muted-foreground'
+          hint={
+            activeScans > 0
+              ? `${activeScans.toLocaleString()} in progress · ${dashboard.queues.pending.toLocaleString()} queued`
+              : `${successRate}% completed successfully`
           }
+          tone={activeScans > 0 ? 'accent' : undefined}
         />
-        <SummaryTile
+        <StatStripItem
           label="Findings"
           value={formatCompact(totalFindings)}
-          hint={`${dashboard.severity_totals.critical ?? 0} critical`}
-          hintClassName={
-            (dashboard.severity_totals.critical ?? 0) > 0 ? 'text-danger' : 'text-muted-foreground'
-          }
+          hint={`${criticalFindings.toLocaleString()} critical`}
+          tone={criticalFindings > 0 ? 'danger' : undefined}
         />
-        <SummaryTile
-          label="Needs Attention"
-          value={dashboard.queues.needs_attention.toLocaleString()}
-          hint={`${failedScans} failed · ${dashboard.queues.blocked_policies} blocked`}
-          hintClassName={
-            dashboard.queues.needs_attention > 0
-              ? 'text-warning-foreground'
-              : 'text-muted-foreground'
-          }
+        <StatStripItem
+          label="Scanner workers"
+          value={`${dashboard.scanner_health.healthy_workers}/${dashboard.scanner_health.total_workers}`}
+          hint={workerIssues > 0 ? `${workerIssues} need review` : 'All healthy'}
+          tone={workerIssues > 0 ? 'warning' : 'success'}
         />
-        <SummaryTile
-          label="API Requests 24h"
+        <StatStripItem
+          label="API requests, 24 h"
           value={formatCompact(dashboard.insights.api_requests_24h)}
-          hint={`${telemetryErrorRate}% error rate`}
-          hintClassName={
-            telemetryErrorRate > 0 ? 'text-warning-foreground' : 'text-muted-foreground'
-          }
+          hint={`${telemetryErrorRate}% errors · ${formatLatency(dashboard.insights.api_p95_ms)} p95`}
+          tone={dashboard.insights.api_error_requests_24h > 0 ? 'warning' : undefined}
         />
-      </div>
+        <StatStripItem
+          label="Xray requests, 24 h"
+          value={formatCompact(dashboard.insights.xray_requests_24h)}
+          hint={`${pluralize(dashboard.insights.xray_error_requests_24h, 'error')}`}
+          tone={dashboard.insights.xray_error_requests_24h > 0 ? 'warning' : undefined}
+        />
+      </StatStrip>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-        <Card className="border border-divider/70">
-          <Card.Header className="flex items-start justify-between gap-3">
+      <section className="space-y-2" aria-labelledby="admin-attention-heading">
+        <h2 id="admin-attention-heading" className="text-base font-medium">
+          Needs attention
+        </h2>
+        <ResourceList>
+          {attentionItems.length > 0 ? (
+            attentionItems.map((item) => (
+              <ResourceList.Item
+                key={item.label}
+                href={item.href}
+                tone={item.tone}
+                media={<StatusDot tone={item.tone} />}
+                title={item.label}
+                description={item.detail}
+                meta={
+                  <span className="text-sm font-medium tabular-nums">
+                    {item.count.toLocaleString()}
+                  </span>
+                }
+              />
+            ))
+          ) : (
+            <ResourceList.Item
+              media={<StatusDot tone="success" />}
+              title="Nothing needs attention"
+              description="The scan queue, scanner workers, and request logs report no issues."
+            />
+          )}
+        </ResourceList>
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <Card.Header className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <Card.Title>Scan volume</Card.Title>
-              <Card.Description>
-                Thirty-day scan throughput across the full platform.
-              </Card.Description>
+              <Card.Description>Scans per day over the last thirty days.</Card.Description>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <StatusTag tone="success">{completedScans} completed</StatusTag>
-              <StatusTag tone="danger">{failedScans} failed</StatusTag>
-              <StatusTag tone="success">{successRate}% success</StatusTag>
+            <div className="flex flex-wrap gap-3">
+              <StatusTag tone="success">{completedScans.toLocaleString()} completed</StatusTag>
+              <StatusTag tone={failedScans > 0 ? 'danger' : 'muted'}>
+                {failedScans.toLocaleString()} failed
+              </StatusTag>
             </div>
           </Card.Header>
-          <Card.Content className="pt-2 pb-3">
+          <Card.Content className="pb-3 pt-2">
             <ScanVolumeChart data={sparkData} />
           </Card.Content>
         </Card>
 
-        <Card className="border border-divider/70">
+        <Card>
           <Card.Header className="flex items-start justify-between gap-3">
             <div>
               <Card.Title>Vulnerability trend</Card.Title>
               <Card.Description>
-                Average finalized findings per day over the last thirty days.
+                Average findings per day from completed scans, last thirty days.
               </Card.Description>
             </div>
             <Link href="/admin/insights">
-              Open observability
+              Observability
               <Link.Icon />
             </Link>
           </Card.Header>
-          <Card.Content className="pt-2 pb-3">
+          <Card.Content className="pb-3 pt-2">
             <VulnerabilityTrendBars data={dashboard.vulnerability_trends} />
           </Card.Content>
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <div className="space-y-4">
-          <Card className="border border-divider/70">
-            <Card.Header className="flex items-start justify-between gap-3">
-              <div>
-                <Card.Title>Platform telemetry</Card.Title>
-                <Card.Description>
-                  Short-horizon API and xRay signal for the last twenty-four hours.
-                </Card.Description>
-              </div>
-              <Link href="/admin/insights">
-                Open logs
-                <Link.Icon />
-              </Link>
-            </Card.Header>
-            <Card.Content className="grid gap-3 sm:grid-cols-2">
-              <StatStripItem
-                label="API traffic"
-                value={formatCompact(dashboard.insights.api_requests_24h)}
-                hint={`${dashboard.insights.api_error_requests_24h.toLocaleString()} errors · ${formatLatency(dashboard.insights.api_p95_ms)} p95`}
-                tone={dashboard.insights.api_error_requests_24h > 0 ? 'warning' : 'success'}
-              />
-              <StatStripItem
-                label="xRay traffic"
-                value={formatCompact(dashboard.insights.xray_requests_24h)}
-                hint={`${dashboard.insights.xray_error_requests_24h.toLocaleString()} errors · ${formatLatency(dashboard.insights.api_average_ms)} avg API latency`}
-                tone={dashboard.insights.xray_error_requests_24h > 0 ? 'warning' : 'success'}
-              />
-            </Card.Content>
-          </Card>
-
-          <Card className="border border-divider/70">
-            <Card.Header>
-              <Card.Title>System and legal</Card.Title>
-              <Card.Description>Runtime build metadata and exposure posture.</Card.Description>
-            </Card.Header>
-            <Card.Content className="space-y-2 text-sm">
-              <Card variant="secondary" className="border border-divider/70">
-                <Card.Content>
-                  <p className="text-xs text-muted-foreground">Public scanning</p>
-                  <p className="font-semibold">
-                    {dashboard.public_scan_enabled ? 'Enabled' : 'Disabled'}
-                  </p>
-                </Card.Content>
-              </Card>
-              <Card variant="secondary" className="border border-divider/70">
-                <Card.Content>
-                  <p className="text-xs text-muted-foreground">Frontend version</p>
-                  <p className="font-semibold">v{APP_FRONTEND_VERSION}</p>
-                </Card.Content>
-              </Card>
-              <Card variant="secondary" className="border border-divider/70">
-                <Card.Content>
-                  <p className="text-xs text-muted-foreground">Dashboard generated</p>
-                  <p>{fullDate(dashboard.generated_at)}</p>
-                </Card.Content>
-              </Card>
-              <Card variant="secondary" className="border border-divider/70">
-                <Card.Content>
-                  <p className="text-xs text-muted-foreground">Copyright</p>
-                  <p>{APP_COPYRIGHT}</p>
-                </Card.Content>
-              </Card>
-            </Card.Content>
-          </Card>
-        </div>
-
-        <div className="space-y-4">
-          <Card className="border border-divider/70">
-            <Card.Header>
-              <Card.Title>Worker health</Card.Title>
-              <Card.Description>
-                Snapshot of local scanner workers from the current backend instance.
-              </Card.Description>
-            </Card.Header>
-            <Card.Content className="space-y-4">
-              <StatStrip>
-                {[
-                  {
-                    label: 'Healthy',
-                    value: dashboard.scanner_health.healthy_workers,
-                    tone: 'success' as const,
-                  },
-                  {
-                    label: 'Stale',
-                    value: dashboard.scanner_health.stale_workers,
-                    tone: 'warning' as const,
-                  },
-                  {
-                    label: 'Errors',
-                    value: dashboard.scanner_health.error_workers,
-                    tone: 'danger' as const,
-                  },
-                  {
-                    label: 'Workers',
-                    value: dashboard.scanner_health.total_workers,
-                    tone: 'accent' as const,
-                  },
-                ].map((item) => (
-                  <StatStripItem
-                    key={item.label}
-                    label={item.label}
-                    value={item.value}
-                    tone={item.tone}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <section className="space-y-2" aria-labelledby="admin-audit-heading">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="admin-audit-heading" className="text-base font-medium">
+              Recent activity
+            </h2>
+            <Link href="/admin/audit">
+              Audit log
+              <Link.Icon />
+            </Link>
+          </div>
+          <ResourceList>
+            {dashboard.recent_audit.length === 0 ? (
+              <ResourceList.Item title="No activity yet" />
+            ) : (
+              dashboard.recent_audit.map((entry) => {
+                const { summary } = parseAuditDetails(entry.details);
+                return (
+                  <ResourceList.Item
+                    key={entry.id}
+                    title={eventLabel(entry.operation)}
+                    description={summary ? `${auditActor(entry)} · ${summary}` : auditActor(entry)}
+                    meta={
+                      <span
+                        className="whitespace-nowrap text-xs text-muted-foreground"
+                        title={fullDate(entry.created_at)}
+                      >
+                        {timeAgo(entry.created_at)}
+                      </span>
+                    }
                   />
-                ))}
-              </StatStrip>
-              <Card variant="secondary" className="border border-divider/70">
-                <Card.Content>
-                  <p className="text-xs text-muted-foreground">
-                    Scanner status generated {timeAgo(dashboard.scanner_health.generated_at)}.
-                    Maximum allowed DB age: {dashboard.scanner_health.max_allowed_age_hours}h.
-                  </p>
-                </Card.Content>
-              </Card>
-            </Card.Content>
-          </Card>
+                );
+              })
+            )}
+          </ResourceList>
+        </section>
 
-          <Card className="border border-divider/70">
-            <Card.Header className="flex items-start justify-between gap-3">
-              <div>
-                <Card.Title>Recent audit activity</Card.Title>
-                <Card.Description>The latest system-wide administrative changes.</Card.Description>
-              </div>
-              <Link href="/admin/audit">
-                View all
-                <Link.Icon />
-              </Link>
+        <div className="space-y-4">
+          <section className="space-y-2" aria-labelledby="admin-config-heading">
+            <h2 id="admin-config-heading" className="text-base font-medium">
+              Configuration
+            </h2>
+            <ResourceList>
+              {[
+                { href: '/admin/users', label: 'Users', value: dashboard.admin_counts.users },
+                {
+                  href: '/admin/tokens',
+                  label: 'Service tokens',
+                  value: dashboard.admin_counts.tokens,
+                },
+                {
+                  href: '/admin/identity',
+                  label: 'Identity providers',
+                  value: dashboard.admin_counts.identity_providers,
+                },
+                {
+                  href: '/admin/notifications',
+                  label: 'Active notification channels',
+                  value: dashboard.admin_counts.active_channels,
+                },
+                {
+                  href: '/admin/registries',
+                  label: 'Global registries',
+                  value: dashboard.admin_counts.global_registries,
+                },
+              ].map((item) => (
+                <ResourceList.Item
+                  key={item.href}
+                  href={item.href}
+                  title={item.label}
+                  meta={
+                    <span className="text-sm tabular-nums text-muted-foreground">
+                      {item.value.toLocaleString()}
+                    </span>
+                  }
+                />
+              ))}
+            </ResourceList>
+          </section>
+
+          <Card>
+            <Card.Header>
+              <Card.Title>System</Card.Title>
             </Card.Header>
-            <Card.Content className="space-y-2">
-              {dashboard.recent_audit.length === 0 ? (
-                <Card variant="secondary" className="border border-divider/70">
-                  <Card.Content>
-                    <p className="text-sm text-muted-foreground">No audit activity yet.</p>
-                  </Card.Content>
-                </Card>
-              ) : (
-                dashboard.recent_audit.map((entry) => (
-                  <Card key={entry.id} variant="secondary" className="border border-divider/70">
-                    <Card.Content>
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-medium">{entry.operation}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {entry.username || entry.user_id}
-                          </p>
-                        </div>
-                        <span
-                          className="whitespace-nowrap text-xs text-muted-foreground"
-                          title={fullDate(entry.created_at)}
-                        >
-                          {timeAgo(entry.created_at)}
-                        </span>
-                      </div>
-                      <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                        {entry.details || 'No details recorded.'}
-                      </p>
-                    </Card.Content>
-                  </Card>
-                ))
-              )}
+            <Card.Content>
+              <DescriptionList
+                items={[
+                  {
+                    label: 'Public scanning',
+                    value: dashboard.public_scan_enabled ? 'Enabled' : 'Disabled',
+                  },
+                  { label: 'Frontend version', value: `v${APP_FRONTEND_VERSION}` },
+                  {
+                    label: 'Database freshness limit',
+                    value: `${dashboard.scanner_health.max_allowed_age_hours} hours`,
+                  },
+                  {
+                    label: 'Data generated',
+                    value: (
+                      <span title={fullDate(dashboard.generated_at)}>
+                        {timeAgo(dashboard.generated_at)}
+                      </span>
+                    ),
+                  },
+                  { label: 'Copyright', value: APP_COPYRIGHT, wide: true },
+                ]}
+              />
             </Card.Content>
           </Card>
         </div>

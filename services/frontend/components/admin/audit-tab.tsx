@@ -1,6 +1,16 @@
 'use client';
 
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
+import {
+  AdminDateRangeField,
+  dateRangeToIso,
+  type AdminDateRange,
+} from '@/components/admin/admin-filters';
+import { auditActor, parseAuditDetails } from '@/components/admin/audit-format';
+import { FilterDisclosureTrigger } from '@/components/ui/filter-toolbar';
 import { StatusAlert } from '@/components/ui/form-alert';
+import { ROLE_LABELS, eventLabel, labelFor } from '@/lib/labels';
+import { cn } from '@/lib/utils';
 import { listAuditLogs } from '@/lib/api/admin';
 import type { AuditLog, AuditLogFilters } from '@/lib/api/types/admin';
 import { deferEffect } from '@/lib/defer-effect';
@@ -8,20 +18,18 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
+  DescriptionList,
+  Disclosure,
   Input,
-  Pagination,
+  Label,
+  ResourceList,
   SearchField,
-  Table,
+  TablePager,
+  TextField,
 } from '@/components/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const PAGE_SIZE = 20;
-
-function toIsoOrUndefined(value: string): string | undefined {
-  if (!value) return undefined;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
-}
 
 function escapeCsv(value: unknown) {
   const text = String(value ?? '');
@@ -39,18 +47,17 @@ export function AuditTab() {
   const [query, setQuery] = useState('');
   const [userFilter, setUserFilter] = useState('');
   const [operationFilter, setOperationFilter] = useState('');
-  const [fromFilter, setFromFilter] = useState('');
-  const [toFilter, setToFilter] = useState('');
+  const [dateRange, setDateRange] = useState<AdminDateRange>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const requestFilters: AuditLogFilters = useMemo(
     () => ({
       q: query.trim() || undefined,
       user: userFilter.trim() || undefined,
       operation: operationFilter.trim() || undefined,
-      from: toIsoOrUndefined(fromFilter),
-      to: toIsoOrUndefined(toFilter),
+      ...dateRangeToIso(dateRange),
     }),
-    [fromFilter, operationFilter, query, toFilter, userFilter]
+    [dateRange, operationFilter, query, userFilter]
   );
 
   const load = useCallback(async () => {
@@ -68,20 +75,6 @@ export function AuditTab() {
   }, [page, requestFilters]);
 
   useEffect(() => deferEffect(load), [load]);
-
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  const paginationItems = useMemo(() => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const items: Array<number | 'ellipsis'> = [1];
-    if (page > 3) items.push('ellipsis');
-    const start = Math.max(2, page - 1);
-    const end = Math.min(totalPages - 1, page + 1);
-    for (let i = start; i <= end; i += 1) items.push(i);
-    if (page < totalPages - 2) items.push('ellipsis');
-    items.push(totalPages);
-    return items;
-  }, [page, totalPages]);
 
   async function handleExport() {
     setExporting(true);
@@ -103,7 +96,7 @@ export function AuditTab() {
         ...rows.map((entry) =>
           [
             escapeCsv(entry.created_at),
-            escapeCsv(entry.username ?? entry.user_id),
+            escapeCsv(entry.username || auditActor(entry)),
             escapeCsv(entry.email ?? ''),
             escapeCsv(entry.role ?? ''),
             escapeCsv(entry.operation),
@@ -128,152 +121,165 @@ export function AuditTab() {
     }
   }
 
-  return (
-    <div className="space-y-4">
-      {error ? <StatusAlert status="danger" title="Audit log failed to load" description={error} /> : null}
+  const moreFilterCount = [userFilter, operationFilter, dateRange].filter(Boolean).length;
 
-      <Card className="space-y-4">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="grid w-full gap-2 md:grid-cols-2 xl:grid-cols-5">
-            <SearchField name="admin-audit-search" variant="secondary">
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  placeholder="Search details or operation..."
-                  value={query}
-                  onChange={(event) => {
-                    setQuery(event.target.value);
+  return (
+    <AdminPageShell
+      actions={
+        <Button
+          size="sm"
+          variant="secondary"
+          onPress={handleExport}
+          isDisabled={exporting || total === 0}
+        >
+          {exporting ? 'Exporting...' : 'Export CSV'}
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        {error ? (
+          <StatusAlert status="danger" title="Audit log failed to load" description={error} />
+        ) : null}
+
+        <Card className="gap-0 overflow-hidden py-0">
+          <Disclosure className="border-b border-border p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <SearchField
+                aria-label="Search activity"
+                name="admin-audit-search"
+                variant="secondary"
+                className="min-w-0 flex-1"
+                value={query}
+                onChange={(value) => {
+                  setQuery(value);
+                  setPage(1);
+                }}
+              >
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder="Search activity details..." />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+              <FilterDisclosureTrigger activeCount={moreFilterCount} />
+            </div>
+            <Disclosure.Content>
+              <Disclosure.Body className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2 xl:grid-cols-3">
+                <TextField
+                  value={userFilter}
+                  onChange={(value) => {
+                    setUserFilter(value);
+                    setPage(1);
+                  }}
+                >
+                  <Label className="mb-1.5 text-xs font-medium text-muted-foreground">User</Label>
+                  <Input variant="secondary" placeholder="Username or email" />
+                </TextField>
+                <TextField
+                  value={operationFilter}
+                  onChange={(value) => {
+                    setOperationFilter(value);
+                    setPage(1);
+                  }}
+                >
+                  <Label className="mb-1.5 text-xs font-medium text-muted-foreground">
+                    Activity type
+                  </Label>
+                  <Input variant="secondary" placeholder="For example scan.create" />
+                </TextField>
+                <AdminDateRangeField
+                  value={dateRange}
+                  onChange={(value) => {
+                    setDateRange(value);
                     setPage(1);
                   }}
                 />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-            <Input
-              variant="secondary"
-              placeholder="User or email"
-              value={userFilter}
-              onChange={(event) => {
-                setUserFilter(event.target.value);
-                setPage(1);
-              }}
-            />
-            <Input
-              variant="secondary"
-              placeholder="Operation"
-              value={operationFilter}
-              onChange={(event) => {
-                setOperationFilter(event.target.value);
-                setPage(1);
-              }}
-            />
-            <Input
-              type="datetime-local"
-              variant="secondary"
-              value={fromFilter}
-              onChange={(event) => {
-                setFromFilter(event.target.value);
-                setPage(1);
-              }}
-            />
-            <Input
-              type="datetime-local"
-              variant="secondary"
-              value={toFilter}
-              onChange={(event) => {
-                setToFilter(event.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
-          <Button
-            variant="secondary"
-            onPress={handleExport}
-            isDisabled={exporting || total === 0}
-            className="shrink-0"
-          >
-            {exporting ? 'Exporting...' : 'Export CSV'}
-          </Button>
-        </div>
+              </Disclosure.Body>
+            </Disclosure.Content>
+          </Disclosure>
 
-        <Table variant="secondary">
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Admin audit logs" className="min-w-[1100px]">
-              <Table.Header>
-                <Table.Column isRowHeader>Time</Table.Column>
-                <Table.Column>User</Table.Column>
-                <Table.Column>Role</Table.Column>
-                <Table.Column>Operation</Table.Column>
-                <Table.Column>Details</Table.Column>
-              </Table.Header>
-              <Table.Body
-                renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    {loading ? 'Loading audit events...' : 'No audit events match your filters.'}
-                  </div>
-                )}
-              >
-                {logs.map((log) => (
-                  <Table.Row key={log.id} id={log.id} className="hover:bg-[var(--row-hover)]">
-                    <Table.Cell className="text-xs text-muted-foreground">
-                      <span title={fullDate(log.created_at)}>{timeAgo(log.created_at)}</span>
-                    </Table.Cell>
-                    <Table.Cell className="font-medium">{log.username ?? log.user_id.slice(0, 8)}</Table.Cell>
-                    <Table.Cell className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
-                      {log.role ?? 'n/a'}
-                    </Table.Cell>
-                    <Table.Cell className="font-mono text-xs">{log.operation}</Table.Cell>
-                    <Table.Cell className="max-w-[520px] text-sm text-muted-foreground">
-                      <div className="line-clamp-2 whitespace-pre-wrap break-words">{log.details || 'No details recorded.'}</div>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-          <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
-              Showing {total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, total)} of {total}
-            </span>
-            <Pagination size="sm" className="justify-self-center">
-              <Pagination.Content>
-                <Pagination.Item>
-                  <Pagination.Previous
-                    isDisabled={page === 1}
-                    onPress={() => setPage((previous) => Math.max(1, previous - 1))}
+          {logs.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+              {loading ? 'Loading activity...' : 'No activity matches your filters.'}
+            </p>
+          ) : (
+            <ResourceList bordered={false} aria-label="Audit log" aria-busy={loading}>
+              {logs.map((log) => {
+                const { summary, facts } = parseAuditDetails(log.details);
+                const expanded = expandedId === log.id;
+                const hasDetails = facts.length > 0 || summary.length > 120;
+                const role = log.role ? labelFor(ROLE_LABELS, log.role) : '';
+                return (
+                  <ResourceList.Item
+                    key={log.id}
+                    title={eventLabel(log.operation)}
+                    titleTooltip={log.operation}
+                    description={[auditActor(log), role].filter(Boolean).join(' · ')}
+                    meta={
+                      <span
+                        className="whitespace-nowrap text-xs text-muted-foreground"
+                        title={fullDate(log.created_at)}
+                      >
+                        {timeAgo(log.created_at)}
+                      </span>
+                    }
+                    actions={
+                      hasDetails ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          aria-expanded={expanded}
+                          aria-controls={`audit-details-${log.id}`}
+                          onPress={() => setExpandedId(expanded ? null : log.id)}
+                        >
+                          {expanded ? 'Hide details' : 'Details'}
+                        </Button>
+                      ) : null
+                    }
                   >
-                    <Pagination.PreviousIcon />
-                    <span>Previous</span>
-                  </Pagination.Previous>
-                </Pagination.Item>
-                {paginationItems.map((item, index) =>
-                  item === 'ellipsis' ? (
-                    <Pagination.Item key={`audit-ellipsis-${index}`}>
-                      <Pagination.Ellipsis />
-                    </Pagination.Item>
-                  ) : (
-                    <Pagination.Item key={`audit-page-${item}`}>
-                      <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
-                        {item}
-                      </Pagination.Link>
-                    </Pagination.Item>
-                  )
-                )}
-                <Pagination.Item>
-                  <Pagination.Next
-                    isDisabled={page === totalPages}
-                    onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-                  >
-                    <span>Next</span>
-                    <Pagination.NextIcon />
-                  </Pagination.Next>
-                </Pagination.Item>
-              </Pagination.Content>
-            </Pagination>
-            <div />
-          </Table.Footer>
-        </Table>
-      </Card>
-    </div>
+                    {summary ? (
+                      <p
+                        className={cn(
+                          'text-sm text-muted-foreground [overflow-wrap:anywhere]',
+                          !expanded && 'line-clamp-1'
+                        )}
+                      >
+                        {summary}
+                      </p>
+                    ) : null}
+                    {expanded ? (
+                      <div
+                        id={`audit-details-${log.id}`}
+                        className="mt-2 rounded-lg bg-muted/30 p-3"
+                      >
+                        <DescriptionList
+                          columns={3}
+                          items={[
+                            ...facts.map((fact) => ({
+                              label: fact.label,
+                              value: fact.value,
+                              mono: fact.key !== 'size' && fact.key !== 'violations',
+                            })),
+                            { label: 'Recorded', value: fullDate(log.created_at) },
+                            { label: 'Email', value: log.email, hidden: !log.email },
+                          ]}
+                        />
+                      </div>
+                    ) : null}
+                  </ResourceList.Item>
+                );
+              })}
+            </ResourceList>
+          )}
+          <TablePager
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            onPageChange={setPage}
+            noun="events"
+          />
+        </Card>
+      </div>
+    </AdminPageShell>
   );
 }

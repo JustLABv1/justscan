@@ -290,3 +290,43 @@ func TestXrayTagMovementRejected(t *testing.T) {
 		t.Fatalf("tag change accepted: %v", err)
 	}
 }
+
+func TestXrayStoredManifestCandidatesFollowArtifactoryLayout(t *testing.T) {
+	var response artifactoryChecksumSearchResponse
+	for _, uri := range []string{
+		"https://jfrog.test/artifactory/api/storage/dockerhub-remote-cache/library/nginx/1.27/manifest.json",
+		"https://jfrog.test/artifactory/api/storage/dockerhub-remote-cache/library/nginx/1.27/list.manifest.json",
+		"https://jfrog.test/artifactory/api/storage/other-local/unrelated/latest/manifest.json",
+		"https://jfrog.test/artifactory/api/storage/docker-local/nginx/sha256__abc/manifest.json",
+		"not-a-storage-uri",
+	} {
+		response.Results = append(response.Results, struct {
+			URI string `json:"uri"`
+		}{URI: uri})
+	}
+	candidates := xrayStoredManifestCandidates("default", "nginx", response)
+	got := joinXrayArtifactPaths(candidates)
+	want := "default/dockerhub-remote-cache/library/nginx/1.27/manifest.json, default/docker-local/nginx/sha256__abc/manifest.json"
+	if got != want {
+		t.Fatalf("unexpected stored manifest candidates:\n got %s\nwant %s", got, want)
+	}
+	if candidates[0].Repository != "dockerhub-remote-cache" || candidates[0].Path != "library/nginx/1.27/manifest.json" {
+		t.Fatalf("candidate split incorrectly: %#v", candidates[0])
+	}
+}
+
+func TestXrayMissingArtifactWindowCanBeExtended(t *testing.T) {
+	client := &xrayClient{baseURL: "http://xray.test", missingArtifactWindow: time.Nanosecond, httpClient: newTestHTTPClient(func(*http.Request) (*http.Response, error) {
+		return jsonResponse(404, map[string]string{"error": "not found"}), nil
+	})}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	start := time.Now()
+	_, _, err := client.waitForArtifactStatus(ctx, []xrayArtifactPathCandidate{{Path: "a", ArtifactPath: "repo/a"}}, nil, false)
+	if err == nil || !strings.Contains(err.Error(), "within 1ns for repo/a") {
+		t.Fatalf("missing-window override or path detail not applied: %v", err)
+	}
+	if time.Since(start) > 25*time.Second {
+		t.Fatal("custom missing window was ignored")
+	}
+}

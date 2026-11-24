@@ -1,8 +1,12 @@
 'use client';
 
-import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
 import { useConfirmDialog } from '@/components/confirm-dialog';
+import { useToast } from '@/components/toast';
+import { FilterToolbar } from '@/components/ui/filter-toolbar';
 import { StatusAlert } from '@/components/ui/form-alert';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { StatusTag } from '@/components/ui/status-dot';
 import { listAdminOrgs, updateAdminOrgGovernance } from '@/lib/api/admin';
 import {
   createOrgInvite,
@@ -17,23 +21,89 @@ import { createOrgToken, listOrgTokens, revokeOrgToken } from '@/lib/api/tokens'
 import type { AdminOrg } from '@/lib/api/types/admin';
 import type { APIToken, OrgInvite, OrgMember, OrgRole } from '@/lib/api/types/orgs';
 import { deferEffect } from '@/lib/defer-effect';
-import { fullDate, timeAgo } from '@/lib/time';
+import { ROLE_LABELS, displayUser, labelFor, pluralize } from '@/lib/labels';
+import { fullDate, timeAgo, timeUntil } from '@/lib/time';
 import {
   Button,
   Card,
+  Chip,
   Input,
+  Label,
   ListBox,
   Modal,
+  ResourceList,
   SearchField,
   Select,
-  Spinner,
+  SettingRow,
+  SettingsSection,
   Switch,
-  Table,
+  TextField,
   useOverlayState,
 } from '@/components/ui';
+import { Delete01Icon, Crown02Icon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+type GovernanceKey =
+  | 'is_active'
+  | 'allow_image_scans'
+  | 'allow_helm_scans'
+  | 'allow_rescans'
+  | 'allow_member_invites'
+  | 'allow_org_tokens';
+
+const GOVERNANCE_CONTROLS: Array<{ key: GovernanceKey; label: string; description: string }> = [
+  {
+    key: 'is_active',
+    label: 'Organization active',
+    description: 'When off, members keep their data but cannot use the organization.',
+  },
+  {
+    key: 'allow_image_scans',
+    label: 'Image scans',
+    description: 'Members can start new container image scans.',
+  },
+  {
+    key: 'allow_helm_scans',
+    label: 'Helm chart scans',
+    description: 'Members can scan every image referenced by a Helm chart.',
+  },
+  {
+    key: 'allow_rescans',
+    label: 'Rescans',
+    description: 'Members can rescan images they scanned before.',
+  },
+  {
+    key: 'allow_member_invites',
+    label: 'Member invites',
+    description: 'Organization admins can invite new members by email.',
+  },
+  {
+    key: 'allow_org_tokens',
+    label: 'Organization tokens',
+    description: 'Organization admins can create API tokens for pipelines and automation.',
+  },
+];
+
+const ORG_ROLE_OPTIONS = ['viewer', 'editor', 'admin'] as const;
+
+const TOKEN_SCOPE_LABELS: Record<string, string> = {
+  pipeline_scan: 'Pipeline scans',
+  org_admin: 'Organization admin',
+};
+
+function expiryLabel(expiresAt?: string | null) {
+  const date = expiresAt ? new Date(expiresAt) : null;
+  if (!date || Number.isNaN(date.getTime()) || date.getFullYear() < 2000) return 'Never expires';
+  if (date.getTime() <= Date.now()) return `Expired ${timeAgo(expiresAt)}`;
+  return `Expires ${timeUntil(expiresAt)}`;
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export function OrganizationsTab() {
+  const toast = useToast();
   const [orgs, setOrgs] = useState<AdminOrg[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -101,26 +171,29 @@ export function OrganizationsTab() {
     orgModal.open();
   }
 
-  async function updateGovernance(
-    patch: Partial<
-      Pick<
-        AdminOrg,
-        | 'is_active'
-        | 'allow_image_scans'
-        | 'allow_helm_scans'
-        | 'allow_rescans'
-        | 'allow_member_invites'
-        | 'allow_org_tokens'
-      >
-    >
-  ) {
+  async function run(action: () => Promise<unknown>, success: string, failure: string) {
+    try {
+      await action();
+      toast.success(success);
+      return true;
+    } catch (actionError: unknown) {
+      toast.error(errorMessage(actionError, failure));
+      return false;
+    }
+  }
+
+  async function updateGovernance(key: GovernanceKey, value: boolean) {
     if (!activeOrg) return;
     setSaving(true);
     try {
-      const updated = await updateAdminOrgGovernance(activeOrg.id, patch);
+      const updated = await updateAdminOrgGovernance(activeOrg.id, { [key]: value });
       setOrgs((current) =>
         current.map((org) => (org.id === updated.id ? { ...org, ...updated } : org))
       );
+      const control = GOVERNANCE_CONTROLS.find((item) => item.key === key);
+      toast.success(`${control?.label ?? 'Setting'} ${value ? 'enabled' : 'disabled'}`);
+    } catch (updateError: unknown) {
+      toast.error(errorMessage(updateError, 'Failed to update organization'));
     } finally {
       setSaving(false);
     }
@@ -128,40 +201,60 @@ export function OrganizationsTab() {
 
   async function handleRoleChange(member: OrgMember, nextRole: 'admin' | 'editor' | 'viewer') {
     if (!activeOrg || member.role === nextRole) return;
-    await updateOrgMemberRole(activeOrg.id, member.user_id, nextRole as OrgRole);
-    await loadOrgDetails(activeOrg.id);
+    const ok = await run(
+      () => updateOrgMemberRole(activeOrg.id, member.user_id, nextRole as OrgRole),
+      `${displayUser(member)} is now ${labelFor(ROLE_LABELS, nextRole).toLowerCase()}`,
+      'Failed to change role'
+    );
+    if (ok) await loadOrgDetails(activeOrg.id);
   }
 
   async function handleRemoveMember(member: OrgMember) {
     if (!activeOrg) return;
-    const ok = await confirm({
-      title: `Remove ${member.username || member.email || 'member'}?`,
+    const name = displayUser(member, 'this member');
+    const confirmed = await confirm({
+      title: `Remove ${name}?`,
       message: 'This user will lose access to the organization immediately.',
       confirmLabel: 'Remove',
       variant: 'danger',
     });
+    if (!confirmed) return;
+    const ok = await run(
+      () => removeOrgMember(activeOrg.id, member.user_id),
+      `${name} removed`,
+      'Failed to remove member'
+    );
     if (!ok) return;
-    await removeOrgMember(activeOrg.id, member.user_id);
     await loadOrgDetails(activeOrg.id);
     await loadOrgs();
   }
 
   async function handleTransferOwnership(member: OrgMember) {
     if (!activeOrg) return;
-    const ok = await confirm({
-      title: `Transfer ownership to ${member.username || member.email || 'member'}?`,
-      message: 'Current owner becomes admin and this action cannot be undone automatically.',
+    const name = displayUser(member, 'this member');
+    const confirmed = await confirm({
+      title: `Transfer ownership to ${name}?`,
+      message: 'The current owner becomes an admin. This cannot be undone automatically.',
       confirmLabel: 'Transfer',
       variant: 'warning',
     });
-    if (!ok) return;
-    await transferOrgOwnership(activeOrg.id, member.user_id);
-    await loadOrgDetails(activeOrg.id);
+    if (!confirmed) return;
+    const ok = await run(
+      () => transferOrgOwnership(activeOrg.id, member.user_id),
+      `${name} now owns ${activeOrg.name}`,
+      'Failed to transfer ownership'
+    );
+    if (ok) await loadOrgDetails(activeOrg.id);
   }
 
   async function handleCreateInvite() {
     if (!activeOrg || !newInviteEmail.trim()) return;
-    await createOrgInvite(activeOrg.id, newInviteEmail.trim(), newInviteRole);
+    const ok = await run(
+      () => createOrgInvite(activeOrg.id, newInviteEmail.trim(), newInviteRole),
+      `Invite sent to ${newInviteEmail.trim()}`,
+      'Failed to create invite'
+    );
+    if (!ok) return;
     inviteModal.close();
     setNewInviteEmail('');
     setNewInviteRole('viewer');
@@ -171,447 +264,418 @@ export function OrganizationsTab() {
 
   async function handleRevokeInvite(invite: OrgInvite) {
     if (!activeOrg) return;
-    await revokeOrgInvite(activeOrg.id, invite.id);
+    const ok = await run(
+      () => revokeOrgInvite(activeOrg.id, invite.id),
+      `Invite for ${invite.email} revoked`,
+      'Failed to revoke invite'
+    );
+    if (!ok) return;
     await loadOrgDetails(activeOrg.id);
     await loadOrgs();
   }
 
   async function handleCreateToken() {
     if (!activeOrg || !newTokenDescription.trim()) return;
-    await createOrgToken(activeOrg.id, newTokenDescription.trim());
+    const ok = await run(
+      () => createOrgToken(activeOrg.id, newTokenDescription.trim()),
+      'Organization token created',
+      'Failed to create token'
+    );
+    if (!ok) return;
     tokenModal.close();
     setNewTokenDescription('');
     await loadOrgDetails(activeOrg.id);
     await loadOrgs();
   }
 
-  async function handleRevokeToken(tokenId: string) {
+  async function handleRevokeToken(token: APIToken) {
     if (!activeOrg) return;
-    await revokeOrgToken(activeOrg.id, tokenId);
+    const ok = await run(
+      () => revokeOrgToken(activeOrg.id, token.id),
+      `Token ${token.description ? `"${token.description}" ` : ''}revoked`,
+      'Failed to revoke token'
+    );
+    if (!ok) return;
     await loadOrgDetails(activeOrg.id);
     await loadOrgs();
   }
 
   return (
-    <div className="space-y-6">
-      {error ? <StatusAlert status="danger" title="Organizations failed to load" description={error} /> : null}
+    <AdminPageShell
+      actions={
+        <Button size="sm" variant="secondary" onPress={loadOrgs} isDisabled={loading}>
+          Refresh
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        {error ? (
+          <StatusAlert status="danger" title="Organizations failed to load" description={error} />
+        ) : null}
 
-      <Card className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <SearchField name="admin-org-search" variant="secondary" className="max-w-md">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                placeholder="Search organizations..."
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-          <Button variant="secondary" onPress={loadOrgs} isDisabled={loading}>
-            Refresh
-          </Button>
-        </div>
+        <Card className="gap-0 overflow-hidden py-0">
+          <div className="border-b border-border p-4">
+            <FilterToolbar
+              search={
+                <SearchField
+                  aria-label="Search organizations"
+                  name="admin-org-search"
+                  variant="secondary"
+                  className="w-full sm:max-w-md"
+                  value={query}
+                  onChange={setQuery}
+                >
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input placeholder="Search organizations..." />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+              }
+            />
+          </div>
 
-        <Table variant="secondary">
-          <Table.Content aria-label="Organizations">
-            <Table.Header>
-              <Table.Column isRowHeader>Name</Table.Column>
-              <Table.Column>Members</Table.Column>
-              <Table.Column>Invites</Table.Column>
-              <Table.Column>Tokens</Table.Column>
-              <Table.Column>Status</Table.Column>
-              <Table.Column className="text-right">Actions</Table.Column>
-            </Table.Header>
-            <Table.Body>
-              {loading ? (
-                <Table.Row id="loading">
-                  <Table.Cell colSpan={6}>
-                    <div className="flex items-center justify-center py-6">
-                      <Spinner size="sm" />
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ) : orgs.length === 0 ? (
-                <Table.Row id="empty">
-                  <Table.Cell colSpan={6}>
-                    <div className="py-6 text-center text-sm text-muted-foreground">
-                      No organizations found.
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ) : (
-                orgs.map((org) => (
-                  <Table.Row key={org.id} id={org.id}>
-                    <Table.Cell>
-                      <div>
-                        <p className="font-medium">{org.name}</p>
-                        <p className="text-xs text-muted-foreground">Created {timeAgo(org.created_at)}</p>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>{org.member_count}</Table.Cell>
-                    <Table.Cell>{org.pending_invite_count}</Table.Cell>
-                    <Table.Cell>{org.active_token_count}</Table.Cell>
-                    <Table.Cell>
-                      <StatusTag tone={toneFromChipColor(org.is_active ? 'success' : 'danger')}>
+          {orgs.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+              {loading ? 'Loading organizations...' : 'No organizations found.'}
+            </p>
+          ) : (
+            <ResourceList bordered={false} aria-label="Organizations">
+              {orgs.map((org) => (
+                <ResourceList.Item
+                  key={org.id}
+                  title={org.name}
+                  tone={org.is_active ? 'default' : 'warning'}
+                  description={[
+                    pluralize(org.member_count, 'member'),
+                    pluralize(org.pending_invite_count, 'invite'),
+                    pluralize(org.active_token_count, 'token'),
+                  ].join(' · ')}
+                  meta={
+                    <>
+                      <span
+                        className="hidden text-xs text-muted-foreground sm:inline"
+                        title={fullDate(org.created_at)}
+                      >
+                        Created {timeAgo(org.created_at)}
+                      </span>
+                      <StatusTag tone={org.is_active ? 'success' : 'warning'}>
                         {org.is_active ? 'Active' : 'Suspended'}
                       </StatusTag>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex justify-end">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onPress={() => void openOrgManagement(org)}
-                        >
-                          Manage
-                        </Button>
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                ))
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table>
-      </Card>
+                    </>
+                  }
+                  actions={
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onPress={() => void openOrgManagement(org)}
+                    >
+                      Manage
+                    </Button>
+                  }
+                />
+              ))}
+            </ResourceList>
+          )}
+        </Card>
 
-      <Modal state={orgModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="cover" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>{activeOrg?.name ?? 'Organization'}</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body className="space-y-5 max-h-[75vh] overflow-y-auto">
-                {activeOrg ? (
-                  <>
-                    <p className="text-xs text-muted-foreground">
-                      {activeOrg.description || 'No description'} · Updated{' '}
-                      {fullDate(activeOrg.updated_at)}
-                    </p>
+        <Modal state={orgModal}>
+          <Modal.Backdrop isDismissable={false}>
+            <Modal.Container size="cover" placement="center">
+              <Modal.Dialog>
+                <Modal.Header>
+                  <Modal.Heading>{activeOrg?.name ?? 'Organization'}</Modal.Heading>
+                  <Modal.CloseTrigger />
+                </Modal.Header>
+                <Modal.Body className="max-h-[75vh] space-y-4 overflow-y-auto">
+                  {activeOrg ? (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        {activeOrg.description || 'No description'} · Updated{' '}
+                        <span title={fullDate(activeOrg.updated_at)}>
+                          {timeAgo(activeOrg.updated_at)}
+                        </span>
+                      </p>
 
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <Switch
-                        isSelected={activeOrg.is_active}
-                        onChange={(value) => void updateGovernance({ is_active: value })}
-                        isDisabled={saving}
+                      <SettingsSection
+                        title="Governance"
+                        description="What this organization's members are allowed to do. Changes save immediately."
                       >
-                        <Switch.Content>
-                          <Switch.Control>
-                            <Switch.Thumb />
-                          </Switch.Control>
-                          Organization active
-                        </Switch.Content>
-                      </Switch>
-                      <Switch
-                        isSelected={activeOrg.allow_image_scans}
-                        onChange={(value) => void updateGovernance({ allow_image_scans: value })}
-                        isDisabled={saving}
-                      >
-                        <Switch.Content>
-                          <Switch.Control>
-                            <Switch.Thumb />
-                          </Switch.Control>
-                          Allow image scans
-                        </Switch.Content>
-                      </Switch>
-                      <Switch
-                        isSelected={activeOrg.allow_helm_scans}
-                        onChange={(value) => void updateGovernance({ allow_helm_scans: value })}
-                        isDisabled={saving}
-                      >
-                        <Switch.Content>
-                          <Switch.Control>
-                            <Switch.Thumb />
-                          </Switch.Control>
-                          Allow Helm scans
-                        </Switch.Content>
-                      </Switch>
-                      <Switch
-                        isSelected={activeOrg.allow_rescans}
-                        onChange={(value) => void updateGovernance({ allow_rescans: value })}
-                        isDisabled={saving}
-                      >
-                        <Switch.Content>
-                          <Switch.Control>
-                            <Switch.Thumb />
-                          </Switch.Control>
-                          Allow rescans
-                        </Switch.Content>
-                      </Switch>
-                      <Switch
-                        isSelected={activeOrg.allow_member_invites}
-                        onChange={(value) => void updateGovernance({ allow_member_invites: value })}
-                        isDisabled={saving}
-                      >
-                        <Switch.Content>
-                          <Switch.Control>
-                            <Switch.Thumb />
-                          </Switch.Control>
-                          Allow member invites
-                        </Switch.Content>
-                      </Switch>
-                      <Switch
-                        isSelected={activeOrg.allow_org_tokens}
-                        onChange={(value) => void updateGovernance({ allow_org_tokens: value })}
-                        isDisabled={saving}
-                      >
-                        <Switch.Content>
-                          <Switch.Control>
-                            <Switch.Thumb />
-                          </Switch.Control>
-                          Allow org tokens
-                        </Switch.Content>
-                      </Switch>
-                    </div>
+                        {GOVERNANCE_CONTROLS.map((control) => (
+                          <SettingRow
+                            key={control.key}
+                            label={control.label}
+                            description={control.description}
+                          >
+                            <Switch
+                              aria-label={control.label}
+                              isSelected={activeOrg[control.key]}
+                              onChange={(value) => void updateGovernance(control.key, value)}
+                              isDisabled={saving}
+                            >
+                              <Switch.Control>
+                                <Switch.Thumb />
+                              </Switch.Control>
+                            </Switch>
+                          </SettingRow>
+                        ))}
+                      </SettingsSection>
 
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold">Members</h3>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onPress={inviteModal.open}
-                          isDisabled={!activeOrg.allow_member_invites || !activeOrg.is_active}
-                        >
-                          Invite
-                        </Button>
-                      </div>
-                      <Table variant="secondary">
-                        <Table.Content aria-label="Org members">
-                          <Table.Header>
-                            <Table.Column isRowHeader>User</Table.Column>
-                            <Table.Column>Role</Table.Column>
-                            <Table.Column>Actions</Table.Column>
-                          </Table.Header>
-                          <Table.Body>
-                            {members.map((member) => (
-                              <Table.Row key={member.user_id} id={member.user_id}>
-                                <Table.Cell>
-                                  <div>
-                                    <p className="text-sm font-medium">
-                                      {member.username || member.email || member.user_id}
-                                    </p>
-                                    {member.email && (
-                                      <p className="text-xs text-muted-foreground">{member.email}</p>
-                                    )}
-                                  </div>
-                                </Table.Cell>
-                                <Table.Cell>
-                                  {member.role === 'owner' ? (
-                                    <StatusTag tone="accent">
-                                      owner
-                                    </StatusTag>
-                                  ) : (
-                                    <Select
-                                      value={member.role}
-                                      onChange={(value) =>
-                                        void handleRoleChange(
-                                          member,
-                                          String(value) as 'admin' | 'editor' | 'viewer'
-                                        )
-                                      }
-                                      variant="secondary"
-                                      className="w-32"
-                                    >
-                                      <Select.Trigger>
-                                        <Select.Value />
-                                        <Select.Indicator />
-                                      </Select.Trigger>
-                                      <Select.Popover>
-                                        <ListBox>
-                                          <ListBox.Item id="viewer">viewer</ListBox.Item>
-                                          <ListBox.Item id="editor">editor</ListBox.Item>
-                                          <ListBox.Item id="admin">admin</ListBox.Item>
-                                        </ListBox>
-                                      </Select.Popover>
-                                    </Select>
-                                  )}
-                                </Table.Cell>
-                                <Table.Cell>
-                                  <div className="flex gap-2">
-                                    {member.role !== 'owner' && (
-                                      <>
-                                        <Button
-                                          size="sm"
-                                          variant="secondary"
-                                          onPress={() => void handleTransferOwnership(member)}
-                                        >
-                                          Make owner
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="danger-soft"
-                                          onPress={() => void handleRemoveMember(member)}
-                                        >
-                                          Remove
-                                        </Button>
-                                      </>
-                                    )}
-                                  </div>
-                                </Table.Cell>
-                              </Table.Row>
-                            ))}
-                          </Table.Body>
-                        </Table.Content>
-                      </Table>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div>
-                        <h3 className="mb-2 text-sm font-semibold">Invites</h3>
-                        <div className="space-y-2">
-                          {invites.length === 0 && (
-                            <p className="text-xs text-muted-foreground">No active invites.</p>
-                          )}
-                          {invites.map((invite) => (
-                            <Card key={invite.id} className="bg-surface-secondary">
-                              <div className="flex items-center justify-between gap-2">
-                                <div>
-                                  <p className="text-xs font-medium">{invite.email}</p>
-                                  <p className="text-xs text-muted-foreground">{invite.role}</p>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="danger-soft"
-                                  onPress={() => void handleRevokeInvite(invite)}
-                                >
-                                  Revoke
-                                </Button>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="mb-2 flex items-center justify-between">
-                          <h3 className="text-sm font-semibold">Org tokens</h3>
+                      <section className="space-y-2" aria-labelledby="org-members-heading">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 id="org-members-heading" className="text-sm font-medium">
+                            Members
+                          </h3>
                           <Button
                             size="sm"
                             variant="secondary"
-                            onPress={tokenModal.open}
-                            isDisabled={!activeOrg.allow_org_tokens || !activeOrg.is_active}
+                            onPress={inviteModal.open}
+                            isDisabled={!activeOrg.allow_member_invites || !activeOrg.is_active}
                           >
-                            Create
+                            Invite member
                           </Button>
                         </div>
-                        <div className="space-y-2">
-                          {tokens.length === 0 && (
-                            <p className="text-xs text-muted-foreground">No active tokens.</p>
+                        <ResourceList aria-label="Members">
+                          {members.length === 0 ? (
+                            <ResourceList.Item title="No members yet" />
+                          ) : (
+                            members.map((member) => {
+                              const name = displayUser(member);
+                              return (
+                                <ResourceList.Item
+                                  key={member.user_id}
+                                  title={name}
+                                  description={
+                                    member.email && member.email !== name ? member.email : undefined
+                                  }
+                                  meta={
+                                    member.role === 'owner' ? (
+                                      <Chip size="sm" color="accent">
+                                        Owner
+                                      </Chip>
+                                    ) : (
+                                      <Select
+                                        aria-label={`Role for ${name}`}
+                                        value={member.role}
+                                        onChange={(value) =>
+                                          void handleRoleChange(
+                                            member,
+                                            String(value) as 'admin' | 'editor' | 'viewer'
+                                          )
+                                        }
+                                        variant="secondary"
+                                        className="w-28"
+                                      >
+                                        <Select.Trigger>
+                                          <Select.Value />
+                                          <Select.Indicator />
+                                        </Select.Trigger>
+                                        <Select.Popover>
+                                          <ListBox>
+                                            {ORG_ROLE_OPTIONS.map((role) => (
+                                              <ListBox.Item key={role} id={role}>
+                                                {labelFor(ROLE_LABELS, role)}
+                                              </ListBox.Item>
+                                            ))}
+                                          </ListBox>
+                                        </Select.Popover>
+                                      </Select>
+                                    )
+                                  }
+                                  actions={
+                                    member.role !== 'owner' ? (
+                                      <RowActionsMenu
+                                        label={`Open actions for ${name}`}
+                                        items={[
+                                          {
+                                            id: 'owner',
+                                            label: 'Make owner',
+                                            icon: <Crown02Icon size={15} />,
+                                            onAction: () => void handleTransferOwnership(member),
+                                          },
+                                          {
+                                            id: 'remove',
+                                            label: 'Remove from organization',
+                                            icon: <Delete01Icon size={15} />,
+                                            variant: 'danger',
+                                            onAction: () => void handleRemoveMember(member),
+                                          },
+                                        ]}
+                                      />
+                                    ) : null
+                                  }
+                                />
+                              );
+                            })
                           )}
-                          {tokens.map((token) => (
-                            <Card key={token.id} className="bg-surface-secondary">
-                              <div className="flex items-center justify-between gap-2">
-                                <div>
-                                  <p className="text-xs font-medium">{token.description}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {token.scope === 'pipeline_scan' ? 'Pipeline scan' : 'Org admin'} · Expires {timeAgo(token.expires_at)}
-                                  </p>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="danger-soft"
-                                  onPress={() => void handleRevokeToken(token.id)}
-                                >
-                                  Revoke
-                                </Button>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
+                        </ResourceList>
+                      </section>
+
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <section className="space-y-2" aria-labelledby="org-invites-heading">
+                          <h3 id="org-invites-heading" className="text-sm font-medium">
+                            Pending invites
+                          </h3>
+                          <ResourceList aria-label="Pending invites">
+                            {invites.length === 0 ? (
+                              <ResourceList.Item title="No pending invites" />
+                            ) : (
+                              invites.map((invite) => (
+                                <ResourceList.Item
+                                  key={invite.id}
+                                  title={invite.email}
+                                  description={`${labelFor(ROLE_LABELS, invite.role)} · ${expiryLabel(invite.expires_at)}`}
+                                  actions={
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onPress={() => void handleRevokeInvite(invite)}
+                                    >
+                                      Revoke
+                                    </Button>
+                                  }
+                                />
+                              ))
+                            )}
+                          </ResourceList>
+                        </section>
+
+                        <section className="space-y-2" aria-labelledby="org-tokens-heading">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 id="org-tokens-heading" className="text-sm font-medium">
+                              Organization tokens
+                            </h3>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onPress={tokenModal.open}
+                              isDisabled={!activeOrg.allow_org_tokens || !activeOrg.is_active}
+                            >
+                              Create token
+                            </Button>
+                          </div>
+                          <ResourceList aria-label="Organization tokens">
+                            {tokens.length === 0 ? (
+                              <ResourceList.Item title="No active tokens" />
+                            ) : (
+                              tokens.map((token) => (
+                                <ResourceList.Item
+                                  key={token.id}
+                                  title={token.description || 'Unnamed token'}
+                                  description={`${labelFor(TOKEN_SCOPE_LABELS, token.scope)} · ${expiryLabel(token.expires_at)}`}
+                                  actions={
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onPress={() => void handleRevokeToken(token)}
+                                    >
+                                      Revoke
+                                    </Button>
+                                  }
+                                />
+                              ))
+                            )}
+                          </ResourceList>
+                        </section>
                       </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="py-4 text-sm text-muted-foreground">No organization selected.</div>
-                )}
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+                    </>
+                  ) : (
+                    <p className="py-4 text-sm text-muted-foreground">No organization selected.</p>
+                  )}
+                </Modal.Body>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
 
-      <Modal state={inviteModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>Create Invite</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body className="space-y-3">
-                <Input
-                  className="w-full"
-                  variant="secondary"
-                  value={newInviteEmail}
-                  onChange={(event) => setNewInviteEmail(event.target.value)}
-                  placeholder="user@example.com"
-                />
-                <Select
-                  className="w-full"
-                  value={newInviteRole}
-                  onChange={(value) =>
-                    setNewInviteRole(String(value) as 'admin' | 'editor' | 'viewer')
-                  }
-                  variant="secondary"
-                >
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id="viewer">viewer</ListBox.Item>
-                      <ListBox.Item id="editor">editor</ListBox.Item>
-                      <ListBox.Item id="admin">admin</ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" onPress={inviteModal.close}>
-                  Cancel
-                </Button>
-                <Button onPress={() => void handleCreateInvite()}>Create invite</Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+        <Modal state={inviteModal}>
+          <Modal.Backdrop isDismissable={false}>
+            <Modal.Container size="md" placement="center">
+              <Modal.Dialog>
+                <Modal.Header>
+                  <Modal.Heading>Invite member</Modal.Heading>
+                  <Modal.CloseTrigger />
+                </Modal.Header>
+                <Modal.Body className="space-y-4">
+                  <TextField value={newInviteEmail} onChange={setNewInviteEmail} type="email">
+                    <Label className="mb-1.5 text-sm font-medium">Email</Label>
+                    <Input className="w-full" variant="secondary" placeholder="user@example.com" />
+                  </TextField>
+                  <div className="space-y-1.5">
+                    <span className="block text-sm font-medium">Role</span>
+                    <Select
+                      aria-label="Role"
+                      className="w-full"
+                      value={newInviteRole}
+                      onChange={(value) =>
+                        setNewInviteRole(String(value) as 'admin' | 'editor' | 'viewer')
+                      }
+                      variant="secondary"
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {ORG_ROLE_OPTIONS.map((role) => (
+                            <ListBox.Item key={role} id={role}>
+                              {labelFor(ROLE_LABELS, role)}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </div>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="tertiary" onPress={inviteModal.close}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onPress={() => void handleCreateInvite()}
+                    isDisabled={!newInviteEmail.trim()}
+                  >
+                    Send invite
+                  </Button>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
 
-      <Modal state={tokenModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>Create Org Token</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
-                <Input
-                  className="w-full"
-                  variant="secondary"
-                  value={newTokenDescription}
-                  onChange={(event) => setNewTokenDescription(event.target.value)}
-                  placeholder="CI token"
-                />
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" onPress={tokenModal.close}>
-                  Cancel
-                </Button>
-                <Button onPress={() => void handleCreateToken()}>Create token</Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+        <Modal state={tokenModal}>
+          <Modal.Backdrop isDismissable={false}>
+            <Modal.Container size="md" placement="center">
+              <Modal.Dialog>
+                <Modal.Header>
+                  <Modal.Heading>Create organization token</Modal.Heading>
+                  <Modal.CloseTrigger />
+                </Modal.Header>
+                <Modal.Body>
+                  <TextField value={newTokenDescription} onChange={setNewTokenDescription}>
+                    <Label className="mb-1.5 text-sm font-medium">Description</Label>
+                    <Input className="w-full" variant="secondary" placeholder="CI token" />
+                  </TextField>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="tertiary" onPress={tokenModal.close}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onPress={() => void handleCreateToken()}
+                    isDisabled={!newTokenDescription.trim()}
+                  >
+                    Create token
+                  </Button>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
 
-      {confirmDialog}
-    </div>
+        {confirmDialog}
+      </div>
+    </AdminPageShell>
   );
 }

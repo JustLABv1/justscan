@@ -1,4 +1,5 @@
 import type { GitRepositoryDiscoveryMode } from '@/lib/api';
+import { shortDigest, splitImageRef } from '@/lib/labels';
 
 /**
  * `https://gitlab.example.com/130-ext-sva/setup-infra.git` → `130-ext-sva/setup-infra`.
@@ -41,3 +42,44 @@ export const DISCOVERY_MODE_LABELS: Record<GitRepositoryDiscoveryMode, string> =
   registry: 'Registry references',
   gitlab_ci: 'GitLab CI',
 };
+
+export const GIT_RUN_STATUS_LABELS: Record<string, string> = {
+  queued: 'Queued',
+  discovering: 'Discovering images',
+  scanning: 'Scanning',
+  completed: 'Completed',
+  partial: 'Partially completed',
+  completed_partial: 'Partially completed',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+};
+
+export const GIT_RUN_TRIGGER_LABELS: Record<string, string> = {
+  dry_run: 'Discovery preview',
+  manual: 'Manual scan',
+  schedule: 'Scheduled scan',
+  scheduled: 'Scheduled scan',
+  cron: 'Scheduled scan',
+  api: 'Started through the API',
+  mcp: 'Started through MCP',
+};
+
+export function gitRunTone(status: string): 'danger' | 'success' | 'warning' | 'accent' {
+  if (status === 'failed') return 'danger';
+  if (status === 'completed') return 'success';
+  if (status === 'partial' || status === 'completed_partial' || status === 'cancelled')
+    return 'warning';
+  return 'accent';
+}
+
+/**
+ * Splits `registry.example.com/team/app:1.2@sha256:…` into the readable part
+ * (`team/app:1.2@sha256:abcdef012345…`) and the registry host.
+ */
+export function displayImageRef(fullRef: string): { host: string; name: string } {
+  const at = fullRef.indexOf('@');
+  const base = at >= 0 ? fullRef.slice(0, at) : fullRef;
+  const digest = at >= 0 ? fullRef.slice(at + 1) : '';
+  const { host, name } = splitImageRef(base);
+  return { host, name: digest ? `${name}@${shortDigest(digest)}` : name };
+}

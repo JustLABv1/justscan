@@ -1,6 +1,7 @@
 'use client';
 
 import { FormField } from '@/components/ui/form-field';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { changePassword, getUserDetails, setUser, updateUserDetails, User } from '@/lib/api';
 import { Avatar, Button, Card } from '@/components/ui';
 import { PencilEdit02Icon } from 'hugeicons-react';
@@ -16,26 +17,7 @@ function splitName(value: string) {
 }
 
 function InlineAlert({ message, type }: { message: string; type: 'success' | 'error' }) {
-  return (
-    <div
-      className="rounded-xl px-3 py-2 text-sm"
-      style={
-        type === 'success'
-          ? {
-              background: 'rgba(16,185,129,0.08)',
-              border: '1px solid rgba(16,185,129,0.2)',
-              color: '#34d399',
-            }
-          : {
-              background: 'rgba(239,68,68,0.08)',
-              border: '1px solid rgba(239,68,68,0.2)',
-              color: '#f87171',
-            }
-      }
-    >
-      {message}
-    </div>
-  );
+  return <StatusAlert status={type === 'success' ? 'success' : 'danger'} description={message} />;
 }
 
 function FieldDisplay({ label, value }: { label: string; value: string }) {
@@ -64,14 +46,14 @@ function SectionHeader({
     <div className="flex items-center justify-between gap-3">
       <h3 className="text-base font-semibold text-foreground">{title}</h3>
       {editing ? (
-        <Button variant="tertiary" className=" " onPress={onCancel}>
+        <Button variant="tertiary" onPress={onCancel}>
           Cancel
         </Button>
       ) : (
         <Button
           variant="tertiary"
           isDisabled={disabled}
-          className=" "
+
           onPress={onEdit}
         >
           <PencilEdit02Icon size={13} />
@@ -205,7 +187,7 @@ export default function ProfilePage() {
             <Button
               type="button"
               variant="tertiary"
-              className=" "
+
               onPress={() => setProfileEditing(true)}
             >
               <PencilEdit02Icon size={13} />
@@ -264,7 +246,7 @@ export default function ProfilePage() {
         </Card.Content>
       </Card>
 
-      <Card className="rounded-xl border border-border shadow-none dark:border-border">
+      <Card>
         <Card.Content className="space-y-4 p-4 sm:p-5">
           <SectionHeader
             title="Security"

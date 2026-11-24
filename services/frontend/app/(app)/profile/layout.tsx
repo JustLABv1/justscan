@@ -1,6 +1,6 @@
 'use client';
 
-import { PageHeader } from '@/components/ui/page-header';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Settings01Icon } from 'hugeicons-react';
 import { usePathname } from 'next/navigation';
@@ -13,7 +13,7 @@ const profileNavItems = [
   },
   {
     href: '/profile/tokens',
-    label: 'API Tokens',
+    label: 'API tokens',
     description: 'Personal automation access for scripts and integrations.',
   },
   {
@@ -27,14 +27,14 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
 
   return (
-    <div className="space-y-5 px-4 py-6 sm:px-6 xl:py-7">
+    <PageContainer size="narrow">
       <PageHeader
-        title="Account Settings"
+        title="Account settings"
         icon={<Settings01Icon size={16} />}
         description="Manage your profile, personal access, and notification behavior."
       />
       <PageTabs currentPath={pathname} items={profileNavItems} />
       <div className="min-w-0">{children}</div>
-    </div>
+    </PageContainer>
   );
 }

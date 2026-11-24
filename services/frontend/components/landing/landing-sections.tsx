@@ -25,8 +25,8 @@ export function LandingHeader({ initialIsLoggedIn = false }: { initialIsLoggedIn
   }, []);
 
   return (
-    <header className="pointer-events-none fixed inset-x-0 top-4 z-50 px-4 sm:px-6">
-      <div className="pointer-events-auto mx-auto flex h-12 max-w-5xl items-center justify-between gap-3 rounded-xl border border-foreground/10 bg-background/78 px-3 shadow-lg shadow-foreground/5 backdrop-blur-xl sm:rounded-full sm:px-4">
+    <header className="pointer-events-none fixed inset-x-0 top-4 z-50 px-5 sm:px-6">
+      <div className="pointer-events-auto mx-auto flex h-12 max-w-7xl items-center justify-between gap-3 rounded-xl border border-foreground/10 bg-background/78 px-3 shadow-lg shadow-foreground/5 backdrop-blur-xl sm:rounded-full sm:px-4">
         <NextLink aria-label="JustScan home" className="flex shrink-0 items-center gap-2" href="/">
           <Logo size={24} />
           <span className="text-sm font-semibold text-foreground">JustScan</span>
@@ -189,7 +189,9 @@ export function LandingFooter() {
           <Logo size={26} />
           <div>
             <p className="text-sm font-semibold text-foreground">JustScan</p>
-            <p className="mt-1 text-xs text-muted-foreground">Container security, kept actionable.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Container security, kept actionable.
+            </p>
           </div>
         </div>
 

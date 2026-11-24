@@ -13,7 +13,7 @@ import {
   setToken,
   setUser,
 } from '@/lib/api';
-import { Button, Checkbox, Form } from '@/components/ui';
+import { Button, Checkbox, Form, Skeleton } from '@/components/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -73,9 +73,15 @@ export default function LoginPage() {
 
   if (!availabilityLoaded) {
     return (
-      <div className="flex items-center justify-center h-32">
-        <div className="size-6 rounded-full border-2 border-primary/30 border-t-accent animate-spin" />
-      </div>
+      <AuthCard title="Welcome back" subtitle="Sign in to continue to your workspace.">
+        <div role="status" aria-live="polite" className="space-y-4">
+          <span className="sr-only">Loading sign-in options</span>
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+      </AuthCard>
     );
   }
 

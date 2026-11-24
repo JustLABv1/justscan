@@ -3504,19 +3504,6 @@ func xrayImageParts(imageName, imageTag string, registry *models.Registry) (stri
 	return repo, artifactName, tag, nil
 }
 
-func xrayArtifactPaths(imageName, imageTag string, registry *models.Registry, artifactoryID string) (string, string, error) {
-	repo, artifactName, tag, err := xrayImageParts(imageName, imageTag, registry)
-	if err != nil {
-		return "", "", err
-	}
-
-	candidates := buildXrayArtifactPathCandidates(artifactoryID, repo, artifactName, tag, "manifest.json", "")
-	if len(candidates) == 0 {
-		return "", "", fmt.Errorf("failed to build xray artifact path for %s:%s", imageName, imageTag)
-	}
-	return candidates[0].RepoPath, candidates[0].ArtifactPath, nil
-}
-
 func updateXrayMetadata(ctx context.Context, db *bun.DB, scanID uuid.UUID, externalScanID, externalStatus, currentStep string) error {
 	_, err := db.NewUpdate().Model((*models.Scan)(nil)).
 		Set("external_scan_id = ?", externalScanID).

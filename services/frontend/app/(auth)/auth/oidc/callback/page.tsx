@@ -1,11 +1,22 @@
 'use client';
-import { Logo } from '@/components/logo';
+import { AuthCard } from '@/components/auth-card';
+import { buttonVariants, Skeleton } from '@/components/ui';
+import { FormAlert } from '@/components/ui/form-alert';
 import { getApiBase } from '@/lib/api/base';
 import { setToken, setUser } from '@/lib/api';
 import { consumeAuthReturnUrl } from '@/lib/auth-return-url';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+class SignInError extends Error {}
+
+function describeStatus(status: number): string {
+  if (status === 401 || status === 403) return 'Your sign-in expired. Try again.';
+  if (status >= 500)
+    return 'JustScan could not finish signing you in right now. Try again in a moment.';
+  return 'We could not complete sign-in. Try again.';
+}
 
 export default function OIDCCallbackPage() {
   const router = useRouter();
@@ -20,29 +31,23 @@ export default function OIDCCallbackPage() {
 
     // Remove fragment from browser history immediately so the token is not
     // visible in the URL bar or navigation history.
-    if (typeof window !== 'undefined') {
-      history.replaceState(null, '', window.location.pathname + window.location.search);
-    }
+    history.replaceState(null, '', window.location.pathname + window.location.search);
 
     if (!token) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setError('No authentication token received. Please try again.');
+      setError('Your identity provider did not return a session. Try signing in again.');
       return;
     }
 
     // Fetch the current user details using the new token.
-    const apiBase = getApiBase();
-    fetch(`${apiBase}/api/v1/user/`, {
+    fetch(`${getApiBase()}/api/v1/user/`, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     })
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `Failed to load user (${res.status})`);
-        }
+      .then((res) => {
+        if (!res.ok) throw new SignInError(describeStatus(res.status));
         return res.json();
       })
       .then((data) => {
@@ -51,45 +56,32 @@ export default function OIDCCallbackPage() {
         router.replace(consumeAuthReturnUrl() ?? '/scans');
       })
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
+        setError(
+          err instanceof SignInError
+            ? err.message
+            : 'We could not reach JustScan to finish signing in. Check your connection and try again.'
+        );
       });
   }, [router]);
 
   if (error) {
     return (
-      <div className="space-y-6">
-        <div className="text-center space-y-3">
-          <Logo size={60} className="mx-auto" />
-          <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>JustScan</h1>
-        </div>
-
-        <div className="surface-panel rounded-xl p-6 space-y-4 relative">
-          <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-            style={{ background: 'linear-gradient(90deg,transparent,color-mix(in srgb, var(--primary) 30%, transparent),transparent)' }} />
-          <div className="rounded-xl px-3.5 py-2.5 text-sm"
-            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.22)', color: '#f87171' }}>
-            {error}
-          </div>
-          <Link
-            href="/login"
-            className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold text-white flex items-center justify-center transition-all hover:opacity-90"
-            style={{
-              background: 'linear-gradient(135deg,var(--primary),color-mix(in srgb, var(--primary) 82%, black))',
-              boxShadow: '0 0 24px color-mix(in srgb, var(--primary) 45%, transparent)',
-            }}
-          >
-            Back to Login
-          </Link>
-        </div>
-      </div>
+      <AuthCard title="Sign-in didn’t finish" subtitle="Nothing was changed. You can start again.">
+        <FormAlert description={error} />
+        <Link href="/login" className={buttonVariants({ fullWidth: true, size: 'lg' })}>
+          Back to sign in
+        </Link>
+      </AuthCard>
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-4">
-      <Logo size={60} />
-      <div className="size-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Completing sign-in…</p>
-    </div>
+    <AuthCard title="Signing you in" subtitle="Completing sign-in with your identity provider…">
+      <div role="status" aria-live="polite" className="space-y-3">
+        <span className="sr-only">Completing sign-in</span>
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-2/3" />
+      </div>
+    </AuthCard>
   );
 }

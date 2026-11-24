@@ -1,20 +1,25 @@
+import { buttonVariants } from '@/components/ui';
+import { ArrowLeft01Icon, Search01Icon } from 'hugeicons-react';
 import Link from 'next/link';
 
 export default function NotFound() {
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-background px-6 py-16 text-foreground">
-      <section className="surface-card w-full max-w-xl rounded-xl p-8 text-center sm:p-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">404</p>
-        <h1 className="mt-3 text-3xl font-semibold">Page not found</h1>
-        <p className="mt-3 text-sm text-muted-foreground">
+    <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10 text-foreground sm:px-6">
+      <section className="w-full max-w-md">
+        <div className="grid size-10 place-items-center rounded-lg border border-border bg-muted text-muted-foreground">
+          <Search01Icon size={20} />
+        </div>
+        <p className="mt-6 text-sm font-medium text-muted-foreground">Error 404</p>
+        <h1 className="mt-1 text-xl font-semibold tracking-tight">Page not found</h1>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
           The page may have moved, or the link may no longer be available.
         </p>
-        <Link
-          href="/"
-          className="mt-7 inline-flex items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          Go home
-        </Link>
+        <div className="mt-6">
+          <Link href="/" className={buttonVariants()}>
+            <ArrowLeft01Icon size={15} />
+            Go home
+          </Link>
+        </div>
       </section>
     </main>
   );

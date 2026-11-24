@@ -51,6 +51,7 @@ import {
   Label,
   ListBox,
   Modal,
+  DetailSheet,
   Select,
   Spinner,
   Switch,
@@ -641,15 +642,17 @@ function OrgDetailContent() {
       </div>
 
       {/* Policy editor modal */}
-      <Modal state={policyModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="overflow-hidden">
-              <Modal.Header>
-                <Modal.Heading>{editingPolicy ? 'Edit Policy' : 'New Policy'}</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body className="py-5 max-h-[60vh] overflow-y-auto">
+      <DetailSheet state={policyModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="lg" placement="center">
+            <DetailSheet.Dialog className="overflow-hidden">
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
+                  {editingPolicy ? 'Edit Policy' : 'New Policy'}
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body className="py-5 max-h-[60vh] overflow-y-auto">
                 <form id="policy-form" onSubmit={handleSavePolicy} className="space-y-5">
                   {policyError ? (
                     <FormAlert title="Policy could not be saved" description={policyError} />
@@ -892,19 +895,19 @@ function OrgDetailContent() {
                     )}
                   </div>
                 </form>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button onPress={policyModal.close} variant="secondary">
                   Cancel
                 </Button>
                 <Button type="submit" form="policy-form" isPending={policySaving}>
                   {editingPolicy ? 'Save Changes' : 'Create Policy'}
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
 
       <Modal state={inviteModal}>
         <Modal.Backdrop isDismissable={false}>

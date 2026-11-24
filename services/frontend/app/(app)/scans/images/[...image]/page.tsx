@@ -1,4 +1,5 @@
 'use client';
+import { AlertDialog } from '@/components/ui/alert-dialog';
 
 import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
 import { ArtifactScansTable } from '@/components/scans/artifact-scans-table';
@@ -34,7 +35,6 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import {
   Alert,
-  AlertDialog,
   Button,
   Card,
   Disclosure,
@@ -433,93 +433,83 @@ export default function ImageScansPage() {
         }
       />
       <AlertDialog
-        isOpen={Boolean(pendingDelete)}
+        open={Boolean(pendingDelete)}
+        dismissible={false}
         onOpenChange={(isOpen) => {
           if (!isOpen && !deleting) setPendingDelete(null);
         }}
       >
-        <AlertDialog.Backdrop variant="blur">
-          <AlertDialog.Container placement="center">
-            <AlertDialog.Dialog className="sm:max-w-[440px]">
-              {!deleting ? <AlertDialog.CloseTrigger /> : null}
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>
-                  {deleting
-                    ? 'Deleting scan history…'
-                    : pendingDelete?.kind === 'image'
-                      ? 'Delete image scan group?'
-                      : pendingDelete?.kind === 'tag'
-                        ? 'Delete tag scan history?'
-                        : 'Delete scan history item?'}
-                </AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body>
-                {deleting ? (
-                  <div
-                    aria-busy="true"
-                    aria-live="polite"
-                    className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-3"
-                    role="status"
-                  >
-                    <Spinner aria-label="Deleting scan history" color="danger" size="md" />
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-sm font-medium text-foreground">
-                        Deleting {pendingScanCount} scan {pendingScanCount === 1 ? 'run' : 'runs'}…
-                      </p>
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        Large histories can take a little while. Keep this window open until the
-                        deletion finishes.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    {pendingDelete?.kind === 'image' ? (
-                      <>
-                        This removes <strong>{imageName}</strong>, including every tag and scan run
-                        in this workspace. This cannot be undone.
-                      </>
-                    ) : pendingDelete?.kind === 'tag' ? (
-                      <>
-                        This removes <strong>{pendingDelete?.artifact.image_tag}</strong> and all{' '}
-                        {pendingDelete?.artifact.scan_count ?? 0} of its historical scan runs. This
-                        cannot be undone.
-                      </>
-                    ) : (
-                      <>
-                        This removes the scan from{' '}
-                        <strong>
-                          {pendingDelete ? fullDate(pendingDelete.scan.created_at) : ''}
-                        </strong>{' '}
-                        from{' '}
-                        <strong>
-                          {imageName}:{pendingDelete?.scan.image_tag}
-                        </strong>
-                        . This cannot be undone.
-                      </>
-                    )}
+        <AlertDialog.Content tone="destructive" blur>
+          <AlertDialog.Title>
+            {deleting
+              ? 'Deleting scan history…'
+              : pendingDelete?.kind === 'image'
+                ? 'Delete image scan group?'
+                : pendingDelete?.kind === 'tag'
+                  ? 'Delete tag scan history?'
+                  : 'Delete scan history item?'}
+          </AlertDialog.Title>
+          <div>
+            {deleting ? (
+              <div
+                aria-busy="true"
+                aria-live="polite"
+                className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-3"
+                role="status"
+              >
+                <Spinner aria-label="Deleting scan history" color="danger" size="md" />
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    Deleting {pendingScanCount} scan {pendingScanCount === 1 ? 'run' : 'runs'}…
                   </p>
+                  <AlertDialog.Description>
+                    Large histories can take a little while. Keep this window open until the
+                    deletion finishes.
+                  </AlertDialog.Description>
+                </div>
+              </div>
+            ) : (
+              <AlertDialog.Description>
+                {pendingDelete?.kind === 'image' ? (
+                  <>
+                    This removes <strong>{imageName}</strong>, including every tag and scan run in
+                    this workspace. This cannot be undone.
+                  </>
+                ) : pendingDelete?.kind === 'tag' ? (
+                  <>
+                    This removes <strong>{pendingDelete?.artifact.image_tag}</strong> and all{' '}
+                    {pendingDelete?.artifact.scan_count ?? 0} of its historical scan runs. This
+                    cannot be undone.
+                  </>
+                ) : (
+                  <>
+                    This removes the scan from{' '}
+                    <strong>{pendingDelete ? fullDate(pendingDelete.scan.created_at) : ''}</strong>{' '}
+                    from{' '}
+                    <strong>
+                      {imageName}:{pendingDelete?.scan.image_tag}
+                    </strong>
+                    . This cannot be undone.
+                  </>
                 )}
-              </AlertDialog.Body>
-              <AlertDialog.Footer>
-                {!deleting ? (
-                  <Button slot="close" variant="tertiary">
-                    Cancel
-                  </Button>
-                ) : null}
-                <Button
-                  isDisabled={deleting}
-                  isPending={deleting}
-                  onPress={() => void confirmDelete()}
-                  variant="danger"
-                >
-                  {deleting ? 'Deleting scan history…' : 'Delete'}
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
+              </AlertDialog.Description>
+            )}
+          </div>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel disabled={deleting} />
+            <AlertDialog.Action
+              disabled={deleting}
+              loading={deleting}
+              onClick={(event) => {
+                // These flows retain failures in place and close only after success.
+                event.preventDefault();
+                void confirmDelete();
+              }}
+            >
+              {deleting ? 'Deleting scan history…' : 'Delete'}
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
       </AlertDialog>
       {queuedDeletions.size > 0 ? (
         <Alert className="items-center gap-3 py-3" status="warning">

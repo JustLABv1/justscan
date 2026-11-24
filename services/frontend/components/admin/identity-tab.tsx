@@ -43,7 +43,7 @@ import {
   Input,
   ListBox,
   Label,
-  Modal,
+  DetailSheet,
   SearchField,
   Select,
   Switch,
@@ -1154,15 +1154,17 @@ export function IdentityTab() {
         </Card>
       )}
 
-      <Modal state={providerModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="cover" placement="center">
-            <Modal.Dialog className="mx-auto w-full max-w-[1040px]">
-              <Modal.Header>
-                <Modal.Heading>{editingProvider ? 'Edit Provider' : 'Add provider'}</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body className="min-h-0 max-h-[80vh] overflow-y-auto py-5">
+      <DetailSheet state={providerModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="xl">
+            <DetailSheet.Dialog className="overflow-hidden">
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
+                  {editingProvider ? 'Edit Provider' : 'Add provider'}
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body className="min-h-0 py-5">
                 <div className="space-y-5">
                   <p className="text-sm text-muted-foreground">
                     Configure identity provider details in three steps.{' '}
@@ -1496,8 +1498,8 @@ export function IdentityTab() {
                     )}
                   </form>
                 </div>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button type="button" variant="secondary" onPress={providerModal.close}>
                   Cancel
                 </Button>
@@ -1528,21 +1530,23 @@ export function IdentityTab() {
                         : 'Create Provider'}
                   </Button>
                 )}
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
 
-      <Modal state={mappingModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>{editingMapping ? 'Edit Mapping' : 'Add mapping'}</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
+      <DetailSheet state={mappingModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="md">
+            <DetailSheet.Dialog>
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
+                  {editingMapping ? 'Edit Mapping' : 'Add mapping'}
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body>
                 <form
                   id="identity-mapping-form"
                   className="space-y-3"
@@ -1787,8 +1791,8 @@ export function IdentityTab() {
                     </>
                   )}
                 </form>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button variant="secondary" onPress={mappingModal.close}>
                   Cancel
                 </Button>
@@ -1800,21 +1804,23 @@ export function IdentityTab() {
                 >
                   {mappingSaving ? 'Saving...' : editingMapping ? 'Save Mapping' : 'Create Mapping'}
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
 
-      <Modal state={overrideModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>{editingOverride ? 'Edit Override' : 'Add override'}</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
+      <DetailSheet state={overrideModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="md">
+            <DetailSheet.Dialog>
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
+                  {editingOverride ? 'Edit Override' : 'Add override'}
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body>
                 <form
                   id="identity-override-form"
                   className="space-y-3"
@@ -1937,8 +1943,8 @@ export function IdentityTab() {
                     </Select.Popover>
                   </Select>
                 </form>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button variant="secondary" onPress={overrideModal.close}>
                   Cancel
                 </Button>
@@ -1954,11 +1960,11 @@ export function IdentityTab() {
                       ? 'Save Override'
                       : 'Create Override'}
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
 
       {confirmDialog}
     </div>

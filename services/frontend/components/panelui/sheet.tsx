@@ -619,6 +619,8 @@ function NextParts({ render, payload }: { render: (payload: any) => ReactNode; p
 
 export interface SheetContentProps extends Omit<ComponentProps<'div'>, 'children'> {
   children?: ReactNode;
+  initialFocus?: ComponentProps<typeof Drawer.Popup>['initialFocus'];
+  finalFocus?: ComponentProps<typeof Drawer.Popup>['finalFocus'];
   /**
    * Stand clear of the screen edges with every corner rounded. On by default;
    * off, the sheet meets the edges it rises from.
@@ -648,6 +650,8 @@ export interface SheetContentProps extends Omit<ComponentProps<'div'>, 'children
    * of a screen.
    */
   inline?: boolean;
+  backdropClassName?: string;
+  viewportClassName?: string;
 }
 
 /** The sheet itself, with the backdrop behind it. */
@@ -659,6 +663,8 @@ function SheetContent({
   showClose = true,
   blur = false,
   inline = false,
+  backdropClassName,
+  viewportClassName,
   className,
   ...props
 }: SheetContentProps) {
@@ -708,14 +714,14 @@ function SheetContent({
       {/* The first sheet darkens the page; one opened from it does not add a second shade. */}
       {sheet.nested ? null : (
         <Drawer.Backdrop
-          className={slots.backdrop()}
+          className={slots.backdrop({ className: backdropClassName })}
           // With a second sheet open, a press here is outside both, and closes both.
           onClick={() => {
             if (sheet.hasOpenChild()) sheet.closeTree();
           }}
         />
       )}
-      <Drawer.Viewport className={slots.viewport()}>
+      <Drawer.Viewport className={slots.viewport({ className: viewportClassName })}>
         <Drawer.Popup
           className={slots.popup({ className: [vertical && slots.stacked(), className] })}
           {...props}

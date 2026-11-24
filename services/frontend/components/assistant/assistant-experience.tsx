@@ -361,6 +361,7 @@ export function AssistantExperience({
       await refreshConversations(conversation?.id === id ? undefined : conversation?.id);
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete conversation');
+      throw error;
     }
   }
 
@@ -679,49 +680,30 @@ export function AssistantExperience({
       <div className="flex h-full min-h-0 w-full flex-1 gap-4 overflow-hidden">
         <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
           <AlertDialog
-            isOpen={Boolean(conversationPendingDelete)}
-            onOpenChange={(isOpen) => {
-              if (!isOpen) {
-                setConversationPendingDelete(null);
-              }
+            open={Boolean(conversationPendingDelete)}
+            onOpenChange={(open) => {
+              if (!open) setConversationPendingDelete(null);
             }}
           >
-            <AlertDialog.Backdrop variant="blur">
-              <AlertDialog.Container placement="center">
-                <AlertDialog.Dialog className="sm:max-w-[420px]">
-                  <AlertDialog.CloseTrigger />
-                  <AlertDialog.Header>
-                    <AlertDialog.Icon status="danger" />
-                    <AlertDialog.Heading>Delete conversation?</AlertDialog.Heading>
-                  </AlertDialog.Header>
-                  <AlertDialog.Body>
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      This removes{' '}
-                      <strong>{conversationPendingDelete?.title ?? 'this conversation'}</strong> and
-                      its message history from this scope.
-                    </p>
-                  </AlertDialog.Body>
-                  <AlertDialog.Footer>
-                    <Button slot="close" variant="tertiary">
-                      Cancel
-                    </Button>
-                    <Button
-                      onPress={() => {
-                        if (!conversationPendingDelete) {
-                          return;
-                        }
-                        void handleDeleteConversation(conversationPendingDelete.id);
-                        setConversationPendingDelete(null);
-                      }}
-                      slot="close"
-                      variant="danger"
-                    >
-                      Delete
-                    </Button>
-                  </AlertDialog.Footer>
-                </AlertDialog.Dialog>
-              </AlertDialog.Container>
-            </AlertDialog.Backdrop>
+            <AlertDialog.Content tone="destructive" size="sm">
+              <AlertDialog.Title>Delete conversation?</AlertDialog.Title>
+              <AlertDialog.Description>
+                This removes{' '}
+                <strong>{conversationPendingDelete?.title ?? 'this conversation'}</strong> and its
+                message history from this scope.
+              </AlertDialog.Description>
+              <AlertDialog.Footer>
+                <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+                <AlertDialog.Action
+                  onClick={async () => {
+                    if (!conversationPendingDelete) return;
+                    await handleDeleteConversation(conversationPendingDelete.id);
+                  }}
+                >
+                  Delete
+                </AlertDialog.Action>
+              </AlertDialog.Footer>
+            </AlertDialog.Content>
           </AlertDialog>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

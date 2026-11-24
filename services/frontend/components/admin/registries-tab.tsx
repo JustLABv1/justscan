@@ -37,7 +37,7 @@ import {
   Chip,
   Input,
   ListBox,
-  Modal,
+  DetailSheet,
   ResourceList,
   SearchField,
   Select,
@@ -374,17 +374,17 @@ export function RegistriesTab() {
           )}
         </Card>
 
-        <Modal state={modal}>
-          <Modal.Backdrop isDismissable={false}>
-            <Modal.Container size="lg" placement="center">
-              <Modal.Dialog>
-                <Modal.Header>
-                  <Modal.Heading>
+        <DetailSheet state={modal}>
+          <DetailSheet.Backdrop isDismissable={false}>
+            <DetailSheet.Container size="lg">
+              <DetailSheet.Dialog>
+                <DetailSheet.Header>
+                  <DetailSheet.Heading>
                     {editingRegistry ? 'Edit registry' : 'Add registry'}
-                  </Modal.Heading>
-                  <Modal.CloseTrigger />
-                </Modal.Header>
-                <Modal.Body>
+                  </DetailSheet.Heading>
+                  <DetailSheet.CloseTrigger />
+                </DetailSheet.Header>
+                <DetailSheet.Body>
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
                       Configure global registry connectivity in three guided steps.
@@ -580,8 +580,8 @@ export function RegistriesTab() {
                       )}
                     </form>
                   </div>
-                </Modal.Body>
-                <Modal.Footer>
+                </DetailSheet.Body>
+                <DetailSheet.Footer>
                   <Button type="button" variant="secondary" onPress={modal.close}>
                     Cancel
                   </Button>
@@ -608,11 +608,11 @@ export function RegistriesTab() {
                       {saving ? 'Saving...' : editingRegistry ? 'Save registry' : 'Create registry'}
                     </Button>
                   )}
-                </Modal.Footer>
-              </Modal.Dialog>
-            </Modal.Container>
-          </Modal.Backdrop>
-        </Modal>
+                </DetailSheet.Footer>
+              </DetailSheet.Dialog>
+            </DetailSheet.Container>
+          </DetailSheet.Backdrop>
+        </DetailSheet>
 
         {confirmDialog}
       </div>

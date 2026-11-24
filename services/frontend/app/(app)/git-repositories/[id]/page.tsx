@@ -13,7 +13,7 @@ import {
   Dropdown,
   Label,
   ListBox,
-  Modal,
+  DetailSheet,
   SearchField,
   Select,
   Spinner,
@@ -2124,19 +2124,19 @@ export default function GitRepositoryDetailPage() {
         </Tabs.Panel>
       </Tabs>
 
-      <Modal>
-        <Modal.Backdrop
+      <DetailSheet>
+        <DetailSheet.Backdrop
           isDismissable={false}
           isOpen={reviewOverlay.isOpen}
           onOpenChange={reviewOverlay.setOpen}
         >
-          <Modal.Container size="lg">
-            <Modal.Dialog>
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Resolve {reviewing?.path}</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="grid gap-4">
+          <DetailSheet.Container size="lg">
+            <DetailSheet.Dialog>
+              <DetailSheet.CloseTrigger />
+              <DetailSheet.Header>
+                <DetailSheet.Heading>Resolve {reviewing?.path}</DetailSheet.Heading>
+              </DetailSheet.Header>
+              <DetailSheet.Body className="grid gap-4">
                 <Select
                   aria-label="Resolution"
                   value={resolution}
@@ -2286,32 +2286,32 @@ export default function GitRepositoryDetailPage() {
                     />
                   </>
                 ) : null}
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button slot="close" variant="tertiary">
                   Cancel
                 </Button>
                 <Button onPress={() => void saveResolution()}>Save and rediscover</Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-      <Modal>
-        <Modal.Backdrop
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
+      <DetailSheet>
+        <DetailSheet.Backdrop
           isDismissable={false}
           isOpen={helmSourceOverlay.isOpen}
           onOpenChange={helmSourceOverlay.setOpen}
         >
-          <Modal.Container size="lg">
-            <Modal.Dialog>
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>
+          <DetailSheet.Container size="lg">
+            <DetailSheet.Dialog>
+              <DetailSheet.CloseTrigger />
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
                   {editingHelmSource ? 'Edit Helm source' : 'Add Helm source'}
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="grid gap-4">
+                </DetailSheet.Heading>
+              </DetailSheet.Header>
+              <DetailSheet.Body className="grid gap-4">
                 <Select
                   aria-label="Chart location"
                   value={helmSourceType}
@@ -2443,19 +2443,19 @@ export default function GitRepositoryDetailPage() {
                   onChange={(event) => setReleaseName(event.target.value)}
                   placeholder="Optional; defaults to the chart directory name"
                 />
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button slot="close" variant="tertiary">
                   Cancel
                 </Button>
                 <Button isPending={savingHelmSource} onPress={() => void saveHelmSource()}>
                   Save Helm source
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
       {confirmDialog}
     </PageContainer>
   );

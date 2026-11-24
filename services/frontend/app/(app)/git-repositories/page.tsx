@@ -6,7 +6,7 @@ import {
   Description,
   Label,
   ListBox,
-  Modal,
+  DetailSheet,
   Select,
   SearchField,
   ResourceList,
@@ -526,21 +526,21 @@ export default function GitRepositoriesPage() {
         </Card>
       </LoadableCollectionState>
       {dialog}
-      <Modal>
-        <Modal.Backdrop
+      <DetailSheet>
+        <DetailSheet.Backdrop
           isDismissable={false}
           isOpen={overlay.isOpen}
           onOpenChange={overlay.setOpen}
         >
-          <Modal.Container size="lg">
-            <Modal.Dialog>
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>
+          <DetailSheet.Container size="lg">
+            <DetailSheet.Dialog>
+              <DetailSheet.CloseTrigger />
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
                   {editingRepository ? 'Edit Git repository' : 'Connect Git repository'}
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="grid gap-4">
+                </DetailSheet.Heading>
+              </DetailSheet.Header>
+              <DetailSheet.Body className="grid gap-4">
                 <FormField
                   label="Name"
                   value={draft.name}
@@ -823,19 +823,19 @@ export default function GitRepositoriesPage() {
                     <Label>Enable scheduled scans</Label>
                   </Switch.Content>
                 </Switch>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button slot="close" variant="tertiary">
                   Cancel
                 </Button>
                 <Button isPending={saving} onPress={() => void save()}>
                   {editingRepository ? 'Save changes' : 'Connect repository'}
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
     </PageContainer>
   );
 }

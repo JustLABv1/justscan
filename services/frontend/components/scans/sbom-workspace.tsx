@@ -22,7 +22,7 @@ import {
   Popover,
   Tabs,
   Tooltip,
-  Drawer,
+  DetailSheet,
   Label,
   ListBox,
   SearchField,
@@ -713,21 +713,21 @@ export function SBOMWorkspace({
       </Card>
 
       {selected ? (
-        <Drawer.Backdrop isOpen={drawer.isOpen} onOpenChange={drawer.setOpen} variant="blur">
-          <Drawer.Content placement="right">
-            <Drawer.Dialog className="flex h-full w-[min(100vw,44rem)] flex-col">
-              <Drawer.Header>
+        <DetailSheet.Backdrop isOpen={drawer.isOpen} onOpenChange={drawer.setOpen} variant="blur">
+          <DetailSheet.Content size="lg">
+            <DetailSheet.Dialog className="min-h-0">
+              <DetailSheet.Header>
                 <div className="min-w-0">
-                  <Drawer.Heading>{packageLabel(selected.component)}</Drawer.Heading>
+                  <DetailSheet.Heading>{packageLabel(selected.component)}</DetailSheet.Heading>
                   <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                     {selected.component.package_url ||
                       selected.component.bom_ref ||
                       'No package URL'}
                   </p>
                 </div>
-                <Drawer.CloseTrigger />
-              </Drawer.Header>
-              <Drawer.Body className="space-y-6">
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body className="space-y-6">
                 {detailError ? (
                   <Card className="border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground">
                     {detailError}
@@ -814,10 +814,10 @@ export function SBOMWorkspace({
                     </section>
                   </>
                 )}
-              </Drawer.Body>
-            </Drawer.Dialog>
-          </Drawer.Content>
-        </Drawer.Backdrop>
+              </DetailSheet.Body>
+            </DetailSheet.Dialog>
+          </DetailSheet.Content>
+        </DetailSheet.Backdrop>
       ) : null}
     </div>
   );

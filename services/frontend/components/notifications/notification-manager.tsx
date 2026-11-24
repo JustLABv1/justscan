@@ -53,7 +53,7 @@ import {
   Button,
   Card,
   ListBox,
-  Modal,
+  DetailSheet,
   ResourceList,
   Select,
   Spinner,
@@ -937,17 +937,17 @@ export function NotificationManager({
         </Card>
       </div>
 
-      <Modal state={channelModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="lg" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>
+      <DetailSheet state={channelModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="lg">
+            <DetailSheet.Dialog>
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
                   {channelForm.id ? 'Edit notification channel' : 'Add notification channel'}
-                </Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body>
                 <form
                   id="notification-channel-form"
                   onSubmit={handleSaveChannel}
@@ -1165,31 +1165,31 @@ export function NotificationManager({
                     </div>
                   ) : null}
                 </form>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button variant="secondary" onPress={channelModal.close}>
                   Cancel
                 </Button>
                 <Button type="submit" form="notification-channel-form">
                   Save Channel
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
 
-      <Modal state={ruleModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="cover" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>
+      <DetailSheet state={ruleModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="xl">
+            <DetailSheet.Dialog>
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
                   {ruleForm.id ? 'Edit notification rule' : 'Add notification rule'}
-                </Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body>
                 <form id="notification-rule-form" onSubmit={handleSaveRule} className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <FormField
@@ -1536,19 +1536,19 @@ export function NotificationManager({
                     </Button>
                   </div>
                 </form>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button variant="secondary" onPress={ruleModal.close}>
                   Cancel
                 </Button>
                 <Button type="submit" form="notification-rule-form">
                   Save Rule
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
 
       {confirmDialog}
     </div>

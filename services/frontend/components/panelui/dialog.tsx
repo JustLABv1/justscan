@@ -200,7 +200,7 @@ export interface DialogProps {
   /** Whether it starts open, when the caller does not hold it. */
   defaultOpen?: boolean;
   /** Called when it opens or closes. */
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: ComponentProps<typeof Primitive.Root>['onOpenChange'];
   /**
    * Whether a press outside it closes it. Turn it off while a form in it has
    * changes that would be lost; Escape and the close button still work.
@@ -220,7 +220,7 @@ function DialogRoot({
     <Primitive.Root
       open={open}
       defaultOpen={defaultOpen}
-      onOpenChange={onOpenChange ? (next) => onOpenChange(next) : undefined}
+      onOpenChange={onOpenChange}
       disablePointerDismissal={!dismissible}
     >
       {children}
@@ -250,6 +250,8 @@ DialogTrigger.displayName = 'Dialog.Trigger';
 
 export interface DialogContentProps extends Omit<ComponentProps<'div'>, 'children'> {
   children?: ReactNode;
+  initialFocus?: ComponentProps<typeof Primitive.Popup>['initialFocus'];
+  finalFocus?: ComponentProps<typeof Primitive.Popup>['finalFocus'];
   /**
    * `inset` sets the task in a panel inside a darker band that holds the
    * footer. `plain` is one surface with the footer ruled off. Default `inset`.
@@ -266,6 +268,8 @@ export interface DialogContentProps extends Omit<ComponentProps<'div'>, 'childre
    * there. For previews; `open` is ignored.
    */
   inline?: boolean;
+  backdropClassName?: string;
+  viewportClassName?: string;
 }
 
 const isFooter = (child: ReactNode) => isValidElement(child) && child.type === DialogFooter;
@@ -277,6 +281,8 @@ function DialogContent({
   showClose = true,
   blur = false,
   inline = false,
+  backdropClassName,
+  viewportClassName,
   className,
   children,
   ...props
@@ -314,8 +320,8 @@ function DialogContent({
 
   return (
     <Primitive.Portal>
-      <Primitive.Backdrop className={slots.backdrop()} />
-      <Primitive.Viewport className={slots.viewport()}>
+      <Primitive.Backdrop className={slots.backdrop({ className: backdropClassName })} />
+      <Primitive.Viewport className={slots.viewport({ className: viewportClassName })}>
         <Primitive.Popup
           data-slot="dialog-content"
           data-variant={variant}

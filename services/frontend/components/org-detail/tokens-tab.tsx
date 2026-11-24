@@ -257,7 +257,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                 </div>
               </form>
             </Modal.Body>
-            <Modal.Footer className="flex justify-end gap-2 border-t border-border px-6 py-4">
+            <Modal.Footer>
               <Button
                 type="button"
                 onPress={() => state.close()}

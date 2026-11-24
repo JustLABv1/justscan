@@ -45,6 +45,7 @@ import {
   Card,
   ListBox,
   Modal,
+  DetailSheet,
   SearchField,
   Select,
   ResourceList,
@@ -669,20 +670,22 @@ export default function RegistriesPage() {
         </Card>
       </LoadableCollectionState>
 
-      <Modal state={modal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="lg" placement="center" scroll="inside">
-            <Modal.Dialog className="overflow-hidden">
-              <Modal.Header className="border-b border-border px-5 py-4 sm:px-6">
+      <DetailSheet state={modal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="lg">
+            <DetailSheet.Dialog className="overflow-hidden">
+              <DetailSheet.Header>
                 <div className="min-w-0">
-                  <Modal.Heading>{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
+                  <DetailSheet.Heading>
+                    {editing ? 'Edit Registry' : 'Add Registry'}
+                  </DetailSheet.Heading>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Configure connectivity, scan behavior, and credentials in one place.
                   </p>
                 </div>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body className="px-5 py-5 sm:px-6">
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body>
                 <form id="registry-form" onSubmit={handleSubmit} className="space-y-6">
                   {formError ? (
                     <FormAlert description={formError} title="Registry save failed" />
@@ -865,8 +868,8 @@ export default function RegistriesPage() {
                     </div>
                   </section>
                 </form>
-              </Modal.Body>
-              <Modal.Footer className="border-t border-border px-5 py-4 sm:px-6">
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button onPress={modal.close} type="button" variant="secondary">
                   Cancel
                 </Button>
@@ -879,11 +882,11 @@ export default function RegistriesPage() {
                 >
                   {editing ? 'Save' : 'Add'}
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
@@ -1022,7 +1025,7 @@ export default function RegistriesPage() {
                   isSaving={shareSaving}
                 />
               </Modal.Body>
-              <Modal.Footer className="flex justify-end border-t border-border px-6 py-4">
+              <Modal.Footer>
                 <Button
                   onPress={shareModal.close}
                   className="btn-secondary"

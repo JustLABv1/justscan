@@ -16,6 +16,7 @@ import { timeAgo } from '@/lib/time';
 import { useToast } from '@/components/toast';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { Sheet } from '@/components/panelui/sheet';
+import { createPortal } from 'react-dom';
 import { Button, Spinner } from '@/components/ui';
 import { StatusDot, type StatusDotTone } from '@/components/ui/status-dot';
 import { ArrowUpRight, X } from 'lucide-react';
@@ -304,7 +305,15 @@ function ActivityTrigger({
   );
 }
 
-export function BackgroundProcessCenter({ collapsed = false }: { collapsed?: boolean }) {
+export function BackgroundProcessCenter({
+  collapsed = false,
+  triggerContainer,
+  onOpen,
+}: {
+  collapsed?: boolean;
+  triggerContainer?: HTMLElement | null;
+  onOpen?: () => void;
+}) {
   const workScope = useWorkScope();
   const scopeKey = workScope.kind === 'org' ? `org:${workScope.orgId}` : 'personal';
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
@@ -481,16 +490,25 @@ export function BackgroundProcessCenter({ collapsed = false }: { collapsed?: boo
     }
   }, []);
 
+  const trigger = (
+    <ActivityTrigger
+      collapsed={collapsed}
+      activeCount={activeCount}
+      onPress={() => {
+        onOpen?.();
+        setIsOpen(true);
+        void loadJobs();
+      }}
+    />
+  );
+
   return (
     <>
-      <ActivityTrigger
-        collapsed={collapsed}
-        activeCount={activeCount}
-        onPress={() => {
-          setIsOpen(true);
-          void loadJobs();
-        }}
-      />
+      {triggerContainer === undefined
+        ? trigger
+        : triggerContainer
+          ? createPortal(trigger, triggerContainer)
+          : null}
 
       <Sheet open={isOpen} onOpenChange={setIsOpen} side="right">
         <Sheet.Content className="sm:max-w-md">

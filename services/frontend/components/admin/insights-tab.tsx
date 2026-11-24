@@ -39,7 +39,7 @@ import {
   Input,
   Label,
   ListBox,
-  Modal,
+  DetailSheet,
   SearchField,
   SearchableSelect,
   Select,
@@ -426,15 +426,15 @@ function ApiLogs() {
           noun="requests"
         />
       </Card>
-      <Modal state={detailModal}>
-        <Modal.Backdrop>
-          <Modal.Container size="lg" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>API request</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
+      <DetailSheet state={detailModal}>
+        <DetailSheet.Backdrop>
+          <DetailSheet.Container size="lg">
+            <DetailSheet.Dialog>
+              <DetailSheet.Header>
+                <DetailSheet.Heading>API request</DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body>
                 {selectedLog && (
                   <DescriptionList
                     items={[
@@ -468,11 +468,11 @@ function ApiLogs() {
                     ]}
                   />
                 )}
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Body>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
     </div>
   );
 }
@@ -949,15 +949,15 @@ function XrayLogs() {
         />
       </Card>
 
-      <Modal state={detailModal}>
-        <Modal.Backdrop>
-          <Modal.Container size="lg" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>Xray call</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body className="space-y-4">
+      <DetailSheet state={detailModal}>
+        <DetailSheet.Backdrop>
+          <DetailSheet.Container size="lg">
+            <DetailSheet.Dialog>
+              <DetailSheet.Header>
+                <DetailSheet.Heading>Xray call</DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body className="space-y-4">
                 {selectedLog ? (
                   <XrayCallDetails
                     log={selectedLog}
@@ -965,11 +965,11 @@ function XrayLogs() {
                     scanRefs={scanRefs}
                   />
                 ) : null}
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Body>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
     </div>
   );
 }

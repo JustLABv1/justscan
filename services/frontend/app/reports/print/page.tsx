@@ -1,7 +1,7 @@
 'use client';
 import {
   Button,
-  Drawer,
+  DetailSheet,
   Label,
   NumberField,
   SearchField,
@@ -728,6 +728,18 @@ function ReportFilterControls({
 
 function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => void }) {
   const drawer = useOverlayState();
+  const closeDrawer = drawer.close;
+
+  useEffect(() => {
+    if (!drawer.isOpen) return;
+    const desktop = window.matchMedia('(min-width: 1280px)');
+    const closeOnDesktop = () => {
+      if (desktop.matches) closeDrawer();
+    };
+    closeOnDesktop();
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => desktop.removeEventListener('change', closeOnDesktop);
+  }, [drawer.isOpen, closeDrawer]);
 
   return (
     <>
@@ -741,34 +753,31 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
         </Button>
       </div>
 
-      <Drawer.Backdrop
+      <DetailSheet.Backdrop
         className="report-filter-drawer print:hidden"
         isOpen={drawer.isOpen}
         onOpenChange={drawer.setOpen}
         variant="blur"
       >
-        <Drawer.Content placement="right">
-          <Drawer.Dialog
-            aria-label="Report filters"
-            className="flex h-full w-[min(92vw,22rem)] flex-col bg-white"
-          >
-            <Drawer.Header className="flex items-center justify-between border-b border-border px-5 py-4">
+        <DetailSheet.Content size="sm">
+          <DetailSheet.Dialog aria-label="Report filters" className="min-h-0">
+            <DetailSheet.Header>
               <div>
-                <Drawer.Heading className="font-semibold text-foreground">
+                <DetailSheet.Heading className="font-semibold text-foreground">
                   Report filters
-                </Drawer.Heading>
+                </DetailSheet.Heading>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Changes apply immediately to the printable report.
                 </p>
               </div>
-              <Drawer.CloseTrigger className="text-muted-foreground hover:text-foreground" />
-            </Drawer.Header>
-            <Drawer.Body className="flex-1 px-5 py-4">
+              <DetailSheet.CloseTrigger className="text-muted-foreground hover:text-foreground" />
+            </DetailSheet.Header>
+            <DetailSheet.Body>
               <ReportFilterControls f={f} onChange={onChange} showHeading={false} />
-            </Drawer.Body>
-          </Drawer.Dialog>
-        </Drawer.Content>
-      </Drawer.Backdrop>
+            </DetailSheet.Body>
+          </DetailSheet.Dialog>
+        </DetailSheet.Content>
+      </DetailSheet.Backdrop>
     </>
   );
 }

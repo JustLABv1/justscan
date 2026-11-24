@@ -31,6 +31,7 @@ import {
   Label,
   ListBox,
   Modal,
+  DetailSheet,
   ResourceList,
   SearchField,
   Select,
@@ -379,15 +380,15 @@ export function OrganizationsTab() {
           )}
         </Card>
 
-        <Modal state={orgModal}>
-          <Modal.Backdrop isDismissable={false}>
-            <Modal.Container size="cover" placement="center">
-              <Modal.Dialog>
-                <Modal.Header>
-                  <Modal.Heading>{activeOrg?.name ?? 'Organization'}</Modal.Heading>
-                  <Modal.CloseTrigger />
-                </Modal.Header>
-                <Modal.Body className="max-h-[75vh] space-y-4 overflow-y-auto">
+        <DetailSheet state={orgModal}>
+          <DetailSheet.Backdrop isDismissable={false}>
+            <DetailSheet.Container size="xl">
+              <DetailSheet.Dialog>
+                <DetailSheet.Header>
+                  <DetailSheet.Heading>{activeOrg?.name ?? 'Organization'}</DetailSheet.Heading>
+                  <DetailSheet.CloseTrigger />
+                </DetailSheet.Header>
+                <DetailSheet.Body className="space-y-4">
                   {activeOrg ? (
                     <>
                       <p className="text-sm text-muted-foreground">
@@ -582,11 +583,11 @@ export function OrganizationsTab() {
                   ) : (
                     <p className="py-4 text-sm text-muted-foreground">No organization selected.</p>
                   )}
-                </Modal.Body>
-              </Modal.Dialog>
-            </Modal.Container>
-          </Modal.Backdrop>
-        </Modal>
+                </DetailSheet.Body>
+              </DetailSheet.Dialog>
+            </DetailSheet.Container>
+          </DetailSheet.Backdrop>
+        </DetailSheet>
 
         <Modal state={inviteModal}>
           <Modal.Backdrop isDismissable={false}>

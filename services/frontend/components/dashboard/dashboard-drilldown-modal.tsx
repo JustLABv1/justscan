@@ -8,7 +8,7 @@ import { RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { Scan, WatchlistItem } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { getWatchlistPosture } from '@/lib/watchlist-posture';
-import { Button, Card, Link as UiLink, Modal, useOverlayState } from '@/components/ui';
+import { Button, Card, Link as UiLink, DetailSheet, useOverlayState } from '@/components/ui';
 import { CheckmarkCircle02Icon, Clock01Icon, Shield01Icon } from 'hugeicons-react';
 
 export type DashboardDrilldownKey = 'total' | 'completed' | 'watchlist' | 'watchlist_attention';
@@ -327,28 +327,28 @@ export function DashboardDrilldownModal({
     : [];
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop isDismissable>
-        <Modal.Container size="lg" placement="center">
-          <Modal.Dialog className="surface-modal overflow-hidden w-[min(920px,calc(100vw-1.5rem))] max-w-none">
-            <Modal.Header>
+    <DetailSheet state={state}>
+      <DetailSheet.Backdrop isDismissable>
+        <DetailSheet.Container size="xl">
+          <DetailSheet.Dialog className="overflow-hidden">
+            <DetailSheet.Header>
               <div className="flex min-w-0 items-start gap-3">
-                <Modal.Icon className={drilldownHeaderMeta[activeCard].className}>
+                <DetailSheet.Icon className={drilldownHeaderMeta[activeCard].className}>
                   {(() => {
                     const HeaderIcon = drilldownHeaderMeta[activeCard].Icon;
                     return <HeaderIcon className="size-5" />;
                   })()}
-                </Modal.Icon>
+                </DetailSheet.Icon>
                 <div>
-                  <Modal.Heading className="text-base font-semibold sm:text-lg">
+                  <DetailSheet.Heading className="text-base font-semibold sm:text-lg">
                     {heading}
-                  </Modal.Heading>
+                  </DetailSheet.Heading>
                   <p className="mt-1 text-sm text-muted-foreground">{description}</p>
                 </div>
               </div>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="min-h-0 py-5">
+              <DetailSheet.CloseTrigger />
+            </DetailSheet.Header>
+            <DetailSheet.Body className="min-h-0 py-5">
               {isWatchlist ? (
                 <WatchlistBody
                   watchlistError={watchlistError}
@@ -389,17 +389,17 @@ export function DashboardDrilldownModal({
                   )}
                 </>
               )}
-            </Modal.Body>
-            <Modal.Footer>
+            </DetailSheet.Body>
+            <DetailSheet.Footer>
               <DrilldownPrimaryAction
                 href={primaryHref}
                 label={primaryLabel}
                 onClose={() => state.close()}
               />
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+            </DetailSheet.Footer>
+          </DetailSheet.Dialog>
+        </DetailSheet.Container>
+      </DetailSheet.Backdrop>
+    </DetailSheet>
   );
 }

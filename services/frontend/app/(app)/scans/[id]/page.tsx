@@ -109,6 +109,7 @@ import {
   Label,
   ListBox,
   Modal,
+  DetailSheet,
   TablePager,
   ResourceList,
   Popover,
@@ -4152,22 +4153,22 @@ function ScanDetailContent() {
       />
       {confirmDialog}
 
-      <Modal state={xrayPolicyDetailsModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="surface-modal overflow-hidden w-[min(900px,calc(100vw-1.5rem))] max-w-none">
-              <Modal.Header>
+      <DetailSheet state={xrayPolicyDetailsModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="lg" placement="center">
+            <DetailSheet.Dialog className="surface-modal overflow-hidden w-[min(900px,calc(100vw-1.5rem))] max-w-none">
+              <DetailSheet.Header>
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Xray policy details
                   </p>
-                  <Modal.Heading className="font-mono text-base font-semibold text-foreground sm:text-lg">
+                  <DetailSheet.Heading className="font-mono text-base font-semibold text-foreground sm:text-lg">
                     {selectedXrayVulnerability?.vuln_id || 'Unnamed finding'}
-                  </Modal.Heading>
+                  </DetailSheet.Heading>
                 </div>
-                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
-              </Modal.Header>
-              <Modal.Body className="space-y-4">
+                <DetailSheet.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
+              </DetailSheet.Header>
+              <DetailSheet.Body className="space-y-4">
                 {(() => {
                   if (!selectedXrayVulnerability) {
                     return null;
@@ -4238,8 +4239,8 @@ function ScanDetailContent() {
                     </>
                   );
                 })()}
-              </Modal.Body>
-              <Modal.Footer className="flex justify-end border-t border-border px-6 py-4">
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button
                   onPress={xrayPolicyDetailsModal.close}
                   className="btn-secondary"
@@ -4248,11 +4249,11 @@ function ScanDetailContent() {
                 >
                   Close
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
     </PageContainer>
   );
 }

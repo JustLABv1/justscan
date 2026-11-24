@@ -30,7 +30,7 @@ import {
   Chip,
   Label,
   ListBox,
-  Modal,
+  DetailSheet,
   ResourceList,
   SearchField,
   Select,
@@ -560,17 +560,17 @@ export function AITab() {
           )}
         </section>
 
-        <Modal state={modal}>
-          <Modal.Backdrop isDismissable={false}>
-            <Modal.Container size="lg" placement="center">
-              <Modal.Dialog>
-                <Modal.Header>
-                  <Modal.Heading>
+        <DetailSheet state={modal}>
+          <DetailSheet.Backdrop isDismissable={false}>
+            <DetailSheet.Container size="lg">
+              <DetailSheet.Dialog>
+                <DetailSheet.Header>
+                  <DetailSheet.Heading>
                     {editingProviderKey ? 'Edit provider' : 'Add provider'}
-                  </Modal.Heading>
-                  <Modal.CloseTrigger />
-                </Modal.Header>
-                <Modal.Body>
+                  </DetailSheet.Heading>
+                  <DetailSheet.CloseTrigger />
+                </DetailSheet.Header>
+                <DetailSheet.Body>
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
                       Configure provider identity, endpoint, and runtime behavior in three steps.
@@ -631,9 +631,7 @@ export function AITab() {
                             value={form.providerType}
                             onChange={(value) => handleProviderTypeChange(String(value))}
                           >
-                            <Label
-                              className="text-sm font-medium"
-                            >
+                            <Label className="text-sm font-medium">
                               Provider type <span className="text-destructive">*</span>
                             </Label>
                             <Select.Trigger className={selectTriggerCls}>
@@ -842,8 +840,8 @@ export function AITab() {
                       )}
                     </form>
                   </div>
-                </Modal.Body>
-                <Modal.Footer>
+                </DetailSheet.Body>
+                <DetailSheet.Footer>
                   <Button type="button" variant="secondary" onPress={modal.close}>
                     Cancel
                   </Button>
@@ -874,11 +872,11 @@ export function AITab() {
                           : 'Create Provider'}
                     </Button>
                   )}
-                </Modal.Footer>
-              </Modal.Dialog>
-            </Modal.Container>
-          </Modal.Backdrop>
-        </Modal>
+                </DetailSheet.Footer>
+              </DetailSheet.Dialog>
+            </DetailSheet.Container>
+          </DetailSheet.Backdrop>
+        </DetailSheet>
 
         {confirmDialog}
       </div>

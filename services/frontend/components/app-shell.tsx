@@ -1,6 +1,6 @@
 'use client';
 
-import { SidebarGroupMenu } from '@/components/sidebar-group-menu';
+import { NavRail, useNavRail } from '@/components/panelui/nav-rail';
 import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import {
   clearToken,
@@ -19,22 +19,15 @@ import {
 } from '@/lib/api';
 import {
   Avatar,
-  Badge,
   Button,
-  buttonVariants,
-  Chip,
-  Drawer,
   Dropdown,
-  Header,
   Label,
   Separator,
-  Surface,
   Tooltip,
 } from '@/components/ui';
 import {
   AiContentGenerator01Icon,
   Activity01Icon,
-  ArrowDown01Icon,
   Building04Icon,
   BookOpen01Icon,
   Clock01Icon,
@@ -47,7 +40,6 @@ import {
   Key01Icon,
   LinkSquare02Icon,
   Logout02Icon,
-  Menu01Icon,
   Moon02Icon,
   PackageIcon,
   Search01Icon,
@@ -82,7 +74,6 @@ import {
   useAIContextBridge,
 } from '@/components/assistant/ai-context-bridge';
 import { ADMIN_AREAS, type AdminTab } from '@/app/(app)/admin/_components/admin-tabs';
-import { openBackgroundProcessCenter } from '@/lib/api/background-jobs';
 import { BackgroundProcessCenter } from '@/components/background-process-center';
 import {
   PageHeaderSlotsProvider,
@@ -198,69 +189,7 @@ interface AppShellProps {
 }
 
 function isActiveRoute(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(href + '/');
-}
-
-function InviteCountChip({ count, className = '' }: { count: number; className?: string }) {
-  if (count <= 0) return null;
-
-  return (
-    <Chip
-      className={`relative z-10 min-w-6 justify-center px-2 text-xs font-semibold ${className}`}
-      color="warning"
-      size="sm"
-      variant="soft"
-    >
-      {count}
-    </Chip>
-  );
-}
-
-function SidebarNavLink({
-  href,
-  itemLabel,
-  Icon,
-  mode,
-  active,
-  inviteCount,
-  onNavigate,
-}: {
-  href: string;
-  itemLabel: string;
-  Icon: SidebarIcon;
-  mode: 'desktop' | 'collapsed' | 'mobile';
-  active: boolean;
-  inviteCount: number;
-  onNavigate?: () => void;
-}) {
-  const iconOnly = mode === 'collapsed';
-  const isMobile = mode === 'mobile';
-  const showCollapsedInviteBadge = href === '/orgs' && iconOnly && inviteCount > 0;
-
-  return (
-    <Link
-      href={href}
-      aria-current={active ? 'page' : undefined}
-      aria-label={iconOnly ? itemLabel : undefined}
-      className={cn(
-        'shell-nav-link group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        iconOnly ? 'justify-center px-0' : 'justify-start',
-        isMobile && 'min-h-11'
-      )}
-      onClick={onNavigate}
-    >
-      <Icon size={18} className="shrink-0" />
-      {showCollapsedInviteBadge ? (
-        <Badge className="pointer-events-none right-1" color="warning" size="sm" />
-      ) : null}
-      {!iconOnly ? (
-        <span className={`flex-1 ${isMobile ? '' : 'truncate'}`}>{itemLabel}</span>
-      ) : null}
-      {href === '/orgs' && !iconOnly ? (
-        <InviteCountChip count={inviteCount} className="ml-auto" />
-      ) : null}
-    </Link>
-  );
+  return pathname === href || (href !== '/admin' && pathname.startsWith(href + '/'));
 }
 
 function ShellTooltip({
@@ -290,6 +219,322 @@ export function AppShell({ children, initialUser }: AppShellProps) {
   );
 }
 
+type ShellNavigationProps = {
+  user: AppShellProps['initialUser'];
+  pathname: string;
+  navigationGroups: NavGroup[];
+  isAdminRoute: boolean;
+  aiEnabled: boolean;
+  scopeLabel: string;
+  workspaceTitle: string;
+  workScope: WorkScope;
+  orgs: Org[];
+  pendingInvites: OrgInvite[];
+  pendingInviteCount: number;
+  manageOpen: boolean;
+  onManageChange: (open: boolean) => void;
+  onScopeChange: (value: string) => void;
+  onSearch: () => void;
+  onLogout: () => void;
+  onRetakeTour: () => void;
+  isDark: boolean;
+  mounted: boolean;
+  setTheme: (theme: string) => void;
+  themeToggleTitle: string;
+  activityRef: (node: HTMLDivElement | null) => void;
+};
+
+function ShellActivityCenter({
+  triggerContainer,
+  collapsed,
+}: {
+  triggerContainer: HTMLDivElement | null;
+  collapsed: boolean;
+}) {
+  const { isMobile, setMobileOpen } = useNavRail();
+  return (
+    <BackgroundProcessCenter
+      collapsed={collapsed && !isMobile}
+      triggerContainer={triggerContainer}
+      onOpen={() => setMobileOpen(false)}
+    />
+  );
+}
+
+function ShellNavigation({
+  user,
+  pathname,
+  navigationGroups,
+  isAdminRoute,
+  aiEnabled,
+  scopeLabel,
+  workspaceTitle,
+  workScope,
+  orgs,
+  pendingInvites,
+  pendingInviteCount,
+  manageOpen,
+  onManageChange,
+  onScopeChange,
+  onSearch,
+  onLogout: handleLogout,
+  onRetakeTour: handleRetakeWorkspaceTour,
+  isDark,
+  mounted,
+  setTheme,
+  themeToggleTitle,
+  activityRef,
+}: ShellNavigationProps) {
+  const router = useRouter();
+  const { collapsed: desktopCollapsed, isMobile, setMobileOpen } = useNavRail();
+  const folded = desktopCollapsed && !isMobile;
+  const initials = (user?.username ?? user?.email ?? 'U')[0]?.toUpperCase() ?? 'U';
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname, setMobileOpen]);
+  const navItem = ({ href, label, Icon }: NavGroup['items'][number]) => (
+    <NavRail.Item
+      key={href}
+      href={href}
+      render={<Link href={href} />}
+      label={label}
+      active={isActiveRoute(pathname, href)}
+      icon={<Icon size={18} aria-hidden />}
+    >
+      {label}
+      {href === '/orgs' && pendingInviteCount > 0 ? (
+        <NavRail.Badge>{pendingInviteCount}</NavRail.Badge>
+      ) : null}
+    </NavRail.Item>
+  );
+  return (
+    <NavRail
+      aria-label={isAdminRoute ? 'Administration sidebar' : 'Workspace sidebar'}
+      expandedWidth="16rem"
+      collapsedWidth="4rem"
+      variant="tonal"
+      className="shell-sidebar h-full rounded-none p-3 ring-0"
+    >
+      <NavRail.Header className="min-h-12">
+        <NavRail.Brand
+          href={isAdminRoute ? '/admin' : '/dashboard'}
+          render={<Link href={isAdminRoute ? '/admin' : '/dashboard'} />}
+          icon={<Logo size={32} />}
+          label={isAdminRoute ? 'JustScan administration' : 'JustScan dashboard'}
+        >
+          {isAdminRoute ? 'Administration' : 'JustScan'}
+        </NavRail.Brand>
+        <ShellTooltip label="Search · ⌘K">
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label="Open command palette"
+            onPress={() => {
+              setMobileOpen(false);
+              onSearch();
+            }}
+          >
+            <Search01Icon size={17} aria-hidden />
+          </Button>
+        </ShellTooltip>
+        {isMobile ? (
+          <NavRail.Trigger
+            expandLabel="Open navigation menu"
+            collapseLabel="Close navigation menu"
+          />
+        ) : null}
+      </NavRail.Header>
+      {isAdminRoute ? (
+        <div
+          className={cn(
+            'mb-2 rounded-lg bg-muted/50',
+            folded ? 'flex justify-center p-2' : 'px-3 py-2.5'
+          )}
+          aria-label="System scope: Platform control plane"
+        >
+          {folded ? (
+            <Shield01Icon size={18} aria-hidden />
+          ) : (
+            <>
+              <p className="text-xs font-medium text-muted-foreground">System scope</p>
+              <p className="mt-0.5 text-sm font-medium">Platform control plane</p>
+            </>
+          )}
+        </div>
+      ) : (
+        <div id="tour-workspace-section" className="pb-2" aria-label={workspaceTitle}>
+          <WorkspaceSwitcher
+            id="tour-workspace-switcher"
+            collapsed={folded}
+            scopeLabel={scopeLabel}
+            scopeValue={workScope.kind === 'org' ? workScope.orgId : 'personal'}
+            orgs={orgs}
+            invites={pendingInvites}
+            onScopeChange={(value) => {
+              onScopeChange(value);
+              setMobileOpen(false);
+            }}
+            onReviewInvite={() => {
+              router.push('/orgs');
+              setMobileOpen(false);
+            }}
+          />
+        </div>
+      )}
+      <NavRail.Content id="tour-primary-navigation" className="flex-1 gap-2">
+        {!isAdminRoute ? (
+          <NavRail.Group>
+            {navItem({ href: '/scans/new', label: 'New scan', Icon: Plus })}
+            {aiEnabled
+              ? navItem({ href: '/assistant', label: 'Assistant', Icon: AiContentGenerator01Icon })
+              : null}
+          </NavRail.Group>
+        ) : null}
+        {navigationGroups.map((group) =>
+          group.collapsible ? (
+            <NavRail.Group key={group.id}>
+              <NavRail.Item
+                icon={<MoreHorizontal size={18} aria-hidden />}
+                label={group.label ?? 'Manage'}
+              >
+                {group.label}
+                <NavRail.Sub
+                  open={
+                    manageOpen || group.items.some((item) => isActiveRoute(pathname, item.href))
+                  }
+                  onOpenChange={onManageChange}
+                  heading
+                >
+                  {group.items.map(navItem)}
+                </NavRail.Sub>
+                {pendingInviteCount > 0 ? (
+                  <NavRail.Badge>{pendingInviteCount}</NavRail.Badge>
+                ) : null}
+              </NavRail.Item>
+            </NavRail.Group>
+          ) : (
+            <NavRail.Group key={group.id} label={group.label}>
+              {group.items.map(navItem)}
+            </NavRail.Group>
+          )
+        )}
+      </NavRail.Content>
+      <NavRail.Footer>
+        {isAdminRoute
+          ? navItem({
+              href: '/dashboard',
+              label: 'Exit administration',
+              Icon: DashboardSquare01Icon,
+            })
+          : null}
+        <div ref={activityRef} />
+        <NavRail.Trigger
+          className={cn(
+            'h-8 w-full text-muted-foreground',
+            folded ? 'justify-center' : 'justify-start gap-2.5 px-2.5'
+          )}
+          expandLabel="Expand sidebar"
+          collapseLabel={isMobile ? 'Close navigation menu' : 'Collapse sidebar'}
+        >
+          {folded ? (
+            <SidebarRight01Icon size={18} />
+          ) : (
+            <>
+              <SidebarLeft01Icon size={18} />
+              <span className="text-sm">{isMobile ? 'Close navigation' : 'Collapse'}</span>
+            </>
+          )}
+        </NavRail.Trigger>
+        <div className={cn('shrink-0 border-t border-border pt-2 pb-3', folded ? 'px-3' : 'px-4')}>
+          <ShellTooltip
+            label={`Account: ${user?.username ?? user?.email ?? 'User'}`}
+            enabled={folded}
+          >
+            <Dropdown>
+              <Dropdown.Trigger
+                aria-label="Open user menu"
+                className={`flex w-full min-w-0 items-center rounded-lg p-2 outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-primary ${folded ? 'justify-center' : 'gap-2.5'}`}
+              >
+                <Avatar variant="soft" color="accent" className="size-7 shrink-0">
+                  <Avatar.Fallback>{initials}</Avatar.Fallback>
+                </Avatar>
+                {!folded ? (
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block text-xs font-medium text-muted-foreground">Account</span>
+                    <span className="block truncate text-sm font-medium">
+                      {user?.username ?? user?.email ?? 'User'}
+                    </span>
+                  </span>
+                ) : null}
+                {!folded && (
+                  <MoreHorizontal aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                )}
+              </Dropdown.Trigger>
+              <Dropdown.Popover className="min-w-[220px]" placement="right bottom">
+                <Dropdown.Menu
+                  onAction={(key) => {
+                    if (key !== 'theme') setMobileOpen(false);
+                    if (key === 'settings') router.push('/profile');
+                    if (key === 'documentation')
+                      window.open('/docs', '_blank', 'noopener,noreferrer');
+                    if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
+                    if (key === 'retake-tour') handleRetakeWorkspaceTour();
+                    if (key === 'signout') handleLogout();
+                  }}
+                >
+                  <Dropdown.Item id="settings" textValue="Profile">
+                    <div className="flex items-center gap-2">
+                      <Settings01Icon size={14} className="text-muted-foreground" />
+                      <Label>Profile</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item id="theme" textValue={themeToggleTitle}>
+                    <div className="flex items-center gap-2">
+                      {mounted ? (
+                        isDark ? (
+                          <Sun01Icon size={14} className="text-muted-foreground" />
+                        ) : (
+                          <Moon02Icon size={14} className="text-muted-foreground" />
+                        )
+                      ) : (
+                        <span aria-hidden className="block size-[14px]" />
+                      )}
+                      <Label>{themeToggleTitle}</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item id="documentation" textValue="Documentation">
+                    <div className="flex items-center gap-2">
+                      <FileExportIcon size={14} className="text-muted-foreground" />
+                      <Label>Documentation</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Item id="retake-tour" textValue="Retake tour">
+                    <div className="flex items-center gap-2">
+                      <AiContentGenerator01Icon size={14} className="text-muted-foreground" />
+                      <Label>Retake tour</Label>
+                    </div>
+                  </Dropdown.Item>
+                  <Dropdown.Section>
+                    <Separator className="my-1" />
+                    <Dropdown.Item id="signout" textValue="Sign out" variant="danger">
+                      <div className="flex items-center gap-2">
+                        <Logout02Icon size={14} />
+                        <Label>Sign out</Label>
+                      </div>
+                    </Dropdown.Item>
+                  </Dropdown.Section>
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
+          </ShellTooltip>
+        </div>
+      </NavRail.Footer>
+      <NavRail.Rail />
+    </NavRail>
+  );
+}
+
 function AppShellInner({ children, initialUser }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -312,7 +557,9 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   const [workspaceTourStartSignal, setWorkspaceTourStartSignal] = useState(0);
   const workspaceTourStateSavedRef = useRef(false);
   const sidebarExpandedForTourRef = useRef(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [activityTriggerContainer, setActivityTriggerContainer] = useState<HTMLDivElement | null>(
+    null
+  );
   const [orgRefreshVersion, setOrgRefreshVersion] = useState(0);
   const [aiEnabled, setAIEnabled] = useState<boolean | null>(null);
 
@@ -342,22 +589,11 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
   }, [initialUser, pathname]);
 
   useEffect(() => {
-    const closeAfterNavigation = window.setTimeout(() => setMobileNavOpen(false), 0);
-    return () => window.clearTimeout(closeAfterNavigation);
-  }, [pathname]);
-
-  useEffect(() => {
     if (localStorage.getItem('sidebar_manage_open') === 'true') {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setManageOpen(true);
     }
   }, []);
-
-  function toggleManage() {
-    const next = !manageOpen;
-    setManageOpen(next);
-    localStorage.setItem('sidebar_manage_open', String(next));
-  }
 
   useEffect(() => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
@@ -513,8 +749,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       });
   }, [orgRefreshVersion, pathname]);
 
-  function toggleCollapsed() {
-    const next = !collapsed;
+  function handleCollapsedChange(next: boolean) {
     collapsedRef.current = next;
     setCollapsed(next);
     localStorage.setItem('sidebar_collapsed', String(next));
@@ -531,7 +766,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
       const nextScope: WorkScope = { kind: 'personal' };
       setWorkScopeState(nextScope);
       setWorkScope(nextScope);
-      setMobileNavOpen(false);
       return;
     }
 
@@ -541,7 +775,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
     const nextScope: WorkScope = { kind: 'org', orgId: matchedOrg.id, orgName: matchedOrg.name };
     setWorkScopeState(nextScope);
     setWorkScope(nextScope);
-    setMobileNavOpen(false);
   }
 
   function handleWorkspaceTourFinished() {
@@ -600,10 +833,6 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
             ]
           : []),
       ];
-  const isGroupOpen = (group: NavGroup) =>
-    !group.collapsible ||
-    manageOpen ||
-    group.items.some((item) => isActiveRoute(pathname, item.href));
   const contentRailClass = 'px-4 md:px-5';
   const currentSection =
     navigationGroups
@@ -624,791 +853,180 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
             <LazySearchModal onClose={() => setSearchOpen(false)} />
           </Suspense>
         ) : null}
-        <div
-          id="tour-main-shell"
-          data-collapsed={desktopCollapsed}
-          className="app-shell relative flex h-dvh overflow-hidden"
+        <NavRail.Provider
+          collapsed={collapsed}
+          onCollapsedChange={handleCollapsedChange}
+          mobileBreakpoint="48rem"
+          className="h-dvh min-h-0"
         >
-          <Surface
-            aria-label={isAdminRoute ? 'Administration sidebar' : 'Workspace sidebar'}
-            className={cn(
-              'shell-sidebar relative hidden shrink-0 flex-col md:flex',
-              desktopCollapsed ? 'w-16' : 'w-64'
-            )}
+          <div
+            id="tour-main-shell"
+            data-collapsed={desktopCollapsed}
+            className="app-shell relative flex h-dvh w-full overflow-hidden"
           >
-            <div
-              className={cn(
-                'shell-sidebar-header flex shrink-0 px-4 pt-4 pb-4',
-                desktopCollapsed ? 'flex-col items-center gap-3' : 'items-center gap-2'
-              )}
+            <ShellNavigation
+              user={user}
+              pathname={pathname}
+              navigationGroups={navigationGroups}
+              isAdminRoute={isAdminRoute}
+              aiEnabled={aiEnabled === true}
+              scopeLabel={scopeLabel}
+              workspaceTitle={workspaceTitle}
+              workScope={workScope}
+              orgs={orgs}
+              pendingInvites={pendingInvites}
+              pendingInviteCount={pendingInviteCount}
+              manageOpen={manageOpen}
+              onManageChange={(open) => {
+                setManageOpen(open);
+                localStorage.setItem('sidebar_manage_open', String(open));
+              }}
+              onScopeChange={handleScopeChange}
+              onSearch={() => setSearchOpen(true)}
+              onLogout={handleLogout}
+              onRetakeTour={handleRetakeWorkspaceTour}
+              isDark={isDark}
+              mounted={mounted}
+              setTheme={setTheme}
+              themeToggleTitle={themeToggleTitle}
+              activityRef={setActivityTriggerContainer}
+            />
+
+            <NavRail.Inset
+              render={<div />}
+              className="shell-content min-h-0 overflow-hidden rounded-none ring-0 md:my-2 md:mr-2 md:rounded-xl"
             >
-              <ShellTooltip
-                label={isAdminRoute ? 'Administration home' : 'Dashboard'}
-                enabled={desktopCollapsed}
+              <div
+                className={`flex min-h-14 shrink-0 flex-wrap items-center gap-2.5 py-2 ${contentRailClass}`}
               >
-                <Link
-                  href={isAdminRoute ? '/admin' : '/dashboard'}
-                  aria-label={isAdminRoute ? 'JustScan administration' : 'JustScan dashboard'}
-                  className="flex min-w-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Logo size={32} className="shrink-0" />
-                  {!desktopCollapsed && (
-                    <span className="truncate text-sm font-semibold tracking-tight">
-                      {isAdminRoute ? 'Administration' : 'JustScan'}
-                    </span>
-                  )}
-                </Link>
-              </ShellTooltip>
-              <div className={desktopCollapsed ? '' : 'ml-auto'}>
-                <ShellTooltip label="Search · ⌘K">
-                  <Button
-                    isIconOnly
-                    size="sm"
-                    variant="ghost"
-                    onPress={() => setSearchOpen(true)}
-                    aria-label="Open command palette"
-                    className="shell-search"
-                  >
-                    <Search01Icon aria-hidden size={17} />
-                  </Button>
-                </ShellTooltip>
-              </div>
-            </div>
-            {isAdminRoute && (
-              <ShellTooltip label="System scope: Platform control plane" enabled={desktopCollapsed}>
-                <div
-                  className={cn(
-                    'mx-3 mb-2 rounded-lg bg-surface-secondary',
-                    desktopCollapsed ? 'flex justify-center p-2' : 'px-3 py-2.5'
-                  )}
-                  aria-label="System scope: Platform control plane"
-                >
-                  {desktopCollapsed ? (
-                    <Shield01Icon size={18} aria-hidden />
-                  ) : (
-                    <>
-                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                        System scope
-                      </p>
-                      <p className="mt-0.5 text-sm font-medium">Platform control plane</p>
-                    </>
-                  )}
-                </div>
-              </ShellTooltip>
-            )}
-            <div
-              className={cn(
-                'flex shrink-0 gap-2 pb-4',
-                desktopCollapsed ? 'flex-col px-3' : 'items-center px-4',
-                isAdminRoute && 'hidden'
-              )}
-            >
-              {!isAdminRoute && (
-                <div id="tour-workspace-section" className="min-w-0 flex-1">
-                  <WorkspaceSwitcher
-                    id="tour-workspace-switcher"
-                    collapsed={desktopCollapsed}
-                    scopeLabel={scopeLabel}
-                    scopeValue={workScope.kind === 'org' ? workScope.orgId : 'personal'}
-                    orgs={orgs}
-                    invites={pendingInvites}
-                    onScopeChange={handleScopeChange}
-                    onReviewInvite={() => router.push('/orgs')}
-                    className={desktopCollapsed ? 'mx-auto' : undefined}
-                  />
-                </div>
-              )}
-            </div>
-            {!isAdminRoute ? (
-              <div className={`shrink-0 ${desktopCollapsed ? 'px-3 pb-2' : 'px-4 pb-1'}`}>
-                <Tooltip isDisabled={!desktopCollapsed}>
-                  <Tooltip.Trigger className="block w-full">
-                    <Link
-                      href="/scans/new"
-                      aria-label="New scan"
-                      className={buttonVariants({
-                        variant: 'primary',
-                        size: 'md',
-                        className: desktopCollapsed
-                          ? 'size-10 w-full rounded-lg px-0'
-                          : 'w-full justify-center rounded-lg px-3 shadow-sm',
-                      })}
-                    >
-                      <Plus aria-hidden className="size-4" />
-                      {!desktopCollapsed ? <span>New scan</span> : null}
-                    </Link>
-                  </Tooltip.Trigger>
-                  <Tooltip.Content placement="right">New scan</Tooltip.Content>
-                </Tooltip>
-                {aiEnabled ? (
-                  <div className="mt-1.5">
-                    <Tooltip isDisabled={!desktopCollapsed}>
-                      <Tooltip.Trigger className="block w-full">
-                        <SidebarNavLink
-                          href="/assistant"
-                          itemLabel="Assistant"
-                          Icon={AiContentGenerator01Icon}
-                          mode={desktopCollapsed ? 'collapsed' : 'desktop'}
-                          active={isActiveRoute(pathname, '/assistant')}
-                          inviteCount={pendingInviteCount}
-                        />
-                      </Tooltip.Trigger>
-                      <Tooltip.Content placement="right">Assistant</Tooltip.Content>
-                    </Tooltip>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            <nav
-              id="tour-primary-navigation"
-              aria-label="Primary navigation"
-              className={`flex-1 overflow-y-auto overflow-x-hidden pb-3 pt-2 ${desktopCollapsed ? 'px-3' : 'px-4'}`}
-            >
-              {navigationGroups.map((group) => {
-                const { id, label, items } = group;
-                const open = desktopCollapsed || isGroupOpen(group);
-                if (desktopCollapsed && group.collapsible && label) {
-                  return (
-                    <div key={id} className="mb-2 last:mb-0">
-                      <SidebarGroupMenu
-                        label={label}
-                        Icon={MoreHorizontal}
-                        items={items}
-                        isActive={(href) => isActiveRoute(pathname, href)}
-                        attention={pendingInviteCount > 0}
-                      />
-                    </div>
-                  );
-                }
-                return (
-                  <div key={id} className={desktopCollapsed ? 'mb-2 last:mb-0' : 'mb-3 last:mb-0'}>
-                    {!desktopCollapsed && label ? (
-                      group.collapsible ? (
-                        <button
-                          type="button"
-                          aria-expanded={open}
-                          onClick={toggleManage}
-                          className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <span className="flex items-center gap-2">
-                            {label}
-                            {!open && pendingInviteCount > 0 ? (
-                              <Badge color="warning" size="sm" />
-                            ) : null}
-                          </span>
-                          <ArrowDown01Icon
-                            size={14}
-                            aria-hidden
-                            className={`transition-transform ${open ? '' : '-rotate-90'}`}
-                          />
-                        </button>
-                      ) : (
-                        <div className="px-2.5 pb-2 pt-2 text-xs font-medium text-muted-foreground">
-                          {label}
-                        </div>
-                      )
-                    ) : null}
-                    <div className={open ? 'space-y-0.5' : 'hidden'}>
-                      {items.map(({ href, label: itemLabel, Icon }) => {
-                        const active = isActiveRoute(pathname, href);
-
-                        if (desktopCollapsed) {
-                          return (
-                            <div key={href}>
-                              <Tooltip delay={0}>
-                                <Tooltip.Trigger aria-label={itemLabel} className="block w-full">
-                                  <SidebarNavLink
-                                    href={href}
-                                    itemLabel={itemLabel}
-                                    Icon={Icon}
-                                    mode="collapsed"
-                                    active={active}
-                                    inviteCount={pendingInviteCount}
-                                  />
-                                </Tooltip.Trigger>
-                                <Tooltip.Content placement="right">{itemLabel}</Tooltip.Content>
-                              </Tooltip>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <SidebarNavLink
-                            key={href}
-                            href={href}
-                            itemLabel={itemLabel}
-                            Icon={Icon}
-                            mode="desktop"
-                            active={active}
-                            inviteCount={pendingInviteCount}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </nav>
-
-            {isAdminRoute ? (
-              <div className="shrink-0 px-3 pb-3">
-                <ShellTooltip label="Exit administration" enabled={desktopCollapsed}>
-                  <SidebarNavLink
-                    href="/dashboard"
-                    itemLabel="Exit administration"
-                    Icon={DashboardSquare01Icon}
-                    mode={desktopCollapsed ? 'collapsed' : 'desktop'}
-                    active={false}
-                    inviteCount={0}
-                  />
-                </ShellTooltip>
-              </div>
-            ) : null}
-
-            <div className={cn('shrink-0 space-y-0.5 pb-2', desktopCollapsed ? 'px-3' : 'px-4')}>
-              <ShellTooltip label="Background activity" enabled={desktopCollapsed}>
-                <BackgroundProcessCenter collapsed={desktopCollapsed} />
-              </ShellTooltip>
-              <ShellTooltip
-                label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                enabled={desktopCollapsed}
-              >
-                <Button
-                  variant="ghost"
-                  onPress={toggleCollapsed}
-                  aria-label={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                  className={cn(
-                    'w-full text-muted-foreground',
-                    desktopCollapsed ? 'justify-center px-0' : 'justify-start gap-2.5 px-2.5'
-                  )}
-                >
-                  {desktopCollapsed ? (
-                    <SidebarRight01Icon size={18} />
-                  ) : (
-                    <>
-                      <SidebarLeft01Icon size={18} />
-                      <span className="text-sm">Collapse</span>
-                    </>
-                  )}
-                </Button>
-              </ShellTooltip>
-            </div>
-
-            <div
-              className={cn(
-                'shrink-0 border-t border-border pt-2 pb-3',
-                desktopCollapsed ? 'px-3' : 'px-4'
-              )}
-            >
-              <ShellTooltip
-                label={`Account: ${user?.username ?? user?.email ?? 'User'}`}
-                enabled={desktopCollapsed}
-              >
-                <Dropdown>
-                  <Dropdown.Trigger
-                    aria-label="Open user menu"
-                    className={`flex w-full min-w-0 items-center rounded-lg p-2 outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-primary ${desktopCollapsed ? 'justify-center' : 'gap-2.5'}`}
-                  >
-                    <Avatar variant="soft" color="accent" className="size-7 shrink-0">
-                      <Avatar.Fallback>{initials}</Avatar.Fallback>
-                    </Avatar>
-                    {!desktopCollapsed ? (
-                      <span className="min-w-0 flex-1 text-left">
-                        <span className="block text-xs font-medium text-muted-foreground">
-                          Account
-                        </span>
-                        <span className="block truncate text-sm font-medium">
-                          {user?.username ?? user?.email ?? 'User'}
-                        </span>
-                      </span>
-                    ) : null}
-                    {!desktopCollapsed && (
-                      <MoreHorizontal
-                        aria-hidden
-                        className="size-4 shrink-0 text-muted-foreground"
-                      />
-                    )}
-                  </Dropdown.Trigger>
-                  <Dropdown.Popover className="min-w-[220px]" placement="right bottom">
-                    <Dropdown.Menu
-                      onAction={(key) => {
-                        if (key === 'settings') router.push('/profile');
-                        if (key === 'documentation')
-                          window.open('/docs', '_blank', 'noopener,noreferrer');
-                        if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
-                        if (key === 'retake-tour') handleRetakeWorkspaceTour();
-                        if (key === 'signout') handleLogout();
-                      }}
-                    >
-                      <Dropdown.Item id="settings" textValue="Profile">
-                        <div className="flex items-center gap-2">
-                          <Settings01Icon size={14} className="text-muted-foreground" />
-                          <Label>Profile</Label>
-                        </div>
-                      </Dropdown.Item>
-                      <Dropdown.Item id="theme" textValue={themeToggleTitle}>
-                        <div className="flex items-center gap-2">
-                          {mounted ? (
-                            isDark ? (
-                              <Sun01Icon size={14} className="text-muted-foreground" />
-                            ) : (
-                              <Moon02Icon size={14} className="text-muted-foreground" />
-                            )
-                          ) : (
-                            <span aria-hidden className="block size-[14px]" />
-                          )}
-                          <Label>{themeToggleTitle}</Label>
-                        </div>
-                      </Dropdown.Item>
-                      <Dropdown.Item id="documentation" textValue="Documentation">
-                        <div className="flex items-center gap-2">
-                          <FileExportIcon size={14} className="text-muted-foreground" />
-                          <Label>Documentation</Label>
-                        </div>
-                      </Dropdown.Item>
-                      <Dropdown.Item id="retake-tour" textValue="Retake tour">
-                        <div className="flex items-center gap-2">
-                          <AiContentGenerator01Icon size={14} className="text-muted-foreground" />
-                          <Label>Retake tour</Label>
-                        </div>
-                      </Dropdown.Item>
-                      <Dropdown.Section>
-                        <Separator className="my-1" />
-                        <Dropdown.Item id="signout" textValue="Sign out" variant="danger">
-                          <div className="flex items-center gap-2">
-                            <Logout02Icon size={14} />
-                            <Label>Sign out</Label>
-                          </div>
-                        </Dropdown.Item>
-                      </Dropdown.Section>
-                    </Dropdown.Menu>
-                  </Dropdown.Popover>
-                </Dropdown>
-              </ShellTooltip>
-            </div>
-          </Surface>
-
-          <div className="shell-content flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:my-2 md:mr-2 md:rounded-xl">
-            <div
-              className={`flex min-h-14 shrink-0 flex-wrap items-center gap-2.5 py-2 ${contentRailClass}`}
-            >
-              <>
-                <Button
-                  aria-label="Open navigation menu"
-                  className=" md:hidden"
-                  isIconOnly
-                  onPress={() => setMobileNavOpen(true)}
-                  variant="secondary"
-                >
-                  <Menu01Icon size={16} />
-                </Button>
-                <Drawer.Backdrop
+                <NavRail.Trigger
                   className="md:hidden"
-                  isOpen={mobileNavOpen}
-                  onOpenChange={setMobileNavOpen}
-                  variant="blur"
+                  expandLabel="Open navigation menu"
+                  collapseLabel="Close navigation menu"
+                  render={<Button isIconOnly variant="secondary" />}
+                />
+                <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
+                  <Link
+                    href="/dashboard"
+                    aria-label="Dashboard home"
+                    className="flex shrink-0 items-center gap-1.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Home aria-hidden className="size-4" />
+                    <span className="hidden sm:inline">Home</span>
+                  </Link>
+                  <span aria-hidden className="text-muted-foreground">
+                    —
+                  </span>
+                  <PageHeadingSlot
+                    fallback={currentSection === 'Dashboard' ? 'Overview' : currentSection}
+                  />
+                </nav>
+                <div
+                  id="tour-topbar-actions"
+                  className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2"
                 >
-                  <Drawer.Content className="md:hidden" placement="left">
-                    <Drawer.Dialog className="flex h-full w-[min(88vw,320px)] flex-col surface-sidebar">
-                      <Drawer.Header
-                        className="flex items-center justify-between p-4"
-                        style={{ borderBottom: '1px solid var(--border-subtle)' }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Logo size={36} className="shrink-0" />
-                          <div>
-                            <Drawer.Heading
-                              className="text-sm font-semibold text-foreground"
-                            >
-                              {isAdminRoute ? 'Administration' : 'JustScan'}
-                            </Drawer.Heading>
-                            <p className="text-xs text-muted-foreground">
-                              {isAdminRoute ? 'Platform control plane' : 'Scan, watch, and manage'}
-                            </p>
-                          </div>
-                        </div>
-                        <Drawer.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
-                      </Drawer.Header>
-                      <Drawer.Body className="flex-1 overflow-y-auto px-2 py-3">
-                        <div className="space-y-4">
-                          {!isAdminRoute ? (
-                            <WorkspaceSwitcher
-                              scopeLabel={scopeLabel}
-                              scopeValue={workScope.kind === 'org' ? workScope.orgId : 'personal'}
-                              orgs={orgs}
-                              invites={pendingInvites}
-                              onScopeChange={handleScopeChange}
-                              onReviewInvite={() => {
-                                setMobileNavOpen(false);
-                                router.push('/orgs');
-                              }}
-                            />
-                          ) : (
-                            <div className="rounded-xl bg-surface-secondary px-3 py-2.5">
-                              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                                System scope
-                              </p>
-                              <p className="mt-1 text-sm font-medium">Platform control plane</p>
-                            </div>
-                          )}
+                  <PageActionsSlot />
+                  <Button
+                    aria-label="Open command palette"
+                    className=" md:hidden"
+                    isIconOnly
+                    onPress={() => setSearchOpen(true)}
+                    variant="ghost"
+                  >
+                    <Search01Icon size={16} />
+                  </Button>
+                  <div className="md:hidden">
+                    <Dropdown>
+                      <Dropdown.Trigger id="tour-user-menu" aria-label="Open user menu">
+                        <Avatar variant="soft" color="accent" className="size-9">
+                          <Avatar.Fallback>{initials}</Avatar.Fallback>
+                        </Avatar>
+                      </Dropdown.Trigger>
 
-                          {!isAdminRoute ? (
-                            <Link
-                              href="/scans/new"
-                              className={buttonVariants({
-                                variant: 'primary',
-                                size: 'md',
-                                className: 'w-full justify-center rounded-xl',
-                              })}
-                              onClick={() => setMobileNavOpen(false)}
-                            >
-                              <Plus aria-hidden className="size-4" />
-                              New scan
-                            </Link>
-                          ) : null}
-
-                          {!isAdminRoute && aiEnabled ? (
-                            <SidebarNavLink
-                              href="/assistant"
-                              itemLabel="Assistant"
-                              Icon={AiContentGenerator01Icon}
-                              mode="mobile"
-                              active={isActiveRoute(pathname, '/assistant')}
-                              inviteCount={pendingInviteCount}
-                              onNavigate={() => setMobileNavOpen(false)}
-                            />
-                          ) : null}
-
-                          {!isAdminRoute && pendingInviteCount > 0 && (
-                            <Link
-                              href="/orgs"
-                              className="flex items-center justify-between rounded-xl p-3 text-sm font-medium text-foreground"
-                              onClick={() => setMobileNavOpen(false)}
-                              style={{
-                                background: 'color-mix(in oklab, var(--warning) 10%, transparent)',
-                                border:
-                                  '1px solid color-mix(in oklab, var(--warning) 24%, transparent)',
-                              }}
-                            >
-                              <div>
-                                <p>Pending invites</p>
-                                <p className="text-xs font-normal text-muted-foreground">
-                                  Review organization access requests
-                                </p>
-                              </div>
-                              <InviteCountChip count={pendingInviteCount} />
-                            </Link>
-                          )}
-
-                          {navigationGroups.map((group) => {
-                            const { id, label, items } = group;
-                            const open = isGroupOpen(group);
-                            return (
-                              <div key={id} className="space-y-1.5">
-                                {label ? (
-                                  group.collapsible ? (
-                                    <button
-                                      type="button"
-                                      aria-expanded={open}
-                                      onClick={toggleManage}
-                                      className="flex w-full items-center justify-between px-2 py-1 text-xs font-medium text-muted-foreground"
-                                    >
-                                      {label}
-                                      <ArrowDown01Icon
-                                        size={14}
-                                        aria-hidden
-                                        className={`transition-transform ${open ? '' : '-rotate-90'}`}
-                                      />
-                                    </button>
-                                  ) : (
-                                    <p className="px-2 text-xs font-medium text-muted-foreground">
-                                      {label}
-                                    </p>
-                                  )
-                                ) : null}
-                                <div className={open ? 'space-y-1' : 'hidden'}>
-                                  {items.map(({ href, label: itemLabel, Icon }) => {
-                                    return (
-                                      <SidebarNavLink
-                                        key={href}
-                                        href={href}
-                                        itemLabel={itemLabel}
-                                        Icon={Icon}
-                                        mode="mobile"
-                                        active={isActiveRoute(pathname, href)}
-                                        inviteCount={pendingInviteCount}
-                                        onNavigate={() => setMobileNavOpen(false)}
-                                      />
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })}
-
-                          {isAdminRoute ? (
-                            <SidebarNavLink
-                              href="/dashboard"
-                              itemLabel="Exit administration"
-                              Icon={DashboardSquare01Icon}
-                              mode="mobile"
-                              active={false}
-                              inviteCount={0}
-                              onNavigate={() => setMobileNavOpen(false)}
-                            />
-                          ) : null}
-                        </div>
-                      </Drawer.Body>
-                      <Drawer.Footer
-                        className="flex flex-col gap-2 p-3"
-                        style={{ borderTop: '1px solid var(--border-subtle)' }}
-                      >
-                        <Button
-                          fullWidth
-                          variant="ghost"
-                          className="justify-start gap-2 text-muted-foreground"
-                          onPress={() => {
-                            setMobileNavOpen(false);
-                            openBackgroundProcessCenter();
+                      <Dropdown.Popover className="min-w-[200px]" placement="bottom end">
+                        <Dropdown.Menu
+                          onAction={(key) => {
+                            if (key === 'settings') router.push('/profile');
+                            if (key === 'documentation')
+                              window.open('/docs', '_blank', 'noopener,noreferrer');
+                            if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
+                            if (key === 'retake-tour') handleRetakeWorkspaceTour();
+                            if (key === 'signout') handleLogout();
                           }}
                         >
-                          <Activity01Icon aria-hidden size={17} />
-                          Activity
-                        </Button>
-                        <Dropdown>
-                          <Dropdown.Trigger
-                            className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 outline-none text-left bg-muted/50"
-                          >
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <div
-                                className="size-10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
-                                style={{
-                                  background:
-                                    'color-mix(in oklab, var(--primary) 12%, transparent)',
-                                  color: 'var(--accent-soft-foreground)',
-                                  border:
-                                    '1px solid color-mix(in oklab, var(--primary) 18%, transparent)',
-                                }}
-                              >
-                                {initials}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium text-foreground">
-                                  {user?.username ?? user?.email ?? 'User'}
-                                </p>
-                                <p className="truncate text-xs text-muted-foreground">
-                                  {user?.role ?? 'user'}
-                                </p>
-                              </div>
+                          <Dropdown.Item key="settings" id="settings" textValue="Settings">
+                            <div className="flex items-center gap-2">
+                              <Settings01Icon size={14} className="text-muted-foreground" />
+                              <Label>Profile</Label>
                             </div>
-                            <Settings01Icon size={16} className="text-muted-foreground shrink-0" />
-                          </Dropdown.Trigger>
-                          <Dropdown.Popover className="w-[min(80vw,300px)]" placement="top end">
-                            <Dropdown.Menu
-                              onAction={(key) => {
-                                if (key === 'settings') {
-                                  router.push('/profile');
-                                  setMobileNavOpen(false);
-                                }
-                                if (key === 'documentation') {
-                                  window.open('/docs', '_blank', 'noopener,noreferrer');
-                                  setMobileNavOpen(false);
-                                }
-                                if (key === 'theme') {
-                                  setTheme(isDark ? 'light' : 'dark');
-                                }
-                                if (key === 'retake-tour') {
-                                  handleRetakeWorkspaceTour();
-                                  setMobileNavOpen(false);
-                                }
-                                if (key === 'signout') {
-                                  handleLogout();
-                                  setMobileNavOpen(false);
-                                }
-                              }}
-                            >
-                              <Dropdown.Item key="settings" id="settings" textValue="Settings">
-                                <div className="flex items-center gap-2">
-                                  <Settings01Icon size={14} className="text-muted-foreground" />
-                                  <Label>Profile</Label>
-                                </div>
-                              </Dropdown.Item>
-                              <Dropdown.Item key="theme" id="theme" textValue="Theme">
-                                <div className="flex items-center justify-between w-full">
-                                  <div className="flex items-center gap-2">
-                                    {mounted ? (
-                                      isDark ? (
-                                        <Sun01Icon size={14} className="text-muted-foreground" />
-                                      ) : (
-                                        <Moon02Icon size={14} className="text-muted-foreground" />
-                                      )
-                                    ) : (
-                                      <span aria-hidden className="block size-[14px]" />
-                                    )}
-                                    <Label>Theme</Label>
-                                  </div>
-                                </div>
-                              </Dropdown.Item>
-                              <Dropdown.Item
-                                key="documentation"
-                                id="documentation"
-                                textValue="Documentation"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <FileExportIcon size={14} className="text-muted-foreground" />
-                                  <Label>Documentation</Label>
-                                </div>
-                              </Dropdown.Item>
-                              <Dropdown.Item
-                                key="retake-tour"
-                                id="retake-tour"
-                                textValue="Retake Tour"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <AiContentGenerator01Icon
-                                    size={14}
-                                    className="text-muted-foreground"
-                                  />
-                                  <Label>Retake Tour</Label>
-                                </div>
-                              </Dropdown.Item>
-                              <Dropdown.Section>
-                                <Separator className="my-1" />
-                                <Dropdown.Item
-                                  key="signout"
-                                  id="signout"
-                                  textValue="Sign Out"
-                                  className="text-destructive"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <Logout02Icon size={14} />
-                                    <Label className="text-destructive">Sign Out</Label>
-                                  </div>
-                                </Dropdown.Item>
-                              </Dropdown.Section>
-                            </Dropdown.Menu>
-                          </Dropdown.Popover>
-                        </Dropdown>
-                      </Drawer.Footer>
-                    </Drawer.Dialog>
-                  </Drawer.Content>
-                </Drawer.Backdrop>
-              </>
-              <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
-                <Link
-                  href="/dashboard"
-                  aria-label="Dashboard home"
-                  className="flex shrink-0 items-center gap-1.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Home aria-hidden className="size-4" />
-                  <span className="hidden sm:inline">Home</span>
-                </Link>
-                <span aria-hidden className="text-muted-foreground">
-                  —
-                </span>
-                <PageHeadingSlot
-                  fallback={currentSection === 'Dashboard' ? 'Overview' : currentSection}
-                />
-              </nav>
-              <div
-                id="tour-topbar-actions"
-                className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2"
-              >
-                <PageActionsSlot />
-                <Button
-                  aria-label="Open command palette"
-                  className=" md:hidden"
-                  isIconOnly
-                  onPress={() => setSearchOpen(true)}
-                  variant="ghost"
-                >
-                  <Search01Icon size={16} />
-                </Button>
-                <div className="md:hidden">
-                  <Dropdown>
-                    <Dropdown.Trigger id="tour-user-menu" aria-label="Open user menu">
-                      <Avatar variant="soft" color="accent" className="size-9">
-                        <Avatar.Fallback>{initials}</Avatar.Fallback>
-                      </Avatar>
-                    </Dropdown.Trigger>
-
-                    <Dropdown.Popover className="min-w-[200px]" placement="bottom end">
-                      <Dropdown.Menu
-                        onAction={(key) => {
-                          if (key === 'settings') router.push('/profile');
-                          if (key === 'documentation')
-                            window.open('/docs', '_blank', 'noopener,noreferrer');
-                          if (key === 'theme') setTheme(isDark ? 'light' : 'dark');
-                          if (key === 'retake-tour') handleRetakeWorkspaceTour();
-                          if (key === 'signout') handleLogout();
-                        }}
-                      >
-                        <Dropdown.Item key="settings" id="settings" textValue="Settings">
-                          <div className="flex items-center gap-2">
-                            <Settings01Icon size={14} className="text-muted-foreground" />
-                            <Label>Profile</Label>
-                          </div>
-                        </Dropdown.Item>
-                        <Dropdown.Item key="theme" id="theme" textValue="Theme">
-                          <div className="flex items-center gap-2">
-                            {mounted ? (
-                              isDark ? (
-                                <Sun01Icon size={14} className="text-muted-foreground" />
+                          </Dropdown.Item>
+                          <Dropdown.Item key="theme" id="theme" textValue="Theme">
+                            <div className="flex items-center gap-2">
+                              {mounted ? (
+                                isDark ? (
+                                  <Sun01Icon size={14} className="text-muted-foreground" />
+                                ) : (
+                                  <Moon02Icon size={14} className="text-muted-foreground" />
+                                )
                               ) : (
-                                <Moon02Icon size={14} className="text-muted-foreground" />
-                              )
-                            ) : (
-                              <span aria-hidden className="block size-[14px]" />
-                            )}
-                            <Label>{themeToggleTitle}</Label>
-                          </div>
-                        </Dropdown.Item>
-                        <Dropdown.Item
-                          key="documentation"
-                          id="documentation"
-                          textValue="Documentation"
-                        >
-                          <div className="flex items-center gap-2">
-                            <FileExportIcon size={14} className="text-muted-foreground" />
-                            <Label>Documentation</Label>
-                          </div>
-                        </Dropdown.Item>
-                        <Dropdown.Item key="retake-tour" id="retake-tour" textValue="Retake Tour">
-                          <div className="flex items-center gap-2">
-                            <AiContentGenerator01Icon size={14} className="text-muted-foreground" />
-                            <Label>Retake Tour</Label>
-                          </div>
-                        </Dropdown.Item>
-                        <Dropdown.Item
-                          key="signout"
-                          id="signout"
-                          textValue="Sign Out"
-                          className="text-destructive flex items-center gap-2 mt-1 border-t border-border dark:border-border pt-1"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Logout02Icon size={14} />
-                            <Label className="text-destructive">Sign Out</Label>
-                          </div>
-                        </Dropdown.Item>
-                      </Dropdown.Menu>
-                    </Dropdown.Popover>
-                  </Dropdown>
+                                <span aria-hidden className="block size-[14px]" />
+                              )}
+                              <Label>{themeToggleTitle}</Label>
+                            </div>
+                          </Dropdown.Item>
+                          <Dropdown.Item
+                            key="documentation"
+                            id="documentation"
+                            textValue="Documentation"
+                          >
+                            <div className="flex items-center gap-2">
+                              <FileExportIcon size={14} className="text-muted-foreground" />
+                              <Label>Documentation</Label>
+                            </div>
+                          </Dropdown.Item>
+                          <Dropdown.Item key="retake-tour" id="retake-tour" textValue="Retake Tour">
+                            <div className="flex items-center gap-2">
+                              <AiContentGenerator01Icon
+                                size={14}
+                                className="text-muted-foreground"
+                              />
+                              <Label>Retake Tour</Label>
+                            </div>
+                          </Dropdown.Item>
+                          <Dropdown.Item
+                            key="signout"
+                            id="signout"
+                            textValue="Sign Out"
+                            className="text-destructive flex items-center gap-2 mt-1 border-t border-border dark:border-border pt-1"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Logout02Icon size={14} />
+                              <Label className="text-destructive">Sign Out</Label>
+                            </div>
+                          </Dropdown.Item>
+                        </Dropdown.Menu>
+                      </Dropdown.Popover>
+                    </Dropdown>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <main
-              className={`min-h-0 flex-1 overflow-x-hidden ${
-                isAssistantRoute ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
-              }`}
-            >
-              <div className={isAssistantRoute ? 'min-h-0 flex-1 overflow-hidden' : ''}>
-                {children}
-              </div>
-            </main>
+              <main
+                className={`min-h-0 flex-1 overflow-x-hidden ${
+                  isAssistantRoute ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
+                }`}
+              >
+                <div className={isAssistantRoute ? 'min-h-0 flex-1 overflow-hidden' : ''}>
+                  {children}
+                </div>
+              </main>
+            </NavRail.Inset>
           </div>
-        </div>
+          <ShellActivityCenter
+            triggerContainer={activityTriggerContainer}
+            collapsed={desktopCollapsed}
+          />
+        </NavRail.Provider>
         {!isAssistantRoute && !isAdminRoute && aiEnabled === true ? (
           <Suspense fallback={null}>
             <LazyFloatingAIChat />

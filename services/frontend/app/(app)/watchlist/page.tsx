@@ -1591,7 +1591,7 @@ export default function WatchlistPage() {
                   warning="The current owner will retain shared access after transfer."
                 />
               </Modal.Body>
-              <Modal.Footer className="flex justify-end border-t border-border px-6 py-4">
+              <Modal.Footer>
                 <Button
                   onPress={shareModal.close}
                   className="btn-secondary"

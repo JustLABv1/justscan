@@ -1,4 +1,5 @@
 'use client';
+import { AlertDialog } from '@/components/ui/alert-dialog';
 
 import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { ImageOverviewTable } from '@/components/scans/image-overview-table';
@@ -27,7 +28,6 @@ import { FilterChips } from '@/components/ui/filter-chips';
 import type { StatusDotTone } from '@/components/ui/status-dot';
 import { parseDate, type DateValue } from '@internationalized/date';
 import {
-  AlertDialog,
   Button,
   Card,
   Disclosure,
@@ -385,67 +385,59 @@ function ScansPageContent() {
         }
       />
       <AlertDialog
-        isOpen={Boolean(pendingDelete)}
+        open={Boolean(pendingDelete)}
+        dismissible={false}
         onOpenChange={(isOpen) => {
           if (!isOpen && !deleting) setPendingDelete(null);
         }}
       >
-        <AlertDialog.Backdrop variant="blur">
-          <AlertDialog.Container placement="center">
-            <AlertDialog.Dialog className="sm:max-w-[440px]">
-              {!deleting ? <AlertDialog.CloseTrigger /> : null}
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>
-                  {deleting ? 'Deleting image scan group…' : 'Delete image scan group?'}
-                </AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body>
-                {deleting ? (
-                  <div
-                    aria-busy="true"
-                    aria-live="polite"
-                    className="flex items-start gap-3 rounded-xl border border-danger/20 bg-danger/5 p-3"
-                    role="status"
-                  >
-                    <Spinner aria-label="Deleting image scan history" color="danger" size="md" />
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-sm font-medium text-foreground">
-                        Deleting {pendingDelete?.scan_count ?? 0} scan{' '}
-                        {(pendingDelete?.scan_count ?? 0) === 1 ? 'run' : 'runs'}…
-                      </p>
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        Large histories can take a little while. Keep this window open until the
-                        deletion finishes.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    This removes <strong>{pendingDelete?.image_name}</strong>, including all{' '}
-                    {pendingDelete?.tag_count ?? 0} tags and {pendingDelete?.scan_count ?? 0} scan
-                    runs in this workspace. This cannot be undone.
+        <AlertDialog.Content tone="destructive" blur>
+          <AlertDialog.Title>
+            {deleting ? 'Deleting image scan group…' : 'Delete image scan group?'}
+          </AlertDialog.Title>
+          <div>
+            {deleting ? (
+              <div
+                aria-busy="true"
+                aria-live="polite"
+                className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-3"
+                role="status"
+              >
+                <Spinner aria-label="Deleting image scan history" color="danger" size="md" />
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    Deleting {pendingDelete?.scan_count ?? 0} scan{' '}
+                    {(pendingDelete?.scan_count ?? 0) === 1 ? 'run' : 'runs'}…
                   </p>
-                )}
-              </AlertDialog.Body>
-              <AlertDialog.Footer>
-                {!deleting ? (
-                  <Button slot="close" variant="tertiary">
-                    Cancel
-                  </Button>
-                ) : null}
-                <Button
-                  isDisabled={deleting}
-                  isPending={deleting}
-                  onPress={() => void confirmDeleteImage()}
-                  variant="danger"
-                >
-                  {deleting ? 'Deleting scan history…' : 'Delete image group'}
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
+                  <AlertDialog.Description>
+                    Large histories can take a little while. Keep this window open until the
+                    deletion finishes.
+                  </AlertDialog.Description>
+                </div>
+              </div>
+            ) : (
+              <AlertDialog.Description>
+                This removes <strong>{pendingDelete?.image_name}</strong>, including all{' '}
+                {pendingDelete?.tag_count ?? 0} tags and {pendingDelete?.scan_count ?? 0} scan runs
+                in this workspace. This cannot be undone.
+              </AlertDialog.Description>
+            )}
+          </div>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel disabled={deleting} />
+            <AlertDialog.Action
+              disabled={deleting}
+              loading={deleting}
+              onClick={(event) => {
+                // These flows retain failures in place and close only after success.
+                event.preventDefault();
+                void confirmDeleteImage();
+              }}
+            >
+              {deleting ? 'Deleting scan history…' : 'Delete image group'}
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
       </AlertDialog>
       {error ? (
         <StatusAlert

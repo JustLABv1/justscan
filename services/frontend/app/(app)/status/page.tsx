@@ -62,6 +62,7 @@ import {
   Label,
   ListBox,
   Modal,
+  DetailSheet,
   SearchField,
   Select,
   ResourceList,
@@ -929,18 +930,18 @@ export default function StatusPagesPage() {
         </div>
       )}
 
-      <Modal state={modal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="xl" placement="center">
-            <Modal.Dialog className="overflow-hidden">
-              <Modal.Header>
-                <Modal.Heading className="text-foreground font-semibold">
+      <DetailSheet state={modal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="xl">
+            <DetailSheet.Dialog className="overflow-hidden">
+              <DetailSheet.Header>
+                <DetailSheet.Heading className="text-foreground font-semibold">
                   {editing ? 'Edit status page' : 'Create status page'}
-                </Modal.Heading>
-                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground" />
-              </Modal.Header>
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger className="text-muted-foreground hover:text-foreground" />
+              </DetailSheet.Header>
 
-              <Modal.Body className="min-h-0 overflow-y-auto overscroll-contain py-5">
+              <DetailSheet.Body>
                 <form id="status-page-form" onSubmit={handleSubmit} className="space-y-6">
                   {formError && (
                     <Alert status="danger">
@@ -1716,9 +1717,9 @@ export default function StatusPagesPage() {
                     </>
                   )}
                 </form>
-              </Modal.Body>
+              </DetailSheet.Body>
 
-              <Modal.Footer
+              <DetailSheet.Footer
                 className="flex items-center justify-between gap-3 px-6 py-4"
                 style={{ borderTop: '1px solid var(--border-subtle)' }}
               >
@@ -1761,11 +1762,11 @@ export default function StatusPagesPage() {
                     </Button>
                   )}
                 </div>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
@@ -1904,10 +1905,7 @@ export default function StatusPagesPage() {
                   warning="Displayed scans and policy results will use the destination organization."
                 />
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
+              <Modal.Footer>
                 <Button className="btn-secondary" onPress={shareModal.close}>
                   Close
                 </Button>

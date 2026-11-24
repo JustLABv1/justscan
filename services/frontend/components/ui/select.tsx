@@ -47,6 +47,31 @@ function withoutItemIndicators(node: React.ReactNode): React.ReactNode {
   });
 }
 
+/** Finds `Select.Value` at any depth inside the trigger's children. */
+function findValueElement(node: React.ReactNode): React.ReactElement<ParentProps> | undefined {
+  for (const child of React.Children.toArray(node)) {
+    if (!React.isValidElement<ParentProps>(child)) continue;
+    if (child.type === AriaSelect.Value) return child;
+    const nested = findValueElement(child.props.children);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
+/**
+ * Swaps the React Aria `Select.Value` for PanelUI's value at any depth, so
+ * triggers that wrap the value with an icon keep their layout. The React Aria
+ * part cannot render here: it needs a React Aria Select around it.
+ */
+function replaceValueElement(node: React.ReactNode, value: React.ReactNode): React.ReactNode {
+  return React.Children.map(node, (child) => {
+    if (!React.isValidElement<ParentProps>(child)) return child;
+    if (child.type === AriaSelect.Value) return value;
+    if (child.props.children === undefined) return child;
+    return React.cloneElement(child, undefined, replaceValueElement(child.props.children, value));
+  });
+}
+
 export interface SelectProps {
   value?: Key | Key[] | null;
   defaultValue?: Key | Key[] | null;
@@ -133,11 +158,14 @@ function PanelSelectAdapter({
   const triggerChildren = React.Children.toArray(triggerElement?.props.children).filter(
     (node) => !isElementOf(node, AriaSelect.Indicator)
   );
-  const hasValue = triggerChildren.some((node) => isElementOf(node, AriaSelect.Value));
-  const valueClassName = (
-    triggerChildren.find((node) => isElementOf(node, AriaSelect.Value)) as
-      React.ReactElement<ParentProps> | undefined
-  )?.props.className;
+  const valueElement = findValueElement(triggerChildren);
+  const panelValue = (
+    <PanelSelect.Value
+      placeholder={placeholder ?? 'Select an item'}
+      className={valueElement?.props.className}
+    />
+  );
+  const directValue = triggerChildren.some((node) => isElementOf(node, AriaSelect.Value));
   const labelElement = label as React.ReactElement<ParentProps> | undefined;
   const hiddenLabel =
     labelElement && /\bsr-only\b/.test(String(labelElement.props.className ?? ''));
@@ -170,14 +198,11 @@ function PanelSelectAdapter({
           }
           className={triggerElement?.props.className}
         >
-          {hasValue ? (
-            <PanelSelect.Value
-              placeholder={placeholder ?? 'Select an item'}
-              className={valueClassName}
-            />
-          ) : (
-            triggerChildren
-          )}
+          {directValue
+            ? panelValue
+            : valueElement
+              ? replaceValueElement(triggerChildren, panelValue)
+              : triggerChildren}
         </PanelSelect.Trigger>
         <PanelSelect.Content
           container={portal}

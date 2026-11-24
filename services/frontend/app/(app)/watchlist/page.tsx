@@ -2,7 +2,7 @@
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { useToast } from '@/components/toast';
-import { OwnershipBadge, StatusBadge } from '@/components/ui/badges';
+import { OwnershipBadge, SeverityCounts, StatusBadge } from '@/components/ui/badges';
 import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FilterChips } from '@/components/ui/filter-chips';
@@ -38,6 +38,7 @@ import {
 import { cronToHuman, type HourCyclePreference } from '@/lib/cron';
 import { deferEffect } from '@/lib/defer-effect';
 import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
+import { splitImageRef } from '@/lib/labels';
 import { fullDate, timeAgo } from '@/lib/time';
 import {
   getWatchlistPolicyAttentionItems,
@@ -52,7 +53,6 @@ import {
   Button,
   Card,
   Checkbox,
-  Chip,
   Dropdown,
   Label,
   ListBox,
@@ -61,7 +61,7 @@ import {
   Select,
   Spinner,
   Switch,
-  Table,
+  ResourceList,
   TextArea,
   useOverlayState,
 } from '@/components/ui';
@@ -149,50 +149,59 @@ function LastScanState({
 }) {
   if (!item.last_scan_id) {
     return (
-      <span className="text-xs text-muted-foreground dark:text-foreground">Never scanned</span>
+      <div className="text-sm text-muted-foreground lg:w-36">
+        <p className="text-xs">Last scan</p>
+        <p>Never scanned</p>
+      </div>
     );
   }
 
   const timestamp =
     item.last_scanned_at ?? item.last_scan?.completed_at ?? item.last_scan?.created_at;
+  const when = timeAgo(timestamp, { hourCycle, timeZone: item.timezone });
+  const scan = item.last_scan;
   return (
     <Link
       href={`/scans/details/${item.last_scan_id}`}
-      className="inline-flex max-w-fit flex-col gap-1.5 px-2 py-1 transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 dark:hover:bg-muted/60"
-      title={fullDate(timestamp, {
-        hourCycle,
-        timeZone: item.timezone,
-      })}
-      aria-label={`Open scan details from ${timeAgo(timestamp, {
-        hourCycle,
-        timeZone: item.timezone,
-      })}`}
+      className="-mx-2 -my-1 flex min-w-0 flex-col gap-1 rounded-md px-2 py-1 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:w-40"
+      title={fullDate(timestamp, { hourCycle, timeZone: item.timezone })}
+      aria-label={`Open scan details from ${when}`}
     >
-      {item.last_scan ? (
-        <StatusBadge
-          status={item.last_scan.status}
-          externalStatus={item.last_scan.external_status}
-        />
-      ) : (
-        <Chip color="default" variant="soft" size="sm">
-          Unknown
-        </Chip>
-      )}
-      <span className="text-xs text-muted-foreground">
-        {timeAgo(timestamp, {
-          hourCycle,
-          timeZone: item.timezone,
-        })}
-        {(item.last_scan?.critical_count ?? 0) > 0 || (item.last_scan?.high_count ?? 0) > 0 ? (
-          <>
-            {' · '}
-            <span className="tabular-nums">
-              {item.last_scan?.critical_count ?? 0}C / {item.last_scan?.high_count ?? 0}H
-            </span>
-          </>
-        ) : null}
+      <span className="flex items-center gap-2">
+        {scan ? (
+          <StatusBadge status={scan.status} externalStatus={scan.external_status} />
+        ) : (
+          <span className="text-sm text-muted-foreground">Unknown status</span>
+        )}
+        <span className="text-xs text-muted-foreground">{when}</span>
       </span>
+      {scan && scan.status === 'completed' ? (
+        <SeverityCounts
+          critical={scan.critical_count ?? 0}
+          high={scan.high_count ?? 0}
+          medium={scan.medium_count ?? 0}
+          low={scan.low_count ?? 0}
+        />
+      ) : null}
     </Link>
+  );
+}
+
+function ScheduleSummary({
+  item,
+  hourCycle,
+}: {
+  item: WatchlistItem;
+  hourCycle: HourCyclePreference;
+}) {
+  return (
+    <div className="min-w-0 space-y-0.5 lg:w-40">
+      <p className="flex items-center gap-1.5 text-sm text-foreground">
+        <Clock01Icon size={12} className="shrink-0 text-muted-foreground" />
+        {cronToHuman(item.schedule ?? '', { timezone: item.timezone, hourCycle })}
+      </p>
+      <p className="truncate text-xs text-muted-foreground">{item.timezone || 'UTC'}</p>
+    </div>
   );
 }
 
@@ -208,7 +217,7 @@ function PolicyPostureCell({ posture, item }: { posture: WatchlistPosture; item:
 
   return (
     <StatusLabel
-      className="max-w-[260px]"
+      className="min-w-0 lg:w-56"
       tone={posture.tone}
       label={posture.label}
       title={policyTitle}
@@ -757,9 +766,17 @@ export default function WatchlistPage() {
   const hasFilters =
     searchQuery.trim().length > 0 || statusFilter !== 'all' || focusFilter !== 'all';
 
-  const nonMutableItemIds: string[] = [];
-  for (const item of filteredItems) {
-    if (!canMutateItem(item)) nonMutableItemIds.push(item.id);
+  const visibleWritableIds = writableItemIds(filteredItems);
+  const allVisibleSelected =
+    visibleWritableIds.length > 0 && visibleWritableIds.every((id) => selectedIds.has(id));
+
+  function toggleSelected(id: string, checked: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
   }
 
   return (
@@ -921,274 +938,220 @@ export default function WatchlistPage() {
                 ) : null}
               </div>
             </Card.Header>
-            {selectedIds.size > 0 ? (
-              <div className="flex flex-wrap items-center gap-2 border-b border-divider px-3 py-2">
-                <span className="text-sm text-muted-foreground">{selectedIds.size} selected</span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  isDisabled={bulkActionSaving}
-                  onPress={() => {
-                    void handleBulkAction('scan');
-                  }}
+            {filteredItems.length > 0 ? (
+              <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-border px-4 py-2">
+                <Checkbox
+                  aria-label="Select all visible watchlist items"
+                  isSelected={allVisibleSelected}
+                  isIndeterminate={selectedIds.size > 0 && !allVisibleSelected}
+                  isDisabled={visibleWritableIds.length === 0}
+                  onChange={(checked) =>
+                    setSelectedIds(checked ? new Set(visibleWritableIds) : new Set())
+                  }
                 >
-                  Scan now
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  isDisabled={bulkActionSaving}
-                  onPress={() => {
-                    void handleBulkAction('enable');
-                  }}
-                >
-                  Enable
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  isDisabled={bulkActionSaving}
-                  onPress={() => {
-                    void handleBulkAction('disable');
-                  }}
-                >
-                  Pause
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  isDisabled={bulkActionSaving}
-                  onPress={openBulkSchedule}
-                >
-                  Set schedule
-                </Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  isDisabled={bulkActionSaving}
-                  onPress={() => {
-                    void handleBulkAction('delete');
-                  }}
-                >
-                  Remove
-                </Button>
-                <Button
-                  size="sm"
-                  variant="tertiary"
-                  isDisabled={bulkActionSaving}
-                  onPress={() => setSelectedIds(new Set())}
-                >
-                  Clear
-                </Button>
+                  <Checkbox.Control>
+                    <Checkbox.Indicator />
+                  </Checkbox.Control>
+                  <span className="text-sm text-muted-foreground">
+                    {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+                  </span>
+                </Checkbox>
+                {selectedIds.size > 0 ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      isDisabled={bulkActionSaving}
+                      onPress={() => {
+                        void handleBulkAction('scan');
+                      }}
+                    >
+                      Scan now
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      isDisabled={bulkActionSaving}
+                      onPress={() => {
+                        void handleBulkAction('enable');
+                      }}
+                    >
+                      Enable
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      isDisabled={bulkActionSaving}
+                      onPress={() => {
+                        void handleBulkAction('disable');
+                      }}
+                    >
+                      Pause
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      isDisabled={bulkActionSaving}
+                      onPress={openBulkSchedule}
+                    >
+                      Set schedule
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      isDisabled={bulkActionSaving}
+                      onPress={() => {
+                        void handleBulkAction('delete');
+                      }}
+                    >
+                      Remove
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="tertiary"
+                      isDisabled={bulkActionSaving}
+                      onPress={() => setSelectedIds(new Set())}
+                    >
+                      Clear
+                    </Button>
+                  </>
+                ) : null}
               </div>
             ) : null}
-            <Table variant="secondary">
-              <Table.ScrollContainer className="rounded-none border-0">
-                <Table.Content
-                  aria-label="Watchlist images"
-                  className="min-w-[900px] [&_td]:py-3"
-                  disabledKeys={nonMutableItemIds}
-                  selectedKeys={selectedIds}
-                  selectionMode="multiple"
-                  onSelectionChange={(selection) => {
-                    if (selection === 'all') {
-                      setSelectedIds(new Set(writableItemIds(filteredItems)));
-                      return;
-                    }
-                    setSelectedIds(new Set([...selection].map(String)));
+            {loading && filteredItems.length === 0 ? (
+              <div className="flex min-h-48 items-center justify-center">
+                <Spinner color="accent" size="sm" />
+              </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="p-4">
+                <EmptyState
+                  icon={<EyeIcon size={24} />}
+                  title="No watchlist items match your filters"
+                  description="Try a different search or clear the current filters."
+                  action={{
+                    label: 'Clear filters',
+                    onClick: () => {
+                      setSearchQuery('');
+                      setStatusFilter('all');
+                      updateFocusFilter('all');
+                    },
                   }}
-                >
-                  <Table.Header>
-                    <Table.Column className="w-10">
-                      <Checkbox aria-label="Select all visible watchlist items" slot="selection">
-                        <Checkbox.Content>
+                />
+              </div>
+            ) : (
+              <ResourceList bordered={false} aria-label="Watchlist images">
+                {filteredItems.map((item) => {
+                  const reg = registries.find((r) => r.id === item.registry_id);
+                  const posture = getWatchlistPosture(item);
+                  const canMutate = canMutateItem(item);
+                  const canManageItemAccess = canManageAccess(item);
+                  const imageRef = `${item.image_name}:${item.image_tag}`;
+                  const { host, name } = splitImageRef(item.image_name);
+                  const source = [host, reg?.name ?? (host ? '' : 'Direct image source')]
+                    .filter(Boolean)
+                    .join(' · ');
+                  const actions = [
+                    ...(canMutate
+                      ? [
+                          {
+                            id: 'edit',
+                            label: 'Edit watchlist item',
+                            icon: <PencilEdit01Icon size={15} />,
+                            onAction: () => openEdit(item),
+                          },
+                        ]
+                      : []),
+                    ...(canManageItemAccess
+                      ? [
+                          {
+                            id: 'share',
+                            label: 'Manage access',
+                            icon: <BiometricAccessIcon size={15} />,
+                            onAction: () => openShareModal(item),
+                          },
+                        ]
+                      : []),
+                    ...(canMutate
+                      ? [
+                          {
+                            id: 'delete',
+                            label: 'Delete watchlist item',
+                            icon: <Delete01Icon size={15} />,
+                            variant: 'danger' as const,
+                            onAction: () => {
+                              void handleDelete(item.id);
+                            },
+                          },
+                        ]
+                      : []),
+                  ];
+                  return (
+                    <ResourceList.Item
+                      key={item.id}
+                      tone={posture.tone === 'danger' ? 'danger' : 'default'}
+                      selected={selectedIds.has(item.id)}
+                      media={
+                        <Checkbox
+                          aria-label={`Select ${imageRef}`}
+                          isSelected={selectedIds.has(item.id)}
+                          isDisabled={!canMutate}
+                          onChange={(checked) => toggleSelected(item.id, checked)}
+                        >
                           <Checkbox.Control>
                             <Checkbox.Indicator />
                           </Checkbox.Control>
-                        </Checkbox.Content>
-                      </Checkbox>
-                    </Table.Column>
-                    <Table.Column isRowHeader className="min-w-72">
-                      Image
-                    </Table.Column>
-                    <Table.Column className="min-w-56">Status</Table.Column>
-                    <Table.Column className="min-w-36">Last scan</Table.Column>
-                    <Table.Column className="min-w-44">Schedule</Table.Column>
-                    <Table.Column className="w-px whitespace-nowrap text-right">
-                      <span className="sr-only">Actions</span>
-                    </Table.Column>
-                  </Table.Header>
-                  <Table.Body
-                    items={filteredItems}
-                    renderEmptyState={() =>
-                      loading ? (
-                        <div className="flex min-h-48 items-center justify-center">
-                          <Spinner color="accent" size="sm" />
+                        </Checkbox>
+                      }
+                      title={`${name}:${item.image_tag}`}
+                      titleTooltip={imageRef}
+                      description={
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate" title={source}>
+                            {source}
+                          </span>
+                          <OwnershipBadge
+                            ownerType={item.owner_type}
+                            ownerOrgId={item.owner_org_id}
+                            orgNamesById={orgNamesById}
+                          />
+                        </span>
+                      }
+                      meta={
+                        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-start sm:gap-4">
+                          <PolicyPostureCell posture={posture} item={item} />
+                          <LastScanState item={item} hourCycle={hourCycle} />
+                          <ScheduleSummary item={item} hourCycle={hourCycle} />
                         </div>
-                      ) : (
-                        <EmptyState
-                          icon={<EyeIcon size={24} />}
-                          title="No watchlist items match your filters"
-                          description="Try a different search or clear the current filters."
-                          action={{
-                            label: 'Clear filters',
-                            onClick: () => {
-                              setSearchQuery('');
-                              setStatusFilter('all');
-                              updateFocusFilter('all');
-                            },
-                          }}
-                        />
-                      )
-                    }
-                  >
-                    {(item) => {
-                      const reg = registries.find((r) => r.id === item.registry_id);
-                      const posture = getWatchlistPosture(item);
-                      const canMutate = canMutateItem(item);
-                      const canManageItemAccess = canManageAccess(item);
-                      const actions = [
-                        ...(canMutate
-                          ? [
-                              {
-                                id: 'scan-now',
-                                label: triggering === item.id ? 'Scanning…' : 'Scan now',
-                                icon:
-                                  triggering === item.id ? (
-                                    <Spinner color="accent" size="sm" />
-                                  ) : (
-                                    <PlayIcon size={15} />
-                                  ),
-                                disabled: Boolean(triggering),
-                                pending: triggering === item.id,
-                                onAction: () => {
-                                  void handleTrigger(item.id);
-                                },
-                              },
-                              {
-                                id: 'edit',
-                                label: 'Edit watchlist item',
-                                icon: <PencilEdit01Icon size={15} />,
-                                onAction: () => openEdit(item),
-                              },
-                            ]
-                          : []),
-                        ...(canManageItemAccess
-                          ? [
-                              {
-                                id: 'share',
-                                label: 'Manage access',
-                                icon: <BiometricAccessIcon size={15} />,
-                                onAction: () => openShareModal(item),
-                              },
-                            ]
-                          : []),
-                        ...(canMutate
-                          ? [
-                              {
-                                id: 'delete',
-                                label: 'Delete watchlist item',
-                                icon: <Delete01Icon size={15} />,
-                                variant: 'danger' as const,
-                                onAction: () => {
-                                  void handleDelete(item.id);
-                                },
-                              },
-                            ]
-                          : []),
-                      ];
-                      return (
-                        <Table.Row
-                          key={item.id}
-                          id={item.id}
-                          className={`group/row hover:bg-[var(--row-hover)] ${
-                            posture.tone === 'danger'
-                              ? 'shadow-[inset_2px_0_0_0_var(--destructive)]'
-                              : ''
-                          }`}
-                        >
-                          <Table.Cell>
-                            <Checkbox
-                              aria-label={`Select ${item.image_name}:${item.image_tag}`}
-                              slot="selection"
-                              variant="secondary"
+                      }
+                      actions={
+                        <div className="flex items-center gap-1">
+                          {canMutate ? (
+                            <Button
+                              size="sm"
+                              variant="tertiary"
+                              aria-label={`Scan ${imageRef} now`}
+                              isPending={triggering === item.id}
+                              isDisabled={Boolean(triggering)}
+                              onPress={() => {
+                                void handleTrigger(item.id);
+                              }}
                             >
-                              <Checkbox.Content>
-                                <Checkbox.Control>
-                                  <Checkbox.Indicator />
-                                </Checkbox.Control>
-                              </Checkbox.Content>
-                            </Checkbox>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="space-y-1">
-                              <p className="max-w-sm whitespace-normal break-words font-mono text-sm text-foreground [overflow-wrap:anywhere]">
-                                {item.image_name}:{item.image_tag}
-                              </p>
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                                <span>{reg?.name ?? 'Direct image source'}</span>
-                                <OwnershipBadge
-                                  ownerType={item.owner_type}
-                                  ownerOrgId={item.owner_org_id}
-                                  orgNamesById={orgNamesById}
-                                />
-                              </div>
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <PolicyPostureCell posture={posture} item={item} />
-                          </Table.Cell>
-                          <Table.Cell>
-                            <LastScanState item={item} hourCycle={hourCycle} />
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="space-y-0.5" title={item.schedule}>
-                              <p className="flex items-center gap-1.5 text-sm text-foreground">
-                                <Clock01Icon size={12} className="shrink-0 text-muted-foreground" />
-                                {cronToHuman(item.schedule ?? '', {
-                                  timezone: item.timezone,
-                                  hourCycle,
-                                })}
-                              </p>
-                              <p className="pl-[18px] font-mono text-xs text-muted-foreground">
-                                {item.timezone || 'UTC'}
-                              </p>
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="flex items-center justify-end gap-1">
-                              {canMutate ? (
-                                <Button
-                                  size="sm"
-                                  variant="tertiary"
-                                  aria-label={`Scan ${item.image_name}:${item.image_tag} now`}
-                                  isPending={triggering === item.id}
-                                  isDisabled={Boolean(triggering)}
-                                  className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100"
-                                  onPress={() => {
-                                    void handleTrigger(item.id);
-                                  }}
-                                >
-                                  <PlayIcon size={14} />
-                                </Button>
-                              ) : null}
-                              {actions.length > 0 ? (
-                                <RowActionsMenu
-                                  label={`Open actions menu for ${item.image_name}:${item.image_tag}`}
-                                  items={actions}
-                                />
-                              ) : (
-                                <span className="text-xs text-muted-foreground">No actions</span>
-                              )}
-                            </div>
-                          </Table.Cell>
-                        </Table.Row>
-                      );
-                    }}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+                              <PlayIcon size={14} />
+                            </Button>
+                          ) : null}
+                          {actions.length > 0 ? (
+                            <RowActionsMenu
+                              label={`Open actions menu for ${imageRef}`}
+                              items={actions}
+                            />
+                          ) : null}
+                        </div>
+                      }
+                    />
+                  );
+                })}
+              </ResourceList>
+            )}
           </Card>
         </>
       )}
@@ -1250,12 +1213,7 @@ export default function WatchlistPage() {
                     className="bg-surface-secondary"
                     description="e.g. 0 2 * * * = daily at 2:00 in the selected timezone"
                   />
-                  <p
-                    className="text-xs font-medium"
-                    style={{ color: 'color-mix(in srgb, var(--primary) 88%, transparent)' }}
-                  >
-                    Preview: {schedulePreview}
-                  </p>
+                  <p className="text-xs font-medium text-primary">Preview: {schedulePreview}</p>
                   <div className="space-y-2">
                     <FormField
                       label="Timezone"
@@ -1316,7 +1274,7 @@ export default function WatchlistPage() {
                         </Select.Popover>
                       </Select>
                       {xrayOnlyWithoutRegistries && (
-                        <p className="text-xs" style={{ color: '#f59e0b' }}>
+                        <p className="text-xs text-warning-foreground">
                           No Artifactory Xray registry is configured yet.
                         </p>
                       )}
@@ -1633,10 +1591,7 @@ export default function WatchlistPage() {
                   warning="The current owner will retain shared access after transfer."
                 />
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
+              <Modal.Footer className="flex justify-end border-t border-border px-6 py-4">
                 <Button
                   onPress={shareModal.close}
                   className="btn-secondary"

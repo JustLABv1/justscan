@@ -26,6 +26,13 @@ import {
   updateHelmRegistryCredential,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { AUTH_TYPE_LABELS, HEALTH_LABELS, labelFor } from '@/lib/labels';
+import { timeAgo } from '@/lib/time';
+
+const PROTOCOL_LABELS: Record<string, string> = {
+  oci: 'OCI registry',
+  http: 'HTTP chart repository',
+};
 import {
   Button,
   Card,
@@ -35,7 +42,7 @@ import {
   Modal,
   SearchField,
   Select,
-  Table,
+  ResourceList,
   useOverlayState,
 } from '@/components/ui';
 import {
@@ -395,103 +402,87 @@ export default function HelmRegistryCredentialsPage() {
               }}
             />
           ) : (
-            <Table variant="secondary">
-              <Table.ScrollContainer className="rounded-none border-0">
-                <Table.Content
-                  aria-label="Helm registry credentials"
-                  className="min-w-[860px] [&_td]:py-3"
-                >
-                  <Table.Header>
-                    <Table.Column isRowHeader>Credential</Table.Column>
-                    <Table.Column className="min-w-44">Endpoint</Table.Column>
-                    <Table.Column className="min-w-44">Health</Table.Column>
-                    <Table.Column className="w-px whitespace-nowrap text-right">
-                      <span className="sr-only">Actions</span>
-                    </Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {filteredItems.map((item) => (
-                      <Table.Row key={item.id} id={item.id}>
-                        <Table.Cell>
-                          <div className="space-y-1">
-                            <p className="font-medium text-foreground">{item.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {item.protocol.toUpperCase()}
-                            </p>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="min-w-44">
-                          <div className="space-y-1">
-                            <p className="max-w-md break-all font-mono text-sm text-foreground">
-                              {item.url}
-                            </p>
-                            <p className="text-xs capitalize text-muted-foreground">
-                              {[item.auth_type.replace('_', ' '), item.username]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </p>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="min-w-44">
-                          <StatusLabel
-                            className="capitalize"
-                            tone={
-                              item.health_status === 'healthy'
-                                ? 'success'
-                                : item.health_status === 'unhealthy'
-                                  ? 'danger'
-                                  : 'warning'
-                            }
-                            label={item.health_status}
-                            detail={item.health_message || undefined}
-                          />
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex justify-end">
-                            <RowActionsMenu
-                              label={`Open actions menu for ${item.name}`}
-                              items={[
-                                {
-                                  id: 'test',
-                                  label: 'Test credential',
-                                  icon: <RefreshIcon size={15} />,
-                                  pending: pendingAction === `test:${item.id}`,
-                                  disabled:
-                                    pendingAction !== null && pendingAction !== `test:${item.id}`,
-                                  onAction: () => void test(item),
-                                },
-                                {
-                                  id: 'access',
-                                  label: 'Manage access',
-                                  icon: <Share01Icon size={15} />,
-                                  onAction: () => void openShares(item),
-                                },
-                                {
-                                  id: 'edit',
-                                  label: 'Edit',
-                                  icon: <PencilEdit01Icon size={15} />,
-                                  onAction: () => open(item),
-                                },
-                                {
-                                  id: 'delete',
-                                  label: 'Delete',
-                                  icon: <Delete01Icon size={15} />,
-                                  variant: 'danger',
-                                  pending: pendingAction === `delete:${item.id}`,
-                                  disabled:
-                                    pendingAction !== null && pendingAction !== `delete:${item.id}`,
-                                  onAction: () => void remove(item),
-                                },
-                              ]}
-                            />
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+            <ResourceList bordered={false} aria-label="Helm registry credentials">
+              {filteredItems.map((item) => {
+                const tone =
+                  item.health_status === 'healthy'
+                    ? 'success'
+                    : item.health_status === 'unhealthy'
+                      ? 'danger'
+                      : 'muted';
+                return (
+                  <ResourceList.Item
+                    key={item.id}
+                    tone={item.health_status === 'unhealthy' ? 'danger' : 'default'}
+                    media={<Key01Icon size={18} className="text-muted-foreground" />}
+                    title={item.name}
+                    description={<span title={item.url}>{item.url}</span>}
+                    meta={
+                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-start sm:gap-4">
+                        <div className="min-w-0 space-y-0.5 text-sm lg:w-52">
+                          <p className="truncate text-foreground">
+                            {labelFor(AUTH_TYPE_LABELS, item.auth_type)}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {[PROTOCOL_LABELS[item.protocol] ?? item.protocol, item.username]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        </div>
+                        <StatusLabel
+                          className="min-w-0 lg:w-40"
+                          tone={tone}
+                          label={labelFor(HEALTH_LABELS, item.health_status)}
+                          title={item.health_message || undefined}
+                          detail={
+                            item.last_health_check_at
+                              ? `Checked ${timeAgo(item.last_health_check_at)}`
+                              : undefined
+                          }
+                        />
+                      </div>
+                    }
+                    actions={
+                      <RowActionsMenu
+                        label={`Open actions menu for ${item.name}`}
+                        items={[
+                          {
+                            id: 'test',
+                            label: 'Test credential',
+                            icon: <RefreshIcon size={15} />,
+                            pending: pendingAction === `test:${item.id}`,
+                            disabled: pendingAction !== null && pendingAction !== `test:${item.id}`,
+                            onAction: () => void test(item),
+                          },
+                          {
+                            id: 'access',
+                            label: 'Manage access',
+                            icon: <Share01Icon size={15} />,
+                            onAction: () => void openShares(item),
+                          },
+                          {
+                            id: 'edit',
+                            label: 'Edit',
+                            icon: <PencilEdit01Icon size={15} />,
+                            onAction: () => open(item),
+                          },
+                          {
+                            id: 'delete',
+                            label: 'Delete',
+                            icon: <Delete01Icon size={15} />,
+                            variant: 'danger',
+                            pending: pendingAction === `delete:${item.id}`,
+                            disabled:
+                              pendingAction !== null && pendingAction !== `delete:${item.id}`,
+                            onAction: () => void remove(item),
+                          },
+                        ]}
+                      />
+                    }
+                  />
+                );
+              })}
+            </ResourceList>
           )}
         </Card>
       </LoadableCollectionState>
@@ -599,7 +590,7 @@ export default function HelmRegistryCredentialsPage() {
               <Modal.Body className="space-y-3">
                 {sharesError ? (
                   <div className="flex flex-col items-center gap-2 rounded-xl border border-danger/30 bg-danger/5 px-4 py-5 text-center">
-                    <p className="text-sm text-danger">{sharesError}</p>
+                    <p className="text-sm text-destructive">{sharesError}</p>
                     <Button
                       variant="secondary"
                       isPending={sharesLoading}
@@ -650,7 +641,7 @@ export default function HelmRegistryCredentialsPage() {
                     ) : (
                       shares.map((share) => (
                         <div
-                          className="flex items-center justify-between rounded-lg border border-divider/70 px-3 py-2"
+                          className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
                           key={share.org_id}
                         >
                           <span className="text-sm">
@@ -674,7 +665,7 @@ export default function HelmRegistryCredentialsPage() {
                   </>
                 )}
                 {shareTarget?.owner_type === 'org' ? (
-                  <div className="space-y-2 border-t border-divider/70 pt-3">
+                  <div className="space-y-2 border-t border-border pt-3">
                     <Select
                       aria-label="Transfer Helm credential ownership"
                       value={transferOrgID}

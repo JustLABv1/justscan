@@ -92,6 +92,7 @@ import { getBlockedPolicyDetails } from '@/lib/blocked-policy';
 import { deferEffect } from '@/lib/defer-effect';
 import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
 import { fullDate, timeAgo } from '@/lib/time';
+import { humanize, labelFor, shortDigest, VISIBILITY_LABELS } from '@/lib/labels';
 import {
   Accordion,
   Alert,
@@ -107,7 +108,8 @@ import {
   Label,
   ListBox,
   Modal,
-  Pagination,
+  TablePager,
+  ResourceList,
   Popover,
   SearchField,
   Select,
@@ -445,16 +447,41 @@ function summarizePolicyRule(rule?: PolicyRule | null): string {
 
 function FirstSeenBadge({ firstSeenAt }: { firstSeenAt?: string | null }) {
   if (!firstSeenAt) {
+    return <StatusTag tone="warning">New</StatusTag>;
+  }
+  return (
+    <span className="whitespace-nowrap text-xs text-muted-foreground" title={fullDate(firstSeenAt)}>
+      First seen {timeAgo(firstSeenAt)}
+    </span>
+  );
+}
+
+/**
+ * One remediation line for a finding. The scanner's fixed version wins; when
+ * the scanner reported none but newer vulnerability data lists a fix, say so
+ * explicitly so the row never claims "no fix" next to a "Fix available" chip.
+ */
+function FindingRemediation({ vuln }: { vuln: Vulnerability }) {
+  const laterFixes =
+    vuln.current_posture?.state === 'fix_available'
+      ? (vuln.current_posture.fixed_versions ?? []).filter(Boolean)
+      : [];
+  if (vuln.fixed_version) {
     return (
-      <span
-        className="text-xs font-semibold px-2 py-0.5 rounded-md"
-        style={{ color: '#fb923c', background: 'rgba(249,115,22,0.12)' }}
-      >
-        New
-      </span>
+      <p className="mt-1.5 text-xs text-success-foreground" title={vuln.fixed_version}>
+        Fixed in <span className="break-all font-mono">{vuln.fixed_version}</span>
+      </p>
     );
   }
-  return <span className="text-xs text-muted-foreground">{timeAgo(firstSeenAt)}</span>;
+  if (laterFixes.length > 0) {
+    return (
+      <p className="mt-1.5 text-xs text-success-foreground" title={laterFixes.join(', ')}>
+        Fix published after this scan:{' '}
+        <span className="break-all font-mono">{laterFixes.join(', ')}</span>
+      </p>
+    );
+  }
+  return <p className="mt-1.5 text-xs text-muted-foreground">No fix available yet</p>;
 }
 
 const LIMIT = 10;
@@ -467,28 +494,6 @@ function isScanTab(value: string | null): value is ScanTab {
     value === 'timeline' ||
     value === 'compliance'
   );
-}
-
-function buildPaginationItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const items: Array<number | 'ellipsis'> = [1];
-  const start = Math.max(2, currentPage - 1);
-  const end = Math.min(totalPages - 1, currentPage + 1);
-
-  if (start > 2) {
-    items.push('ellipsis');
-  }
-  for (let page = start; page <= end; page += 1) {
-    items.push(page);
-  }
-  if (end < totalPages - 1) {
-    items.push('ellipsis');
-  }
-  items.push(totalPages);
-  return items;
 }
 
 function scanImageHref(imageName: string) {
@@ -1970,6 +1975,41 @@ function ScanDetailContent() {
     }
   }
 
+  const renderFindingReview = (v: Vulnerability) => (
+    <FindingReviewPanel
+      vuln={v}
+      showRiskDecision={Boolean(scan?.image_digest)}
+      canMutate={canMutateCurrentScan}
+      isPlatformAdmin={isPlatformAdmin}
+      workScope={workScope}
+      orgNamesById={orgNamesById}
+      currentUserId={currentUser?.id}
+      decision={{
+        status: suppressStatus,
+        onStatusChange: setSuppressStatus,
+        scope: suppressScope,
+        onScopeChange: setSuppressScope,
+        justification: suppressJustification,
+        onJustificationChange: setSuppressJustification,
+        expiry: suppressExpiry,
+        onExpiryChange: setSuppressExpiry,
+        saving: suppressSaving,
+        error: suppressError,
+        onSave: () => handleSuppress(v),
+        onLift: () => handleLiftSuppression(v),
+        canManageAccess: canManageSuppressionAccess,
+        onManageAccess: openSuppressionAccess,
+      }}
+      notes={{
+        text: commentText,
+        onTextChange: setCommentText,
+        saving: commentSaving,
+        onAdd: () => handleAddComment(v.id),
+        onDelete: handleDeleteComment,
+      }}
+    />
+  );
+
   function openVulnerabilityDetails(vulnerability: Vulnerability) {
     setSelectedVulnerability(vulnerability);
     vulnerabilityDetailsModal.open();
@@ -2029,7 +2069,6 @@ function ScanDetailContent() {
   const effectiveScanStatus = resolveDisplayStatus(scan.status, scan.external_status);
   const isScanInProgress = ACTIVE_SCAN_STATUSES.has(effectiveScanStatus);
 
-  const totalPages = Math.max(1, Math.ceil(vulnTotal / LIMIT));
   const isPlatformAdmin = getTokenType() === 'admin' || currentUser?.role === 'admin';
   const orgNamesById = Object.fromEntries(allOrgs.map((org) => [org.id, org.name]));
   const ownerOrgPolicy =
@@ -2196,7 +2235,6 @@ function ScanDetailContent() {
         };
       })
     );
-  const vulnPaginationItems = buildPaginationItems(page, totalPages);
 
   const vulnerabilitiesWithFix = vulnSummary?.with_fix ?? 0;
   const xrayPolicyMatches = vulnSummary?.xray_policy ?? 0;
@@ -2436,22 +2474,12 @@ function ScanDetailContent() {
                     <div>
                       <p className="mb-1.5 text-xs text-muted-foreground">
                         Share link
-                        <span
-                          className="ml-1.5 rounded px-1.5 py-0.5 text-xs font-medium"
-                          style={{
-                            background:
-                              scan.share_visibility === 'public'
-                                ? 'rgba(34,197,94,0.1)'
-                                : 'color-mix(in srgb, var(--primary) 10%, transparent)',
-                            color:
-                              scan.share_visibility === 'public'
-                                ? '#4ade80'
-                                : 'color-mix(in srgb, var(--primary) 78%, white)',
-                            border: `1px solid ${scan.share_visibility === 'public' ? 'rgba(34,197,94,0.2)' : 'color-mix(in srgb, var(--primary) 20%, transparent)'}`,
-                          }}
+                        <StatusTag
+                          className="ml-1.5"
+                          tone={scan.share_visibility === 'public' ? 'success' : 'accent'}
                         >
-                          {scan.share_visibility}
-                        </span>
+                          {labelFor(VISIBILITY_LABELS, scan.share_visibility)}
+                        </StatusTag>
                       </p>
                       <div className="flex items-center gap-2">
                         <code className="flex-1 truncate rounded-lg bg-muted px-2 py-1.5 text-xs text-muted-foreground dark:bg-muted dark:text-foreground">
@@ -2585,7 +2613,7 @@ function ScanDetailContent() {
               tone="danger"
             />
             <ScanOverviewMetric
-              label="Fixable"
+              label="Fixable at scan"
               value={vulnerabilitiesWithFix}
               onPress={() => {
                 setActiveTab('vulns');
@@ -3044,12 +3072,63 @@ function ScanDetailContent() {
             />
           ) : null}
 
-          <Table variant="secondary">
+          {vulns.length > 0 ? (
+            <ul className="divide-y divide-border md:hidden" aria-label="Scan vulnerabilities">
+              {vulns.map((v) => (
+                <li key={v.id} className="space-y-2 px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <SeverityBadge severity={v.severity} />
+                    <Button
+                      variant="link"
+                      onPress={() => openVulnerabilityDetails(v)}
+                      className="h-auto p-0 font-mono text-xs font-medium"
+                    >
+                      {v.vuln_id || 'Unnamed finding'}
+                    </Button>
+                    {v.cvss_score ? (
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        CVSS {v.cvss_score.toFixed(1)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium [overflow-wrap:anywhere]">{v.pkg_name}</p>
+                    <p className="break-all font-mono text-xs text-muted-foreground">
+                      {v.installed_version}
+                    </p>
+                    <FindingRemediation vuln={v} />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <IntelligenceStatusChip posture={v.current_posture} />
+                    <FirstSeenBadge firstSeenAt={v.first_seen_at} />
+                    {v.suppression ? (
+                      <StatusTag tone="warning">{humanize(v.suppression.status)}</StatusTag>
+                    ) : null}
+                  </div>
+                  <Button
+                    onPress={() => {
+                      setExpandedVuln(expandedVuln === v.id ? null : v.id);
+                      setCommentText('');
+                    }}
+                    size="sm"
+                    variant="tertiary"
+                  >
+                    <Comment01Icon size={15} />
+                    Review{v.comments?.length ? ` ${v.comments.length}` : ''}
+                  </Button>
+                  {expandedVuln === v.id ? (
+                    <div className="rounded-lg bg-muted/30 p-3">{renderFindingReview(v)}</div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <Table variant="secondary" className="hidden md:block">
             <Table.ScrollContainer className="rounded-none border-0 [container-type:inline-size]">
               <Table.Content
                 aria-label="Scan vulnerabilities"
                 aria-busy={vulnLoading}
-                className="min-w-[1120px] table-auto [&_td]:px-4 [&_th]:px-4 [&_td]:py-3 [&_td]:align-top [&_td]:whitespace-normal [&_td]:[overflow-wrap:anywhere]"
+                className="table-fixed [&_td]:px-4 [&_th]:px-4 [&_td]:py-3 [&_td]:align-top [&_td]:[overflow-wrap:anywhere]"
                 sortDescriptor={{
                   column: sortBy,
                   direction: sortDir === 'asc' ? 'ascending' : 'descending',
@@ -3069,7 +3148,6 @@ function ScanDetailContent() {
                       { label: 'Finding', key: 'vuln_id', align: 'left' },
                       { label: 'Affected package', key: 'pkg_name', align: 'left' },
                       { label: 'Risk', key: 'severity', align: 'left' },
-                      { label: 'Remediation', key: 'fixed_version', align: 'left' },
                     ] as {
                       label: string;
                       key: VulnerabilityViewSettings['sort_by'];
@@ -3082,8 +3160,7 @@ function ScanDetailContent() {
                         key={key}
                         allowsSorting
                         isRowHeader={key === 'vuln_id'}
-                        className={`${key === 'vuln_id' ? 'w-[220px]' : key === 'pkg_name' ? 'min-w-[240px]' : key === 'severity' ? 'w-[160px]' : 'w-[220px]'} ${align === 'right' ? 'text-right' : 'text-left'}`}
-                        style={{ color: active ? 'var(--foreground)' : undefined }}
+                        className={`${key === 'vuln_id' ? 'w-[26%]' : key === 'pkg_name' ? 'w-[34%]' : 'w-[14%]'} ${align === 'right' ? 'text-right' : 'text-left'} ${active ? 'text-foreground' : ''}`}
                       >
                         {({ sortDirection }) => (
                           <Table.SortableColumnHeader sortDirection={sortDirection}>
@@ -3093,12 +3170,12 @@ function ScanDetailContent() {
                       </Table.Column>
                     );
                   })}
-                  <Table.Column className="min-w-[220px] text-left">Signals & notes</Table.Column>
+                  <Table.Column className="w-[26%] text-left">Signals & review</Table.Column>
                 </Table.Header>
                 <Table.Body>
                   {vulnError && vulns.length === 0 ? null : vulns.length === 0 ? (
                     <Table.Row key="vuln-state" id="vuln-state">
-                      <Table.Cell colSpan={5}>
+                      <Table.Cell colSpan={4}>
                         {vulnLoading ? (
                           <div className="py-12 text-center">
                             <div className="flex justify-center">
@@ -3128,10 +3205,10 @@ function ScanDetailContent() {
 
                       return (
                         <Fragment key={v.id}>
-                          <Table.Row id={v.id} className="hover:bg-[var(--row-hover)]">
+                          <Table.Row id={v.id} className="hover:bg-muted/50">
                             <Table.Cell>
                               {v.vuln_id ? (
-                                <div className="flex max-w-[220px] flex-wrap items-center gap-1.5">
+                                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                                   <Button
                                     variant="link"
                                     onPress={() => openVulnerabilityDetails(v)}
@@ -3147,7 +3224,7 @@ function ScanDetailContent() {
                                   </span>
                                   {v.suppression && (
                                     <StatusTag tone="warning">
-                                      {v.suppression.status.replace(/_/g, ' ')}
+                                      {humanize(v.suppression.status)}
                                     </StatusTag>
                                   )}
                                   {v.suppression && (
@@ -3178,6 +3255,7 @@ function ScanDetailContent() {
                                   {v.installed_version}
                                 </p>
                               </Button>
+                              <FindingRemediation vuln={v} />
                             </Table.Cell>
                             <Table.Cell>
                               <div className="flex flex-wrap items-center gap-2">
@@ -3186,22 +3264,6 @@ function ScanDetailContent() {
                                   {v.cvss_score ? `CVSS ${v.cvss_score.toFixed(1)}` : 'No CVSS'}
                                 </span>
                               </div>
-                            </Table.Cell>
-                            <Table.Cell className="align-top">
-                              {v.fixed_version ? (
-                                <div>
-                                  <p className="text-xs font-medium text-success-foreground">
-                                    Update available
-                                  </p>
-                                  <p className="mt-1 break-all font-mono text-xs leading-5 text-muted-foreground">
-                                    {v.fixed_version}
-                                  </p>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  No fix reported
-                                </span>
-                              )}
                             </Table.Cell>
                             <Table.Cell className="align-top">
                               <div className="flex min-w-0 flex-col items-start gap-2">
@@ -3266,41 +3328,10 @@ function ScanDetailContent() {
                           {expandedVuln === v.id && (
                             <Table.Row id={`${v.id}-expanded`}>
                               <Table.Cell
-                                colSpan={5}
+                                colSpan={4}
                                 className="border-t border-border bg-muted/30 p-4"
                               >
-                                <FindingReviewPanel
-                                  vuln={v}
-                                  showRiskDecision={Boolean(scan.image_digest)}
-                                  canMutate={canMutateCurrentScan}
-                                  isPlatformAdmin={isPlatformAdmin}
-                                  workScope={workScope}
-                                  orgNamesById={orgNamesById}
-                                  currentUserId={currentUser?.id}
-                                  decision={{
-                                    status: suppressStatus,
-                                    onStatusChange: setSuppressStatus,
-                                    scope: suppressScope,
-                                    onScopeChange: setSuppressScope,
-                                    justification: suppressJustification,
-                                    onJustificationChange: setSuppressJustification,
-                                    expiry: suppressExpiry,
-                                    onExpiryChange: setSuppressExpiry,
-                                    saving: suppressSaving,
-                                    error: suppressError,
-                                    onSave: () => handleSuppress(v),
-                                    onLift: () => handleLiftSuppression(v),
-                                    canManageAccess: canManageSuppressionAccess,
-                                    onManageAccess: openSuppressionAccess,
-                                  }}
-                                  notes={{
-                                    text: commentText,
-                                    onTextChange: setCommentText,
-                                    saving: commentSaving,
-                                    onAdd: () => handleAddComment(v.id),
-                                    onDelete: handleDeleteComment,
-                                  }}
-                                />
+                                {renderFindingReview(v)}
                               </Table.Cell>
                             </Table.Row>
                           )}
@@ -3312,48 +3343,13 @@ function ScanDetailContent() {
               </Table.Content>
             </Table.ScrollContainer>
           </Table>
-          <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
-              Showing {vulnTotal === 0 ? 0 : (page - 1) * LIMIT + 1}-
-              {Math.min(page * LIMIT, vulnTotal)} of {vulnTotal}
-            </span>
-            <Pagination size="sm" className="justify-self-center">
-              <Pagination.Content>
-                <Pagination.Item>
-                  <Pagination.Previous
-                    isDisabled={page === 1}
-                    onPress={() => setPage((previous) => Math.max(1, previous - 1))}
-                  >
-                    <Pagination.PreviousIcon />
-                    <span>Previous</span>
-                  </Pagination.Previous>
-                </Pagination.Item>
-                {vulnPaginationItems.map((item, index) =>
-                  item === 'ellipsis' ? (
-                    <Pagination.Item key={`vuln-ellipsis-${index}`}>
-                      <Pagination.Ellipsis />
-                    </Pagination.Item>
-                  ) : (
-                    <Pagination.Item key={`vuln-page-${item}`}>
-                      <Pagination.Link isActive={item === page} onPress={() => setPage(item)}>
-                        {item}
-                      </Pagination.Link>
-                    </Pagination.Item>
-                  )
-                )}
-                <Pagination.Item>
-                  <Pagination.Next
-                    isDisabled={page === totalPages}
-                    onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-                  >
-                    <span>Next</span>
-                    <Pagination.NextIcon />
-                  </Pagination.Next>
-                </Pagination.Item>
-              </Pagination.Content>
-            </Pagination>
-            <div />
-          </Table.Footer>
+          <TablePager
+            page={page}
+            pageSize={LIMIT}
+            total={vulnTotal}
+            onPageChange={setPage}
+            noun="findings"
+          />
         </Card>
       )}
 
@@ -3468,14 +3464,14 @@ function ScanDetailContent() {
               <Table.ScrollContainer className="rounded-none border-0">
                 <Table.Content
                   aria-label="Compliance violations"
-                  className="min-w-[1200px] table-auto [&_td]:px-4 [&_td]:py-3 [&_td]:align-top [&_td]:whitespace-normal [&_td]:[overflow-wrap:anywhere] [&_th]:px-4"
+                  className="table-auto [&_td]:px-4 [&_td]:py-3 [&_td]:align-top [&_td]:[overflow-wrap:anywhere] [&_th]:px-4"
                 >
                   <Table.Header>
                     <Table.Column isRowHeader className="w-[200px]">
                       Policy / organization
                     </Table.Column>
-                    <Table.Column className="min-w-[240px]">Finding / package</Table.Column>
-                    <Table.Column className="min-w-[260px]">Violation</Table.Column>
+                    <Table.Column>Finding / package</Table.Column>
+                    <Table.Column>Violation</Table.Column>
                     <Table.Column className="w-[180px]">Remediation</Table.Column>
                     <Table.Column className="w-[130px]">Evaluated</Table.Column>
                     <Table.Column className="w-[90px]">
@@ -3779,21 +3775,13 @@ function ScanDetailContent() {
                       <Accordion.Body className="pt-0">
                         {imageEnv.length > 0 ? (
                           <pre
-                            className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-foreground"
-                            style={{
-                              background: 'var(--row-hover)',
-                              border: '1px solid var(--surface-border)',
-                            }}
+                            className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-foreground border border-border bg-muted/40"
                           >
                             {imageEnv.join('\n')}
                           </pre>
                         ) : (
                           <div
-                            className="rounded-xl px-3 py-2 text-xs text-muted-foreground"
-                            style={{
-                              background: 'var(--row-hover)',
-                              border: '1px solid var(--surface-border)',
-                            }}
+                            className="rounded-xl px-3 py-2 text-xs text-muted-foreground border border-border bg-muted/40"
                           >
                             No environment variables were captured for this image.
                           </div>
@@ -3822,11 +3810,7 @@ function ScanDetailContent() {
                             {imageLabelEntries.map(([key, value]) => (
                               <div
                                 key={key}
-                                className="grid gap-1 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
-                                style={{
-                                  background: 'var(--row-hover)',
-                                  border: '1px solid var(--surface-border)',
-                                }}
+                                className="grid gap-1 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] border border-border bg-muted/40"
                               >
                                 <p className="text-sm font-medium text-muted-foreground">{key}</p>
                                 <p className="mt-2 break-all  text-xs text-foreground">
@@ -3837,11 +3821,7 @@ function ScanDetailContent() {
                           </div>
                         ) : (
                           <div
-                            className="rounded-xl px-3 py-2 text-xs text-muted-foreground"
-                            style={{
-                              background: 'var(--row-hover)',
-                              border: '1px solid var(--surface-border)',
-                            }}
+                            className="rounded-xl px-3 py-2 text-xs text-muted-foreground border border-border bg-muted/40"
                           >
                             No labels were captured for this image.
                           </div>
@@ -3864,11 +3844,7 @@ function ScanDetailContent() {
                     <Accordion.Panel>
                       <Accordion.Body className="pt-0">
                         <pre
-                          className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-foreground"
-                          style={{
-                            background: 'var(--row-hover)',
-                            border: '1px solid var(--surface-border)',
-                          }}
+                          className="overflow-x-auto rounded-xl p-4 text-xs leading-6 text-foreground border border-border bg-muted/40"
                         >
                           {JSON.stringify(fullImageConfig, null, 2)}
                         </pre>
@@ -3883,12 +3859,7 @@ function ScanDetailContent() {
           {allTags.length > 0 && (
             <Card>
               <Card.Content className="space-y-3 p-4">
-                <p
-                  className="text-xs font-semibold uppercase tracking-wider"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  Tags
-                </p>
+                <h3 className="text-sm font-medium">Tags</h3>
                 <div className="flex gap-2">
                   <Select
                     value={selectedTagToAdd || '__none__'}
@@ -3989,8 +3960,8 @@ function ScanDetailContent() {
                       orgNamesById={orgNamesById}
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground" title={scan.image_digest}>
-                    {scan.image_digest}
+                  <p className="font-mono text-xs text-muted-foreground" title={scan.image_digest}>
+                    {shortDigest(scan.image_digest)}
                   </p>
                 </Card>
 
@@ -4192,9 +4163,7 @@ function ScanDetailContent() {
 
                       {watchNames.length > 0 && (
                         <div className="space-y-1.5">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Watches
-                          </p>
+                          <p className="text-xs font-medium text-muted-foreground">Watches</p>
                           <div className="flex flex-wrap gap-2">
                             {watchNames.map((watchName) => (
                               <StatusTag key={watchName}>{watchName}</StatusTag>
@@ -4204,68 +4173,29 @@ function ScanDetailContent() {
                       )}
 
                       {policyMatches.length > 0 ? (
-                        <Card className="surface-panel rounded-xl overflow-hidden">
-                          <Table variant="secondary">
-                            <Table.ScrollContainer>
-                              <Table.Content
-                                aria-label="Xray watch policy matches"
-                                className="min-w-[760px]"
-                              >
-                                <Table.Header>
-                                  <Table.Column isRowHeader>Watch</Table.Column>
-                                  <Table.Column>Policy</Table.Column>
-                                  <Table.Column>Rule</Table.Column>
-                                  <Table.Column className="text-right">Blocking</Table.Column>
-                                </Table.Header>
-                                <Table.Body>
-                                  {policyMatches.map((match, index) => (
-                                    <Table.Row
-                                      key={`${match.watchName}-${match.policy}-${match.rule}-${index}`}
-                                      id={`${match.watchName}-${match.policy}-${match.rule}-${index}`}
-                                    >
-                                      <Table.Cell className="text-xs text-foreground">
-                                        <div className="flex flex-col">
-                                          <span>{match.watchName || '-'}</span>
-                                          {match.watchID && (
-                                            <span className="text-xs text-muted-foreground">
-                                              {match.watchID}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </Table.Cell>
-                                      <Table.Cell className="text-xs text-foreground">
-                                        {match.policy || '-'}
-                                      </Table.Cell>
-                                      <Table.Cell className="text-xs text-foreground">
-                                        {match.rule || '-'}
-                                      </Table.Cell>
-                                      <Table.Cell className="text-right">
-                                        <span
-                                          className="rounded-full border px-2.5 py-1 text-xs font-semibold"
-                                          style={
-                                            isActiveXrayPolicyMatch(match)
-                                              ? {
-                                                  borderColor: 'rgba(239,68,68,0.28)',
-                                                  color: '#f87171',
-                                                  background: 'rgba(239,68,68,0.12)',
-                                                }
-                                              : {
-                                                  borderColor: 'var(--surface-border)',
-                                                  color: 'var(--text-secondary)',
-                                                  background: 'var(--app-bg)',
-                                                }
-                                          }
-                                        >
-                                          {isActiveXrayPolicyMatch(match) ? 'Active' : 'Not active'}
-                                        </span>
-                                      </Table.Cell>
-                                    </Table.Row>
-                                  ))}
-                                </Table.Body>
-                              </Table.Content>
-                            </Table.ScrollContainer>
-                          </Table>
-                        </Card>
+                        <ResourceList aria-label="Xray watch policy matches">
+                          {policyMatches.map((match, index) => {
+                            const active = isActiveXrayPolicyMatch(match);
+                            return (
+                              <ResourceList.Item
+                                key={`${match.watchName}-${match.policy}-${match.rule}-${index}`}
+                                title={match.policy || 'Unnamed policy'}
+                                description={[
+                                  match.watchName ? `Watch ${match.watchName}` : null,
+                                  match.rule ? `Rule ${match.rule}` : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                                tone={active ? 'danger' : 'default'}
+                                meta={
+                                  <StatusTag tone={active ? 'danger' : 'muted'}>
+                                    {active ? 'Blocking' : 'Not blocking'}
+                                  </StatusTag>
+                                }
+                              />
+                            );
+                          })}
+                        </ResourceList>
                       ) : (
                         <Alert status="warning">
                           <Alert.Indicator />
@@ -4282,10 +4212,7 @@ function ScanDetailContent() {
                   );
                 })()}
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
+              <Modal.Footer className="flex justify-end border-t border-border px-6 py-4">
                 <Button
                   onPress={xrayPolicyDetailsModal.close}
                   className="btn-secondary"

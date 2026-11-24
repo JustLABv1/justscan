@@ -40,14 +40,16 @@ import {
   Label,
   ListBox,
   Modal,
-  Pagination,
   parseColor,
+  ResourceList,
   SearchField,
   Select,
-  type SortDescriptor,
-  Table,
+  Spinner,
+  TablePager,
   useOverlayState,
 } from '@/components/ui';
+import { FilterChips } from '@/components/ui/filter-chips';
+import { pluralize } from '@/lib/labels';
 import {
   Delete01Icon,
   PencilEdit01Icon,
@@ -56,6 +58,8 @@ import {
   Tag01Icon,
 } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+
+type TagSort = 'name' | 'owner';
 
 const DEFAULT_TAG_COLOR = '#6366f1';
 const selectTriggerCls = fieldSelectTriggerClassName;
@@ -82,10 +86,7 @@ export default function TagsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filterQuery, setFilterQuery] = useState('');
   const [page, setPage] = useState(1);
-  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
-    column: 'name',
-    direction: 'ascending',
-  });
+  const [sortBy, setSortBy] = useState<TagSort>('name');
   const PAGE_SIZE = 10;
   const parsedColor = useMemo(() => {
     try {
@@ -260,68 +261,36 @@ export default function TagsPage() {
             (isPlatformAdmin || manageableOrgIds.has(org.id)) && org.id !== shareTarget.owner_org_id
         )
       : [];
-  const visibleTags = useMemo(() => {
+  function tagOwnerLabel(tag: Tag) {
+    if (tag.owner_type === 'system') return 'System tag';
+    if (tag.owner_type === 'org') {
+      const orgName = tag.owner_org_id ? orgNamesById[tag.owner_org_id] : undefined;
+      return orgName ? `Owned by ${orgName}` : 'Organization tag';
+    }
+    return 'Personal tag';
+  }
+  const visibleTags = (() => {
     const query = filterQuery.trim().toLowerCase();
     const filtered = query
-      ? tags.filter((tag) => {
-          const ownerLabel =
-            tag.owner_type === 'org'
-              ? `org ${(tag.owner_org_id ? orgNamesById[tag.owner_org_id] : '') ?? ''}`
-              : tag.owner_type === 'system'
-                ? 'system'
-                : 'personal';
-          return (
+      ? tags.filter(
+          (tag) =>
             tag.name.toLowerCase().includes(query) ||
-            tag.color.toLowerCase().includes(query) ||
-            ownerLabel.toLowerCase().includes(query)
-          );
-        })
+            tagOwnerLabel(tag).toLowerCase().includes(query)
+        )
       : tags;
-
-    const sorted = [...filtered].sort((a, b) => {
-      const column = sortDescriptor.column as string;
-      const direction = sortDescriptor.direction === 'descending' ? -1 : 1;
-
-      if (column === 'owner') {
-        const ownerA =
-          a.owner_type === 'org'
-            ? (orgNamesById[a.owner_org_id ?? ''] ?? 'Org workspace')
-            : a.owner_type === 'system'
-              ? 'System'
-              : 'Personal';
-        const ownerB =
-          b.owner_type === 'org'
-            ? (orgNamesById[b.owner_org_id ?? ''] ?? 'Org workspace')
-            : b.owner_type === 'system'
-              ? 'System'
-              : 'Personal';
-        return ownerA.localeCompare(ownerB, undefined, { sensitivity: 'base' }) * direction;
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'owner') {
+        const byOwner = tagOwnerLabel(a).localeCompare(tagOwnerLabel(b), undefined, {
+          sensitivity: 'base',
+        });
+        if (byOwner !== 0) return byOwner;
       }
-
-      const valueA = column === 'color' ? a.color : a.name;
-      const valueB = column === 'color' ? b.color : b.name;
-      return valueA.localeCompare(valueB, undefined, { sensitivity: 'base' }) * direction;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     });
-
-    return sorted;
-  }, [filterQuery, tags, sortDescriptor, orgNamesById]);
+  })();
   const totalPages = Math.max(1, Math.ceil(visibleTags.length / PAGE_SIZE));
   const effectivePage = Math.min(page, totalPages);
-  const paginationItems = useMemo(() => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const items: Array<number | 'ellipsis'> = [1];
-    if (effectivePage > 3) items.push('ellipsis');
-    const start = Math.max(2, effectivePage - 1);
-    const end = Math.min(totalPages - 1, effectivePage + 1);
-    for (let i = start; i <= end; i += 1) items.push(i);
-    if (effectivePage < totalPages - 2) items.push('ellipsis');
-    items.push(totalPages);
-    return items;
-  }, [effectivePage, totalPages]);
-  const pagedTags = useMemo(() => {
-    const start = (effectivePage - 1) * PAGE_SIZE;
-    return visibleTags.slice(start, start + PAGE_SIZE);
-  }, [effectivePage, visibleTags]);
+  const pagedTags = visibleTags.slice((effectivePage - 1) * PAGE_SIZE, effectivePage * PAGE_SIZE);
 
   async function handleSubmit(e: React.FormEvent) {
     if (editing ? !canMutateTag(editing) : !canMutateActiveScope) return;
@@ -386,7 +355,7 @@ export default function TagsPage() {
               isDisabled={!canMutateActiveScope}
               variant="primary"
             >
-              <PlusSignIcon size={15} /> New Tag
+              <PlusSignIcon size={15} /> New tag
             </Button>
           ) : undefined
         }
@@ -398,7 +367,7 @@ export default function TagsPage() {
             icon={<Tag01Icon size={28} />}
             title="No tags yet"
             description="Create color-coded tags to group and filter your scans. Tags can be assigned to any scan."
-            action={canMutateActiveScope ? { label: 'New Tag', onClick: openCreate } : undefined}
+            action={canMutateActiveScope ? { label: 'New tag', onClick: openCreate } : undefined}
           />
         }
         error={error || undefined}
@@ -407,53 +376,46 @@ export default function TagsPage() {
         loading={loading}
         retry={() => void load()}
         loadingFallback={
-          <Card className="space-y-4" role="status">
-            <SearchField name="tags-search" variant="secondary" className="w-full">
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  aria-label="Filter tags"
-                  placeholder="Filter tags by name, owner, or color..."
-                  value={filterQuery}
-                  onChange={(event) => {
-                    setFilterQuery(event.target.value);
-                    setPage(1);
-                  }}
-                />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-            <div className="surface-panel rounded-xl overflow-hidden">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-4 px-4 py-3.5"
-                  style={{ borderTop: i > 0 ? '1px solid var(--row-divider)' : undefined }}
-                >
-                  <Skeleton className="size-8 rounded-lg shrink-0" />
+          <ResourceList role="status" aria-label="Loading tags">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <li key={i} className="flex items-center gap-3 px-4 py-3">
+                <Skeleton className="size-4 shrink-0 rounded-full" />
+                <div className="flex-1 space-y-1.5">
                   <Skeleton className="h-4 w-28 rounded" />
-                  <div className="flex-1" />
-                  <Skeleton className="h-4 w-16 rounded" />
-                  <Skeleton className="size-7 rounded-lg" />
-                  <Skeleton className="size-7 rounded-lg" />
+                  <Skeleton className="h-3 w-20 rounded" />
                 </div>
-              ))}
-            </div>
-          </Card>
+                <Skeleton className="size-7 rounded-lg" />
+              </li>
+            ))}
+          </ResourceList>
         }
       >
         <Card className="gap-0 overflow-hidden py-0">
           <Card.Header className="space-y-3 border-b p-4">
-            <div className="flex items-center justify-between gap-3">
-              <Card.Title>Scan tags</Card.Title>
-              <span className="text-xs text-muted-foreground">{tags.length} tags</span>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <FilterChips
+                label="Sort tags"
+                onSelect={(id) => {
+                  setSortBy(id as TagSort);
+                  setPage(1);
+                }}
+                items={[
+                  { id: 'name', label: 'By name', active: sortBy === 'name' },
+                  { id: 'owner', label: 'By owner', active: sortBy === 'owner' },
+                ]}
+              />
+              <span className="text-sm text-muted-foreground">
+                {filterQuery.trim()
+                  ? `${visibleTags.length.toLocaleString()} of ${pluralize(tags.length, 'tag')}`
+                  : pluralize(tags.length, 'tag')}
+              </span>
             </div>
             <SearchField name="tags-search" variant="secondary" className="w-full">
               <SearchField.Group>
                 <SearchField.SearchIcon />
                 <SearchField.Input
                   aria-label="Filter tags"
-                  placeholder="Filter tags by name, owner, or color..."
+                  placeholder="Filter tags by name or owner..."
                   value={filterQuery}
                   onChange={(event) => {
                     setFilterQuery(event.target.value);
@@ -464,156 +426,80 @@ export default function TagsPage() {
               </SearchField.Group>
             </SearchField>
           </Card.Header>
-          <Table variant="secondary">
-            <Table.ScrollContainer className="rounded-none border-0">
-              <Table.Content
-                aria-label="Tags table"
-                className="min-w-[640px] [&_td]:py-3"
-                sortDescriptor={sortDescriptor}
-                onSortChange={setSortDescriptor}
-              >
-                <Table.Header>
-                  <Table.Column id="name" allowsSorting isRowHeader>
-                    {({ sortDirection }) => (
-                      <Table.SortableColumnHeader sortDirection={sortDirection}>
-                        Tag
-                      </Table.SortableColumnHeader>
-                    )}
-                  </Table.Column>
-                  <Table.Column id="owner" allowsSorting>
-                    {({ sortDirection }) => (
-                      <Table.SortableColumnHeader sortDirection={sortDirection}>
-                        Owner
-                      </Table.SortableColumnHeader>
-                    )}
-                  </Table.Column>
-                  <Table.Column className="w-px whitespace-nowrap text-right">Actions</Table.Column>
-                </Table.Header>
-                <Table.Body
-                  items={pagedTags}
-                  renderEmptyState={() => (
-                    <div className="py-10 text-center text-sm text-muted-foreground">
-                      No tags match your filter.
-                    </div>
-                  )}
-                >
-                  {(tag) => (
-                    <Table.Row key={tag.id} id={tag.id}>
-                      <Table.Cell>
-                        <div className="flex min-w-0 items-center gap-2" title={tag.name}>
-                          <span
-                            className="size-3 shrink-0 rounded-full border"
-                            style={{ backgroundColor: tag.color, borderColor: `${tag.color}88` }}
-                            aria-hidden="true"
-                          />
-                          <span className="truncate text-sm font-medium">{tag.name}</span>
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {tag.color}
-                          </span>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <OwnershipBadge
-                          ownerType={tag.owner_type}
-                          ownerOrgId={tag.owner_org_id}
-                          orgNamesById={orgNamesById}
-                        />
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex items-center justify-end">
-                          {canManageTag(tag) || canMutateTag(tag) ? (
-                            <RowActionsMenu
-                              label={`Open actions menu for tag ${tag.name}`}
-                              items={[
-                                ...(canManageTag(tag)
-                                  ? [
-                                      {
-                                        id: 'share',
-                                        label: 'Manage access',
-                                        icon: <Shield01Icon size={15} />,
-                                        onAction: () => openShareModal(tag),
-                                      },
-                                    ]
-                                  : []),
-                                ...(canMutateTag(tag)
-                                  ? [
-                                      {
-                                        id: 'edit',
-                                        label: 'Edit tag',
-                                        icon: <PencilEdit01Icon size={15} />,
-                                        onAction: () => openEdit(tag),
-                                      },
-                                      {
-                                        id: 'delete',
-                                        label: 'Delete tag',
-                                        icon: <Delete01Icon size={15} />,
-                                        variant: 'danger' as const,
-                                        pending: deletingId === tag.id,
-                                        disabled: deletingId !== null && deletingId !== tag.id,
-                                        onAction: () => {
-                                          void handleDelete(tag.id);
-                                        },
-                                      },
-                                    ]
-                                  : []),
-                              ]}
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Read only</span>
-                          )}
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  )}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-            <Table.Footer className="flex flex-wrap items-center justify-between px-4 py-3 gap-3">
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                Showing {visibleTags.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
-                {Math.min(effectivePage * PAGE_SIZE, visibleTags.length)} of {visibleTags.length}
-              </span>
-              <Pagination size="sm" className="justify-self-center">
-                <Pagination.Content>
-                  <Pagination.Item>
-                    <Pagination.Previous
-                      isDisabled={effectivePage === 1}
-                      onPress={() => setPage((previous) => Math.max(1, previous - 1))}
-                    >
-                      <Pagination.PreviousIcon />
-                      <span>Previous</span>
-                    </Pagination.Previous>
-                  </Pagination.Item>
-                  {paginationItems.map((item, index) =>
-                    item === 'ellipsis' ? (
-                      <Pagination.Item key={`tags-ellipsis-${index}`}>
-                        <Pagination.Ellipsis />
-                      </Pagination.Item>
+          {pagedTags.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+              <p className="text-sm text-muted-foreground">No tags match your filter.</p>
+              <Button variant="secondary" size="sm" onPress={() => setFilterQuery('')}>
+                Clear filter
+              </Button>
+            </div>
+          ) : (
+            <ResourceList bordered={false} aria-label="Tags">
+              {pagedTags.map((tag) => (
+                <ResourceList.Item
+                  key={tag.id}
+                  media={
+                    <span
+                      className="size-4 shrink-0 rounded-full ring-1 ring-foreground/15"
+                      style={{ backgroundColor: tag.color }}
+                      aria-hidden="true"
+                    />
+                  }
+                  title={tag.name}
+                  description={tagOwnerLabel(tag)}
+                  actions={
+                    canManageTag(tag) || canMutateTag(tag) ? (
+                      <RowActionsMenu
+                        label={`Open actions menu for tag ${tag.name}`}
+                        items={[
+                          ...(canManageTag(tag)
+                            ? [
+                                {
+                                  id: 'share',
+                                  label: 'Manage access',
+                                  icon: <Shield01Icon size={15} />,
+                                  onAction: () => openShareModal(tag),
+                                },
+                              ]
+                            : []),
+                          ...(canMutateTag(tag)
+                            ? [
+                                {
+                                  id: 'edit',
+                                  label: 'Edit tag',
+                                  icon: <PencilEdit01Icon size={15} />,
+                                  onAction: () => openEdit(tag),
+                                },
+                                {
+                                  id: 'delete',
+                                  label: 'Delete tag',
+                                  icon: <Delete01Icon size={15} />,
+                                  variant: 'danger' as const,
+                                  pending: deletingId === tag.id,
+                                  disabled: deletingId !== null && deletingId !== tag.id,
+                                  onAction: () => {
+                                    void handleDelete(tag.id);
+                                  },
+                                },
+                              ]
+                            : []),
+                        ]}
+                      />
                     ) : (
-                      <Pagination.Item key={`tags-page-${item}`}>
-                        <Pagination.Link
-                          isActive={item === effectivePage}
-                          onPress={() => setPage(item)}
-                        >
-                          {item}
-                        </Pagination.Link>
-                      </Pagination.Item>
+                      <span className="text-xs text-muted-foreground">Read only</span>
                     )
-                  )}
-                  <Pagination.Item>
-                    <Pagination.Next
-                      isDisabled={effectivePage === totalPages}
-                      onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-                    >
-                      <span>Next</span>
-                      <Pagination.NextIcon />
-                    </Pagination.Next>
-                  </Pagination.Item>
-                </Pagination.Content>
-              </Pagination>
-              <div />
-            </Table.Footer>
-          </Table>
+                  }
+                />
+              ))}
+            </ResourceList>
+          )}
+          <TablePager
+            page={effectivePage}
+            pageSize={PAGE_SIZE}
+            total={visibleTags.length}
+            onPageChange={setPage}
+            noun="tags"
+          />
         </Card>
       </LoadableCollectionState>
 
@@ -622,7 +508,7 @@ export default function TagsPage() {
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
-                <Modal.Heading>{editing ? 'Edit Tag' : 'New Tag'}</Modal.Heading>
+                <Modal.Heading>{editing ? 'Edit tag' : 'New tag'}</Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
               <Modal.Body className="py-5">
@@ -636,9 +522,7 @@ export default function TagsPage() {
                     value={name}
                   />
                   <div className="space-y-2.5 flex flex-col">
-                    <Label className="text-sm font-medium text-muted-foreground dark:text-foreground">
-                      Color
-                    </Label>
+                    <Label className="text-sm font-medium text-foreground">Color</Label>
                     <ColorPicker
                       value={parsedColor}
                       onChange={(nextColor) => setColor(nextColor.toString('hex'))}
@@ -717,7 +601,7 @@ export default function TagsPage() {
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
-                <Modal.Heading>Manage Tag Access</Modal.Heading>
+                <Modal.Heading>Manage tag access</Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
               <Modal.Body className="mt-4 space-y-4">
@@ -729,11 +613,9 @@ export default function TagsPage() {
                     <div className="flex flex-wrap items-center justify-between">
                       <div className="flex items-center gap-3">
                         <span
-                          className="size-4 rounded-full shrink-0"
-                          style={{
-                            background: shareTarget.color,
-                            boxShadow: `0 0 8px ${shareTarget.color}88`,
-                          }}
+                          className="size-4 shrink-0 rounded-full ring-1 ring-foreground/15"
+                          style={{ backgroundColor: shareTarget.color }}
+                          aria-hidden="true"
                         />
                         <p className="text-sm font-medium text-foreground">{shareTarget.name}</p>
                       </div>
@@ -754,8 +636,9 @@ export default function TagsPage() {
                     </p>
                   </div>
                   {sharesLoading ? (
-                    <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+                    <div className="flex justify-center py-6" role="status">
+                      <Spinner size="sm" />
+                      <span className="sr-only">Loading access grants</span>
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No organization grants yet.</p>
@@ -787,6 +670,7 @@ export default function TagsPage() {
                                 isPending={shareSaving}
                                 isDisabled={shareSaving}
                                 isIconOnly
+                                aria-label={`Revoke access for ${share.org_name}`}
                                 variant="danger-soft"
                               >
                                 <Delete01Icon size={15} />

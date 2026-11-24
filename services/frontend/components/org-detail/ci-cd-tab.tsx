@@ -52,9 +52,9 @@ function CodeBlock({
 
   return (
     <div
-      className={`flex flex-col overflow-hidden rounded-xl border border-divider bg-surface-secondary ${className ?? ''}`}
+      className={`flex flex-col overflow-hidden rounded-xl border border-border bg-surface-secondary ${className ?? ''}`}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-divider px-4 py-2.5">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         <Button size="sm" variant="secondary" onPress={() => void copy()}>
           <Copy01Icon size={14} />
@@ -82,7 +82,7 @@ function CopyValue({ label, value }: { label: string; value: string }) {
   }
 
   return (
-    <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-divider bg-surface-secondary p-4">
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-surface-secondary p-4">
       <div className="min-w-0">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <code className="mt-1 block truncate text-sm font-medium">{value || 'Loading…'}</code>
@@ -176,7 +176,7 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
           </Card.Description>
         </Card.Header>
         <Card.Content className="space-y-8">
-          <section className="flex flex-wrap items-center justify-between gap-4 border-b border-divider pb-6">
+          <section className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
             <div className="flex items-start gap-3">
               <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-accent-foreground">
                 1
@@ -208,7 +208,7 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
             </ButtonGroup>
           </section>
 
-          <section className="space-y-3 border-b border-divider pb-6">
+          <section className="space-y-3 border-b border-border pb-6">
             <div className="flex items-start gap-3">
               <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-tertiary text-xs font-semibold text-muted-foreground">
                 2
@@ -262,7 +262,7 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                     Create a least-privilege token, then store it as a secret in your CI provider.
                   </p>
                 </div>
-                <div className="rounded-xl border border-divider bg-surface-secondary p-3">
+                <div className="rounded-xl border border-border bg-surface-secondary p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-medium">Pipeline token</p>
                     <Link
@@ -284,11 +284,11 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
                         className="min-w-36 flex-1"
                       >
                         <Label>Token lifetime</Label>
-                        <Select.Trigger className="border border-divider ">
+                        <Select.Trigger className="border border-border ">
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
-                        <Select.Popover className="border border-divider bg-surface shadow-lg">
+                        <Select.Popover className="border border-border bg-surface shadow-lg">
                           <ListBox>
                             {CLI_TOKEN_LIFETIMES.map((option) => (
                               <ListBox.Item
@@ -350,7 +350,7 @@ justscan scan "registry.example.com/my-app:1.2.3" \\
               Run a scan with the CLI to create history.
             </p>
           ) : (
-            <div className="divide-y divide-divider rounded-xl border border-divider">
+            <div className="divide-y divide-border rounded-xl border border-border">
               {history.map((entry) => (
                 <div
                   key={entry.id}

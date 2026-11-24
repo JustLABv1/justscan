@@ -1,5 +1,7 @@
 'use client';
-import { StatusLabel } from '@/components/ui/status-dot';
+import { StatusTag } from '@/components/ui/status-dot';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { JOB_STATUS_LABELS, labelFor } from '@/lib/labels';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
@@ -19,10 +21,10 @@ import {
   Card,
   Label,
   Modal,
+  ResourceList,
   SearchField,
-  Table,
+  Spinner,
   useOverlayState,
-  type SortDescriptor,
 } from '@/components/ui';
 import {
   Cancel01Icon,
@@ -59,10 +61,11 @@ function getTokenStatus(token: APIToken): 'active' | 'expired' | 'revoked' {
 function OrgTokenStatusBadge({ token }: { token: APIToken }) {
   const status = getTokenStatus(token);
   return (
-    <StatusLabel
+    <StatusTag
       tone={status === 'revoked' ? 'danger' : status === 'expired' ? 'warning' : 'success'}
-      label={status === 'revoked' ? 'Revoked' : status === 'expired' ? 'Expired' : 'Active'}
-    />
+    >
+      {labelFor(JOB_STATUS_LABELS, status)}
+    </StatusTag>
   );
 }
 
@@ -70,12 +73,10 @@ function OrgTokenExpiry({ token }: { token: APIToken }) {
   const expiresAt = new Date(token.expires_at);
   const now = new Date();
   return (
-    <span className="text-sm text-muted-foreground" title={fullDate(token.expires_at)}>
-      {expiresAt < now ? (
-        <>Expired {timeAgo(token.expires_at)}</>
-      ) : (
-        <>Expires {timeUntil(token.expires_at)}</>
-      )}
+    <span title={fullDate(token.expires_at)}>
+      {expiresAt < now
+        ? `expired ${timeAgo(token.expires_at).toLowerCase()}`
+        : `expires ${timeUntil(token.expires_at)}`}
     </span>
   );
 }
@@ -107,7 +108,7 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
                 <Modal.Icon className="bg-primary/10 text-primary">
                   <Key01Icon size={18} />
                 </Modal.Icon>
-                <Modal.Heading className="font-semibold">Token Created</Modal.Heading>
+                <Modal.Heading className="font-semibold">Token created</Modal.Heading>
               </div>
               <Modal.CloseTrigger />
             </Modal.Header>
@@ -130,7 +131,7 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
                 variant="primary"
               >
                 <Copy01Icon size={15} />
-                {copied ? 'Copied!' : 'Copy Token'}
+                {copied ? 'Copied' : 'Copy token'}
               </Button>
             </Modal.Body>
           </Modal.Dialog>
@@ -189,7 +190,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                 <Modal.Icon className="bg-default text-foreground">
                   <Settings01Icon size={18} />
                 </Modal.Icon>
-                <Modal.Heading className="font-semibold">New Org Token</Modal.Heading>
+                <Modal.Heading className="font-semibold">New organization token</Modal.Heading>
               </div>
               <Modal.CloseTrigger />
             </Modal.Header>
@@ -204,9 +205,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                   </Alert>
                 )}
                 <div className="space-y-1.5">
-                  <Label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                    Scope
-                  </Label>
+                  <Label className="text-sm font-medium text-foreground">Scope</Label>
                   <div className="grid grid-cols-2 gap-2">
                     {(
                       [
@@ -241,9 +240,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                   maxLength={128}
                 />
                 <div className="space-y-1.5">
-                  <Label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                    Expiration
-                  </Label>
+                  <Label className="text-sm font-medium text-foreground">Expiration</Label>
                   <div className="flex flex-wrap gap-1.5">
                     {EXPIRY_OPTIONS.map((opt) => (
                       <Button
@@ -260,10 +257,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                 </div>
               </form>
             </Modal.Body>
-            <Modal.Footer
-              className="px-6 py-4 flex justify-end gap-2"
-              style={{ borderTop: '1px solid var(--border-subtle)' }}
-            >
+            <Modal.Footer className="flex justify-end gap-2 border-t border-border px-6 py-4">
               <Button
                 type="button"
                 onPress={() => state.close()}
@@ -282,7 +276,7 @@ function CreateOrgTokenDialog({ state, orgId, onCreated }: CreateOrgTokenDialogP
                 {saving && (
                   <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 )}
-                Create Token
+                Create token
               </Button>
             </Modal.Footer>
           </Modal.Dialog>
@@ -303,10 +297,6 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
   const [loading, setLoading] = useState(true);
   const [rawToken, setRawToken] = useState('');
   const [query, setQuery] = useState('');
-  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
-    column: 'created',
-    direction: 'descending',
-  });
   const createModal = useOverlayState();
   const revealModal = useOverlayState();
   const toast = useToast();
@@ -326,26 +316,15 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
     });
   }, [query, tokens]);
 
+  // Active tokens first, newest first within each group.
   const sortedTokens = useMemo(() => {
-    const direction = sortDescriptor.direction === 'descending' ? -1 : 1;
-    const column = String(sortDescriptor.column ?? 'created');
-
-    return [...filteredTokens].sort((a, b) => {
-      if (column === 'created') {
-        return (Date.parse(a.created_at) - Date.parse(b.created_at)) * direction;
-      }
-
-      if (column === 'expiry') {
-        return (Date.parse(a.expires_at) - Date.parse(b.expires_at)) * direction;
-      }
-
-      if (column === 'status') {
-        return getTokenStatus(a).localeCompare(getTokenStatus(b)) * direction;
-      }
-
-      return a.description.localeCompare(b.description) * direction;
-    });
-  }, [filteredTokens, sortDescriptor]);
+    const rank = { active: 0, expired: 1, revoked: 2 } as const;
+    return [...filteredTokens].sort(
+      (a, b) =>
+        rank[getTokenStatus(a)] - rank[getTokenStatus(b)] ||
+        Date.parse(b.created_at) - Date.parse(a.created_at)
+    );
+  }, [filteredTokens]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -405,163 +384,134 @@ export function OrgTokensTab({ orgId, canManage, featureDisabledReason }: OrgTok
     <Card>
       {confirmDialog}
 
-      <div className="flex items-start justify-between gap-4">
+      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold">CLI &amp; API Tokens</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Service-account tokens scoped to this organization. Manage the tokens used by the
-            JustScan CLI, CI/CD pipelines, and other automated scanning here.
-          </p>
+          <Card.Title>CLI and API tokens</Card.Title>
+          <Card.Description>
+            Service tokens for this organization, used by the JustScan CLI, CI/CD pipelines, and
+            other automated scanning.
+          </Card.Description>
+          {featureDisabledReason ? (
+            <p className="mt-1 text-xs text-warning-foreground">{featureDisabledReason}</p>
+          ) : null}
         </div>
-        {canManage && (
+        {canManage ? (
           <Button onClick={() => createModal.open()} isDisabled={Boolean(featureDisabledReason)}>
             <PlusSignIcon size={14} />
-            New Token
+            New token
           </Button>
-        )}
-      </div>
-      {featureDisabledReason && (
-        <p className="text-xs text-warning-foreground">{featureDisabledReason}</p>
-      )}
+        ) : null}
+      </Card.Header>
 
-      <div className="surface-card rounded-xl overflow-hidden">
+      <Card.Content className="space-y-4">
         {loading ? (
-          <div className="flex justify-center py-8">
-            <div className="size-6 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+          <div className="flex justify-center py-8" role="status">
+            <Spinner />
+            <span className="sr-only">Loading tokens</span>
           </div>
         ) : tokens.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 px-6 text-center gap-3">
-            <div
-              className="size-12 rounded-xl flex items-center justify-center"
-              style={{
-                background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)',
-              }}
-            >
-              <Key01Icon size={22} color="color-mix(in srgb, var(--primary) 78%, white)" />
-            </div>
+          <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+            <Key01Icon size={24} className="text-muted-foreground" />
             <div>
-              <p className="font-semibold text-foreground">No org tokens yet</p>
-              <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+              <p className="font-medium text-foreground">No organization tokens yet</p>
+              <p className="mt-1 max-w-xs text-sm text-muted-foreground">
                 Create a token to authenticate CI/CD pipelines and automated tools for this
                 organization.
               </p>
             </div>
-            {canManage && (
+            {canManage ? (
               <Button
+                variant="secondary"
                 onClick={() => createModal.open()}
                 isDisabled={Boolean(featureDisabledReason)}
               >
-                <PlusSignIcon size={14} />
                 Create first token
               </Button>
-            )}
+            ) : null}
           </div>
         ) : (
-          <div className="space-y-3 p-3">
-            <SearchField name="org-token-search" variant="secondary">
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  placeholder="Filter by token name or status..."
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
+          <>
+            {tokens.length > 6 || query ? (
+              <SearchField name="org-token-search" variant="secondary">
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    aria-label="Filter tokens"
+                    placeholder="Filter by token name or status..."
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+            ) : null}
 
-            <Table variant="secondary">
-              <Table.ScrollContainer>
-                <Table.Content
-                  aria-label="Organization API tokens"
-                  className="min-w-[760px]"
-                  sortDescriptor={sortDescriptor}
-                  onSortChange={setSortDescriptor}
-                >
-                  <Table.Header>
-                    <Table.Column id="name" allowsSorting isRowHeader>
-                      Name
-                    </Table.Column>
-                    <Table.Column id="created" allowsSorting>
-                      Created
-                    </Table.Column>
-                    <Table.Column id="expiry" allowsSorting>
-                      Expiry
-                    </Table.Column>
-                    <Table.Column id="status" allowsSorting>
-                      Status
-                    </Table.Column>
-                    <Table.Column id="scope">Scope</Table.Column>
-                    {canManage ? <Table.Column className="text-right">Actions</Table.Column> : null}
-                  </Table.Header>
-                  <Table.Body>
-                    {sortedTokens.length === 0 ? (
-                      <Table.Row id="empty">
-                        <Table.Cell colSpan={canManage ? 6 : 5}>
-                          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                            No tokens match this filter.
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ) : (
-                      sortedTokens.map((token) => (
-                        <Table.Row key={token.id} id={token.id}>
-                          <Table.Cell>
-                            <span className="font-medium text-foreground">{token.description}</span>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <span className="text-muted-foreground">
-                              {timeAgo(token.created_at)}
-                            </span>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <OrgTokenExpiry token={token} />
-                          </Table.Cell>
-                          <Table.Cell>
-                            <OrgTokenStatusBadge token={token} />
-                          </Table.Cell>
-                          <Table.Cell>
-                            <span className="text-sm text-muted-foreground">
-                              {token.scope === 'pipeline_scan' ? 'Pipeline scan' : 'Org admin'}
-                            </span>
-                          </Table.Cell>
-                          {canManage ? (
-                            <Table.Cell>
-                              <div className="flex justify-end">
-                                {!token.disabled ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onPress={() => void handleRevoke(token)}
-                                  >
-                                    <Cancel01Icon size={15} />
-                                    Revoke
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="danger"
-                                    aria-label={`Delete revoked token ${token.description} permanently`}
-                                    onPress={() => void handleDelete(token)}
-                                  >
-                                    <Delete01Icon size={15} />
-                                    Delete
-                                  </Button>
-                                )}
-                              </div>
-                            </Table.Cell>
+            {sortedTokens.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No tokens match this filter.
+              </p>
+            ) : (
+              <ResourceList aria-label="Organization API tokens">
+                {sortedTokens.map((token) => {
+                  const status = getTokenStatus(token);
+                  return (
+                    <ResourceList.Item
+                      key={token.id}
+                      media={<Key01Icon size={16} className="text-muted-foreground" />}
+                      title={token.description}
+                      description={
+                        <>
+                          {token.scope === 'pipeline_scan'
+                            ? 'Pipeline scans'
+                            : 'Organization admin'}
+                          {' · '}
+                          <span title={fullDate(token.created_at)}>
+                            created {timeAgo(token.created_at).toLowerCase()}
+                          </span>
+                          {status === 'active' ? (
+                            <>
+                              {' · '}
+                              <OrgTokenExpiry token={token} />
+                            </>
                           ) : null}
-                        </Table.Row>
-                      ))
-                    )}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
-          </div>
+                        </>
+                      }
+                      meta={<OrgTokenStatusBadge token={token} />}
+                      actions={
+                        canManage ? (
+                          !token.disabled ? (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onPress={() => void handleRevoke(token)}
+                            >
+                              <Cancel01Icon size={15} />
+                              Revoke
+                            </Button>
+                          ) : (
+                            <RowActionsMenu
+                              label={`Actions for ${token.description}`}
+                              items={[
+                                {
+                                  id: 'delete',
+                                  label: 'Delete permanently',
+                                  icon: <Delete01Icon size={15} />,
+                                  variant: 'danger',
+                                  onAction: () => void handleDelete(token),
+                                },
+                              ]}
+                            />
+                          )
+                        ) : null
+                      }
+                    />
+                  );
+                })}
+              </ResourceList>
+            )}
+          </>
         )}
-      </div>
+      </Card.Content>
 
       {canManage && !featureDisabledReason && (
         <CreateOrgTokenDialog state={createModal} orgId={orgId} onCreated={handleCreated} />

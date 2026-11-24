@@ -52,6 +52,7 @@ import {
   ListBox,
   Modal,
   Select,
+  Spinner,
   Switch,
   Tabs,
   useOverlayState,
@@ -484,26 +485,18 @@ function OrgDetailContent() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="size-7 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+      <div className="flex h-64 items-center justify-center" role="status">
+        <Spinner />
+        <span className="sr-only">Loading organization</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6">
-        <div
-          className="rounded-xl px-4 py-3 text-sm"
-          style={{
-            background: 'rgba(239,68,68,0.08)',
-            border: '1px solid rgba(239,68,68,0.18)',
-            color: '#f87171',
-          }}
-        >
-          {error}
-        </div>
-      </div>
+      <PageContainer size="default">
+        <FormAlert title="Organization could not be loaded" description={error} />
+      </PageContainer>
     );
   }
 
@@ -697,12 +690,10 @@ function OrgDetailContent() {
 
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-muted-foreground dark:text-foreground">
-                        Rules
-                      </label>
+                      <label className="text-sm font-medium text-foreground">Rules</label>
                       <Button type="button" onPress={addRule} size="sm" variant="secondary">
                         <PlusSignIcon size={12} />
-                        Add Rule
+                        Add rule
                       </Button>
                     </div>
 

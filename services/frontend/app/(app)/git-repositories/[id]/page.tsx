@@ -19,7 +19,7 @@ import {
   Spinner,
   TextArea,
   Tabs,
-  Table,
+  ResourceList,
   useOverlayState,
 } from '@/components/ui';
 import {
@@ -90,7 +90,15 @@ import {
   type Registry,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { labelFor, pluralize, summarizeError } from '@/lib/labels';
 import { fullDate, timeAgo } from '@/lib/time';
+import {
+  GIT_RUN_STATUS_LABELS,
+  GIT_RUN_TRIGGER_LABELS,
+  displayImageRef,
+  gitRunTone,
+  repositoryDisplayName,
+} from '@/components/git-repositories/repository-name';
 
 type Preview = { run: GitRepositoryRun; images: GitRepositoryRunImage[] };
 
@@ -1130,11 +1138,11 @@ export default function GitRepositoryDetailPage() {
   return (
     <PageContainer>
       <PageTitle
-        title={repository.name}
+        title={repositoryDisplayName(repository)}
         icon={<GitBranchIcon />}
         breadcrumbs={[
           { label: 'Git repositories', href: '/git-repositories' },
-          { label: repository.name },
+          { label: repositoryDisplayName(repository) },
         ]}
         description={`${repository.clone_url} · ${repository.ref} · ${discoveryModeLabel(repository.discovery_mode)}${repository.discovery_mode === 'registry' ? ` · ${registryDiscoverySource(repository, registries)}` : ''}${repository.owner_type === 'org' ? ' · Scans appear in the organization workspace.' : ''}`}
         actions={
@@ -1272,15 +1280,20 @@ export default function GitRepositoryDetailPage() {
             {attentionImages.slice(0, 5).map((image) => {
               const health = healthByRef.get(image.full_ref);
               const scan = latestScanByRef.get(image.full_ref);
+              const ref = displayImageRef(image.full_ref);
               return (
                 <li key={image.id} className="flex min-w-0 items-center gap-3 px-4 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <code className="block truncate text-xs font-medium text-foreground">
-                      {image.full_ref}
-                    </code>
+                    <p
+                      className="truncate text-sm font-medium text-foreground"
+                      title={image.full_ref}
+                    >
+                      {ref.name}
+                    </p>
                     <p className="truncate text-xs text-muted-foreground">
                       <span className="font-medium text-destructive">{health?.label}</span>
                       {health?.reason ? ` · ${health.reason}` : ''}
+                      {ref.host ? ` · ${ref.host}` : ''}
                     </p>
                   </div>
                   {scan ? (
@@ -1515,7 +1528,7 @@ export default function GitRepositoryDetailPage() {
                     an image’s registry below saves a pattern across its tags.
                   </p>
                   {registryRuleError ? (
-                    <p className="text-xs text-danger md:col-span-3">{registryRuleError}</p>
+                    <p className="text-xs text-destructive md:col-span-3">{registryRuleError}</p>
                   ) : null}
                 </form>
               </div>
@@ -1771,8 +1784,10 @@ export default function GitRepositoryDetailPage() {
                           : imageHost
                             ? `No registry configured for ${imageHost}; the reference is used as written.`
                             : 'Automatic matching (Docker Hub).';
+                    const ref = displayImageRef(image.full_ref);
                     const subtitle = [
                       needsAttention && health?.reason ? health.reason : null,
+                      ref.host || null,
                       `${locations.length} deployment ${locations.length === 1 ? 'location' : 'locations'}`,
                       latestScan ? `scanned ${timeAgo(latestScan.created_at)}` : null,
                     ]
@@ -1829,12 +1844,12 @@ export default function GitRepositoryDetailPage() {
                             className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                           >
                             <span className="min-w-0 flex-1">
-                              <code
+                              <span
                                 className="block truncate text-sm font-medium text-foreground"
                                 title={image.full_ref}
                               >
-                                {image.full_ref}
-                              </code>
+                                {ref.name}
+                              </span>
                               <span className="block truncate text-xs text-muted-foreground">
                                 {subtitle}
                               </span>
@@ -1858,7 +1873,7 @@ export default function GitRepositoryDetailPage() {
                           />
                         </div>
                         {isOpen ? (
-                          <div className="grid gap-6 border-t border-border bg-muted/20 px-4 py-4 pl-[3.25rem] md:grid-cols-2">
+                          <div className="grid gap-6 border-t border-border bg-muted/20 p-4 sm:pl-12 md:grid-cols-2">
                             <div className="min-w-0 space-y-2">
                               <h3 className="text-xs font-medium text-muted-foreground">
                                 Registry
@@ -2013,13 +2028,21 @@ export default function GitRepositoryDetailPage() {
                                       />
                                       <Button
                                         variant="link"
-                                        className="h-auto min-w-0 justify-start whitespace-normal break-all p-0 text-left font-mono text-xs"
+                                        className="h-auto min-w-0 justify-start p-0 text-left text-sm"
+                                        title={ref}
                                         onPress={() => {
                                           setImageSearch(ref);
                                           setDetailView('images');
                                         }}
                                       >
-                                        {ref}
+                                        <span className="truncate">
+                                          {displayImageRef(ref).name}
+                                        </span>
+                                        {displayImageRef(ref).host ? (
+                                          <span className="truncate text-xs font-normal text-muted-foreground">
+                                            {displayImageRef(ref).host}
+                                          </span>
+                                        ) : null}
                                       </Button>
                                     </li>
                                   ))}
@@ -2044,90 +2067,59 @@ export default function GitRepositoryDetailPage() {
               </div>
               <span className="text-xs text-muted-foreground">{Math.min(runs.length, 6)} runs</span>
             </div>
-            <Table>
-              <Table.ScrollContainer className="rounded-none border-0">
-                <Table.Content
-                  aria-label="Repository run history"
-                  className="min-w-[960px] table-fixed [&_td]:whitespace-normal [&_td]:px-4 [&_td]:py-3 [&_th]:px-4"
-                >
-                  <Table.Header>
-                    <Table.Column isRowHeader className="w-auto">
-                      Run
-                    </Table.Column>
-                    <Table.Column className="w-36">State</Table.Column>
-                    <Table.Column className="w-28">Images</Table.Column>
-                    <Table.Column className="w-28">Scans</Table.Column>
-                    <Table.Column className="w-36">Commit</Table.Column>
-                    <Table.Column className="w-40">Started</Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {runs.length === 0 ? (
-                      <Table.Row id="empty-runs">
-                        <Table.Cell colSpan={6}>
-                          <div className="space-y-2 py-12 text-center">
-                            <Clock01Icon size={24} className="mx-auto text-muted-foreground" />
-                            <p className="text-sm font-medium">No runs yet</p>
-                            <p className="text-xs text-muted-foreground">
-                              Discover images to start recording repository activity.
-                            </p>
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ) : (
-                      runs.slice(0, 6).map((run) => (
-                        <Table.Row key={run.id} id={run.id}>
-                          <Table.Cell>
-                            <p className="text-sm font-medium">
-                              {run.trigger === 'dry_run'
-                                ? 'Discovery preview'
-                                : run.trigger.replaceAll('_', ' ')}
-                            </p>
-                            <code className="mt-1 block truncate text-xs text-muted-foreground">
-                              {run.ref}
-                            </code>
-                            {run.error_message ? (
-                              <p className="mt-1 break-words text-xs text-destructive">
-                                {run.error_message}
-                              </p>
-                            ) : null}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <StatusLabel
-                              tone={
-                                run.status === 'failed'
-                                  ? 'danger'
-                                  : run.status === 'completed'
-                                    ? 'success'
-                                    : run.status === 'partial' || run.status === 'cancelled'
-                                      ? 'warning'
-                                      : 'accent'
-                              }
-                              label={run.status}
-                              className="capitalize"
-                            />
-                          </Table.Cell>
-                          <Table.Cell className="tabular-nums">{run.image_count}</Table.Cell>
-                          <Table.Cell className="tabular-nums">{run.scan_count}</Table.Cell>
-                          <Table.Cell>
-                            <code className="text-xs text-muted-foreground" title={run.commit_sha}>
-                              {run.commit_sha ? run.commit_sha.slice(0, 8) : '—'}
-                            </code>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <span
-                              className="text-xs text-muted-foreground"
-                              title={fullDate(run.created_at)}
-                            >
-                              {timeAgo(run.created_at)}
-                            </span>
-                          </Table.Cell>
-                        </Table.Row>
-                      ))
-                    )}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+            {runs.length === 0 ? (
+              <div className="space-y-2 px-4 py-12 text-center">
+                <Clock01Icon size={24} className="mx-auto text-muted-foreground" />
+                <p className="text-sm font-medium">No runs yet</p>
+                <p className="text-xs text-muted-foreground">
+                  Discover images to start recording repository activity.
+                </p>
+              </div>
+            ) : (
+              <ResourceList bordered={false} aria-label="Repository run history">
+                {runs.slice(0, 6).map((run) => {
+                  const errorSummary = summarizeError(run.error_message);
+                  return (
+                    <ResourceList.Item
+                      key={run.id}
+                      tone={run.status === 'failed' ? 'danger' : 'default'}
+                      title={labelFor(GIT_RUN_TRIGGER_LABELS, run.trigger)}
+                      description={
+                        <span title={[run.ref, run.commit_sha].filter(Boolean).join(' · ')}>
+                          {run.ref}
+                          {run.commit_sha ? ` · commit ${run.commit_sha.slice(0, 8)}` : ''}
+                          {' · '}
+                          {pluralize(run.image_count, 'image')} ·{' '}
+                          {pluralize(run.scan_count, 'scan')}
+                        </span>
+                      }
+                      meta={
+                        <>
+                          <StatusTag tone={gitRunTone(run.status)}>
+                            {labelFor(GIT_RUN_STATUS_LABELS, run.status)}
+                          </StatusTag>
+                          <span
+                            className="text-xs whitespace-nowrap text-muted-foreground"
+                            title={fullDate(run.created_at)}
+                          >
+                            {timeAgo(run.created_at)}
+                          </span>
+                        </>
+                      }
+                    >
+                      {errorSummary ? (
+                        <p
+                          className="line-clamp-2 text-xs text-destructive"
+                          title={run.error_message}
+                        >
+                          {errorSummary}
+                        </p>
+                      ) : null}
+                    </ResourceList.Item>
+                  );
+                })}
+              </ResourceList>
+            )}
           </Card>
         </Tabs.Panel>
       </Tabs>

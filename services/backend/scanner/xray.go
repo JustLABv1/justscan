@@ -48,6 +48,10 @@ type xrayClient struct {
 	progress         func(string)
 	observeStatus    func(xrayArtifactPathCandidate, xrayArtifactScanStatus) error
 	freshRequestedAt *time.Time
+	// missingArtifactWindow overrides how long Xray may report every candidate
+	// as unknown. It is extended once Artifactory confirms the manifest is
+	// stored, because Xray then only lags behind on indexing.
+	missingArtifactWindow time.Duration
 
 	baseURL              string
 	registryURL          string
@@ -528,6 +532,17 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	// Only digest paths may establish freshness. A mutable tag or an index
 	// for another platform must never substitute for the selected image.
 	artifactCandidates = xrayDigestCandidates(artifactCandidates, scan.ImageDigest)
+	// Artifactory does not always store a digest-pulled manifest under the
+	// sha256__ folder (for example when the tag was cached earlier, through a
+	// virtual repository, or as a multi-arch child). Ask where the manifest with
+	// this digest actually lives; identical checksums mean identical images.
+	if stored, lookupErr := client.storedManifestCandidates(ctx, scan.ImageDigest, artifactName); lookupErr != nil {
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to locate the cached manifest through Artifactory checksum search: %v", lookupErr))
+	} else if len(stored) > 0 {
+		artifactCandidates = dedupeXrayArtifactPathCandidates(append(artifactCandidates, stored...))
+		client.missingArtifactWindow = xraySummaryWaitWindow()
+		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Artifactory stores the image manifest at %s; waiting up to %s for Xray to index it.", joinXrayArtifactPaths(stored), client.missingArtifactWindow))
+	}
 	// Provider polling does not occupy download/import capacity.
 	xrayPermit(ctx).release()
 	if err := setScanStep(ctx, db, scan, models.ScanStepIndexingArtifact); err != nil {
@@ -1634,6 +1649,10 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 	}
 
 	deadline := time.Now().Add(xraySummaryWaitWindow())
+	missingWindow := c.missingArtifactWindow
+	if missingWindow <= 0 {
+		missingWindow = xrayMissingArtifactWindow
+	}
 	var missingSince time.Time
 	seenPending := make(map[string]bool)
 	for {
@@ -1686,8 +1705,8 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 			if missingSince.IsZero() {
 				missingSince = time.Now()
 			}
-			if time.Since(missingSince) >= xrayMissingArtifactWindow {
-				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("Xray did not expose an artifact status within %s; ensure the Artifactory repository is indexed and the image is available in its cache", xrayMissingArtifactWindow)
+			if time.Since(missingSince) >= missingWindow {
+				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("Xray did not expose an artifact status within %s for %s; ensure the Artifactory repository is indexed by Xray and the image is available in its cache", missingWindow, joinXrayArtifactPaths(candidates))
 			}
 		} else {
 			missingSince = time.Time{}
@@ -3094,26 +3113,32 @@ func blockedArtifactSummaryPaths(artifactoryID string, targets []xrayViolationLo
 	return paths
 }
 
+func newXrayArtifactPathCandidate(artifactoryID, repo, path, filename string) (xrayArtifactPathCandidate, bool) {
+	path = strings.Trim(strings.TrimSpace(path), "/")
+	filename = strings.TrimSpace(filename)
+	repo = strings.Trim(strings.TrimSpace(repo), "/")
+	if repo == "" || path == "" || filename == "" {
+		return xrayArtifactPathCandidate{}, false
+	}
+	candidate := xrayArtifactPathCandidate{
+		Repository: repo,
+		Path:       path + "/" + filename,
+	}
+	candidate.RepoPath = repo + "/" + candidate.Path
+	candidate.ArtifactPath = strings.Trim(strings.TrimSpace(artifactoryID), "/")
+	if candidate.ArtifactPath != "" {
+		candidate.ArtifactPath += "/"
+	}
+	candidate.ArtifactPath += candidate.RepoPath
+	return candidate, true
+}
+
 func buildXrayArtifactPathCandidates(artifactoryID, repository, artifactName, reference, manifestFilename, resolvedDigest string) []xrayArtifactPathCandidate {
 	results := make([]xrayArtifactPathCandidate, 0, 4)
 	addCandidate := func(repo, path, filename string) {
-		path = strings.Trim(strings.TrimSpace(path), "/")
-		filename = strings.TrimSpace(filename)
-		repo = strings.Trim(strings.TrimSpace(repo), "/")
-		if repo == "" || path == "" || filename == "" {
-			return
+		if candidate, ok := newXrayArtifactPathCandidate(artifactoryID, repo, path, filename); ok {
+			results = append(results, candidate)
 		}
-		candidate := xrayArtifactPathCandidate{
-			Repository: repo,
-			Path:       path + "/" + filename,
-		}
-		candidate.RepoPath = repo + "/" + candidate.Path
-		candidate.ArtifactPath = strings.Trim(strings.TrimSpace(artifactoryID), "/")
-		if candidate.ArtifactPath != "" {
-			candidate.ArtifactPath += "/"
-		}
-		candidate.ArtifactPath += candidate.RepoPath
-		results = append(results, candidate)
 	}
 
 	repositories := xrayRepositoryCandidates(repository)
@@ -3126,6 +3151,56 @@ func buildXrayArtifactPathCandidates(artifactoryID, repository, artifactName, re
 		}
 	}
 
+	return dedupeXrayArtifactPathCandidates(results)
+}
+
+type artifactoryChecksumSearchResponse struct {
+	Results []struct {
+		URI string `json:"uri"`
+	} `json:"results"`
+}
+
+// storedManifestCandidates returns the Artifactory locations of the Docker
+// manifest whose sha256 checksum equals the image digest. Hits are limited to
+// folders of the requested image name; the repository may differ because the
+// image is often addressed through a virtual repository.
+func (c *xrayClient) storedManifestCandidates(ctx context.Context, digest, artifactName string) ([]xrayArtifactPathCandidate, error) {
+	algorithm, checksum, ok := strings.Cut(strings.TrimSpace(digest), ":")
+	if !ok || !strings.EqualFold(algorithm, "sha256") || strings.TrimSpace(checksum) == "" {
+		return nil, nil
+	}
+	var response artifactoryChecksumSearchResponse
+	if _, err := c.doJSON(ctx, http.MethodGet, "/artifactory/api/search/checksum?sha256="+url.QueryEscape(strings.TrimSpace(checksum)), nil, &response, http.StatusOK); err != nil {
+		return nil, err
+	}
+	return xrayStoredManifestCandidates(c.artifactoryID, artifactName, response), nil
+}
+
+func xrayStoredManifestCandidates(artifactoryID, artifactName string, response artifactoryChecksumSearchResponse) []xrayArtifactPathCandidate {
+	imagePath := strings.Trim(strings.TrimSpace(artifactName), "/")
+	results := make([]xrayArtifactPathCandidate, 0, len(response.Results))
+	for _, result := range response.Results {
+		uri := strings.TrimSpace(result.URI)
+		index := strings.Index(uri, "/api/storage/")
+		if index < 0 {
+			continue
+		}
+		storagePath, err := url.PathUnescape(uri[index+len("/api/storage/"):])
+		if err != nil {
+			continue
+		}
+		repo, filePath, ok := strings.Cut(strings.Trim(storagePath, "/"), "/")
+		if !ok || !strings.HasSuffix("/"+filePath, "/manifest.json") {
+			continue
+		}
+		folder := strings.TrimSuffix(filePath, "/manifest.json")
+		if imagePath == "" || (!strings.HasPrefix(folder, imagePath+"/") && !strings.HasPrefix(folder, "library/"+imagePath+"/")) {
+			continue
+		}
+		if candidate, ok := newXrayArtifactPathCandidate(artifactoryID, repo, folder, "manifest.json"); ok {
+			results = append(results, candidate)
+		}
+	}
 	return dedupeXrayArtifactPathCandidates(results)
 }
 

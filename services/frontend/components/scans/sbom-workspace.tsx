@@ -469,27 +469,27 @@ export function SBOMWorkspace({
                 <Table.ScrollContainer className="rounded-none border-0">
                   <Table.Content
                     aria-label="SBOM package inventory"
-                    className="min-w-[1120px] table-fixed [&_td]:px-3 [&_td]:py-3 [&_th]:px-3"
+                    className="min-w-[640px] table-fixed [&_td]:px-3 [&_td]:py-3 [&_td]:[overflow-wrap:anywhere] [&_th]:px-3"
                     sortDescriptor={sortDescriptor}
                     onSortChange={setSortDescriptor}
                   >
                     <Table.Header>
-                      <Table.Column id="package" allowsSorting isRowHeader className="w-auto">
+                      <Table.Column id="package" allowsSorting isRowHeader className="w-[28%]">
                         Package
                       </Table.Column>
-                      <Table.Column id="version" allowsSorting className="w-[160px]">
+                      <Table.Column id="version" allowsSorting className="w-[16%]">
                         Version
                       </Table.Column>
-                      <Table.Column id="ecosystem" allowsSorting className="w-[112px]">
+                      <Table.Column id="ecosystem" allowsSorting className="w-[10%]">
                         Type
                       </Table.Column>
-                      <Table.Column id="dependency_depth" allowsSorting className="w-[144px]">
+                      <Table.Column id="dependency_depth" allowsSorting className="w-[14%]">
                         Relationship
                       </Table.Column>
-                      <Table.Column id="vulnerabilities" allowsSorting className="w-[160px]">
+                      <Table.Column id="vulnerabilities" allowsSorting className="w-[16%]">
                         Vulnerabilities
                       </Table.Column>
-                      <Table.Column id="license" allowsSorting className="w-[180px]">
+                      <Table.Column id="license" allowsSorting className="w-[16%]">
                         License
                       </Table.Column>
                     </Table.Header>

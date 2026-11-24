@@ -34,6 +34,10 @@ const xrayDataSource = "JFrog Xray"
 const xrayRequestTimeout = 90 * time.Second
 const registryRequestTimeout = 5 * time.Minute
 const xraySummaryPollInterval = 10 * time.Second
+
+// xrayIndexRequestDelay is how long Full mode waits for Xray to discover an
+// artifact on its own before requesting on-demand indexing.
+var xrayIndexRequestDelay = 30 * time.Second
 const xrayMissingArtifactWindow = 2 * time.Minute
 const xrayBlockedSummaryWaitWindow = 45 * time.Second
 const xrayFreshScanSettleDelay = 8 * time.Second
@@ -52,6 +56,9 @@ type xrayClient struct {
 	// as unknown. It is extended once Artifactory confirms the manifest is
 	// stored, because Xray then only lags behind on indexing.
 	missingArtifactWindow time.Duration
+	// indexComponentID, when set (Full mode), is sent to scanArtifact once if
+	// Xray still does not know the artifact after xrayIndexRequestDelay.
+	indexComponentID string
 
 	baseURL              string
 	registryURL          string
@@ -570,6 +577,11 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		scan.ExternalStatus = status.Status
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray reports %s for %s.", status.Status, candidate.ArtifactPath))
 		return nil
+	}
+	if mode == models.XrayModeFull {
+		// Full credentials may index on demand when Xray has not picked the
+		// artifact up on its own (busy queue or repository not indexed).
+		client.indexComponentID = "docker://" + buildImageRef(artifactName, imageTag)
 	}
 	// Full mode needs an addressable artifact and baseline, not a completed
 	// initial analysis. Limited mode waits for the existing provider result.
@@ -1671,8 +1683,9 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 		missingWindow = xrayMissingArtifactWindow
 	}
 	var missingSince time.Time
+	indexRequested := false
 	seenPending := make(map[string]bool)
-	for {
+	for attempt := 0; ; attempt++ {
 		allMissing := true
 		for _, candidate := range candidates {
 			status, err := c.artifactStatus(ctx, candidate)
@@ -1722,6 +1735,17 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 			if missingSince.IsZero() {
 				missingSince = time.Now()
 			}
+			if !indexRequested && c.indexComponentID != "" && time.Since(missingSince) >= xrayIndexRequestDelay {
+				indexRequested = true
+				if err := c.scanArtifact(ctx, c.indexComponentID); err != nil {
+					c.reportProgress(fmt.Sprintf("Xray has not indexed the artifact yet; the on-demand index request for %s failed: %v", c.indexComponentID, err))
+				} else {
+					c.reportProgress(fmt.Sprintf("Xray has not indexed the artifact yet; requested on-demand indexing for %s.", c.indexComponentID))
+					if providerWindow := xraySummaryWaitWindow(); providerWindow > missingWindow {
+						missingWindow = providerWindow
+					}
+				}
+			}
 			if time.Since(missingSince) >= missingWindow {
 				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("Xray did not expose an artifact status within %s for %s; ensure the Artifactory repository is indexed by Xray and the image is available in its cache", missingWindow, joinXrayArtifactPaths(candidates))
 			}
@@ -1740,8 +1764,25 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("waiting for a fresh Xray artifact status; completion freshness must be evidenced by a timestamp or observed transition: %w", ctx.Err())
 			}
 			return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("waiting for Xray artifact status: %w", ctx.Err())
-		case <-time.After(xraySummaryPollInterval):
+		case <-time.After(xrayPollDelay(attempt)):
 		}
+	}
+}
+
+// xrayPollDelay spaces provider polls out the longer a wait lasts: every 10s
+// for the first minute, then 20s and 30s, and at most 60s. Large batches
+// otherwise keep dozens of scans polling Xray every 10s for up to the
+// provider timeout.
+func xrayPollDelay(attempt int) time.Duration {
+	switch {
+	case attempt < 6:
+		return xraySummaryPollInterval
+	case attempt < 12:
+		return 2 * xraySummaryPollInterval
+	case attempt < 18:
+		return 3 * xraySummaryPollInterval
+	default:
+		return 6 * xraySummaryPollInterval
 	}
 }
 
@@ -1771,9 +1812,13 @@ func (c *xrayClient) pollArtifactSummaryWithin(ctx context.Context, candidates [
 	}
 
 	deadline := time.Now().Add(waitWindow)
+	missingWindow := c.missingArtifactWindow
+	if missingWindow <= 0 {
+		missingWindow = xrayMissingArtifactWindow
+	}
 	var missingArtifactSince time.Time
 	var missingDetails []string
-	for {
+	for attempt := 0; ; attempt++ {
 		allCandidatesMissing := true
 		var availableSummary *xraySummaryResponse
 		var availableCandidate xrayArtifactPathCandidate
@@ -1819,8 +1864,8 @@ func (c *xrayClient) pollArtifactSummaryWithin(ctx context.Context, candidates [
 			if missingArtifactSince.IsZero() {
 				missingArtifactSince = time.Now()
 			}
-			if time.Since(missingArtifactSince) >= xrayMissingArtifactWindow {
-				return nil, xrayArtifactPathCandidate{}, fmt.Errorf("xray did not expose artifact summary for any candidate path within %s; the image may not exist in Artifactory/Xray yet (%s)", xrayMissingArtifactWindow, strings.Join(missingDetails, "; "))
+			if time.Since(missingArtifactSince) >= missingWindow {
+				return nil, xrayArtifactPathCandidate{}, fmt.Errorf("xray did not expose artifact summary for any candidate path within %s; the image may not exist in Artifactory/Xray yet (%s)", missingWindow, strings.Join(missingDetails, "; "))
 			}
 		} else {
 			missingArtifactSince = time.Time{}
@@ -1836,7 +1881,7 @@ func (c *xrayClient) pollArtifactSummaryWithin(ctx context.Context, candidates [
 		select {
 		case <-ctx.Done():
 			return nil, xrayArtifactPathCandidate{}, fmt.Errorf("waiting for Xray artifact summary: %w", ctx.Err())
-		case <-time.After(xraySummaryPollInterval):
+		case <-time.After(xrayPollDelay(attempt)):
 		}
 	}
 }

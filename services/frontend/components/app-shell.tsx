@@ -53,7 +53,7 @@ import {
   Tag01Icon,
 } from 'hugeicons-react';
 import { useTheme } from 'next-themes';
-import { Home, MoreHorizontal, Plus } from 'lucide-react';
+import { ChevronsUpDown, Home, MoreHorizontal, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -289,6 +289,8 @@ function ShellNavigation({
   const { collapsed: desktopCollapsed, isMobile, setMobileOpen } = useNavRail();
   const folded = desktopCollapsed && !isMobile;
   const initials = (user?.username ?? user?.email ?? 'U')[0]?.toUpperCase() ?? 'U';
+  const accountName = user?.username ?? user?.email ?? 'Account';
+  const accountDetail = user?.email && user.email !== accountName ? user.email : '';
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname, setMobileOpen]);
@@ -313,7 +315,7 @@ function ShellNavigation({
       expandedWidth="16rem"
       collapsedWidth="4rem"
       variant="tonal"
-      className="shell-sidebar h-full rounded-none p-3 ring-0"
+      className="md:my-2 md:ml-2 md:h-auto"
     >
       <NavRail.Header className="min-h-12">
         <NavRail.Brand
@@ -446,30 +448,38 @@ function ShellNavigation({
             </>
           )}
         </NavRail.Trigger>
-        <div className={cn('shrink-0 border-t border-border pt-2 pb-3', folded ? 'px-3' : 'px-4')}>
-          <ShellTooltip
-            label={`Account: ${user?.username ?? user?.email ?? 'User'}`}
-            enabled={folded}
-          >
+        <div className="mt-1 shrink-0 border-t border-border pt-2">
+          <ShellTooltip label={`Account: ${accountName}`} enabled={folded}>
             <Dropdown>
               <Dropdown.Trigger
                 aria-label="Open user menu"
-                className={`flex w-full min-w-0 items-center rounded-lg p-2 outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-primary ${folded ? 'justify-center' : 'gap-2.5'}`}
+                className={cn(
+                  'flex h-12 w-full min-w-0 items-center gap-2.5 rounded-[10px] text-start outline-none transition-colors duration-150',
+                  'hover:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                  folded ? 'justify-center px-0' : 'px-1.5'
+                )}
               >
-                <Avatar variant="soft" color="accent" className="size-7 shrink-0">
-                  <Avatar.Fallback>{initials}</Avatar.Fallback>
-                </Avatar>
+                <span
+                  aria-hidden
+                  className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary"
+                >
+                  {initials}
+                </span>
                 {!folded ? (
-                  <span className="min-w-0 flex-1 text-left">
-                    <span className="block text-xs font-medium text-muted-foreground">Account</span>
-                    <span className="block truncate text-sm font-medium">
-                      {user?.username ?? user?.email ?? 'User'}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {accountName}
                     </span>
+                    {accountDetail ? (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {accountDetail}
+                      </span>
+                    ) : null}
                   </span>
                 ) : null}
-                {!folded && (
-                  <MoreHorizontal aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-                )}
+                {!folded ? (
+                  <ChevronsUpDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                ) : null}
               </Dropdown.Trigger>
               <Dropdown.Popover className="min-w-[220px]" placement="right bottom">
                 <Dropdown.Menu
@@ -894,7 +904,7 @@ function AppShellInner({ children, initialUser }: AppShellProps) {
 
             <NavRail.Inset
               render={<div />}
-              className="shell-content min-h-0 overflow-hidden rounded-none ring-0 md:my-2 md:mr-2 md:rounded-xl"
+              className="shell-content min-h-0 overflow-hidden rounded-none ring-0 md:m-2 md:rounded-xl"
             >
               <div
                 className={`flex min-h-14 shrink-0 flex-wrap items-center gap-2.5 py-2 ${contentRailClass}`}

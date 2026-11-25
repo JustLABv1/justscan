@@ -50,8 +50,12 @@ export function WorkspaceSwitcher({
         aria-label={`Workspace: ${scopeLabel}${inviteLabel}`}
         title={collapsed ? `Workspace: ${scopeLabel}` : undefined}
         className={cn(
-          'flex min-w-0 items-center rounded-lg text-left outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-ring',
-          collapsed ? 'relative size-10 justify-center' : 'w-full gap-2.5 p-2',
+          'flex min-w-0 items-center rounded-[10px] text-left outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+          collapsed
+            ? 'relative size-10 justify-center hover:bg-foreground/[0.05]'
+            : // A raised tile in the rail, so the switcher reads as a control
+              // rather than as a row of the navigation below it.
+              'w-full gap-2.5 bg-background/70 p-2 ring-1 ring-foreground/[0.06] ring-inset hover:bg-background dark:bg-foreground/[0.04] dark:ring-foreground/[0.08] dark:hover:bg-foreground/[0.07]',
           className
         )}
       >

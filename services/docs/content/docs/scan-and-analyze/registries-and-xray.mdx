@@ -12,7 +12,7 @@ Use the provider tabs and search to find registry connections. Summary cards des
 ## Xray modes
 
 - **Limited** reads an existing Xray result after warming the image through Artifactory. It is suitable for consumer credentials and does not trigger a rescan.
-- **Full** requires Xray Read and Manage Xray Metadata. JustScan calls `scanArtifact`, then requires a newer completion timestamp or an observed pending-to-completed transition before importing the result. Xray documents this endpoint as a scan request rather than a forced reindex operation.
+- **Full** requires Xray Read and Manage Xray Metadata. JustScan calls `scanArtifact`, then waits for a newer completion timestamp or an observed pending-to-completed transition before importing the result. For an image Xray has already scanned, `scanArtifact` does not start a new scan: Xray answers that a scan is in progress but keeps its existing result, which it re-checks against new vulnerability data on its own. If Xray had a completed result before the request and does not start a new scan within 90 seconds, JustScan imports that current result and says so in the scan output, including when the image contents were last scanned. An image digest is immutable, so its package contents do not change between scans; only the matched vulnerabilities do.
 
 Use the standard backend image when any registry uses local Trivy scanning. An Xray-only deployment can use the minimal backend image with local scanners disabled. Verify the custom CA chain if Artifactory or the registry uses internal TLS, then test both the registry connection and a real small scan before enabling a CI gate.
 

@@ -90,3 +90,47 @@ func TestXrayFreshTimeoutNamesLastStatuses(t *testing.T) {
 		t.Fatalf("timeout should list each path with its last status, got %v", err)
 	}
 }
+
+func withXrayExistingResultGrace(t *testing.T, grace time.Duration) {
+	previous := xrayExistingResultGrace
+	xrayExistingResultGrace = grace
+	t.Cleanup(func() { xrayExistingResultGrace = previous })
+}
+
+// Xray answers scanArtifact for an already scanned artifact with "Scan of
+// artifact is in progress" but keeps reporting the earlier DONE result.
+func TestXrayFreshWaitAcceptsExistingResultForScannedImage(t *testing.T) {
+	withXrayExistingResultGrace(t, 0)
+	completed := time.Date(2026, 11, 23, 9, 37, 24, 0, time.UTC)
+	client := &xrayClient{baseURL: "http://xray.test", httpClient: xrayStatusByRepo(t, func(int) (string, string) {
+		return "DONE", completed.Format(time.RFC3339)
+	})}
+	requestedAt := time.Now().UTC()
+	client.freshRequestedAt = &requestedAt
+	client.baselineCompleted = true
+
+	status, candidate, err := client.waitForArtifactStatus(context.Background(), remoteAndCacheCandidates(), &completed, true)
+	if err != nil {
+		t.Fatalf("existing result should be accepted after the grace period: %v", err)
+	}
+	if !status.ExistingResult || candidate.Repository != "m029-ghcr-remote-cache" || status.Time == nil || !status.Time.Equal(completed) {
+		t.Fatalf("unexpected result: %#v from %s", status, candidate.Repository)
+	}
+}
+
+func TestXrayFreshWaitStillRequiresNewScanForUnscannedImage(t *testing.T) {
+	withXrayExistingResultGrace(t, 0)
+	old := time.Now().Add(-time.Hour).UTC()
+	client := &xrayClient{baseURL: "http://xray.test", httpClient: xrayStatusByRepo(t, func(int) (string, string) {
+		return "DONE", old.Format(time.RFC3339)
+	})}
+	requestedAt := time.Now().UTC()
+	client.freshRequestedAt = &requestedAt
+	client.baselineCompleted = false
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, _, err := client.waitForArtifactStatus(ctx, remoteAndCacheCandidates(), nil, true); err == nil {
+		t.Fatal("a stale DONE must not be accepted when Xray had not finished a scan before the request")
+	}
+}

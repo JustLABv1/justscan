@@ -38,6 +38,7 @@ const xraySummaryPollInterval = 10 * time.Second
 // xrayIndexRequestDelay is how long Full mode waits for Xray to discover an
 // artifact on its own before requesting on-demand indexing.
 var xrayIndexRequestDelay = 30 * time.Second
+
 const xrayMissingArtifactWindow = 2 * time.Minute
 const xrayBlockedSummaryWaitWindow = 45 * time.Second
 const xrayFreshScanSettleDelay = 8 * time.Second
@@ -554,7 +555,10 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	if stored, lookupErr := client.storedManifestCandidates(ctx, scan.ImageDigest, artifactName); lookupErr != nil {
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Unable to locate the cached manifest through Artifactory checksum search: %v", lookupErr))
 	} else if len(stored) > 0 {
-		artifactCandidates = dedupeXrayArtifactPathCandidates(append(artifactCandidates, stored...))
+		// Poll the paths where Artifactory physically stores the manifest first;
+		// Xray scans those (e.g. the remote repository's -cache), not the
+		// remote repository key the image was requested through.
+		artifactCandidates = dedupeXrayArtifactPathCandidates(append(stored, artifactCandidates...))
 		client.missingArtifactWindow = xraySummaryWaitWindow()
 		recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Artifactory stores the image manifest at %s; waiting up to %s for Xray to index it.", joinXrayArtifactPaths(stored), client.missingArtifactWindow))
 	}
@@ -589,7 +593,12 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	if err != nil {
 		return err
 	}
-	artifactCandidates = []xrayArtifactPathCandidate{baselineCandidate}
+	// A NOT_SCANNED baseline only proves Xray knows the path, not that it will
+	// scan it (a remote repository key reports NOT_SCANNED while its cache is
+	// the path that gets scanned), so keep watching every candidate then.
+	if baselineStatus.Status != "NOT_SCANNED" {
+		artifactCandidates = []xrayArtifactPathCandidate{baselineCandidate}
+	}
 	artifactRepoPath = baselineCandidate.Path
 	repoPath = baselineCandidate.RepoPath
 	artifactPath = baselineCandidate.ArtifactPath
@@ -1223,9 +1232,13 @@ func (c *xrayClient) artifactStatus(ctx context.Context, candidate xrayArtifactP
 		Status: strings.ToUpper(strings.TrimSpace(response.Overall.Status)),
 		Error:  strings.TrimSpace(response.Overall.Error),
 	}
-	if rawTime := firstNonEmpty(response.Overall.Time, response.Overall.UpdatedAt); rawTime != "" {
-		if parsed, err := time.Parse(time.RFC3339, rawTime); err == nil {
-			status.Time = &parsed
+	// For NOT_SCANNED, Xray fills `time` with the time of the request, which
+	// says nothing about a scan; only keep timestamps for real scan states.
+	if status.Status != "NOT_SCANNED" {
+		if rawTime := firstNonEmpty(response.Overall.Time, response.Overall.UpdatedAt); rawTime != "" {
+			if parsed, err := time.Parse(time.RFC3339, rawTime); err == nil {
+				status.Time = &parsed
+			}
 		}
 	}
 	return status, nil
@@ -1685,8 +1698,11 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 	var missingSince time.Time
 	indexRequested := false
 	seenPending := make(map[string]bool)
+	lastStatus := make(map[string]string)
 	for attempt := 0; ; attempt++ {
 		allMissing := true
+		var notScanned *xrayArtifactPathCandidate
+		var notScannedStatus xrayArtifactScanStatus
 		for _, candidate := range candidates {
 			status, err := c.artifactStatus(ctx, candidate)
 			if err != nil {
@@ -1704,13 +1720,23 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 			if status.Status == "" {
 				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("Xray returned HTTP 200 without overall.status for %s", candidate.ArtifactPath)
 			}
+			lastStatus[candidate.ArtifactPath] = status.Status
 			if c.observeStatus != nil {
 				if err := c.observeStatus(candidate, status); err != nil {
 					return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, err
 				}
 			}
 			switch status.Status {
-			case "PENDING", "IN_PROGRESS", "SCANNING", "INDEXING", "NOT_SCANNED":
+			case "NOT_SCANNED":
+				// Another candidate may be the path Xray actually scans, so a
+				// NOT_SCANNED answer only wins when no candidate has more.
+				seenPending[candidate.ArtifactPath] = true
+				if notScanned == nil {
+					current := candidate
+					notScanned = &current
+					notScannedStatus = status
+				}
+			case "PENDING", "IN_PROGRESS", "SCANNING", "INDEXING":
 				seenPending[candidate.ArtifactPath] = true
 				if !requireDone {
 					return status, candidate, nil
@@ -1729,6 +1755,10 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 			default:
 				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("Xray returned unsupported artifact status %q for %s", status.Status, candidate.ArtifactPath)
 			}
+		}
+
+		if !requireDone && notScanned != nil {
+			return notScannedStatus, *notScanned, nil
 		}
 
 		if allMissing {
@@ -1754,14 +1784,14 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 		}
 		if time.Now().After(deadline) {
 			if requireFresh {
-				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("timed out after %s waiting for Xray to complete the requested fresh scan for %s", xraySummaryWaitWindow(), joinXrayArtifactPaths(candidates))
+				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("timed out after %s waiting for Xray to finish the requested scan; last status: %s", xraySummaryWaitWindow(), describeXrayCandidateStatuses(candidates, lastStatus))
 			}
 			return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("timed out after %s waiting for Xray artifact status for %s", xraySummaryWaitWindow(), joinXrayArtifactPaths(candidates))
 		}
 		select {
 		case <-ctx.Done():
 			if requireFresh {
-				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("waiting for a fresh Xray artifact status; completion freshness must be evidenced by a timestamp or observed transition: %w", ctx.Err())
+				return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("Xray did not finish the requested scan in time (last status: %s): %w", describeXrayCandidateStatuses(candidates, lastStatus), ctx.Err())
 			}
 			return xrayArtifactScanStatus{}, xrayArtifactPathCandidate{}, fmt.Errorf("waiting for Xray artifact status: %w", ctx.Err())
 		case <-time.After(xrayPollDelay(attempt)):
@@ -1784,6 +1814,20 @@ func xrayPollDelay(attempt int) time.Duration {
 	default:
 		return 6 * xraySummaryPollInterval
 	}
+}
+
+// describeXrayCandidateStatuses lists each polled path with the last status
+// Xray reported, e.g. "repo/a (NOT_SCANNED), repo-cache/a (IN_PROGRESS)".
+func describeXrayCandidateStatuses(candidates []xrayArtifactPathCandidate, lastStatus map[string]string) string {
+	parts := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		status := lastStatus[candidate.ArtifactPath]
+		if status == "" {
+			status = "not found"
+		}
+		parts = append(parts, fmt.Sprintf("%s (%s)", candidate.ArtifactPath, status))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func xrayCompletionIsFresh(completed, baseline, requestedAt *time.Time) bool {

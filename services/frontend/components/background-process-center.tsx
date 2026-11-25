@@ -13,15 +13,16 @@ import {
 } from '@/lib/api/background-jobs';
 import type { BackgroundJob } from '@/lib/api/types/background-jobs';
 import { timeAgo } from '@/lib/time';
+import { humanize, splitImageRef, summarizeError } from '@/lib/labels';
 import { useToast } from '@/components/toast';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import { Sheet } from '@/components/panelui/sheet';
 import { createPortal } from 'react-dom';
 import { Button, Spinner } from '@/components/ui';
 import { StatusDot, type StatusDotTone } from '@/components/ui/status-dot';
-import { ArrowUpRight, X } from 'lucide-react';
+import { ArrowUpRight, Check, ChevronRight, Minus, X } from 'lucide-react';
 import { Activity01Icon, Alert02Icon, Refresh01Icon } from 'hugeicons-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 const JOB_LIMIT = 50;
 const ACTIVE_POLL_MS = 2500;
@@ -71,9 +72,15 @@ function hasProgress(job: BackgroundJob) {
 }
 
 function formatPhase(phase: string | null | undefined) {
-  const normalized = phase?.trim().replaceAll('_', ' ');
-  if (!normalized) return '';
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  return humanize(phase);
+}
+
+/** "Yesterday" / "Just now" read as part of a sentence ("Failed yesterday"). */
+function relativeInSentence(value: string) {
+  const relative = timeAgo(value);
+  return /^(Yesterday|Just now|Today)\b/.test(relative)
+    ? relative.charAt(0).toLowerCase() + relative.slice(1)
+    : relative;
 }
 
 function jobDisplayPriority(job: BackgroundJob) {
@@ -150,89 +157,157 @@ function announceFinishedJob(job: BackgroundJob, setAnnouncement: (value: string
   }
 }
 
+/** "Scan registry.example.com/team/app:1.2" → name "team/app:1.2", host "registry.example.com". */
+function jobHeading(job: BackgroundJob) {
+  const title = job.title?.trim() || 'Background process';
+  const match = /^Scan\s+(.+)$/.exec(title);
+  if (job.type !== 'scan' || !match) return { name: title, host: '' };
+  const { host, name } = splitImageRef(match[1]);
+  return { name, host };
+}
+
+/** Finished jobs with the same title and outcome, newest first, shown as one row. */
+type JobGroup = { key: string; latest: BackgroundJob; jobs: BackgroundJob[] };
+
+function groupFinishedJobs(jobs: BackgroundJob[]): JobGroup[] {
+  const groups = new Map<string, JobGroup>();
+  for (const job of jobs) {
+    const key = `${job.status}\u0000${job.title}`;
+    const group = groups.get(key);
+    if (group) group.jobs.push(job);
+    else groups.set(key, { key, latest: job, jobs: [job] });
+  }
+  return Array.from(groups.values());
+}
+
+const STATUS_TILE: Record<StatusDotTone, string> = {
+  accent: 'bg-primary/10 text-primary',
+  success: 'bg-success/10 text-success',
+  danger: 'bg-destructive/10 text-destructive',
+  warning: 'bg-warning/10 text-warning-foreground',
+  neutral: 'bg-muted text-muted-foreground',
+  muted: 'bg-muted text-muted-foreground',
+};
+
+function JobStatusTile({ job }: { job: BackgroundJob }) {
+  const tone = jobStatusTone(job.status);
+  return (
+    <span
+      aria-hidden
+      className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${STATUS_TILE[tone]}`}
+    >
+      {isBackgroundJobActive(job) ? (
+        <Spinner size="sm" />
+      ) : job.status === 'failed' ? (
+        <X className="size-4" />
+      ) : job.status === 'cancelled' ? (
+        <Minus className="size-4" />
+      ) : (
+        <Check className="size-4" />
+      )}
+    </span>
+  );
+}
+
 function BackgroundJobRow({
-  job,
+  group,
   isDismissing,
   onDismiss,
 }: {
-  job: BackgroundJob;
+  group: JobGroup;
   isDismissing: boolean;
-  onDismiss: (id: string) => void;
+  onDismiss: (ids: string[]) => void;
 }) {
+  const job = group.latest;
   const active = isBackgroundJobActive(job);
   const progressCurrent = Math.max(0, job.progress_current ?? 0);
   const progressTotal = Math.max(1, job.progress_total ?? 1);
   const progressPercent = Math.min(100, (progressCurrent / progressTotal) * 100);
   const scanHref = scanDetailsHref(job);
+  const { name, host } = jobHeading(job);
+  const repeats = group.jobs.length;
+  const when = job.finished_at ?? job.started_at ?? job.created_at;
 
-  const subtitle = active
-    ? formatPhase(job.phase) || job.description || 'Working in the background…'
-    : [
-        job.finished_at
-          ? `${jobStatusLabel(job.status)} ${timeAgo(job.finished_at)}`
-          : jobStatusLabel(job.status),
-        job.description,
-        isWatchlistScanJob(job) ? 'Watchlist' : isGitScanJob(job) ? 'Git repository' : null,
-      ]
-        .filter(Boolean)
-        .join(' · ');
+  const meta = (
+    active
+      ? [formatPhase(job.phase) || 'Working in the background', host]
+      : [
+          `${jobStatusLabel(job.status)} ${relativeInSentence(when)}`,
+          isWatchlistScanJob(job) ? 'Watchlist' : isGitScanJob(job) ? 'Git repository' : null,
+          host,
+        ]
+  )
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <li
       aria-label={`${job.title}, ${jobStatusLabel(job.status)}`}
-      className="group flex min-w-0 items-start gap-3 px-5 py-3"
+      className="flex min-w-0 items-start gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted/50"
     >
-      <span className="mt-1.5 flex size-4 shrink-0 items-center justify-center">
-        {active ? (
-          <Spinner aria-label={`${jobStatusLabel(job.status)} process`} size="sm" />
-        ) : (
-          <StatusDot tone={jobStatusTone(job.status)} />
-        )}
-      </span>
+      <JobStatusTile job={job} />
       <div className="min-w-0 flex-1">
-        <p className="break-words text-sm font-medium text-foreground">{job.title}</p>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="min-w-0 truncate text-sm font-medium text-foreground" title={job.title}>
+            {name}
+          </p>
+          {repeats > 1 ? (
+            <span
+              className="shrink-0 rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground"
+              title={`${repeats} runs with the same result`}
+            >
+              {repeats}×
+            </span>
+          ) : null}
+        </div>
+        <p className="truncate text-xs text-muted-foreground" title={meta}>
+          {meta}
+        </p>
 
         {active && hasProgress(job) ? (
-          <div className="mt-2 space-y-1">
+          <div className="mt-2 flex items-center gap-2">
             <div
               role="progressbar"
               aria-label={`${job.title} progress`}
               aria-valuemin={0}
               aria-valuemax={progressTotal}
               aria-valuenow={progressCurrent}
-              className="h-1 overflow-hidden rounded-full bg-muted"
+              className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"
             >
               <div
                 className="h-full rounded-full bg-primary transition-[width] duration-300"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <p className="text-xs tabular-nums text-muted-foreground">
-              {progressCurrent.toLocaleString()} of {progressTotal.toLocaleString()}
-            </p>
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+              {progressCurrent.toLocaleString()}/{progressTotal.toLocaleString()}
+            </span>
           </div>
         ) : null}
 
         {job.status === 'failed' && job.error ? (
-          <details className="mt-1.5">
-            <summary className="cursor-pointer text-xs text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              Show error
+          <details className="group/error mt-1.5 min-w-0">
+            <summary className="flex cursor-pointer list-none items-start gap-1 text-xs text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+              <ChevronRight
+                aria-hidden
+                className="mt-0.5 size-3 shrink-0 transition-transform group-open/error:rotate-90"
+              />
+              <span className="min-w-0 [overflow-wrap:anywhere]">{summarizeError(job.error)}</span>
             </summary>
-            <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2.5 font-mono text-xs leading-5 text-muted-foreground">
+            <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-2.5 font-mono text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
               {job.error}
             </pre>
           </details>
         ) : null}
       </div>
 
-      <div className="flex shrink-0 items-center gap-0.5 opacity-60 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+      <div className="flex shrink-0 items-center">
         {scanHref ? (
           <a
             href={scanHref}
             aria-label={`View scan for ${job.title}`}
             title="View scan"
-            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
             <ArrowUpRight aria-hidden className="size-4" />
           </a>
@@ -240,17 +315,41 @@ function BackgroundJobRow({
         {!active ? (
           <button
             type="button"
-            aria-label={`Remove ${job.title || 'background process'} from the process center`}
-            title="Remove"
+            aria-label={`Remove ${job.title || 'background process'}${repeats > 1 ? ` and ${repeats - 1} earlier runs` : ''} from the list`}
+            title={repeats > 1 ? `Remove all ${repeats}` : 'Remove'}
             disabled={isDismissing}
-            onClick={() => onDismiss(job.id)}
-            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+            onClick={() => onDismiss(group.jobs.map((item) => item.id))}
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
           >
             <X aria-hidden className="size-4" />
           </button>
         ) : null}
       </div>
     </li>
+  );
+}
+
+function JobSection({
+  title,
+  count,
+  action,
+  children,
+}: {
+  title: string;
+  count: number;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section aria-label={title} className="min-w-0">
+      <div className="flex items-center justify-between gap-2 px-3 pb-1">
+        <h3 className="text-xs font-medium text-muted-foreground">
+          {title} <span className="tabular-nums">{count}</span>
+        </h3>
+        {action}
+      </div>
+      <ul className="flex min-w-0 flex-col gap-0.5">{children}</ul>
+    </section>
   );
 }
 
@@ -346,6 +445,7 @@ export function BackgroundProcessCenter({
   const scopedError = errorScopeKey === scopeKey ? error : '';
   const activeJobs = useMemo(() => scopedJobs.filter(isBackgroundJobActive), [scopedJobs]);
   const finishedJobs = useMemo(() => scopedJobs.filter(isBackgroundJobFinished), [scopedJobs]);
+  const finishedGroups = useMemo(() => groupFinishedJobs(finishedJobs), [finishedJobs]);
   const activeCount = activeJobs.length;
 
   const loadJobs = useCallback(async () => {
@@ -522,7 +622,7 @@ export function BackgroundProcessCenter({
                   : 'Nothing running'
             }
           />
-          <Sheet.Body className="p-0">
+          <Sheet.Body className="w-full min-w-0! overflow-x-hidden p-0">
             <div aria-atomic="true" aria-live="polite" className="sr-only" role="status">
               {announcement}
             </div>
@@ -554,53 +654,48 @@ export function BackgroundProcessCenter({
                 </p>
               </div>
             ) : (
-              <div className="pb-4">
+              <div className="flex min-w-0 flex-col gap-5 px-2 pb-4 pt-1">
                 {scopedError ? (
-                  <p className="mx-5 mb-2 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+                  <p className="mx-3 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
                     Updates paused: {scopedError}
                   </p>
                 ) : null}
                 {activeJobs.length > 0 ? (
-                  <section aria-label="In progress">
-                    <h3 className="px-5 pb-1 pt-2 text-xs font-medium text-muted-foreground">
-                      In progress
-                    </h3>
-                    <ul>
-                      {activeJobs.map((job) => (
-                        <BackgroundJobRow
-                          isDismissing={dismissingJobIDs.has(job.id)}
-                          job={job}
-                          key={job.id}
-                          onDismiss={(id) => void dismissJobs([id])}
-                        />
-                      ))}
-                    </ul>
-                  </section>
+                  <JobSection title="In progress" count={activeJobs.length}>
+                    {activeJobs.map((job) => (
+                      <BackgroundJobRow
+                        group={{ key: job.id, latest: job, jobs: [job] }}
+                        isDismissing={dismissingJobIDs.has(job.id)}
+                        key={job.id}
+                        onDismiss={(ids) => void dismissJobs(ids)}
+                      />
+                    ))}
+                  </JobSection>
                 ) : null}
-                {finishedJobs.length > 0 ? (
-                  <section aria-label="Finished" className={activeJobs.length > 0 ? 'mt-3' : ''}>
-                    <div className="flex items-center justify-between px-5 pb-1 pt-2">
-                      <h3 className="text-xs font-medium text-muted-foreground">Finished</h3>
-                      <button
-                        type="button"
-                        disabled={dismissingJobIDs.size > 0}
-                        onClick={() => void dismissJobs(finishedJobs.map((job) => job.id))}
-                        className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+                {finishedGroups.length > 0 ? (
+                  <JobSection
+                    title="Finished"
+                    count={finishedJobs.length}
+                    action={
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        isDisabled={dismissingJobIDs.size > 0}
+                        onPress={() => void dismissJobs(finishedJobs.map((job) => job.id))}
                       >
                         Clear all
-                      </button>
-                    </div>
-                    <ul>
-                      {finishedJobs.map((job) => (
-                        <BackgroundJobRow
-                          isDismissing={dismissingJobIDs.has(job.id)}
-                          job={job}
-                          key={job.id}
-                          onDismiss={(id) => void dismissJobs([id])}
-                        />
-                      ))}
-                    </ul>
-                  </section>
+                      </Button>
+                    }
+                  >
+                    {finishedGroups.map((group) => (
+                      <BackgroundJobRow
+                        group={group}
+                        isDismissing={group.jobs.some((job) => dismissingJobIDs.has(job.id))}
+                        key={group.key}
+                        onDismiss={(ids) => void dismissJobs(ids)}
+                      />
+                    ))}
+                  </JobSection>
                 ) : null}
               </div>
             )}

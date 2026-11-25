@@ -42,6 +42,14 @@ var xrayIndexRequestDelay = 30 * time.Second
 const xrayMissingArtifactWindow = 2 * time.Minute
 const xrayBlockedSummaryWaitWindow = 45 * time.Second
 const xrayFreshScanSettleDelay = 8 * time.Second
+
+// xrayExistingResultGrace is how long Full mode waits for Xray to start a new
+// scan of an artifact it had already scanned. scanArtifact is an index request:
+// for an indexed artifact Xray answers "in progress" but keeps the earlier
+// result, which it re-checks against new vulnerability data on its own. After
+// this grace period that result is imported as current.
+var xrayExistingResultGrace = 90 * time.Second
+
 const registryWarmupRetryInterval = 10 * time.Second
 const registryPreparationRetryInterval = 3 * time.Second
 
@@ -57,6 +65,9 @@ type xrayClient struct {
 	// as unknown. It is extended once Artifactory confirms the manifest is
 	// stored, because Xray then only lags behind on indexing.
 	missingArtifactWindow time.Duration
+	// baselineCompleted marks that Xray had already finished a scan of the
+	// artifact before the Full-mode scan request (see xrayExistingResultGrace).
+	baselineCompleted bool
 	// indexComponentID, when set (Full mode), is sent to scanArtifact once if
 	// Xray still does not know the artifact after xrayIndexRequestDelay.
 	indexComponentID string
@@ -283,6 +294,9 @@ type xrayArtifactScanStatus struct {
 	Status string
 	Time   *time.Time
 	Error  string
+	// ExistingResult is set when Xray did not start a new scan after the
+	// request and its earlier completed result was accepted as current.
+	ExistingResult bool
 }
 
 func (e *registryHTTPError) Error() string {
@@ -639,6 +653,7 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 	scan.ExternalStatus = "waiting_for_xray"
 	scan.CurrentStep = models.ScanStepWaitingForXray
 	if mode == models.XrayModeFull {
+		client.baselineCompleted = baselineStatus.Status == "DONE" || baselineStatus.Status == "PARTIAL"
 		freshStatus, freshCandidate, err := client.waitForArtifactStatus(ctx, artifactCandidates, baselineStatus.Time, true)
 		if err != nil {
 			return err
@@ -654,7 +669,13 @@ func processXrayScan(ctx context.Context, db *bun.DB, scan *models.Scan) error {
 		if err := client.verifyImageDigest(ctx, imageRepoPath, imageTag, scan.Platform, scan.ImageDigest); err != nil {
 			return err
 		}
-		if freshStatus.Status == "PARTIAL" {
+		if freshStatus.ExistingResult {
+			lastScanned := "earlier"
+			if freshStatus.Time != nil {
+				lastScanned = freshStatus.Time.UTC().Format("2 Jan 2006 15:04 UTC")
+			}
+			recordScanStepOutput(ctx, db, scan.ID, fmt.Sprintf("Xray did not start a new scan of this already scanned image; importing its current result (contents last scanned %s). Xray re-checks scanned images against new vulnerability data on its own.", lastScanned))
+		} else if freshStatus.Status == "PARTIAL" {
 			recordScanStepOutput(ctx, db, scan.ID, "Xray completed the requested scan partially; importing all available results.")
 		} else {
 			recordScanStepOutput(ctx, db, scan.ID, "Xray confirmed completion of the requested scan.")
@@ -1743,6 +1764,10 @@ func (c *xrayClient) waitForArtifactStatusUntil(ctx context.Context, candidates 
 				}
 			case "DONE", "PARTIAL":
 				if !requireFresh || seenPending[candidate.ArtifactPath] || xrayCompletionIsFresh(status.Time, baseline, c.freshRequestedAt) {
+					return status, candidate, nil
+				}
+				if c.baselineCompleted && c.freshRequestedAt != nil && time.Since(*c.freshRequestedAt) >= xrayExistingResultGrace {
+					status.ExistingResult = true
 					return status, candidate, nil
 				}
 			case "FAILED", "ERROR", "SCAN_FAILED":

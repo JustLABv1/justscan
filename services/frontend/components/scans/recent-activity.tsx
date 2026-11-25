@@ -1,6 +1,7 @@
 'use client';
 
-import { StatusBadge } from '@/components/ui/badges';
+import { SeverityCounts, StatusBadge } from '@/components/ui/badges';
+import { summarizeError } from '@/lib/labels';
 import type { Scan } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
 import Link from 'next/link';
@@ -81,24 +82,6 @@ export function scanContextLabel(scan: Scan): string {
   return 'Built-in scanner';
 }
 
-function SeverityPill({
-  count,
-  label,
-  tone,
-}: {
-  count: number;
-  label: string;
-  tone: { color: string; background: string; border: string };
-}) {
-  if (count <= 0) return null;
-
-  return (
-    <span className="text-xs font-mono px-1.5 py-0.5 rounded-md" style={tone}>
-      {label}:{count}
-    </span>
-  );
-}
-
 export function RecentActivityRangePicker({
   value,
   onChange,
@@ -118,20 +101,7 @@ export function RecentActivityRangePicker({
         <button
           type="button"
           onClick={() => onClear?.()}
-          className="rounded-lg px-2.5 py-1 text-xs font-medium transition-all duration-150"
-          style={
-            value == null
-              ? {
-                  background: 'color-mix(in srgb, var(--primary) 20%, transparent)',
-                  color: 'color-mix(in srgb, var(--primary) 78%, white)',
-                  border: '1px solid color-mix(in srgb, var(--primary) 28%, transparent)',
-                }
-              : {
-                  background: 'var(--row-hover)',
-                  color: 'var(--text-muted)',
-                  border: '1px solid var(--surface-border)',
-                }
-          }
+          className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${value == null ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'}`}
           aria-pressed={value == null}
           aria-label={clearLabel}
           title={clearLabel}
@@ -148,20 +118,7 @@ export function RecentActivityRangePicker({
             key={option.id}
             type="button"
             onClick={() => onChange(option.id)}
-            className="rounded-lg px-2.5 py-1 text-xs font-medium transition-all duration-150"
-            style={
-              isActive
-                ? {
-                    background: 'color-mix(in srgb, var(--primary) 20%, transparent)',
-                    color: 'color-mix(in srgb, var(--primary) 78%, white)',
-                    border: '1px solid color-mix(in srgb, var(--primary) 28%, transparent)',
-                  }
-                : {
-                    background: 'var(--row-hover)',
-                    color: 'var(--text-muted)',
-                    border: '1px solid var(--surface-border)',
-                  }
-            }
+            className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${isActive ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'}`}
             aria-pressed={isActive}
             aria-label={option.label}
             title={option.label}
@@ -180,9 +137,7 @@ export function RecentActivityRow({ scan }: { scan: Scan }) {
   return (
     <Link
       href={`/scans/details/${scan.id}`}
-      className="flex items-start justify-between gap-3 rounded-xl p-3 transition-colors duration-150 group"
-      onMouseEnter={(event) => (event.currentTarget.style.background = 'var(--row-hover)')}
-      onMouseLeave={(event) => (event.currentTarget.style.background = 'transparent')}
+      className="flex items-start justify-between gap-3 rounded-xl p-3 transition-colors duration-150 group hover:bg-muted/50"
     >
       <div className="min-w-0 flex-1">
         <p className="truncate font-mono text-sm text-foreground transition-colors group-hover:text-foreground dark:group-hover:text-white">
@@ -200,37 +155,19 @@ export function RecentActivityRow({ scan }: { scan: Scan }) {
           </span>
         </div>
         {scan.error_message ? (
-          <p className="mt-1 line-clamp-2 text-xs text-destructive">{scan.error_message}</p>
+          <p className="mt-1 line-clamp-2 text-xs text-destructive" title={scan.error_message}>
+            {summarizeError(scan.error_message)}
+          </p>
         ) : null}
       </div>
 
       <div className="ml-2 flex shrink-0 flex-wrap items-center justify-end gap-1">
-        <SeverityPill
-          count={scan.critical_count}
-          label="C"
-          tone={{
-            color: '#f87171',
-            background: 'rgba(239,68,68,0.12)',
-            border: '1px solid rgba(239,68,68,0.18)',
-          }}
-        />
-        <SeverityPill
-          count={scan.high_count}
-          label="H"
-          tone={{
-            color: '#fb923c',
-            background: 'rgba(249,115,22,0.12)',
-            border: '1px solid rgba(249,115,22,0.18)',
-          }}
-        />
-        <SeverityPill
-          count={scan.medium_count}
-          label="M"
-          tone={{
-            color: '#fbbf24',
-            background: 'rgba(245,158,11,0.12)',
-            border: '1px solid rgba(245,158,11,0.18)',
-          }}
+        <SeverityCounts
+          critical={scan.critical_count}
+          high={scan.high_count}
+          medium={scan.medium_count}
+          low={scan.low_count ?? 0}
+          emptyLabel=""
         />
       </div>
     </Link>

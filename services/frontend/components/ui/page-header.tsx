@@ -117,14 +117,33 @@ export function PageTitle({
   );
 }
 
+const PAGE_WIDTHS = {
+  /** Data-heavy pages (dashboards, findings, logs). */
+  full: 'max-w-[1600px]',
+  /** Most list and detail pages. */
+  default: 'max-w-screen-xl',
+  /** Forms, settings, and single-column flows. */
+  narrow: 'max-w-4xl',
+} as const;
+
+/**
+ * The page shell every signed-in route uses: one gutter, one section gap, and
+ * one of three widths. Don't hand-roll `p-6 space-y-5` wrappers.
+ */
 export function PageContainer({
   children,
   className = '',
+  size = 'full',
 }: {
   children: ReactNode;
   className?: string;
+  size?: keyof typeof PAGE_WIDTHS;
 }) {
-  return <div className={`w-full space-y-4 p-4 md:p-5 ${className}`}>{children}</div>;
+  return (
+    <div className={`mx-auto w-full space-y-4 p-4 md:p-5 ${PAGE_WIDTHS[size]} ${className}`}>
+      {children}
+    </div>
+  );
 }
 
 /** @deprecated Use PageTitle. Kept temporarily so route migrations stay source-compatible. */

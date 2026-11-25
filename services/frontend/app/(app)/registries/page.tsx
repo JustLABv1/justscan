@@ -6,7 +6,7 @@ import { useToast } from '@/components/toast';
 import { OwnershipBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FilterChips } from '@/components/ui/filter-chips';
-import { StatusDot, StatusLabel } from '@/components/ui/status-dot';
+import { StatusDot, StatusLabel, StatusTag } from '@/components/ui/status-dot';
 import { FormAlert } from '@/components/ui/form-alert';
 import { FormField } from '@/components/ui/form-field';
 import { fieldSelectTriggerClassName } from '@/components/ui/form-styles';
@@ -37,6 +37,7 @@ import {
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
+import { AUTH_TYPE_LABELS, HEALTH_LABELS, SCAN_PROVIDER_LABELS, labelFor } from '@/lib/labels';
 import { timeAgo } from '@/lib/time';
 import {
   Alert,
@@ -44,9 +45,11 @@ import {
   Card,
   ListBox,
   Modal,
+  DetailSheet,
   SearchField,
   Select,
-  Table,
+  ResourceList,
+  Chip,
   Label,
   useOverlayState,
 } from '@/components/ui';
@@ -62,27 +65,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { XrayMode } from '@/lib/api/types/registries';
 
 const selectTriggerCls = fieldSelectTriggerClassName;
-
-const AUTH_TYPE_LABEL: Record<string, string> = {
-  none: 'Public',
-  basic: 'Basic auth',
-  token: 'Token',
-  aws_ecr: 'AWS ECR',
-};
-const PROVIDER_LABEL: Record<string, string> = {
-  trivy: 'Trivy',
-  artifactory_xray: 'Artifactory Xray',
-};
-
-function HealthBadge({ status, message }: { status: string; message: string }) {
-  return (
-    <StatusLabel
-      tone={status === 'healthy' ? 'success' : status === 'unhealthy' ? 'danger' : 'neutral'}
-      label={status === 'healthy' ? 'Healthy' : status === 'unhealthy' ? 'Unhealthy' : 'Unknown'}
-      title={message}
-    />
-  );
-}
 
 export default function RegistriesPage() {
   const workScope = useWorkScope();
@@ -539,190 +521,171 @@ export default function RegistriesPage() {
               }}
             />
           ) : (
-            <Table variant="secondary">
-              <Table.ScrollContainer className="rounded-none border-0">
-                <Table.Content
-                  aria-label="Configured registries"
-                  className="min-w-[860px] [&_td]:py-3"
-                >
-                  <Table.Header>
-                    <Table.Column isRowHeader>Name</Table.Column>
-                    <Table.Column className="min-w-56">Connection</Table.Column>
-                    <Table.Column className="min-w-44">Health</Table.Column>
-                    <Table.Column className="w-px whitespace-nowrap text-right">
-                      <span className="sr-only">Actions</span>
-                    </Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {filteredRegistries.map((r) => (
-                      <Table.Row
-                        key={r.id}
-                        id={r.id}
-                        className={
-                          hiddenSystemRegistryIdSet.has(r.id)
-                            ? 'opacity-55 grayscale-[0.2]'
-                            : undefined
-                        }
-                      >
-                        <Table.Cell>
-                          <div className="space-y-1">
-                            <p className="font-medium text-foreground">{r.name}</p>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                              {r.is_default ? (
-                                <span className="font-medium text-primary">Workspace default</span>
-                              ) : null}
-                              {hiddenSystemRegistryIdSet.has(r.id) ? (
-                                <span>Hidden in workspace</span>
-                              ) : null}
-                              <OwnershipBadge
-                                ownerType={r.owner_type}
-                                ownerOrgId={r.owner_org_id}
-                                orgNamesById={orgNamesById}
-                              />
-                            </div>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="min-w-56">
-                          <div className="space-y-1">
-                            <p className="max-w-md break-all font-mono text-sm text-foreground">
-                              {r.url}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {[
-                                PROVIDER_LABEL[r.scan_provider ?? 'trivy'],
-                                AUTH_TYPE_LABEL[r.auth_type ?? 'none'],
-                                r.username,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </p>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="min-w-44">
-                          <div className="space-y-0.5">
-                            <HealthBadge
-                              status={r.health_status ?? 'unknown'}
-                              message={r.health_message ?? ''}
-                            />
-                            {r.last_health_check_at && (
-                              <p className="pl-4 text-xs text-muted-foreground">
-                                {timeAgo(r.last_health_check_at)}
-                              </p>
-                            )}
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex items-center justify-end">
-                            {canManageAccess(r) ||
-                            canMutateRegistry(r) ||
-                            r.owner_type === 'system' ? (
-                              <RowActionsMenu
-                                label={`Open actions menu for ${r.name}`}
-                                items={[
-                                  ...(hiddenSystemRegistryIdSet.has(r.id)
-                                    ? []
-                                    : [
-                                        {
-                                          id: 'default',
-                                          label: r.is_default
-                                            ? 'Clear workspace default'
-                                            : 'Set as workspace default',
-                                          icon: <Shield01Icon size={15} />,
-                                          onAction: () => {
-                                            void handleDefault(r);
-                                          },
-                                        },
-                                      ]),
-                                  ...(r.owner_type === 'system' && canMutateActiveScope
-                                    ? [
-                                        {
-                                          id: 'system-visibility',
-                                          label: hiddenSystemRegistryIdSet.has(r.id)
-                                            ? 'Show in workspace'
-                                            : 'Hide from workspace',
-                                          icon: <ServerStack01Icon size={15} />,
-                                          onAction: () => {
-                                            void handleSystemRegistryVisibility(r);
-                                          },
-                                        },
-                                      ]
-                                    : []),
-                                  ...(canMutateRegistry(r)
-                                    ? [
-                                        {
-                                          id: 'test',
-                                          label: testing === r.id ? 'Testing…' : 'Test connection',
-                                          icon: <TestTube01Icon size={15} />,
-                                          disabled: testing !== null,
-                                          pending: testing === r.id,
-                                          onAction: () => {
-                                            void handleTest(r.id);
-                                          },
-                                        },
-                                      ]
-                                    : []),
-                                  ...(canManageAccess(r)
-                                    ? [
-                                        {
-                                          id: 'share',
-                                          label: 'Manage access',
-                                          icon: <Shield01Icon size={15} />,
-                                          onAction: () => openShareModal(r),
-                                        },
-                                      ]
-                                    : []),
-                                  ...(canMutateRegistry(r)
-                                    ? [
-                                        {
-                                          id: 'edit',
-                                          label: 'Edit registry',
-                                          icon: <PencilEdit01Icon size={15} />,
-                                          onAction: () => openEdit(r),
-                                        },
-                                        {
-                                          id: 'delete',
-                                          label: 'Delete registry',
-                                          icon: <Delete01Icon size={15} />,
-                                          variant: 'danger' as const,
-                                          pending: deletingId === r.id,
-                                          disabled: deletingId !== null && deletingId !== r.id,
-                                          onAction: () => {
-                                            void handleDelete(r.id);
-                                          },
-                                        },
-                                      ]
-                                    : []),
-                                ]}
-                              />
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Read only</span>
-                            )}
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+            <ResourceList bordered={false} aria-label="Configured registries">
+              {filteredRegistries.map((r) => {
+                const hidden = hiddenSystemRegistryIdSet.has(r.id);
+                const health = r.health_status ?? 'unknown';
+                const canAct =
+                  canManageAccess(r) || canMutateRegistry(r) || r.owner_type === 'system';
+                return (
+                  <ResourceList.Item
+                    key={r.id}
+                    className={hidden ? 'opacity-60' : undefined}
+                    tone={health === 'unhealthy' ? 'danger' : 'default'}
+                    media={<ServerStack01Icon size={18} className="text-muted-foreground" />}
+                    title={r.name}
+                    description={<span title={r.url}>{r.url}</span>}
+                    meta={
+                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {r.is_default ? (
+                            <Chip color="accent" size="sm">
+                              Default
+                            </Chip>
+                          ) : null}
+                          {hidden ? <StatusTag>Hidden in workspace</StatusTag> : null}
+                          <OwnershipBadge
+                            ownerType={r.owner_type}
+                            ownerOrgId={r.owner_org_id}
+                            orgNamesById={orgNamesById}
+                          />
+                        </div>
+                        <p className="min-w-0 truncate text-xs text-muted-foreground lg:w-48">
+                          {[
+                            labelFor(SCAN_PROVIDER_LABELS, r.scan_provider ?? 'trivy'),
+                            labelFor(AUTH_TYPE_LABELS, r.auth_type ?? 'none'),
+                            r.username,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                        <StatusLabel
+                          className="min-w-0 lg:w-32"
+                          tone={
+                            health === 'healthy'
+                              ? 'success'
+                              : health === 'unhealthy'
+                                ? 'danger'
+                                : 'muted'
+                          }
+                          label={labelFor(HEALTH_LABELS, health)}
+                          title={r.health_message || undefined}
+                          detail={
+                            r.last_health_check_at
+                              ? `Checked ${timeAgo(r.last_health_check_at)}`
+                              : undefined
+                          }
+                        />
+                      </div>
+                    }
+                    actions={
+                      canAct ? (
+                        <RowActionsMenu
+                          label={`Open actions menu for ${r.name}`}
+                          items={[
+                            ...(hiddenSystemRegistryIdSet.has(r.id)
+                              ? []
+                              : [
+                                  {
+                                    id: 'default',
+                                    label: r.is_default
+                                      ? 'Clear workspace default'
+                                      : 'Set as workspace default',
+                                    icon: <Shield01Icon size={15} />,
+                                    onAction: () => {
+                                      void handleDefault(r);
+                                    },
+                                  },
+                                ]),
+                            ...(r.owner_type === 'system' && canMutateActiveScope
+                              ? [
+                                  {
+                                    id: 'system-visibility',
+                                    label: hiddenSystemRegistryIdSet.has(r.id)
+                                      ? 'Show in workspace'
+                                      : 'Hide from workspace',
+                                    icon: <ServerStack01Icon size={15} />,
+                                    onAction: () => {
+                                      void handleSystemRegistryVisibility(r);
+                                    },
+                                  },
+                                ]
+                              : []),
+                            ...(canMutateRegistry(r)
+                              ? [
+                                  {
+                                    id: 'test',
+                                    label: testing === r.id ? 'Testing…' : 'Test connection',
+                                    icon: <TestTube01Icon size={15} />,
+                                    disabled: testing !== null,
+                                    pending: testing === r.id,
+                                    onAction: () => {
+                                      void handleTest(r.id);
+                                    },
+                                  },
+                                ]
+                              : []),
+                            ...(canManageAccess(r)
+                              ? [
+                                  {
+                                    id: 'share',
+                                    label: 'Manage access',
+                                    icon: <Shield01Icon size={15} />,
+                                    onAction: () => openShareModal(r),
+                                  },
+                                ]
+                              : []),
+                            ...(canMutateRegistry(r)
+                              ? [
+                                  {
+                                    id: 'edit',
+                                    label: 'Edit registry',
+                                    icon: <PencilEdit01Icon size={15} />,
+                                    onAction: () => openEdit(r),
+                                  },
+                                  {
+                                    id: 'delete',
+                                    label: 'Delete registry',
+                                    icon: <Delete01Icon size={15} />,
+                                    variant: 'danger' as const,
+                                    pending: deletingId === r.id,
+                                    disabled: deletingId !== null && deletingId !== r.id,
+                                    onAction: () => {
+                                      void handleDelete(r.id);
+                                    },
+                                  },
+                                ]
+                              : []),
+                          ]}
+                        />
+                      ) : (
+                        <StatusTag>Read only</StatusTag>
+                      )
+                    }
+                  />
+                );
+              })}
+            </ResourceList>
           )}
         </Card>
       </LoadableCollectionState>
 
-      <Modal state={modal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="lg" placement="center" scroll="inside">
-            <Modal.Dialog className="overflow-hidden">
-              <Modal.Header className="border-b border-border px-5 py-4 sm:px-6">
+      <DetailSheet state={modal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="lg">
+            <DetailSheet.Dialog className="overflow-hidden">
+              <DetailSheet.Header>
                 <div className="min-w-0">
-                  <Modal.Heading>{editing ? 'Edit Registry' : 'Add Registry'}</Modal.Heading>
+                  <DetailSheet.Heading>
+                    {editing ? 'Edit Registry' : 'Add Registry'}
+                  </DetailSheet.Heading>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Configure connectivity, scan behavior, and credentials in one place.
                   </p>
                 </div>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body className="px-5 py-5 sm:px-6">
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body>
                 <form id="registry-form" onSubmit={handleSubmit} className="space-y-6">
                   {formError ? (
                     <FormAlert description={formError} title="Registry save failed" />
@@ -905,8 +868,8 @@ export default function RegistriesPage() {
                     </div>
                   </section>
                 </form>
-              </Modal.Body>
-              <Modal.Footer className="border-t border-border px-5 py-4 sm:px-6">
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button onPress={modal.close} type="button" variant="secondary">
                   Cancel
                 </Button>
@@ -919,19 +882,16 @@ export default function RegistriesPage() {
                 >
                   {editing ? 'Save' : 'Add'}
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="overflow-hidden">
-              <Modal.Header
-                className="px-6 py-4"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
+              <Modal.Header className="border-b border-border px-6 py-4">
                 <Modal.Heading className="text-foreground font-semibold">
                   Manage Registry Access
                 </Modal.Heading>
@@ -963,7 +923,7 @@ export default function RegistriesPage() {
                   </div>
                   {sharesLoading ? (
                     <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+                      <div className="size-5 rounded-full border-2 border-border border-t-primary animate-spin" />
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No organization grants yet.</p>
@@ -972,11 +932,7 @@ export default function RegistriesPage() {
                       {shares.map((share) => (
                         <div
                           key={share.org_id}
-                          className="flex items-start justify-between gap-3 rounded-xl px-4 py-3"
-                          style={{
-                            background: 'var(--row-hover)',
-                            border: '1px solid var(--surface-border)',
-                          }}
+                          className="flex items-start justify-between gap-3 rounded-xl border border-border bg-muted/50 px-4 py-3"
                         >
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-foreground">{share.org_name}</p>
@@ -1069,10 +1025,7 @@ export default function RegistriesPage() {
                   isSaving={shareSaving}
                 />
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
+              <Modal.Footer>
                 <Button
                   onPress={shareModal.close}
                   className="btn-secondary"

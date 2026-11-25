@@ -32,7 +32,7 @@ export function PageTabs({ items, currentPath }: PageTabsProps) {
 
   return (
     <Tabs className="w-full" selectedKey={activeHref ?? items[0].href} variant="secondary">
-      <Tabs.ListContainer className="border-b border-divider overflow-x-auto">
+      <Tabs.ListContainer className="border-b border-border overflow-x-auto">
         <Tabs.List
           aria-label="Section navigation"
           className={cn(

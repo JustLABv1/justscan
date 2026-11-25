@@ -1,4 +1,5 @@
 import type { WatchlistItem } from '@/lib/api';
+import { humanize, summarizeError } from '@/lib/labels';
 
 export type WatchlistPostureKind =
   | 'policy_failed'
@@ -15,6 +16,8 @@ export interface WatchlistPosture {
   kind: WatchlistPostureKind;
   label: string;
   description: string;
+  /** Full raw text (e.g. scanner stderr) for a tooltip or details view. */
+  detail?: string;
   tone: 'success' | 'warning' | 'danger' | 'accent' | 'neutral';
 }
 
@@ -64,7 +67,8 @@ export function getWatchlistPosture(item: WatchlistItem): WatchlistPosture {
     return {
       kind: 'scan_failed',
       label: 'Scan failed',
-      description: scan.error_message || 'Last scan did not complete',
+      description: summarizeError(scan.error_message) || 'Last scan did not complete',
+      detail: scan.error_message || undefined,
       tone: 'danger',
     };
   }
@@ -73,7 +77,7 @@ export function getWatchlistPosture(item: WatchlistItem): WatchlistPosture {
     return {
       kind: 'running',
       label: scan.status === 'pending' ? 'Queued' : 'Running',
-      description: scan.current_step ? scan.current_step.replace(/_/g, ' ') : 'Scan in progress',
+      description: scan.current_step ? humanize(scan.current_step) : 'Scan in progress',
       tone: 'accent',
     };
   }

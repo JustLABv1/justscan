@@ -4,10 +4,10 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight, Container, Tag, ScanLine } from 'lucide-react';
 import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
-import { SevCount, StatusBadge } from '@/components/ui/badges';
+import { SeverityCounts, StatusBadge } from '@/components/ui/badges';
 import { EmptyState } from '@/components/ui/empty-state';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
-import { Button, Chip, Spinner, Table } from '@/components/ui';
+import { Button, Chip, Spinner } from '@/components/ui';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   listScanArtifacts,
@@ -17,6 +17,7 @@ import {
   type Scan,
 } from '@/lib/api';
 import { fullDate, timeAgo } from '@/lib/time';
+import { labelFor, pluralize, SCAN_PROVIDER_LABELS, splitImageRef } from '@/lib/labels';
 import { Delete01Icon, Shield01Icon } from 'hugeicons-react';
 
 /** The list filters, applied to expanded tags and scans so they match their image row. */
@@ -61,27 +62,6 @@ const tagKey = (image: string, tag: string) => JSON.stringify([image, tag]);
 export function ImageOverviewTable(props: Props) {
   const scope = useWorkScope();
   return <ScanTreeTable key={scope.kind === 'org' ? scope.orgId : 'personal'} {...props} />;
-}
-
-function Findings({
-  critical,
-  high,
-  medium,
-  low,
-}: {
-  critical: number;
-  high: number;
-  medium: number;
-  low: number;
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      <SevCount count={critical} level="critical" />
-      <SevCount count={high} level="high" />
-      <SevCount count={medium} level="medium" />
-      <SevCount count={low} level="low" />
-    </div>
-  );
 }
 
 function useScanTreeData(images: ImageOverview[], revision: number, filters: ScanTreeFilters = {}) {
@@ -267,6 +247,10 @@ function buildRows(
   return rows;
 }
 
+/** Shared column template so image, tag and scan rows line up on wide screens. */
+const ROW_GRID =
+  'grid grid-cols-1 gap-2 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_13rem_13rem_7rem_2.5rem] lg:items-center lg:gap-4';
+
 function ScanTreeTable({
   filters,
   toolbar,
@@ -285,7 +269,7 @@ function ScanTreeTable({
         <div>
           <h2 className="font-medium">Scanned images</h2>
           <p className="text-xs text-muted-foreground">
-            Expand an image to browse tags and scan history.
+            Expand an image to browse its tags and scan history.
           </p>
         </div>
         <Button
@@ -298,57 +282,41 @@ function ScanTreeTable({
         </Button>
       </div>
       {toolbar}
-      <Table>
-        <Table.ScrollContainer className="rounded-none border-0">
-          <Table.Content
-            aria-label="Scanned images, tags and scan history"
-            className="min-w-[960px] table-fixed [&_td]:px-3 [&_th]:px-3"
-          >
-            <Table.Header>
-              <Table.Column isRowHeader className="w-auto">
-                Image / tag / scan
-              </Table.Column>
-              <Table.Column className="w-[216px]">Status</Table.Column>
-              <Table.Column className="w-[216px]">Findings</Table.Column>
-              <Table.Column className="w-[144px]">Last scan</Table.Column>
-              <Table.Column className="w-14">
-                <span className="sr-only">Actions</span>
-              </Table.Column>
-            </Table.Header>
-            <Table.Body>
-              {loading ? (
-                Array.from({ length: 5 }, (_, i) => (
-                  <Table.Row key={i} id={`loading:${i}`}>
-                    <Table.Cell colSpan={5}>
-                      <div className="h-10 animate-pulse rounded bg-muted" />
-                    </Table.Cell>
-                  </Table.Row>
-                ))
-              ) : images.length === 0 ? (
-                <Table.Row id="empty">
-                  <Table.Cell colSpan={5}>
-                    <div className="py-8">
-                      <EmptyState
-                        icon={<Shield01Icon size={28} />}
-                        title={hasActiveFilters ? 'No images match your filters' : 'No scans yet'}
-                        description={
-                          hasActiveFilters
-                            ? 'Adjust or clear the filters to widen the results.'
-                            : 'Run a scan to start tracking image health.'
-                        }
-                      />
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ) : (
-                <Table.Collection items={rows}>
-                  {(row) => renderTreeRow(row, tree, onDeleteImage, queuedImageNames)}
-                </Table.Collection>
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
+      <div
+        aria-hidden
+        className="hidden border-b border-border px-4 py-2 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1fr)_13rem_13rem_7rem_2.5rem] lg:gap-4"
+      >
+        <span>Image</span>
+        <span>Status</span>
+        <span>Findings</span>
+        <span>Last scan</span>
+        <span />
+      </div>
+      {loading ? (
+        <ul className="divide-y divide-border" aria-busy>
+          {Array.from({ length: 5 }, (_, i) => (
+            <li key={i} className="px-4 py-3">
+              <div className="h-10 animate-pulse rounded bg-muted" />
+            </li>
+          ))}
+        </ul>
+      ) : images.length === 0 ? (
+        <div className="py-8">
+          <EmptyState
+            icon={<Shield01Icon size={28} />}
+            title={hasActiveFilters ? 'No images match your filters' : 'No scans yet'}
+            description={
+              hasActiveFilters
+                ? 'Adjust or clear the filters to widen the results.'
+                : 'Run a scan to start tracking image health.'
+            }
+          />
+        </div>
+      ) : (
+        <ul aria-label="Scanned images, tags and scan history" className="divide-y divide-border">
+          {rows.map((row) => renderTreeRow(row, tree, onDeleteImage, queuedImageNames))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -363,177 +331,174 @@ function renderTreeRow(
 
   if (row.kind === 'branch') {
     const branch = row.tag === undefined ? tags[row.parent] : runs[row.parent];
+    const noun = row.tag === undefined ? 'tags' : 'scans';
     return (
-      <Table.Row id={row.id}>
-        <Table.Cell colSpan={5}>
-          <div
-            className={`flex items-center gap-3 py-1 ${row.tag === undefined ? 'pl-12' : 'pl-20'}`}
+      <li
+        key={row.id}
+        className={`flex items-center gap-3 py-2 pr-4 ${row.tag === undefined ? 'pl-12' : 'pl-20'}`}
+      >
+        {!branch || branch.loading ? (
+          <>
+            <Spinner size="sm" />
+            <span className="text-xs text-muted-foreground">Loading {noun}…</span>
+          </>
+        ) : branch.error ? (
+          <>
+            <span role="alert" className="text-xs text-destructive">
+              {branch.error}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={() => void loadBranch(row.image, row.tag, branch.requestedPage ?? 1)}
+            >
+              Retry
+            </Button>
+          </>
+        ) : branch.total === 0 ? (
+          <span className="text-xs text-muted-foreground">
+            No {noun} match the current filters.
+          </span>
+        ) : (
+          <Button
+            size="sm"
+            variant="ghost"
+            onPress={() => void loadBranch(row.image, row.tag, branch.page + 1)}
           >
-            {!branch || branch.loading ? (
-              <>
-                <Spinner size="sm" />
-                <span className="text-xs text-muted-foreground">
-                  Loading {row.tag === undefined ? 'tags' : 'scans'}…
-                </span>
-              </>
-            ) : branch.error ? (
-              <>
-                <span role="alert" className="text-xs text-destructive">
-                  {branch.error}
-                </span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onPress={() => void loadBranch(row.image, row.tag, branch.requestedPage ?? 1)}
-                >
-                  Retry
-                </Button>
-              </>
-            ) : branch.total === 0 ? (
-              <span className="text-xs text-muted-foreground">
-                No {row.tag === undefined ? 'tags' : 'scans'} available.
-              </span>
-            ) : (
-              <Button
-                size="sm"
-                variant="ghost"
-                onPress={() => void loadBranch(row.image, row.tag, branch.page + 1)}
-              >
-                Load more {row.tag === undefined ? 'tags' : 'scans'} ({branch.data.length} of{' '}
-                {branch.total})
-              </Button>
-            )}
-          </div>
-        </Table.Cell>
-      </Table.Row>
+            Show more {noun} ({branch.data.length} of {branch.total})
+          </Button>
+        )}
+      </li>
     );
   }
+
   const image = row.kind === 'image' ? row.image : undefined;
   const tag = row.kind === 'tag' ? row.tag : undefined;
   const scan = row.kind === 'scan' ? row.scan : undefined;
-  const name = image?.image_name ?? tag?.image_tag ?? `Run ${scan!.id.slice(0, 8)}`;
+  const imageParts = image ? splitImageRef(image.image_name) : undefined;
   const date = image?.latest_scan_at ?? tag?.latest_scan_at ?? scan!.created_at;
+  const name = image ? imageParts!.name : tag ? tag.image_tag : `Scan ${timeAgo(scan!.created_at)}`;
+  const fullName = image?.image_name ?? tag?.image_tag ?? fullDate(scan!.created_at);
   const status = image?.health_status ?? tag?.latest_status ?? scan!.status;
   const isExpanded = expanded.has(row.id);
   const Icon = image ? Container : tag ? Tag : ScanLine;
   const queued = image && queuedImageNames?.has(image.image_name);
+  const needsAttention = Boolean(
+    image && (image.health_policy_failed || image.health_critical_count > 0)
+  );
+  const subtitle = image
+    ? [imageParts!.host, pluralize(image.tag_count, 'tag'), pluralize(image.scan_count, 'scan')]
+        .filter(Boolean)
+        .join(' · ')
+    : tag
+      ? pluralize(tag.scan_count, 'scan')
+      : labelFor(SCAN_PROVIDER_LABELS, scan!.scan_provider);
+  const indent = tag ? 'lg:pl-10 pl-8' : scan ? 'lg:pl-20 pl-14' : '';
+  const findingsFailed = status === 'failed';
+
   return (
-    <Table.Row
-      id={row.id}
-      className={`${image ? 'bg-muted/20' : ''} ${
-        image && (image.health_policy_failed || image.health_critical_count > 0)
-          ? 'shadow-[inset_2px_0_0_0_var(--destructive)]'
-          : ''
+    <li
+      key={row.id}
+      className={`${ROW_GRID} ${image ? 'bg-muted/20' : ''} ${
+        needsAttention ? 'shadow-[inset_3px_0_0_0_var(--destructive)]' : ''
       }`}
-      textValue={name}
     >
-      <Table.Cell>
-        <div
-          className={`flex min-w-0 items-center gap-2 py-2 ${tag ? 'pl-6' : scan ? 'pl-14' : ''}`}
-        >
-          {scan ? null : (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${name}`}
-              aria-expanded={isExpanded}
-              onPress={() => toggle(image?.image_name ?? tag!.image_name, tag?.image_tag)}
+      <div className={`flex min-w-0 items-center gap-2 ${indent}`}>
+        {scan ? null : (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${fullName}`}
+            aria-expanded={isExpanded}
+            onPress={() => toggle(image?.image_name ?? tag!.image_name, tag?.image_tag)}
+          >
+            {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+          </Button>
+        )}
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50">
+          <Icon className="size-3.5 text-muted-foreground" />
+        </span>
+        <div className="min-w-0">
+          {scan ? (
+            <Link
+              href={`/scans/details/${scan.id}`}
+              className="block truncate text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              title={fullName}
             >
-              {isExpanded ? (
-                <ChevronDown className="size-4" />
-              ) : (
-                <ChevronRight className="size-4" />
-              )}
-            </Button>
+              {name}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className="block max-w-full truncate text-left text-sm font-medium text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              onClick={() => toggle(image?.image_name ?? tag!.image_name, tag?.image_tag)}
+              aria-expanded={isExpanded}
+              title={fullName}
+            >
+              {name}
+            </button>
           )}
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50">
-            <Icon className="size-3.5 text-muted-foreground" />
-          </span>
-          <div className="min-w-0">
-            {scan ? (
-              <Link
-                href={`/scans/details/${scan.id}`}
-                className="block truncate text-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-              >
-                {name}
-              </Link>
-            ) : (
-              <Button
-                variant="link"
-                className="h-auto min-w-0 max-w-full justify-start truncate p-0 text-left font-mono text-sm font-medium"
-                onPress={() => toggle(image?.image_name ?? tag!.image_name, tag?.image_tag)}
-                aria-expanded={isExpanded}
-                title={name}
-              >
-                {name}
-              </Button>
-            )}
-            {queued ? (
-              <Chip color="warning" size="sm" variant="soft">
-                Deletion queued
-              </Chip>
-            ) : (
-              <span className="block text-xs text-muted-foreground">
-                {image
-                  ? `${image.tag_count} tags · ${image.scan_count} runs`
-                  : tag
-                    ? `${tag.scan_count} runs`
-                    : scan!.scan_provider}
-              </span>
-            )}
-          </div>
-        </div>
-      </Table.Cell>
-      <Table.Cell>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {image && (image.active_tags ?? 0) > 0 ? (
-            <Chip color="info" size="sm" variant="soft" className="gap-1.5 text-xs font-medium">
-              <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-current" />
-              {image.active_tags} in progress
+          {queued ? (
+            <Chip color="warning" size="sm" variant="soft">
+              Deletion queued
             </Chip>
-          ) : null}
-          <StatusBadge
-            status={status}
-            externalStatus={
-              image?.health_external_status ?? tag?.latest_external_status ?? scan?.external_status
-            }
-          />
-          <IntelligenceSummaryChip
-            compact
-            summary={
-              image?.intelligence_summary ?? tag?.intelligence_summary ?? scan?.intelligence_summary
-            }
-          />
-          {image?.health_policy_failed ||
-          tag?.compliance_summary?.failed_policy_names?.length ||
-          scan?.compliance_summary?.failed_policy_names?.length ? (
-            <Chip color="danger" size="sm" variant="soft">
-              Policy failed
-            </Chip>
-          ) : null}
+          ) : (
+            <span className="block truncate text-xs text-muted-foreground" title={subtitle}>
+              {subtitle}
+            </span>
+          )}
         </div>
-      </Table.Cell>
-      <Table.Cell>
-        <Findings
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 pl-9 lg:pl-0">
+        {image && (image.active_tags ?? 0) > 0 ? (
+          <Chip color="info" size="sm" variant="soft" className="gap-1.5 text-xs font-medium">
+            <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-current" />
+            {image.active_tags} in progress
+          </Chip>
+        ) : null}
+        <StatusBadge
+          status={status}
+          externalStatus={
+            image?.health_external_status ?? tag?.latest_external_status ?? scan?.external_status
+          }
+        />
+        <IntelligenceSummaryChip
+          compact
+          summary={
+            image?.intelligence_summary ?? tag?.intelligence_summary ?? scan?.intelligence_summary
+          }
+        />
+        {image?.health_policy_failed ||
+        tag?.compliance_summary?.failed_policy_names?.length ||
+        scan?.compliance_summary?.failed_policy_names?.length ? (
+          <Chip color="danger" size="sm" variant="soft">
+            Policy failed
+          </Chip>
+        ) : null}
+      </div>
+      <div className="pl-9 lg:pl-0">
+        <SeverityCounts
           critical={image?.health_critical_count ?? tag?.critical_count ?? scan!.critical_count}
           high={image?.health_high_count ?? tag?.high_count ?? scan!.high_count}
           medium={image?.health_medium_count ?? tag?.medium_count ?? scan!.medium_count}
           low={image?.health_low_count ?? tag?.low_count ?? scan!.low_count}
+          emptyLabel={findingsFailed ? 'No results' : 'No findings'}
         />
-      </Table.Cell>
-      <Table.Cell>
-        <span className="whitespace-nowrap text-xs text-muted-foreground" title={fullDate(date)}>
-          {timeAgo(date)}
-        </span>
-      </Table.Cell>
-      <Table.Cell>
+      </div>
+      <span
+        className="whitespace-nowrap pl-9 text-xs text-muted-foreground lg:pl-0"
+        title={fullDate(date)}
+      >
+        {timeAgo(date)}
+      </span>
+      <div className="flex justify-end">
         {image ? (
           <RowActionsMenu
-            label={`Actions for ${name}`}
+            label={`Actions for ${fullName}`}
             items={[
               {
                 id: 'delete',
-                label: queued ? 'Deletion queued' : 'Delete image group',
+                label: queued ? 'Deletion queued' : 'Delete image and its scans',
                 icon: <Delete01Icon size={14} />,
                 variant: 'danger',
                 disabled: Boolean(queued),
@@ -543,14 +508,14 @@ function renderTreeRow(
           />
         ) : (
           <Link
-            aria-label={`Open ${name}`}
+            aria-label={`Open ${fullName}`}
             href={`/scans/details/${tag?.latest_scan_id ?? scan!.id}`}
             className="inline-flex rounded p-1 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ChevronRight className="size-4" />
           </Link>
         )}
-      </Table.Cell>
-    </Table.Row>
+      </div>
+    </li>
   );
 }

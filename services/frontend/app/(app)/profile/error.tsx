@@ -3,6 +3,7 @@
 import { RouteErrorState } from '@/components/route-state';
 
 export default function Error({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -12,6 +13,7 @@ export default function Error({
     <RouteErrorState
       title="Profile failed to load"
       message="The profile route could not be prepared for this session."
+      error={error}
       onRetry={reset}
     />
   );

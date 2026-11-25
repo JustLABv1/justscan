@@ -4,8 +4,9 @@ import { OwnershipBadge } from '@/components/ui/badges';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
 import { FormAlert } from '@/components/ui/form-alert';
 import type { ResourceShare, Suppression } from '@/lib/api';
-import { Button, Card, ListBox, Modal, Select, useOverlayState } from '@/components/ui';
+import { Button, Card, ListBox, Modal, Select, Spinner, useOverlayState } from '@/components/ui';
 import { Delete01Icon } from 'hugeicons-react';
+import { pluralize } from '@/lib/labels';
 
 type OrgOption = {
   id: string;
@@ -67,35 +68,30 @@ export function ManageSuppressionAccessModal({
               {target ? (
                 <Card className="py-3" variant="secondary">
                   <div className="flex flex-wrap gap-2">
-                    <p className="text-sm font-medium text-foreground">
-                      {target.vuln_id}
-                    </p>
+                    <p className="text-sm font-medium text-foreground">{target.vuln_id}</p>
                     <OwnershipBadge
                       ownerType={target.owner_type}
                       ownerOrgId={target.owner_org_id}
                       orgNamesById={orgNamesById}
                     />
                   </div>
-                  <p className="font-mono text-xs text-muted-foreground" title={target.image_digest}>
-                    {target.image_digest.length > 48
-                      ? `${target.image_digest.slice(0, 48)}…`
-                      : target.image_digest}
+                  <p className="text-xs text-muted-foreground" title={target.image_digest}>
+                    Applies to {pluralize(target.applies_image_count ?? 0, 'image')}
                   </p>
                 </Card>
               ) : null}
 
               <div className="space-y-2">
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Current access
-                  </h3>
+                  <h3 className="text-sm font-semibold text-foreground">Current access</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Organizations listed here can use this suppression.
                   </p>
                 </div>
                 {loading ? (
-                  <div className="flex justify-center py-6">
-                    <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+                  <div className="flex justify-center py-6" role="status">
+                    <Spinner size="sm" />
+                    <span className="sr-only">Loading access grants</span>
                   </div>
                 ) : shares.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No organization grants yet.</p>
@@ -105,15 +101,15 @@ export function ManageSuppressionAccessModal({
                       <Card key={share.org_id} variant="secondary">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground">
-                              {share.org_name}
-                            </p>
+                            <p className="text-sm font-medium text-foreground">{share.org_name}</p>
                             <p className="text-xs text-muted-foreground">
                               {share.is_owner ? 'Owner workspace' : 'Shared access'}
                             </p>
                           </div>
                           {share.is_owner ? (
-                            <span className="text-xs font-medium text-muted-foreground">Locked</span>
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Locked
+                            </span>
                           ) : (
                             <Button
                               onPress={() => onRevoke(share.org_id)}
@@ -133,9 +129,7 @@ export function ManageSuppressionAccessModal({
 
               <div className="space-y-2">
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Grant access
-                  </h3>
+                  <h3 className="text-sm font-semibold text-foreground">Grant access</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Share this suppression with another organization you manage.
                   </p>

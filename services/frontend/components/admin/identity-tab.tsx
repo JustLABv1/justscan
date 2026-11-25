@@ -1,5 +1,7 @@
 'use client';
 
+import { ResourceList } from '@/components/ui/resource-list';
+import { humanize, labelFor, ROLE_LABELS, pluralize } from '@/lib/labels';
 import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { LocalAuthPanel } from '@/components/admin/local-auth-panel';
@@ -40,11 +42,11 @@ import {
   Disclosure,
   Input,
   ListBox,
-  Modal,
+  Label,
+  DetailSheet,
   SearchField,
   Select,
   Switch,
-  Table,
   TextArea,
   useOverlayState,
 } from '@/components/ui';
@@ -414,7 +416,7 @@ export function IdentityTab() {
   function requiredLabel(text: string) {
     return (
       <span>
-        {text} <span className="text-danger">*</span>
+        {text} <span className="text-destructive">*</span>
       </span>
     );
   }
@@ -736,6 +738,8 @@ export function IdentityTab() {
     setError('');
     try {
       const session = await adminCreateOIDCDebugSession(selectedProvider.name);
+      // Start the backend OIDC flow with a full navigation so its redirect and cookies apply.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign(`${getApiBase()}${session.login_url}`);
     } catch (debugError: unknown) {
       setError(
@@ -774,120 +778,72 @@ export function IdentityTab() {
           </SearchField>
           <Button variant="secondary" onPress={openCreateProvider}>
             <PlusSignIcon size={15} />
-            Add Provider
+            Add provider
           </Button>
         </div>
 
-        <Table variant="secondary">
-          <Table.ScrollContainer>
-            <Table.Content aria-label="OIDC providers" className="min-w-[1100px]">
-              <Table.Header>
-                <Table.Column>Select</Table.Column>
-                <Table.Column isRowHeader>Provider name</Table.Column>
-                <Table.Column>Issuer</Table.Column>
-                <Table.Column>Status</Table.Column>
-                <Table.Column>Mappings</Table.Column>
-                <Table.Column>Overrides</Table.Column>
-                <Table.Column className="text-right">Actions</Table.Column>
-              </Table.Header>
-              <Table.Body
-                renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    {loading ? 'Loading providers...' : 'No providers found.'}
-                  </div>
-                )}
-              >
-                {filteredProviders.map((provider) => (
-                  <Table.Row
-                    key={provider.name}
-                    id={provider.name}
-                    className={
-                      provider.name === selectedProvider?.name
-                        ? 'bg-[var(--row-hover)]'
-                        : 'hover:bg-[var(--row-hover)]'
-                    }
-                  >
-                    <Table.Cell>
-                      <Button
-                        size="sm"
-                        variant={provider.name === selectedProvider?.name ? 'primary' : 'secondary'}
-                        onPress={() => setSelectedProvider(provider)}
-                      >
-                        {provider.name === selectedProvider?.name ? 'Selected' : 'Select'}
-                      </Button>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Button
-                        className="h-auto min-w-0 justify-start text-left"
-                        onPress={() => setSelectedProvider(provider)}
-                        variant="tertiary"
-                      >
-                        <div className="flex min-w-0 flex-col items-start gap-1">
-                          <span className="font-medium underline-offset-4 hover:underline">
-                            {provider.display_name}
-                          </span>
-                          <span className="max-w-full truncate font-mono text-xs text-muted-foreground">
-                            ID: {provider.name}
-                          </span>
-                        </div>
-                      </Button>
-                    </Table.Cell>
-                    <Table.Cell className="text-xs text-muted-foreground font-mono">
-                      {provider.issuer_url}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <StatusTag tone={toneFromChipColor(provider.enabled ? 'success' : 'default')}>
-                        {provider.enabled ? 'Enabled' : 'Disabled'}
-                      </StatusTag>
-                    </Table.Cell>
-                    <Table.Cell className="text-xs text-muted-foreground">
-                      {provider.name === selectedProvider?.name ? mappings.length : '-'}
-                    </Table.Cell>
-                    <Table.Cell className="text-xs text-muted-foreground">
-                      {provider.name === selectedProvider?.name ? roleOverrides.length : '-'}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex justify-end">
-                        <RowActionsMenu
-                          label={`Open actions for provider ${provider.display_name}`}
-                          items={[
-                            {
-                              id: 'toggle',
-                              label: provider.enabled ? 'Disable provider' : 'Enable provider',
-                              icon: <Refresh01Icon size={15} />,
-                              onAction: () => {
-                                void handleToggleEnabled(provider);
-                              },
-                            },
-                            {
-                              id: 'edit',
-                              label: 'Edit provider',
-                              icon: <PencilEdit01Icon size={15} />,
-                              onAction: () => openEditProvider(provider),
-                            },
-                            {
-                              id: 'delete',
-                              label: 'Delete provider',
-                              icon: <Delete01Icon size={15} />,
-                              variant: 'danger',
-                              onAction: () => {
-                                void handleDeleteProvider(provider.name);
-                              },
-                            },
-                          ]}
-                        />
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+        <ResourceList aria-label="OIDC providers">
+          {filteredProviders.length === 0 && (
+            <li className="px-4 py-10 text-center text-sm text-muted-foreground">
+              {loading ? 'Loading providers…' : 'No providers found.'}
+            </li>
+          )}
+          {filteredProviders.map((provider) => (
+            <ResourceList.Item
+              key={provider.name}
+              title={provider.display_name || provider.name}
+              description={provider.issuer_url}
+              selected={provider.name === selectedProvider?.name}
+              onClick={() => setSelectedProvider(provider)}
+              meta={
+                <StatusTag tone={provider.enabled ? 'success' : 'muted'}>
+                  {provider.enabled ? 'Enabled' : 'Disabled'}
+                </StatusTag>
+              }
+              actions={
+                <RowActionsMenu
+                  label={`Open actions for provider ${provider.display_name}`}
+                  items={[
+                    {
+                      id: 'toggle',
+                      label: provider.enabled ? 'Disable provider' : 'Enable provider',
+                      icon: <Refresh01Icon size={15} />,
+                      onAction: () => {
+                        void handleToggleEnabled(provider);
+                      },
+                    },
+                    {
+                      id: 'edit',
+                      label: 'Edit provider',
+                      icon: <PencilEdit01Icon size={15} />,
+                      onAction: () => openEditProvider(provider),
+                    },
+                    {
+                      id: 'delete',
+                      label: 'Delete provider',
+                      icon: <Delete01Icon size={15} />,
+                      variant: 'danger',
+                      onAction: () => {
+                        void handleDeleteProvider(provider.name);
+                      },
+                    },
+                  ]}
+                />
+              }
+            >
+              {provider.name === selectedProvider?.name && (
+                <p className="text-xs text-muted-foreground">
+                  Selected · {pluralize(mappings.length, 'mapping')} ·{' '}
+                  {pluralize(roleOverrides.length, 'override')}
+                </p>
+              )}
+            </ResourceList.Item>
+          ))}
+        </ResourceList>
       </Card>
 
       {!selectedProvider && (
-        <Card className="border border-divider/60 bg-content2/30">
+        <Card className="border border-border/60 bg-muted/30">
           <Card.Content>
             <p className="text-sm text-muted-foreground">
               Select a provider row above to configure claim mappings, role overrides, and claim
@@ -901,136 +857,98 @@ export function IdentityTab() {
         <div className="grid gap-4 xl:grid-cols-2">
           <Card className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold">Claim Mappings</h3>
+              <h3 className="text-base font-semibold">Claim mappings</h3>
               <Button size="sm" variant="secondary" onPress={openCreateMapping}>
-                Add Mapping
+                Add mapping
               </Button>
             </div>
-            <Table variant="secondary">
-              <Table.Content aria-label="Claim mappings">
-                <Table.Header>
-                  <Table.Column isRowHeader>Claim</Table.Column>
-                  <Table.Column>Target</Table.Column>
-                  <Table.Column>Role</Table.Column>
-                  <Table.Column className="text-right">Actions</Table.Column>
-                </Table.Header>
-                <Table.Body
-                  renderEmptyState={() => (
-                    <div className="py-6 text-center text-sm text-muted-foreground">
-                      No mappings configured.
-                    </div>
-                  )}
-                >
-                  {mappings.map((mapping) => (
-                    <Table.Row key={mapping.id} id={mapping.id}>
-                      <Table.Cell>
-                        <p className="font-mono text-xs">{mapping.match_value}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {mapping.claim_type} · {mapping.match_type} · {mapping.effect}
-                        </p>
-                      </Table.Cell>
-                      <Table.Cell className="text-xs text-muted-foreground">
-                        {mapping.org_name ?? mapping.org_id ?? 'Derived'}
-                      </Table.Cell>
-                      <Table.Cell className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
-                        {mapping.effect === 'exclude' ? '—' : mapping.role}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex justify-end">
-                          <RowActionsMenu
-                            label={`Open actions for mapping ${mapping.match_value}`}
-                            items={[
-                              {
-                                id: 'edit',
-                                label: 'Edit mapping',
-                                icon: <PencilEdit01Icon size={15} />,
-                                onAction: () => openEditMapping(mapping),
-                              },
-                              {
-                                id: 'delete',
-                                label: 'Delete mapping',
-                                icon: <Delete01Icon size={15} />,
-                                variant: 'danger',
-                                onAction: () => {
-                                  void handleDeleteMapping(mapping.id);
-                                },
-                              },
-                            ]}
-                          />
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table>
+            <ResourceList aria-label="Claim mappings">
+              {mappings.length === 0 && (
+                <li className="px-4 py-6 text-sm text-muted-foreground">No mappings configured.</li>
+              )}
+              {mappings.map((mapping) => (
+                <ResourceList.Item
+                  key={mapping.id}
+                  title={`${humanize(mapping.claim_type)} “${mapping.match_value}” (${humanize(mapping.match_type).toLowerCase()})`}
+                  description={`${mapping.effect === 'exclude' ? 'Exclude from' : 'Add to'} ${mapping.org_name ?? orgs.find((org) => org.id === mapping.org_id)?.name ?? 'derived organization'}${mapping.effect === 'exclude' ? '' : ` as ${labelFor(ROLE_LABELS, mapping.role).toLowerCase()}`}`}
+                  meta={
+                    <StatusTag tone="muted">
+                      {mapping.effect === 'exclude'
+                        ? 'Excluded'
+                        : labelFor(ROLE_LABELS, mapping.role)}
+                    </StatusTag>
+                  }
+                  actions={
+                    <RowActionsMenu
+                      label={`Open actions for mapping ${mapping.match_value}`}
+                      items={[
+                        {
+                          id: 'edit',
+                          label: 'Edit mapping',
+                          icon: <PencilEdit01Icon size={15} />,
+                          onAction: () => openEditMapping(mapping),
+                        },
+                        {
+                          id: 'delete',
+                          label: 'Delete mapping',
+                          icon: <Delete01Icon size={15} />,
+                          variant: 'danger',
+                          onAction: () => {
+                            void handleDeleteMapping(mapping.id);
+                          },
+                        },
+                      ]}
+                    />
+                  }
+                />
+              ))}
+            </ResourceList>
           </Card>
 
           <Card className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold">Role Overrides</h3>
+              <h3 className="text-base font-semibold">Role overrides</h3>
               <Button size="sm" variant="secondary" onPress={openCreateOverride}>
-                Add Override
+                Add override
               </Button>
             </div>
-            <Table variant="secondary">
-              <Table.Content aria-label="Role overrides">
-                <Table.Header>
-                  <Table.Column isRowHeader>Claim</Table.Column>
-                  <Table.Column>Target</Table.Column>
-                  <Table.Column>Role</Table.Column>
-                  <Table.Column className="text-right">Actions</Table.Column>
-                </Table.Header>
-                <Table.Body
-                  renderEmptyState={() => (
-                    <div className="py-6 text-center text-sm text-muted-foreground">
-                      No overrides configured.
-                    </div>
-                  )}
-                >
-                  {roleOverrides.map((override) => (
-                    <Table.Row key={override.id} id={override.id}>
-                      <Table.Cell>
-                        <p className="font-mono text-xs">{override.match_value}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {override.claim_type} · {override.match_type}
-                        </p>
-                      </Table.Cell>
-                      <Table.Cell className="text-xs text-muted-foreground">
-                        {override.org_name ?? override.org_id ?? override.org_name_template}
-                      </Table.Cell>
-                      <Table.Cell className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
-                        {override.role}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex justify-end">
-                          <RowActionsMenu
-                            label={`Open actions for override ${override.match_value}`}
-                            items={[
-                              {
-                                id: 'edit',
-                                label: 'Edit override',
-                                icon: <PencilEdit01Icon size={15} />,
-                                onAction: () => openEditOverride(override),
-                              },
-                              {
-                                id: 'delete',
-                                label: 'Delete override',
-                                icon: <Delete01Icon size={15} />,
-                                variant: 'danger',
-                                onAction: () => {
-                                  void handleDeleteOverride(override.id);
-                                },
-                              },
-                            ]}
-                          />
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table>
+            <ResourceList aria-label="Role overrides">
+              {roleOverrides.length === 0 && (
+                <li className="px-4 py-6 text-sm text-muted-foreground">
+                  No overrides configured.
+                </li>
+              )}
+              {roleOverrides.map((override) => (
+                <ResourceList.Item
+                  key={override.id}
+                  title={`${humanize(override.claim_type)} “${override.match_value}” (${humanize(override.match_type).toLowerCase()})`}
+                  description={`Set role in ${override.org_name ?? orgs.find((org) => org.id === override.org_id)?.name ?? override.org_name_template ?? 'derived organization'} to ${labelFor(ROLE_LABELS, override.role).toLowerCase()}`}
+                  meta={<StatusTag tone="muted">{labelFor(ROLE_LABELS, override.role)}</StatusTag>}
+                  actions={
+                    <RowActionsMenu
+                      label={`Open actions for override ${override.match_value}`}
+                      items={[
+                        {
+                          id: 'edit',
+                          label: 'Edit override',
+                          icon: <PencilEdit01Icon size={15} />,
+                          onAction: () => openEditOverride(override),
+                        },
+                        {
+                          id: 'delete',
+                          label: 'Delete override',
+                          icon: <Delete01Icon size={15} />,
+                          variant: 'danger',
+                          onAction: () => {
+                            void handleDeleteOverride(override.id);
+                          },
+                        },
+                      ]}
+                    />
+                  }
+                />
+              ))}
+            </ResourceList>
           </Card>
         </div>
       )}
@@ -1039,7 +957,7 @@ export function IdentityTab() {
         <Card className="space-y-4">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
             <div className="space-y-1">
-              <h3 className="text-base font-semibold">Live OIDC Diagnostics</h3>
+              <h3 className="text-base font-semibold">Live OIDC diagnostics</h3>
               <p className="max-w-3xl text-sm text-muted-foreground">
                 Sign in through {selectedProvider.display_name} to inspect the verified ID token and
                 UserInfo claims. This does not provision a user, change roles, sync organizations,
@@ -1075,9 +993,7 @@ export function IdentityTab() {
                   <Card.Content className="flex flex-wrap gap-2">
                     {(debugReport.resolved_groups ?? []).length > 0 ? (
                       (debugReport.resolved_groups ?? []).map((group) => (
-                        <StatusTag key={group}>
-                          {group}
-                        </StatusTag>
+                        <StatusTag key={group}>{group}</StatusTag>
                       ))
                     ) : (
                       <span className="text-sm text-muted-foreground">No groups resolved</span>
@@ -1094,9 +1010,7 @@ export function IdentityTab() {
                   <Card.Content className="flex flex-wrap gap-2">
                     {(debugReport.resolved_roles ?? []).length > 0 ? (
                       (debugReport.resolved_roles ?? []).map((role) => (
-                        <StatusTag key={role}>
-                          {role}
-                        </StatusTag>
+                        <StatusTag key={role}>{role}</StatusTag>
                       ))
                     ) : (
                       <span className="text-sm text-muted-foreground">No roles resolved</span>
@@ -1110,15 +1024,17 @@ export function IdentityTab() {
                   </Card.Header>
                   <Card.Content className="space-y-2 text-xs">
                     <p>
-                      <span className="text-muted-foreground">Realm:</span> <code>realm_access.roles</code>{' '}
-                      ({(debugReport.realm_roles ?? []).length})
+                      <span className="text-muted-foreground">Realm:</span>{' '}
+                      <code>realm_access.roles</code> ({(debugReport.realm_roles ?? []).length})
                     </p>
                     <p>
                       <span className="text-muted-foreground">Client:</span>{' '}
                       <code>{debugReport.client_roles_path}</code> (
                       {(debugReport.client_roles ?? []).length})
                     </p>
-                    <StatusTag tone={toneFromChipColor(debugReport.would_be_admin ? 'success' : 'default')}>
+                    <StatusTag
+                      tone={toneFromChipColor(debugReport.would_be_admin ? 'success' : 'default')}
+                    >
                       {debugReport.would_be_admin
                         ? 'Would receive admin role'
                         : 'Would receive user role'}
@@ -1134,16 +1050,16 @@ export function IdentityTab() {
               )}
 
               <div className="space-y-2">
-                <Disclosure isExpanded>
+                <Disclosure>
                   <Disclosure.Heading>
-                    <Disclosure.Trigger className="flex w-full items-center justify-between rounded-xl border border-divider/60 px-3 py-2 text-sm font-medium">
-                      ID token claims
+                    <Disclosure.Trigger className="flex w-full items-center justify-between rounded-xl border border-border/60 px-3 py-2 text-sm font-medium">
+                      View raw ID token claims
                       <Disclosure.Indicator />
                     </Disclosure.Trigger>
                   </Disclosure.Heading>
                   <Disclosure.Content>
                     <Disclosure.Body className="pt-2">
-                      <pre className="max-h-[32rem] overflow-auto rounded-xl bg-content2 p-4 text-xs leading-5">
+                      <pre className="max-h-[32rem] overflow-auto rounded-xl bg-muted p-4 text-xs leading-5">
                         {JSON.stringify(debugReport.id_token_claims, null, 2)}
                       </pre>
                     </Disclosure.Body>
@@ -1151,14 +1067,14 @@ export function IdentityTab() {
                 </Disclosure>
                 <Disclosure>
                   <Disclosure.Heading>
-                    <Disclosure.Trigger className="flex w-full items-center justify-between rounded-xl border border-divider/60 px-3 py-2 text-sm font-medium">
-                      UserInfo claims
+                    <Disclosure.Trigger className="flex w-full items-center justify-between rounded-xl border border-border/60 px-3 py-2 text-sm font-medium">
+                      View raw UserInfo claims
                       <Disclosure.Indicator />
                     </Disclosure.Trigger>
                   </Disclosure.Heading>
                   <Disclosure.Content>
                     <Disclosure.Body className="pt-2">
-                      <pre className="max-h-[32rem] overflow-auto rounded-xl bg-content2 p-4 text-xs leading-5">
+                      <pre className="max-h-[32rem] overflow-auto rounded-xl bg-muted p-4 text-xs leading-5">
                         {JSON.stringify(debugReport.userinfo_claims ?? {}, null, 2)}
                       </pre>
                     </Disclosure.Body>
@@ -1181,75 +1097,74 @@ export function IdentityTab() {
             className="grid gap-3 lg:grid-cols-[1fr_1fr_auto] lg:items-end"
             onSubmit={handlePreview}
           >
-            <TextArea
-              value={previewGroupsInput}
-              onChange={(event) => setPreviewGroupsInput(event.target.value)}
-              variant="secondary"
-              placeholder="groups (comma or newline separated)"
-              rows={4}
-            />
-            <TextArea
-              value={previewRolesInput}
-              onChange={(event) => setPreviewRolesInput(event.target.value)}
-              variant="secondary"
-              placeholder="roles (comma or newline separated)"
-              rows={4}
-            />
+            <div className="space-y-2">
+              <Label htmlFor="preview-groups">Group claims</Label>
+              <TextArea
+                id="preview-groups"
+                value={previewGroupsInput}
+                onChange={(event) => setPreviewGroupsInput(event.target.value)}
+                variant="secondary"
+                placeholder="groups (comma or newline separated)"
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="preview-roles">Role claims</Label>
+              <TextArea
+                id="preview-roles"
+                value={previewRolesInput}
+                onChange={(event) => setPreviewRolesInput(event.target.value)}
+                variant="secondary"
+                placeholder="roles (comma or newline separated)"
+                rows={4}
+              />
+            </div>
             <Button type="submit" variant="secondary" isDisabled={previewLoading}>
               {previewLoading ? 'Running...' : 'Run Preview'}
             </Button>
           </form>
 
           {preview && (
-            <Table variant="secondary">
-              <Table.Content aria-label="Preview memberships">
-                <Table.Header>
-                  <Table.Column isRowHeader>Org</Table.Column>
-                  <Table.Column>Claim</Table.Column>
-                  <Table.Column>Role</Table.Column>
-                  <Table.Column>Behavior</Table.Column>
-                </Table.Header>
-                <Table.Body
-                  renderEmptyState={() => (
-                    <div className="py-6 text-center text-sm text-muted-foreground">No memberships.</div>
-                  )}
+            <ResourceList aria-label="Preview memberships">
+              {preview.final_memberships.length === 0 && (
+                <li className="px-4 py-6 text-sm text-muted-foreground">No memberships.</li>
+              )}
+              {preview.final_memberships.map((membership) => (
+                <ResourceList.Item
+                  key={`${membership.mapping_id}-${membership.org_name}-${membership.claim}-${membership.final_role}`}
+                  title={membership.org_name}
+                  description={membership.claim}
+                  meta={
+                    <StatusTag tone="muted">
+                      {labelFor(ROLE_LABELS, membership.base_role)} →{' '}
+                      {labelFor(ROLE_LABELS, membership.final_role)}
+                    </StatusTag>
+                  }
                 >
-                  {preview.final_memberships.map((membership) => (
-                    <Table.Row
-                      key={`${membership.mapping_id}-${membership.org_name}-${membership.claim}-${membership.final_role}`}
-                      id={`${membership.mapping_id}-${membership.org_name}-${membership.claim}-${membership.final_role}`}
-                    >
-                      <Table.Cell>{membership.org_name}</Table.Cell>
-                      <Table.Cell className="font-mono text-xs text-muted-foreground">
-                        {membership.claim}
-                      </Table.Cell>
-                      <Table.Cell className="text-xs text-muted-foreground">
-                        {membership.base_role} → {membership.final_role}
-                      </Table.Cell>
-                      <Table.Cell className="text-xs text-muted-foreground">
-                        {membership.provisioning_mode === 'create_org'
-                          ? 'Create org'
-                          : 'Existing org'}
-                        {membership.override_applied ? ' · Override applied' : ''}
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table>
+                  <p className="text-xs text-muted-foreground">
+                    {membership.provisioning_mode === 'create_org'
+                      ? 'Create organization'
+                      : 'Existing organization'}
+                    {membership.override_applied ? ' · Override applied' : ''}
+                  </p>
+                </ResourceList.Item>
+              ))}
+            </ResourceList>
           )}
         </Card>
       )}
 
-      <Modal state={providerModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="cover" placement="center">
-            <Modal.Dialog className="mx-auto w-full max-w-[1040px]">
-              <Modal.Header>
-                <Modal.Heading>{editingProvider ? 'Edit Provider' : 'Add Provider'}</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body className="min-h-0 max-h-[80vh] overflow-y-auto py-5">
+      <DetailSheet state={providerModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="xl">
+            <DetailSheet.Dialog className="overflow-hidden">
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
+                  {editingProvider ? 'Edit Provider' : 'Add provider'}
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body className="min-h-0 py-5">
                 <div className="space-y-5">
                   <p className="text-sm text-muted-foreground">
                     Configure identity provider details in three steps.{' '}
@@ -1277,7 +1192,7 @@ export function IdentityTab() {
                       3. Claims & Order
                     </Chip>
                   </div>
-                  <Card className="border border-divider/60 bg-content2/30">
+                  <Card className="border border-border/60 bg-muted/30">
                     <Card.Content>
                       <p className="text-sm font-semibold">{providerStepTitle(providerStep)}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
@@ -1292,12 +1207,12 @@ export function IdentityTab() {
                     onSubmit={handleProviderSubmit}
                   >
                     {providerFormError && (
-                      <p className="text-sm text-danger">{providerFormError}</p>
+                      <p className="text-sm text-destructive">{providerFormError}</p>
                     )}
 
                     {providerStep === 0 && (
                       <div className="space-y-4">
-                        <Card className="border border-divider/60 bg-content1">
+                        <Card className="border border-border/60 bg-card">
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">Provider Identity</p>
                             <div className="grid gap-4 md:grid-cols-2">
@@ -1330,7 +1245,7 @@ export function IdentityTab() {
                             </div>
                           </Card.Content>
                         </Card>
-                        <Card className="border border-divider/60 bg-content1">
+                        <Card className="border border-border/60 bg-card">
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">OIDC Handshake</p>
                             <div className="grid gap-4 md:grid-cols-2">
@@ -1384,7 +1299,9 @@ export function IdentityTab() {
                           </Card.Content>
                         </Card>
                         <div className="space-y-1">
-                          <p className="text-sm text-muted-foreground">{requiredLabel('Redirect URI')}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {requiredLabel('Redirect URI')}
+                          </p>
                           <Input
                             className="w-full"
                             variant="secondary"
@@ -1413,12 +1330,14 @@ export function IdentityTab() {
 
                     {providerStep === 1 && (
                       <div className="space-y-4">
-                        <Card className="border border-divider/60 bg-content1">
+                        <Card className="border border-border/60 bg-card">
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">Scope and Admin Signals</p>
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-1.5 md:col-span-2">
-                                <p className="text-sm text-muted-foreground">{requiredLabel('Scopes')}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {requiredLabel('Scopes')}
+                                </p>
                                 <Input
                                   className="w-full"
                                   variant="secondary"
@@ -1454,7 +1373,7 @@ export function IdentityTab() {
                             </div>
                           </Card.Content>
                         </Card>
-                        <Card className="border border-divider/60 bg-content1">
+                        <Card className="border border-border/60 bg-card">
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">Provider Filters</p>
                             <div className="grid gap-4 md:grid-cols-2">
@@ -1506,7 +1425,7 @@ export function IdentityTab() {
 
                     {providerStep === 2 && (
                       <div className="space-y-4">
-                        <Card className="border border-divider/60 bg-content1">
+                        <Card className="border border-border/60 bg-card">
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">Claim Extraction</p>
                             <div className="grid gap-4 md:grid-cols-2">
@@ -1533,7 +1452,7 @@ export function IdentityTab() {
                             </div>
                           </Card.Content>
                         </Card>
-                        <Card className="border border-divider/60 bg-content1">
+                        <Card className="border border-border/60 bg-card">
                           <Card.Content className="space-y-4">
                             <p className="text-sm font-semibold">Presentation and Ordering</p>
                             <div className="grid gap-4 md:grid-cols-2">
@@ -1559,7 +1478,7 @@ export function IdentityTab() {
                                 />
                               </div>
                             </div>
-                            <div className="rounded-medium border border-divider/60 bg-content2/20 p-4">
+                            <div className="rounded-medium border border-border/60 bg-muted/20 p-4">
                               <Switch isSelected={providerEnabled} onChange={setProviderEnabled}>
                                 <Switch.Content>
                                   <Switch.Control>
@@ -1579,8 +1498,8 @@ export function IdentityTab() {
                     )}
                   </form>
                 </div>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button type="button" variant="secondary" onPress={providerModal.close}>
                   Cancel
                 </Button>
@@ -1611,30 +1530,34 @@ export function IdentityTab() {
                         : 'Create Provider'}
                   </Button>
                 )}
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
 
-      <Modal state={mappingModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>{editingMapping ? 'Edit Mapping' : 'Add Mapping'}</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
+      <DetailSheet state={mappingModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="md">
+            <DetailSheet.Dialog>
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
+                  {editingMapping ? 'Edit Mapping' : 'Add mapping'}
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body>
                 <form
                   id="identity-mapping-form"
                   className="space-y-3"
                   onSubmit={handleMappingSubmit}
                 >
-                  {mappingFormError && <p className="text-sm text-danger">{mappingFormError}</p>}
-                  <Card className="border border-divider/60 bg-content2/30">
+                  {mappingFormError && (
+                    <p className="text-sm text-destructive">{mappingFormError}</p>
+                  )}
+                  <Card className="border border-border/60 bg-muted/30">
                     <Card.Content className="space-y-1.5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      <p className="text-xs font-medium text-muted-foreground">
                         Template Variables
                       </p>
                       <p className="text-sm text-muted-foreground">
@@ -1786,9 +1709,9 @@ export function IdentityTab() {
                         it is the first capture group.
                       </p>
                       {(mappingProvisioningMode === 'create_org' || mappingRecreateMissingOrg) && (
-                        <Card className="border border-divider/60 bg-content2/30">
+                        <Card className="border border-border/60 bg-muted/30">
                           <Card.Content className="space-y-1.5">
-                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                            <p className="text-xs font-medium text-muted-foreground">
                               Live Preview
                             </p>
                             <label
@@ -1868,8 +1791,8 @@ export function IdentityTab() {
                     </>
                   )}
                 </form>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button variant="secondary" onPress={mappingModal.close}>
                   Cancel
                 </Button>
@@ -1881,27 +1804,31 @@ export function IdentityTab() {
                 >
                   {mappingSaving ? 'Saving...' : editingMapping ? 'Save Mapping' : 'Create Mapping'}
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
 
-      <Modal state={overrideModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>{editingOverride ? 'Edit Override' : 'Add Override'}</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
+      <DetailSheet state={overrideModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="md">
+            <DetailSheet.Dialog>
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
+                  {editingOverride ? 'Edit Override' : 'Add override'}
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body>
                 <form
                   id="identity-override-form"
                   className="space-y-3"
                   onSubmit={handleOverrideSubmit}
                 >
-                  {overrideFormError && <p className="text-sm text-danger">{overrideFormError}</p>}
+                  {overrideFormError && (
+                    <p className="text-sm text-destructive">{overrideFormError}</p>
+                  )}
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Select
                       value={overrideClaimType}
@@ -2016,8 +1943,8 @@ export function IdentityTab() {
                     </Select.Popover>
                   </Select>
                 </form>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button variant="secondary" onPress={overrideModal.close}>
                   Cancel
                 </Button>
@@ -2033,11 +1960,11 @@ export function IdentityTab() {
                       ? 'Save Override'
                       : 'Create Override'}
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
 
       {confirmDialog}
     </div>

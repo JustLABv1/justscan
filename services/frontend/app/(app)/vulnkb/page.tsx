@@ -11,6 +11,7 @@ import {
 import { VulnerabilityKBTable } from '@/components/vulnkb/vulnerability-kb-table';
 import { listKBEntries, type VulnKBEntry } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { pluralize } from '@/lib/labels';
 import { Card, Spinner } from '@/components/ui';
 import { InformationCircleIcon } from 'hugeicons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -188,22 +189,10 @@ function VulnKBPageContent() {
     []
   );
 
-  const paginationItems = useMemo(() => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
-    const items: Array<number | 'ellipsis'> = [1];
-    if (state.page > 3) items.push('ellipsis');
-    const start = Math.max(2, state.page - 1);
-    const end = Math.min(totalPages - 1, state.page + 1);
-    for (let page = start; page <= end; page += 1) items.push(page);
-    if (state.page < totalPages - 2) items.push('ellipsis');
-    items.push(totalPages);
-    return items;
-  }, [state.page, totalPages]);
-
   const activeFilters = [
     state.severity ? SEV_OPTIONS.find((option) => option.id === state.severity)?.label : '',
     state.minCvss !== '0' ? `CVSS ≥ ${state.minCvss}` : '',
-    state.exploitOnly ? 'Exploit Only' : '',
+    state.exploitOnly ? 'Known exploit only' : '',
     state.publishedRange
       ? PUBLISHED_OPTIONS.find((option) => option.id === state.publishedRange)?.label
       : '',
@@ -250,6 +239,21 @@ function VulnKBPageContent() {
     replaceUrl({ severity: '', minCvss: '0', exploitOnly: false, publishedRange: '', page: 1 });
   };
 
+  const clearAll = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    dispatch({ type: 'set-query-input', value: '' });
+    dispatch({ type: 'apply-query', value: '' });
+    dispatch({ type: 'clear-filters' });
+    replaceUrl({
+      query: '',
+      severity: '',
+      minCvss: '0',
+      exploitOnly: false,
+      publishedRange: '',
+      page: 1,
+    });
+  };
+
   return (
     <PageContainer>
       <PageHeader
@@ -262,7 +266,7 @@ function VulnKBPageContent() {
           <div className="flex items-center justify-between gap-3">
             <Card.Title>CVE intelligence</Card.Title>
             <span className="text-xs text-muted-foreground">
-              {state.total.toLocaleString()} matching records
+              {pluralize(state.total, 'matching record')}
             </span>
           </div>
           <VulnerabilityKBFilters
@@ -293,8 +297,8 @@ function VulnKBPageContent() {
           loading={state.loading}
           total={state.total}
           page={state.page}
-          totalPages={totalPages}
-          paginationItems={paginationItems}
+          pageSize={LIMIT}
+          onClearFilters={activeFilters.length > 0 || state.query ? clearAll : undefined}
           onRowOpen={(vulnId) => router.push(`/vulnkb/${encodeURIComponent(vulnId)}`)}
           onPageChange={goToPage}
         />

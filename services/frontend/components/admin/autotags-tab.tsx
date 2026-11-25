@@ -2,7 +2,11 @@
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
-import { StatusAlert } from '@/components/ui/form-alert';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
+import { EmptyState } from '@/components/ui/empty-state';
+import { FilterToolbar } from '@/components/ui/filter-toolbar';
+import { FormAlert, StatusAlert } from '@/components/ui/form-alert';
+import { StatusTag } from '@/components/ui/status-dot';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import {
   createAutoTagRule,
@@ -18,13 +22,16 @@ import { fullDate, timeAgo } from '@/lib/time';
 import {
   Button,
   Card,
+  Description,
   Input,
+  Label,
   ListBox,
   Modal,
-  Pagination,
+  ResourceList,
   SearchField,
   Select,
-  Table,
+  TablePager,
+  TextField,
   useOverlayState,
 } from '@/components/ui';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Tag01Icon } from 'hugeicons-react';
@@ -131,7 +138,6 @@ export function AutoTagsTab() {
       return (
         q.length === 0 ||
         rule.pattern.toLowerCase().includes(q) ||
-        rule.tag_id.toLowerCase().includes(q) ||
         (tag?.name.toLowerCase().includes(q) ?? false)
       );
     });
@@ -144,245 +150,206 @@ export function AutoTagsTab() {
     effectivePage * PAGE_SIZE
   );
 
-  const paginationItems = useMemo(() => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const items: Array<number | 'ellipsis'> = [1];
-    if (effectivePage > 3) items.push('ellipsis');
-    const start = Math.max(2, effectivePage - 1);
-    const end = Math.min(totalPages - 1, effectivePage + 1);
-    for (let i = start; i <= end; i += 1) items.push(i);
-    if (effectivePage < totalPages - 2) items.push('ellipsis');
-    items.push(totalPages);
-    return items;
-  }, [effectivePage, totalPages]);
-
   return (
-    <div className="space-y-4">
-      {error ? (
-        <StatusAlert status="danger" title="Auto-tag rules failed to load" description={error} />
-      ) : null}
-
-      <div className="flex justify-end">
-        <Button onPress={openCreate} variant="secondary">
+    <AdminPageShell
+      actions={
+        <Button size="sm" onPress={openCreate}>
           <PlusSignIcon size={15} />
-          Add Rule
+          Add rule
         </Button>
-      </div>
+      }
+    >
+      <div className="space-y-4">
+        {error ? (
+          <StatusAlert status="danger" title="Auto-tag rules failed to load" description={error} />
+        ) : null}
 
-      <Card className="space-y-4">
-        <SearchField
-          name="admin-autotags-search"
-          variant="secondary"
-          className="w-full sm:max-w-md"
-        >
-          <SearchField.Group>
-            <SearchField.SearchIcon />
-            <SearchField.Input
-              aria-label="Filter auto-tag rules"
-              placeholder="Filter by pattern or tag..."
-              value={searchQuery}
-              onChange={(event) => {
-                setSearchQuery(event.target.value);
-                setPage(1);
-              }}
-            />
-            <SearchField.ClearButton />
-          </SearchField.Group>
-        </SearchField>
+        {!loading && !error && rules.length === 0 ? (
+          <EmptyState
+            icon={<Tag01Icon size={20} />}
+            title="No auto-tag rules yet"
+            description="Rules tag new scans automatically when the image name matches a pattern such as nginx/*."
+            action={{ label: 'Add rule', onClick: openCreate }}
+          />
+        ) : (
+          <Card className="gap-0 overflow-hidden py-0">
+            <div className="border-b border-border p-4">
+              <FilterToolbar
+                search={
+                  <SearchField
+                    aria-label="Filter auto-tag rules"
+                    name="admin-autotags-search"
+                    variant="secondary"
+                    className="w-full sm:max-w-md"
+                    value={searchQuery}
+                    onChange={(value) => {
+                      setSearchQuery(value);
+                      setPage(1);
+                    }}
+                  >
+                    <SearchField.Group>
+                      <SearchField.SearchIcon />
+                      <SearchField.Input placeholder="Filter by pattern or tag..." />
+                      <SearchField.ClearButton />
+                    </SearchField.Group>
+                  </SearchField>
+                }
+              />
+            </div>
 
-        <Table variant="secondary">
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Auto tag rules" className="min-w-[880px]">
-              <Table.Header>
-                <Table.Column isRowHeader>Pattern</Table.Column>
-                <Table.Column>Tag</Table.Column>
-                <Table.Column>Created</Table.Column>
-                <Table.Column className="text-right">Actions</Table.Column>
-              </Table.Header>
-              <Table.Body
-                renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    {loading ? 'Loading auto-tag rules...' : 'No auto-tag rules match your filter.'}
-                  </div>
-                )}
-              >
+            {pagedRules.length === 0 ? (
+              <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                {loading ? 'Loading auto-tag rules...' : 'No auto-tag rules match your filter.'}
+              </p>
+            ) : (
+              <ResourceList bordered={false} aria-label="Auto-tag rules">
                 {pagedRules.map((rule) => {
                   const tag = rule.tag ?? tagById(rule.tag_id);
                   return (
-                    <Table.Row key={rule.id} id={rule.id} className="hover:bg-[var(--row-hover)]">
-                      <Table.Cell className="font-mono text-sm">{rule.pattern}</Table.Cell>
-                      <Table.Cell>
-                        {tag ? (
-                          <span
-                            className="text-xs font-medium rounded-full px-2.5 py-0.5"
-                            style={{
-                              background: `${tag.color}22`,
-                              color: tag.color,
-                              border: `1px solid ${tag.color}44`,
-                            }}
-                          >
-                            {tag.name}
+                    <ResourceList.Item
+                      key={rule.id}
+                      title={<span className="font-mono">{rule.pattern}</span>}
+                      titleTooltip={rule.pattern}
+                      description={
+                        <span title={fullDate(rule.created_at)}>
+                          Created {timeAgo(rule.created_at)}
+                        </span>
+                      }
+                      meta={
+                        tag ? (
+                          <span className="inline-flex max-w-48 items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-xs font-medium">
+                            <span
+                              aria-hidden
+                              className="size-2 shrink-0 rounded-full"
+                              style={{ backgroundColor: tag.color }}
+                            />
+                            <span className="truncate" title={tag.name}>
+                              {tag.name}
+                            </span>
                           </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground font-mono">{rule.tag_id}</span>
-                        )}
-                      </Table.Cell>
-                      <Table.Cell className="text-xs text-muted-foreground">
-                        <span title={fullDate(rule.created_at)}>{timeAgo(rule.created_at)}</span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex justify-end">
-                          <RowActionsMenu
-                            label={`Open actions for pattern ${rule.pattern}`}
-                            items={[
-                              {
-                                id: 'edit',
-                                label: 'Edit rule',
-                                icon: <PencilEdit01Icon size={15} />,
-                                onAction: () => openEdit(rule),
+                          <StatusTag tone="warning">Deleted tag</StatusTag>
+                        )
+                      }
+                      actions={
+                        <RowActionsMenu
+                          label={`Open actions for pattern ${rule.pattern}`}
+                          items={[
+                            {
+                              id: 'edit',
+                              label: 'Edit rule',
+                              icon: <PencilEdit01Icon size={15} />,
+                              onAction: () => openEdit(rule),
+                            },
+                            {
+                              id: 'delete',
+                              label: 'Delete rule',
+                              icon: <Delete01Icon size={15} />,
+                              variant: 'danger',
+                              pending: pendingAction === `delete:${rule.id}`,
+                              disabled:
+                                pendingAction !== null && pendingAction !== `delete:${rule.id}`,
+                              onAction: () => {
+                                void handleDelete(rule.id);
                               },
-                              {
-                                id: 'delete',
-                                label: 'Delete rule',
-                                icon: <Delete01Icon size={15} />,
-                                variant: 'danger',
-                                pending: pendingAction === `delete:${rule.id}`,
-                                disabled:
-                                  pendingAction !== null && pendingAction !== `delete:${rule.id}`,
-                                onAction: () => {
-                                  void handleDelete(rule.id);
-                                },
-                              },
-                            ]}
-                          />
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
+                            },
+                          ]}
+                        />
+                      }
+                    />
                   );
                 })}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-          <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
-              Showing {filteredRules.length === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1}-
-              {Math.min(effectivePage * PAGE_SIZE, filteredRules.length)} of {filteredRules.length}
-            </span>
-            <Pagination size="sm" className="justify-self-center">
-              <Pagination.Content>
-                <Pagination.Item>
-                  <Pagination.Previous
-                    isDisabled={effectivePage === 1}
-                    onPress={() => setPage((previous) => Math.max(1, previous - 1))}
-                  >
-                    <Pagination.PreviousIcon />
-                    <span>Previous</span>
-                  </Pagination.Previous>
-                </Pagination.Item>
-                {paginationItems.map((item, index) =>
-                  item === 'ellipsis' ? (
-                    <Pagination.Item key={`autotags-ellipsis-${index}`}>
-                      <Pagination.Ellipsis />
-                    </Pagination.Item>
-                  ) : (
-                    <Pagination.Item key={`autotags-page-${item}`}>
-                      <Pagination.Link
-                        isActive={item === effectivePage}
-                        onPress={() => setPage(item)}
-                      >
-                        {item}
-                      </Pagination.Link>
-                    </Pagination.Item>
-                  )
-                )}
-                <Pagination.Item>
-                  <Pagination.Next
-                    isDisabled={effectivePage === totalPages}
-                    onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-                  >
-                    <span>Next</span>
-                    <Pagination.NextIcon />
-                  </Pagination.Next>
-                </Pagination.Item>
-              </Pagination.Content>
-            </Pagination>
-            <div />
-          </Table.Footer>
-        </Table>
-      </Card>
+              </ResourceList>
+            )}
+            <TablePager
+              page={effectivePage}
+              pageSize={PAGE_SIZE}
+              total={filteredRules.length}
+              onPageChange={setPage}
+              noun="rules"
+            />
+          </Card>
+        )}
 
-      <Modal state={modal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="md" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>
-                  {isCreate ? 'Add Auto-Tag Rule' : 'Edit Auto-Tag Rule'}
-                </Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
-                <form id="autotag-form" onSubmit={handleSubmit} className="space-y-4">
-                  {formError && <p className="text-sm text-danger">{formError}</p>}
-                  <Input
-                    aria-label="Auto-tag image pattern"
-                    value={formPattern}
-                    onChange={(event) => setFormPattern(event.target.value)}
-                    placeholder="nginx/*"
-                    variant="secondary"
-                    required
-                  />
-                  {tags.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No tags available. Create tags first.</p>
-                  ) : (
-                    <Select
-                      aria-label="Tag applied by this auto-tag rule"
-                      value={formTagId}
-                      onChange={(value) => setFormTagId(String(value))}
-                      variant="secondary"
-                      isRequired
-                    >
-                      <Select.Trigger>
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
-                          <span className="shrink-0 text-muted-foreground">
-                            <Tag01Icon size={15} />
-                          </span>
-                          <Select.Value />
-                        </div>
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          {tags.map((tag) => (
-                            <ListBox.Item key={tag.id} id={tag.id}>
-                              {tag.name}
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  )}
-                </form>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="secondary" onPress={modal.close}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  form="autotag-form"
-                  variant="primary"
-                  isPending={saving}
-                  isDisabled={tags.length === 0}
-                >
-                  {isCreate ? 'Create' : 'Save'}
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-      {confirmDialog}
-    </div>
+        <Modal state={modal}>
+          <Modal.Backdrop isDismissable={false}>
+            <Modal.Container size="md" placement="center">
+              <Modal.Dialog>
+                <Modal.Header>
+                  <Modal.Heading>
+                    {isCreate ? 'Add auto-tag rule' : 'Edit auto-tag rule'}
+                  </Modal.Heading>
+                  <Modal.CloseTrigger />
+                </Modal.Header>
+                <Modal.Body>
+                  <form id="autotag-form" onSubmit={handleSubmit} className="space-y-4">
+                    {formError ? (
+                      <FormAlert title="Rule not saved" description={formError} />
+                    ) : null}
+                    <TextField isRequired value={formPattern} onChange={setFormPattern}>
+                      <Label>Image pattern</Label>
+                      <Input placeholder="nginx/*" variant="secondary" />
+                      <Description>
+                        Use * to match any characters, e.g. registry.example.com/team/*.
+                      </Description>
+                    </TextField>
+                    {tags.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No tags available. Create tags first.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <Label id="autotag-tag-label">Tag to apply</Label>
+                        <Select
+                          aria-label="Tag to apply"
+                          value={formTagId}
+                          onChange={(value) => setFormTagId(String(value))}
+                          variant="secondary"
+                          isRequired
+                        >
+                          <Select.Trigger>
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                              <span className="shrink-0 text-muted-foreground">
+                                <Tag01Icon size={15} />
+                              </span>
+                              <Select.Value />
+                            </div>
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {tags.map((tag) => (
+                                <ListBox.Item key={tag.id} id={tag.id}>
+                                  {tag.name}
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </div>
+                    )}
+                  </form>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="secondary" onPress={modal.close}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    form="autotag-form"
+                    variant="primary"
+                    isPending={saving}
+                    isDisabled={tags.length === 0}
+                  >
+                    {isCreate ? 'Create' : 'Save'}
+                  </Button>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
+        {confirmDialog}
+      </div>
+    </AdminPageShell>
   );
 }

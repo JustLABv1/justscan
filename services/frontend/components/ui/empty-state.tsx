@@ -25,7 +25,7 @@ export function EmptyState({
   action,
 }: EmptyStateProps) {
   return (
-    <Card className="surface-card rounded-xl border border-divider/70">
+    <Card className="surface-card rounded-xl border border-border">
       <Card.Content className="flex flex-col items-center gap-4 px-6 py-16 text-center">
         <SurfaceIcon icon={icon} tone={tone} size="lg" />
         <div className="space-y-2">

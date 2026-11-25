@@ -1,7 +1,10 @@
 'use client';
 
+import { FilterDisclosureTrigger } from '@/components/ui/filter-toolbar';
+import { StatusAlert } from '@/components/ui/form-alert';
 import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
-import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
+import { StatusTag, type StatusDotTone } from '@/components/ui/status-dot';
+import { displayUser, humanize, labelFor, pluralize } from '@/lib/labels';
 import { getAdminMCPOverview, listAdminMCPActivity, updateAdminMCPSettings } from '@/lib/api/admin';
 import type {
   MCPActivityFilters,
@@ -12,44 +15,50 @@ import type {
 import { useToast } from '@/components/toast';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Clock03Icon, CodeIcon, } from 'hugeicons-react';
-import { Button, Card, ListBox, Pagination, SearchField, Select, Table } from '@/components/ui';
+import {
+  Button,
+  Card,
+  Disclosure,
+  ListBox,
+  ResourceList,
+  SearchField,
+  Select,
+  SettingRow,
+  SettingsSection,
+  Table,
+  TablePager,
+} from '@/components/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const PAGE_SIZE = 25;
 type MCPWindow = '24h' | '7d' | '30d';
 
-function statusColor(
-  status: MCPInteraction['status']
-): 'success' | 'warning' | 'danger' | 'default' {
-  if (status === 'success') return 'success';
-  if (status === 'rejected') return 'warning';
-  if (status === 'error') return 'danger';
-  return 'default';
+const STATUS_DISPLAY: Record<string, { label: string; tone: StatusDotTone }> = {
+  success: { label: 'Succeeded', tone: 'success' },
+  error: { label: 'Failed', tone: 'danger' },
+  rejected: { label: 'Rejected', tone: 'warning' },
+};
+
+const TRANSPORT_LABELS: Record<string, string> = {
+  http: 'HTTP',
+  stdio: 'Local (stdio)',
+};
+
+/** MCP tool names are snake_case identifiers such as `list_scans`. */
+function toolLabel(name: string) {
+  return humanize(name) || 'Unknown tool';
 }
 
 function modeLabel(mode: MCPRuntimeMode) {
   if (mode === 'read_only') return 'Read-only';
   if (mode === 'disabled') return 'Disabled';
-  return 'Read + actions';
+  return 'Read and actions';
 }
 
 function modeDescription(mode: MCPRuntimeMode) {
   if (mode === 'read_only') return 'Read tools stay available; scan-starting actions are rejected.';
   if (mode === 'disabled') return 'All MCP requests are rejected, including active stdio sessions.';
   return 'Read tools and confirmation-gated scan actions are available.';
-}
-
-function pagerItems(page: number, totalPages: number): Array<number | 'ellipsis'> {
-  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
-  const items: Array<number | 'ellipsis'> = [1];
-  if (page > 3) items.push('ellipsis');
-  for (let value = Math.max(2, page - 1); value <= Math.min(totalPages - 1, page + 1); value += 1) {
-    items.push(value);
-  }
-  if (page < totalPages - 2) items.push('ellipsis');
-  items.push(totalPages);
-  return items;
 }
 
 export function MCPAdminTab() {
@@ -134,20 +143,92 @@ export function MCPAdminTab() {
   const metrics = overview?.metrics;
   const toolMetrics = overview?.by_tool ?? [];
   const transportMetrics = overview?.by_transport ?? [];
-  const totalPages = Math.max(1, Math.ceil(activityTotal / PAGE_SIZE));
-  const pagination = pagerItems(activityPage, totalPages);
+  const maxToolCalls = Math.max(1, ...toolMetrics.map((tool) => tool.calls));
+  const modeDirty = Boolean(overview && draftMode !== overview.settings.mode);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+      {overviewError ? (
+        <StatusAlert
+          status="danger"
+          title="MCP analytics failed to load"
+          description={overviewError}
+        />
+      ) : null}
+
+      {overview ? (
+        <SettingsSection
+          title="MCP access"
+          description="Controls what MCP clients can do. Applies to new HTTP requests and running stdio sessions."
+          footer={
+            modeDirty ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  isDisabled={savingMode}
+                  onPress={() => setDraftMode(overview.settings.mode)}
+                >
+                  Discard
+                </Button>
+                <Button size="sm" onPress={() => void saveMode()} isDisabled={savingMode}>
+                  {savingMode ? 'Saving...' : 'Save changes'}
+                </Button>
+              </>
+            ) : null
+          }
+        >
+          <SettingRow label="Runtime mode" description={modeDescription(draftMode)}>
+            <Select
+              aria-label="Runtime mode"
+              value={draftMode}
+              onChange={(value) => setDraftMode(value as MCPRuntimeMode)}
+              variant="secondary"
+              className="w-full sm:w-44"
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="enabled">Read and actions</ListBox.Item>
+                  <ListBox.Item id="read_only">Read-only</ListBox.Item>
+                  <ListBox.Item id="disabled">Disabled</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </SettingRow>
+          <SettingRow
+            label="Server configuration"
+            description={
+              overview.settings.http_enabled && overview.settings.endpoint ? (
+                <span className="break-all">HTTP endpoint: {overview.settings.endpoint}</span>
+              ) : (
+                'Set in the backend configuration file.'
+              )
+            }
+          >
+            <StatusTag tone={overview.settings.config_enabled ? 'success' : 'warning'}>
+              {overview.settings.config_enabled ? 'MCP enabled' : 'MCP not enabled'}
+            </StatusTag>
+            <StatusTag tone={overview.settings.http_enabled ? 'success' : 'muted'}>
+              {overview.settings.http_enabled ? 'HTTP exposed' : 'HTTP off'}
+            </StatusTag>
+          </SettingRow>
+        </SettingsSection>
+      ) : null}
+
+      <div className="flex flex-col justify-between gap-3 pt-2 sm:flex-row sm:items-end">
         <div>
+          <h2 className="text-base font-medium">Usage</h2>
           <p className="text-sm text-muted-foreground">
-            Tool-level telemetry for HTTP and stdio MCP clients. Payloads and credentials are never
-            stored.
+            Tool calls from HTTP and stdio clients. Only metadata is stored, never payloads or
+            credentials.
           </p>
         </div>
         <Select
-          aria-label="MCP analytics window"
+          aria-label="Time window"
           value={window}
           onChange={(value) => {
             setWindow(value as MCPWindow);
@@ -170,174 +251,107 @@ export function MCPAdminTab() {
         </Select>
       </div>
 
-      {overviewError && <p className="text-sm text-danger">{overviewError}</p>}
-
-      {metrics && !overviewLoading && (
-        <StatStrip>
+      {metrics && !overviewLoading ? (
+        <StatStrip className="lg:grid-cols-4">
           <StatStripItem
             label="Tool calls"
             value={metrics.total_calls.toLocaleString()}
-            hint={`${(metrics.error_rate * 100).toFixed(1)}% error or rejected`}
-          />
-          <StatStripItem
-            label="Successful"
-            value={metrics.successful_calls.toLocaleString()}
-            hint={`${metrics.failed_calls.toLocaleString()} tool errors`}
-            tone="success"
+            hint={`${(metrics.error_rate * 100).toFixed(1)}% failed or rejected`}
+            tone={metrics.error_rate > 0 ? 'warning' : undefined}
           />
           <StatStripItem
             label="Actions"
             value={metrics.action_calls.toLocaleString()}
-            hint={`${metrics.replayed_actions.toLocaleString()} idempotent replays`}
-            tone="warning"
+            hint={`${pluralize(metrics.replayed_actions, 'repeated request')}`}
           />
+          <StatStripItem label="Active users" value={metrics.active_users.toLocaleString()} />
           <StatStripItem
-            label="Active users"
-            value={metrics.active_users.toLocaleString()}
-            hint={`${metrics.p95_duration_ms.toFixed(0)} ms p95`}
+            label="Response time"
+            value={`${metrics.p95_duration_ms.toFixed(0)} ms`}
+            hint="95th percentile"
           />
         </StatStrip>
-      )}
+      ) : null}
 
-      {overview && (
-        <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]">
-          <Card className="space-y-4">
-            <Card.Header>
-              <Card.Title>MCP runtime control</Card.Title>
-              <Card.Description>
-                Use read-only mode while investigating integrations. The change applies to new HTTP
-                requests and active stdio tool calls.
-              </Card.Description>
-            </Card.Header>
-            <Card.Content className="space-y-4">
-              <Select
-                aria-label="MCP runtime mode"
-                value={draftMode}
-                onChange={(value) => setDraftMode(value as MCPRuntimeMode)}
-                variant="secondary"
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="enabled">Read + actions</ListBox.Item>
-                    <ListBox.Item id="read_only">Read-only</ListBox.Item>
-                    <ListBox.Item id="disabled">Disabled</ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {modeDescription(draftMode)}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <StatusTag
-                  tone={toneFromChipColor(overview.settings.config_enabled ? 'success' : 'warning')}
+      {overview ? (
+        <section className="space-y-2" aria-labelledby="mcp-tools-heading">
+          <h3 id="mcp-tools-heading" className="text-sm font-medium">
+            Most used tools
+          </h3>
+          <ResourceList aria-label="Most used MCP tools">
+            {toolMetrics.length === 0 ? (
+              <ResourceList.Item
+                title={overviewLoading ? 'Loading tool usage...' : 'No MCP calls in this window'}
+              />
+            ) : (
+              toolMetrics.map((tool) => (
+                <ResourceList.Item
+                  key={tool.tool_name}
+                  title={toolLabel(tool.tool_name)}
+                  titleTooltip={tool.tool_name}
+                  description={[
+                    pluralize(tool.calls, 'call'),
+                    tool.errors > 0 ? pluralize(tool.errors, 'error') : null,
+                    tool.actions > 0 ? pluralize(tool.actions, 'action') : null,
+                    `${tool.avg_duration_ms.toFixed(0)} ms average`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  tone={tool.errors > 0 ? 'warning' : 'default'}
                 >
-                  {overview.settings.config_enabled
-                    ? 'MCP configured'
-                    : 'MCP not enabled in config'}
-                </StatusTag>
-                <StatusTag
-                  tone={toneFromChipColor(overview.settings.http_enabled ? 'success' : undefined)}
-                >
-                  HTTP {overview.settings.http_enabled ? 'exposed' : 'off'}
-                </StatusTag>
-              </div>
-              {overview.settings.http_enabled && overview.settings.endpoint && (
-                <p className="font-mono text-xs text-muted-foreground">
-                  {overview.settings.endpoint}
-                </p>
-              )}
-              <div className="flex justify-end">
-                <Button
-                  variant="secondary"
-                  onPress={() => void saveMode()}
-                  isDisabled={savingMode || draftMode === overview.settings.mode}
-                >
-                  {savingMode ? 'Saving...' : 'Save runtime mode'}
-                </Button>
-              </div>
-            </Card.Content>
-          </Card>
+                  <div
+                    className="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-muted"
+                    aria-hidden
+                  >
+                    <div
+                      className="h-full rounded-full bg-primary/70"
+                      style={{ width: `${Math.max(2, (tool.calls / maxToolCalls) * 100)}%` }}
+                    />
+                  </div>
+                </ResourceList.Item>
+              ))
+            )}
+          </ResourceList>
+          {transportMetrics.length > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              By transport:{' '}
+              {transportMetrics
+                .map(
+                  (transport) =>
+                    `${labelFor(TRANSPORT_LABELS, transport.transport)} ${transport.calls.toLocaleString()}`
+                )
+                .join(' · ')}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
-          <Card>
-            <Card.Header>
-              <Card.Title>Most used tools</Card.Title>
-              <Card.Description>Calls and failures in the selected time window.</Card.Description>
-            </Card.Header>
-            <Card.Content>
-              <Table variant="secondary">
-                <Table.ScrollContainer>
-                  <Table.Content aria-label="MCP tool usage" className="min-w-[620px]">
-                    <Table.Header>
-                      <Table.Column isRowHeader>Tool</Table.Column>
-                      <Table.Column>Calls</Table.Column>
-                      <Table.Column>Errors</Table.Column>
-                      <Table.Column>Actions</Table.Column>
-                      <Table.Column>Avg. duration</Table.Column>
-                    </Table.Header>
-                    <Table.Body
-                      renderEmptyState={() => (
-                        <div className="py-8 text-center text-sm text-muted-foreground">
-                          {overviewLoading
-                            ? 'Loading MCP tool stats...'
-                            : 'No MCP calls in this window.'}
-                        </div>
-                      )}
-                    >
-                      {toolMetrics.map((tool) => (
-                        <Table.Row key={tool.tool_name}>
-                          <Table.Cell className="font-mono text-xs">{tool.tool_name}</Table.Cell>
-                          <Table.Cell>{tool.calls.toLocaleString()}</Table.Cell>
-                          <Table.Cell>
-                            <StatusTag
-                              tone={toneFromChipColor(tool.errors > 0 ? 'warning' : 'success')}
-                            >
-                              {tool.errors.toLocaleString()}
-                            </StatusTag>
-                          </Table.Cell>
-                          <Table.Cell>{tool.actions.toLocaleString()}</Table.Cell>
-                          <Table.Cell className="text-xs text-muted-foreground">
-                            {tool.avg_duration_ms.toFixed(0)} ms
-                          </Table.Cell>
-                        </Table.Row>
-                      ))}
-                    </Table.Body>
-                  </Table.Content>
-                </Table.ScrollContainer>
-              </Table>
-              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-divider/60 pt-3">
-                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Transport mix
-                </span>
-                {transportMetrics.map((transport) => (
-                  <StatusTag key={transport.transport}>
-                    {transport.transport}: {transport.calls.toLocaleString()}
-                  </StatusTag>
-                ))}
-                {transportMetrics.length === 0 && (
-                  <span className="text-xs text-muted-foreground">No calls yet</span>
-                )}
-              </div>
-            </Card.Content>
-          </Card>
-        </div>
-      )}
-
-      <Card className="space-y-4">
-        <Card.Header>
-          <Card.Title>Interaction activity</Card.Title>
-          <Card.Description>
-            Recent calls are searchable by tool, transport, status, and user.
-          </Card.Description>
+      <Card className="gap-0 overflow-hidden py-0">
+        <Card.Header className="border-b border-border py-4">
+          <Card.Title>Activity</Card.Title>
+          <Card.Description>Individual tool calls in the selected time window.</Card.Description>
         </Card.Header>
-        <Card.Content className="space-y-4">
-          {activityError && <p className="text-sm text-danger">{activityError}</p>}
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        <Disclosure className="border-b border-border p-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
+            <SearchField
+              aria-label="Filter by user"
+              name="mcp-activity-user"
+              variant="secondary"
+              className="min-w-0 flex-1"
+              value={filters.user}
+              onChange={(value) => {
+                setFilters((current) => ({ ...current, user: value }));
+                setActivityPage(1);
+              }}
+            >
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input placeholder="Filter by user..." />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
             <Select
-              aria-label="MCP tool filter"
+              aria-label="Tool"
               value={filters.tool || '__all__'}
               onChange={(value) => {
                 setFilters((current) => ({
@@ -347,6 +361,7 @@ export function MCPAdminTab() {
                 setActivityPage(1);
               }}
               variant="secondary"
+              className="w-full md:w-48"
             >
               <Select.Trigger>
                 <Select.Value />
@@ -357,38 +372,14 @@ export function MCPAdminTab() {
                   <ListBox.Item id="__all__">All tools</ListBox.Item>
                   {toolMetrics.map((tool) => (
                     <ListBox.Item key={tool.tool_name} id={tool.tool_name}>
-                      {tool.tool_name}
+                      {toolLabel(tool.tool_name)}
                     </ListBox.Item>
                   ))}
                 </ListBox>
               </Select.Popover>
             </Select>
             <Select
-              aria-label="MCP transport filter"
-              value={filters.transport || '__all__'}
-              onChange={(value) => {
-                setFilters((current) => ({
-                  ...current,
-                  transport: value === '__all__' ? '' : String(value),
-                }));
-                setActivityPage(1);
-              }}
-              variant="secondary"
-            >
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="__all__">All transports</ListBox.Item>
-                  <ListBox.Item id="http">HTTP</ListBox.Item>
-                  <ListBox.Item id="stdio">stdio</ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
-            <Select
-              aria-label="MCP status filter"
+              aria-label="Status"
               value={filters.status || '__all__'}
               onChange={(value) => {
                 setFilters((current) => ({
@@ -398,6 +389,7 @@ export function MCPAdminTab() {
                 setActivityPage(1);
               }}
               variant="secondary"
+              className="w-full md:w-40"
             >
               <Select.Trigger>
                 <Select.Value />
@@ -406,39 +398,108 @@ export function MCPAdminTab() {
               <Select.Popover>
                 <ListBox>
                   <ListBox.Item id="__all__">All statuses</ListBox.Item>
-                  <ListBox.Item id="success">Success</ListBox.Item>
-                  <ListBox.Item id="error">Error</ListBox.Item>
+                  <ListBox.Item id="success">Succeeded</ListBox.Item>
+                  <ListBox.Item id="error">Failed</ListBox.Item>
                   <ListBox.Item id="rejected">Rejected</ListBox.Item>
                 </ListBox>
               </Select.Popover>
             </Select>
-            <SearchField name="mcp-activity-user" variant="secondary">
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  placeholder="Filter by user"
-                  value={filters.user}
-                  onChange={(event) => {
-                    setFilters((current) => ({ ...current, user: event.target.value }));
+            <FilterDisclosureTrigger activeCount={filters.transport ? 1 : 0} />
+          </div>
+          <Disclosure.Content>
+            <Disclosure.Body className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div>
+                <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Transport
+                </span>
+                <Select
+                  aria-label="Transport"
+                  value={filters.transport || '__all__'}
+                  onChange={(value) => {
+                    setFilters((current) => ({
+                      ...current,
+                      transport: value === '__all__' ? '' : String(value),
+                    }));
                     setActivityPage(1);
                   }}
-                />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-          </div>
+                  variant="secondary"
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="__all__">All transports</ListBox.Item>
+                      <ListBox.Item id="http">{TRANSPORT_LABELS.http}</ListBox.Item>
+                      <ListBox.Item id="stdio">{TRANSPORT_LABELS.stdio}</ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </div>
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure>
 
+        {activityError ? (
+          <StatusAlert
+            className="m-4"
+            status="danger"
+            title="MCP activity failed to load"
+            description={activityError}
+          />
+        ) : null}
+
+        <Table.Responsive
+          cards={
+            <ResourceList aria-label="MCP activity" bordered={false}>
+              {!activity.length && (
+                <li className="p-4 text-sm text-muted-foreground">
+                  {activityLoading ? 'Loading MCP activity…' : 'No MCP activity found.'}
+                </li>
+              )}
+              {activity.map((entry) => {
+                const status = STATUS_DISPLAY[entry.status] ?? {
+                  label: humanize(entry.status),
+                  tone: 'neutral' as const,
+                };
+                return (
+                  <ResourceList.Item
+                    key={entry.id}
+                    title={toolLabel(entry.tool_name)}
+                    titleTooltip={entry.tool_name}
+                    description={displayUser(entry)}
+                    meta={<StatusTag tone={status.tone}>{status.label}</StatusTag>}
+                  >
+                    <p className="text-xs text-muted-foreground">{entry.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {[
+                        labelFor(TRANSPORT_LABELS, entry.transport),
+                        entry.action ? (entry.replayed ? 'Repeated action' : 'Action') : 'Read',
+                        `${entry.duration_ms.toLocaleString()} ms`,
+                      ].join(' · ')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{fullDate(entry.created_at)}</p>
+                    {entry.error_code && (
+                      <p className="text-xs text-destructive">{humanize(entry.error_code)}</p>
+                    )}
+                  </ResourceList.Item>
+                );
+              })}
+            </ResourceList>
+          }
+        >
           <Table variant="secondary">
-            <Table.ScrollContainer>
-              <Table.Content aria-label="MCP interaction activity" className="min-w-[1000px]">
+            <Table.ScrollContainer className="rounded-none border-0">
+              <Table.Content aria-label="MCP activity" aria-busy={activityLoading}>
                 <Table.Header>
-                  <Table.Column isRowHeader>Time</Table.Column>
+                  <Table.Column isRowHeader className="px-4">
+                    Tool
+                  </Table.Column>
                   <Table.Column>User</Table.Column>
-                  <Table.Column>Transport</Table.Column>
-                  <Table.Column>Tool</Table.Column>
                   <Table.Column>Status</Table.Column>
-                  <Table.Column>Duration</Table.Column>
-                  <Table.Column>Type</Table.Column>
+                  <Table.Column className="hidden md:table-cell">Details</Table.Column>
+                  <Table.Column className="px-4 text-right">Time</Table.Column>
                 </Table.Header>
                 <Table.Body
                   renderEmptyState={() => (
@@ -447,96 +508,65 @@ export function MCPAdminTab() {
                     </div>
                   )}
                 >
-                  {activity.map((entry) => (
-                    <Table.Row key={entry.id} id={entry.id} className="hover:bg-[var(--row-hover)]">
-                      <Table.Cell className="text-xs text-muted-foreground">
-                        <span title={fullDate(entry.created_at)}>{timeAgo(entry.created_at)}</span>
-                      </Table.Cell>
-                      <Table.Cell className="text-xs text-muted-foreground">
-                        {entry.username || entry.email || entry.user_id?.slice(0, 8) || 'unknown'}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <StatusTag className="font-mono">{entry.transport}</StatusTag>
-                      </Table.Cell>
-                      <Table.Cell className="font-mono text-xs">{entry.tool_name}</Table.Cell>
-                      <Table.Cell>
-                        <StatusTag tone={toneFromChipColor(statusColor(entry.status))}>
-                          {entry.status}
-                        </StatusTag>
-                      </Table.Cell>
-                      <Table.Cell className="text-xs text-muted-foreground">
-                        {entry.duration_ms} ms
-                      </Table.Cell>
-                      <Table.Cell className="text-xs">
-                        {entry.action ? (
-                          <span className="inline-flex items-center gap-1 text-warning-foreground">
-                            <CodeIcon size={14} />
-                            {entry.replayed ? 'replay' : 'action'}
+                  {activity.map((entry) => {
+                    const status = STATUS_DISPLAY[entry.status] ?? {
+                      label: humanize(entry.status),
+                      tone: 'neutral' as const,
+                    };
+                    return (
+                      <Table.Row key={entry.id} id={entry.id}>
+                        <Table.Cell className="max-w-0 px-4 sm:w-[30%]">
+                          <span className="block truncate font-medium" title={entry.tool_name}>
+                            {toolLabel(entry.tool_name)}
                           </span>
-                        ) : (
-                          'read'
-                        )}
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
+                        </Table.Cell>
+                        <Table.Cell className="max-w-48">
+                          <span
+                            className="block truncate text-muted-foreground"
+                            title={entry.email || undefined}
+                          >
+                            {displayUser(entry)}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell className="whitespace-nowrap">
+                          <StatusTag tone={status.tone}>{status.label}</StatusTag>
+                          {entry.error_code ? (
+                            <span
+                              className="block text-xs text-muted-foreground"
+                              title={entry.error_code}
+                            >
+                              {humanize(entry.error_code)}
+                            </span>
+                          ) : null}
+                        </Table.Cell>
+                        <Table.Cell className="hidden text-muted-foreground md:table-cell">
+                          {[
+                            labelFor(TRANSPORT_LABELS, entry.transport),
+                            entry.action ? (entry.replayed ? 'Repeated action' : 'Action') : 'Read',
+                            `${entry.duration_ms.toLocaleString()} ms`,
+                          ].join(' · ')}
+                        </Table.Cell>
+                        <Table.Cell className="whitespace-nowrap px-4 text-right text-muted-foreground">
+                          <span title={fullDate(entry.created_at)}>
+                            {timeAgo(entry.created_at)}
+                          </span>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
                 </Table.Body>
               </Table.Content>
             </Table.ScrollContainer>
-            <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3">
-              <span className="text-xs text-muted-foreground">
-                Showing {activityTotal === 0 ? 0 : (activityPage - 1) * PAGE_SIZE + 1}-
-                {Math.min(activityPage * PAGE_SIZE, activityTotal)} of {activityTotal}
-              </span>
-              <Pagination size="sm">
-                <Pagination.Content>
-                  <Pagination.Item>
-                    <Pagination.Previous
-                      isDisabled={activityPage === 1}
-                      onPress={() => setActivityPage((current) => Math.max(1, current - 1))}
-                    >
-                      <Pagination.PreviousIcon />
-                      <span>Previous</span>
-                    </Pagination.Previous>
-                  </Pagination.Item>
-                  {pagination.map((item, index) =>
-                    item === 'ellipsis' ? (
-                      <Pagination.Item key={`ellipsis-${index}`}>
-                        <Pagination.Ellipsis />
-                      </Pagination.Item>
-                    ) : (
-                      <Pagination.Item key={item}>
-                        <Pagination.Link
-                          isActive={item === activityPage}
-                          onPress={() => setActivityPage(item)}
-                        >
-                          {item}
-                        </Pagination.Link>
-                      </Pagination.Item>
-                    )
-                  )}
-                  <Pagination.Item>
-                    <Pagination.Next
-                      isDisabled={activityPage === totalPages}
-                      onPress={() =>
-                        setActivityPage((current) => Math.min(totalPages, current + 1))
-                      }
-                    >
-                      <span>Next</span>
-                      <Pagination.NextIcon />
-                    </Pagination.Next>
-                  </Pagination.Item>
-                </Pagination.Content>
-              </Pagination>
-              <div />
-            </Table.Footer>
           </Table>
-        </Card.Content>
+        </Table.Responsive>
+        <TablePager
+          page={activityPage}
+          pageSize={PAGE_SIZE}
+          total={activityTotal}
+          onPageChange={setActivityPage}
+          noun="calls"
+        />
       </Card>
-
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Clock03Icon size={14} />
-        Analytics are retained with the MCP interaction table and contain metadata only.
-      </div>
     </div>
   );
 }

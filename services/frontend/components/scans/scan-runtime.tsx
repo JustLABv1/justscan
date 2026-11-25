@@ -3,7 +3,15 @@
 import { getScanXrayRequestLogs } from '@/lib/api/scans';
 import type { ScanStepLog, XRayRequestLog } from '@/lib/api/types/scans';
 import { fullDate, timeAgo } from '@/lib/time';
-import { Alert, Button, Card, Chip, Modal, ProgressBar, useOverlayState } from '@/components/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  Chip,
+  DetailSheet,
+  ProgressBar,
+  useOverlayState,
+} from '@/components/ui';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
@@ -760,24 +768,25 @@ function PipelineLiveLogs({
   detailMessage: string;
   history?: boolean;
 }) {
-  const visibleLogs =
-    activeStep && activeStep.output.length > 0
-      ? activeStep.output.slice(-7)
-      : history
-        ? ['No output was recorded for this stage.']
-        : [
-            `$ justscan scan --step ${activeStep?.key ?? 'queued'}`,
-            `-> ${detailMessage}`,
-            '-> waiting for the next backend update',
-          ];
+  const visibleLogs = activeStep && activeStep.output.length > 0 ? activeStep.output.slice(-7) : [];
+  const placeholder = history ? 'No output was recorded for this stage.' : detailMessage;
 
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-3">
-      <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-lg font-mono text-xs text-foreground">
-        {visibleLogs
-          .map((line) => (line.startsWith('$') ? line : `-> ${line.replace(/^->\s?/, '')}`))
-          .join('\n')}
-      </pre>
+      {visibleLogs.length > 0 ? (
+        <ol className="max-h-96 space-y-1 overflow-y-auto text-xs text-foreground">
+          {visibleLogs.map((line, index) => (
+            <li key={index} className="break-words font-mono leading-5">
+              {line.replace(/^(\$|->)\s?/, '')}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {placeholder}
+          {history ? null : ' Waiting for the next update…'}
+        </p>
+      )}
     </div>
   );
 }
@@ -1224,24 +1233,24 @@ export function ScanStepTimeline({
         </Alert>
       ) : null}
 
-      <Modal state={xrayDebugModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="full" placement="center">
-            <Modal.Dialog className="max-h-[85vh] overflow-hidden">
-              <Modal.Header>
-                <Modal.Heading className="text-base font-semibold text-foreground">
+      <DetailSheet state={xrayDebugModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="full" placement="center">
+            <DetailSheet.Dialog>
+              <DetailSheet.Header>
+                <DetailSheet.Heading className="text-base font-semibold text-foreground">
                   Xray request timeline debug
-                </Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
-                <div className="grid h-[70vh] grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body>
+                <div className="grid min-h-0 grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
                   <div
                     className="border-b p-3 lg:border-b-0 lg:border-r"
                     style={{ borderColor: 'var(--separator-secondary)' }}
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      <p className="text-xs font-medium text-muted-foreground">
                         Requests ({xrayLogs.length})
                       </p>
                       <Button
@@ -1267,25 +1276,21 @@ export function ScanStepTimeline({
                           <button
                             key={entry.id}
                             type="button"
-                            className="w-full rounded-lg border px-2.5 py-2 text-left"
-                            style={{
-                              borderColor: isActive
-                                ? 'rgba(20,184,166,0.35)'
-                                : 'var(--separator-secondary)',
-                              background: isActive
-                                ? 'rgba(20,184,166,0.10)'
-                                : 'var(--surface-secondary)',
-                            }}
+                            className={`w-full rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                              isActive
+                                ? 'border-primary/40 bg-primary/10'
+                                : 'border-border bg-muted/30 hover:bg-muted/50'
+                            }`}
                             onClick={() => setSelectedXrayLogID(entry.id)}
                           >
-                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                              #{index + 1} - {entry.method}
+                            <p className="text-xs font-medium text-muted-foreground">
+                              #{index + 1} · {entry.method}
                             </p>
                             <p className="mt-0.5 line-clamp-2 text-xs font-medium text-foreground">
                               {entry.endpoint}
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
-                              {entry.status_code} - {entry.duration_ms}ms -{' '}
+                              HTTP {entry.status_code} · {entry.duration_ms} ms ·{' '}
                               {timeAgo(entry.created_at)}
                             </p>
                           </button>
@@ -1306,9 +1311,7 @@ export function ScanStepTimeline({
                     {selectedXrayLog ? (
                       <div className="space-y-3">
                         <Card variant="secondary">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                            Request
-                          </p>
+                          <p className="text-xs font-medium text-muted-foreground">Request</p>
                           <p className="text-sm font-semibold text-foreground">
                             {selectedXrayLog.method} {selectedXrayLog.endpoint}
                           </p>
@@ -1331,7 +1334,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          <p className="text-xs font-medium text-muted-foreground">
                             Request headers
                           </p>
                           <pre
@@ -1343,9 +1346,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                            Request body
-                          </p>
+                          <p className="text-xs font-medium text-muted-foreground">Request body</p>
                           <pre
                             className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border p-2 text-xs"
                             style={{ borderColor: 'var(--separator-tertiary)' }}
@@ -1355,7 +1356,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          <p className="text-xs font-medium text-muted-foreground">
                             Response headers
                           </p>
                           <pre
@@ -1367,9 +1368,7 @@ export function ScanStepTimeline({
                         </Card>
 
                         <Card variant="secondary">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                            Response body
-                          </p>
+                          <p className="text-xs font-medium text-muted-foreground">Response body</p>
                           <pre
                             className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border p-2 text-xs"
                             style={{ borderColor: 'var(--separator-tertiary)' }}
@@ -1385,11 +1384,11 @@ export function ScanStepTimeline({
                     )}
                   </div>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Body>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
     </section>
   );
 }

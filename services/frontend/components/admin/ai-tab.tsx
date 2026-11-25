@@ -1,7 +1,10 @@
 'use client';
 
-import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
-import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
+import { EmptyState } from '@/components/ui/empty-state';
+import { FormAlert, StatusAlert } from '@/components/ui/form-alert';
+import { StatusDot, StatusTag } from '@/components/ui/status-dot';
+import { humanize, pluralize } from '@/lib/labels';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { useToast } from '@/components/toast';
@@ -27,11 +30,14 @@ import {
   Chip,
   Label,
   ListBox,
-  Modal,
+  DetailSheet,
+  ResourceList,
   SearchField,
   Select,
+  SettingRow,
+  SettingsSection,
   Switch,
-  Table,
+  TablePager,
   useOverlayState,
 } from '@/components/ui';
 import { Delete01Icon, PencilEdit01Icon, PlusSignIcon, Rocket01Icon } from 'hugeicons-react';
@@ -116,11 +122,6 @@ function toFormState(provider?: AIProviderAdmin): ProviderFormState {
     maxOutputTokens: String(provider.maxOutputTokens),
     temperature: String(provider.temperature),
   };
-}
-
-function metricLabel(value: number | null | undefined) {
-  if (value == null) return '—';
-  return value.toString();
 }
 
 export function AITab() {
@@ -310,8 +311,8 @@ export function AITab() {
 
   async function handleDelete(provider: AIProviderAdmin) {
     const ok = await confirm({
-      title: 'Delete AI Provider',
-      message: `Remove provider "${provider.label}"?`,
+      title: `Delete ${provider.label}?`,
+      message: 'Assistant requests will no longer use this provider.',
       confirmLabel: 'Delete',
       variant: 'danger',
     });
@@ -354,524 +355,531 @@ export function AITab() {
   }
 
   const enabledCount = providers.filter((provider) => provider.enabled).length;
-  const tokenCount = providers.filter((provider) => provider.tokenConfigured).length;
-  const defaultProvider = providers.find((provider) => provider.isDefault);
+  const runtimeLabel = (type: string) =>
+    supportedProviders.find((provider) => provider.type === type)?.label ?? humanize(type);
 
   return (
-    <div className="space-y-4">
-      <StatStrip>
-        <StatStripItem
-          label="Providers"
-          value={providers.length}
-          hint={`${enabledCount} enabled`}
-        />
-        <StatStripItem label="Token health" value={tokenCount} hint="With configured credentials" />
-        <StatStripItem
-          label="AI availability"
-          value={settings?.enabled ? 'On' : 'Off'}
-          hint="Assistant request path"
-        />
-        <StatStripItem
-          label="Default provider"
-          value={defaultProvider?.label ?? 'None'}
-          hint={defaultProvider?.providerType ?? 'Unset'}
-        />
-      </StatStrip>
+    <AdminPageShell
+      actions={
+        <Button size="sm" onPress={openCreateModal}>
+          <PlusSignIcon size={15} />
+          Add provider
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        <SettingsSection
+          title="Assistant settings"
+          description="Who can use the AI assistant. Changes save immediately."
+        >
+          <SettingRow
+            label="AI assistant"
+            description="Turn the assistant on for signed-in users. Requests go to the default provider."
+          >
+            <Switch
+              aria-label="AI assistant"
+              isDisabled={!settings || savingSetting !== ''}
+              isSelected={settings?.enabled ?? false}
+              onChange={(nextSelected) => {
+                if (!settings) return;
+                void handleUpdateSettings({ enabled: nextSelected }, 'enabled');
+              }}
+            >
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+            </Switch>
+          </SettingRow>
+          <SettingRow
+            label="Anonymous access"
+            description="Let visitors who are not signed in use the assistant, for example on public scan pages."
+          >
+            <Switch
+              aria-label="Anonymous access"
+              isDisabled={!settings || savingSetting !== ''}
+              isSelected={settings?.allowAnonymous ?? false}
+              onChange={(nextSelected) => {
+                if (!settings) return;
+                void handleUpdateSettings({ allowAnonymous: nextSelected }, 'allowAnonymous');
+              }}
+            >
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+            </Switch>
+          </SettingRow>
+        </SettingsSection>
 
-      <Card className="space-y-4">
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto] lg:items-center">
-          <SearchField name="admin-ai-search" variant="secondary" className="w-full">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input
-                placeholder="Filter providers by label, key, runtime, or endpoint..."
+        {settings?.enabled && providers.length > 0 && enabledCount === 0 ? (
+          <StatusAlert
+            status="warning"
+            title="No provider is enabled"
+            description="The assistant is on, but every provider is disabled, so requests will fail."
+          />
+        ) : null}
+
+        <section className="space-y-2" aria-labelledby="ai-providers-heading">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 id="ai-providers-heading" className="text-base font-medium">
+                Providers
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {providers.length > 0
+                  ? `${enabledCount} of ${pluralize(providers.length, 'provider')} enabled`
+                  : 'Connect a model provider to answer assistant requests.'}
+              </p>
+            </div>
+            {providers.length > 5 ? (
+              <SearchField
+                aria-label="Filter providers"
+                name="admin-ai-search"
+                variant="secondary"
+                className="w-full sm:w-72"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-
-          <Switch
-            isDisabled={!settings || savingSetting !== ''}
-            isSelected={settings?.enabled ?? false}
-            onChange={(nextSelected) => {
-              if (!settings) return;
-              void handleUpdateSettings({ enabled: nextSelected }, 'enabled');
-            }}
-          >
-            <Switch.Content>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-              AI Enabled
-            </Switch.Content>
-          </Switch>
-
-          <Switch
-            isDisabled={!settings || savingSetting !== ''}
-            isSelected={settings?.allowAnonymous ?? false}
-            onChange={(nextSelected) => {
-              if (!settings) return;
-              void handleUpdateSettings({ allowAnonymous: nextSelected }, 'allowAnonymous');
-            }}
-          >
-            <Switch.Content>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-              Anonymous Access
-            </Switch.Content>
-          </Switch>
-
-          <Button variant="secondary" onPress={openCreateModal}>
-            <PlusSignIcon size={15} />
-            Add Provider
-          </Button>
-        </div>
-
-        <Table variant="secondary">
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Configured AI providers" className="min-w-[980px]">
-              <Table.Header>
-                <Table.Column isRowHeader>Provider</Table.Column>
-                <Table.Column>Runtime</Table.Column>
-                <Table.Column>Endpoint</Table.Column>
-                <Table.Column>Status</Table.Column>
-                <Table.Column className="text-right">Actions</Table.Column>
-              </Table.Header>
-              <Table.Body
-                renderEmptyState={() => (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    {loading ? 'Loading AI providers...' : 'No providers found.'}
-                  </div>
-                )}
+                onChange={(value) => {
+                  setSearch(value);
+                  setPage(1);
+                }}
               >
-                {pagedProviders.map((provider) => (
-                  <Table.Row key={provider.providerKey} id={provider.providerKey}>
-                    <Table.Cell>
-                      <p className="font-medium">{provider.label}</p>
-                      <p className="font-mono text-xs text-muted-foreground">
-                        {provider.providerKey}
-                      </p>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <p className="text-sm">{provider.providerType}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {provider.chatModel || 'No chat model set'}
-                      </p>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <p className="font-mono text-xs text-muted-foreground break-all">
-                        {provider.baseUrl || 'No base URL set'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {provider.apiPath || provider.apiVersion || 'Default API route'}
-                      </p>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex flex-wrap gap-2">
-                        {provider.isDefault && <StatusTag tone="accent">Default</StatusTag>}
-                        <StatusTag
-                          tone={toneFromChipColor(provider.enabled ? 'success' : 'danger')}
-                        >
-                          {provider.enabled ? 'Enabled' : 'Disabled'}
-                        </StatusTag>
-                        <StatusTag
-                          tone={toneFromChipColor(provider.tokenConfigured ? 'success' : 'warning')}
-                        >
-                          {provider.tokenConfigured ? 'Token set' : 'Token missing'}
-                        </StatusTag>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex justify-end">
-                        <RowActionsMenu
-                          label={`Open actions for provider ${provider.label}`}
-                          items={[
-                            {
-                              id: 'test',
-                              label:
-                                testingKey === provider.providerKey
-                                  ? 'Testing...'
-                                  : 'Test provider',
-                              icon: <Rocket01Icon size={15} />,
-                              onAction: () => {
-                                void handleTest(provider.providerKey);
-                              },
-                            },
-                            {
-                              id: 'edit',
-                              label: 'Edit provider',
-                              icon: <PencilEdit01Icon size={15} />,
-                              onAction: () => openEditModal(provider),
-                            },
-                            {
-                              id: 'delete',
-                              label: 'Delete provider',
-                              icon: <Delete01Icon size={15} />,
-                              variant: 'danger',
-                              onAction: () => {
-                                void handleDelete(provider);
-                              },
-                            },
-                          ]}
-                        />
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
-
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            Showing {filteredProviders.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}-
-            {Math.min(currentPage * PAGE_SIZE, filteredProviders.length)} of{' '}
-            {filteredProviders.length}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              isDisabled={currentPage <= 1}
-              onPress={() => setPage((current) => Math.max(1, current - 1))}
-            >
-              Previous
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              variant="secondary"
-              isDisabled={currentPage >= totalPages}
-              onPress={() => setPage((current) => Math.min(totalPages, current + 1))}
-            >
-              Next
-            </Button>
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder="Filter providers..." />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+            ) : null}
           </div>
-        </div>
-      </Card>
 
-      <Card>
-        <Card.Content className="space-y-2">
-          <p className="text-sm font-medium">Supported Runtimes</p>
-          <div className="flex flex-wrap gap-2">
-            {supportedProviders.map((provider) => (
-              <StatusTag key={provider.type}>{provider.label}</StatusTag>
-            ))}
-          </div>
-        </Card.Content>
-      </Card>
-
-      <Modal state={modal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="lg" placement="center">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>
-                  {editingProviderKey ? 'Edit Provider' : 'Create Provider'}
-                </Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Configure provider identity, endpoint, and runtime behavior in three steps.
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Chip
-                      variant={providerStep === 0 ? 'primary' : 'soft'}
-                      color={providerStep === 0 ? 'accent' : 'default'}
-                    >
-                      1. Identity
-                    </Chip>
-                    <Chip
-                      variant={providerStep === 1 ? 'primary' : 'soft'}
-                      color={providerStep === 1 ? 'accent' : 'default'}
-                    >
-                      2. Endpoint
-                    </Chip>
-                    <Chip
-                      variant={providerStep === 2 ? 'primary' : 'soft'}
-                      color={providerStep === 2 ? 'accent' : 'default'}
-                    >
-                      3. Runtime
-                    </Chip>
-                  </div>
-                  <form
-                    id="ai-provider-form"
-                    className="space-y-4"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void handleSave();
-                    }}
-                  >
-                    {formError && <p className="text-sm text-danger">{formError}</p>}
-
-                    {providerStep === 0 && (
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <FormField
-                          label="Provider key"
-                          description="Stable identifier used by the backend."
-                          placeholder="primary-openai"
-                          required
-                          disabled={Boolean(editingProviderKey)}
-                          value={form.providerKey}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, providerKey: event.target.value }))
+          {!loading && providers.length === 0 ? (
+            <EmptyState
+              icon={<Rocket01Icon size={20} />}
+              title="No AI providers yet"
+              description={
+                supportedProviders.length > 0
+                  ? `Supported runtimes: ${supportedProviders.map((provider) => provider.label).join(', ')}.`
+                  : 'Add a provider to enable the assistant.'
+              }
+              action={{ label: 'Add provider', onClick: openCreateModal }}
+            />
+          ) : (
+            <Card className="gap-0 overflow-hidden py-0">
+              {pagedProviders.length === 0 ? (
+                <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  {loading ? 'Loading AI providers...' : 'No providers match your filter.'}
+                </p>
+              ) : (
+                <ResourceList bordered={false} aria-label="AI providers">
+                  {pagedProviders.map((provider) => (
+                    <ResourceList.Item
+                      key={provider.providerKey}
+                      media={
+                        <StatusDot
+                          tone={
+                            !provider.enabled
+                              ? 'muted'
+                              : provider.tokenConfigured
+                                ? 'success'
+                                : 'warning'
                           }
                         />
-
-                        <Select
-                          className="w-full min-w-0"
-                          isDisabled={Boolean(editingProviderKey)}
-                          variant="secondary"
-                          value={form.providerType}
-                          onChange={(value) => handleProviderTypeChange(String(value))}
-                        >
-                          <Label
-                            className="text-sm font-medium"
-                            style={{ color: 'var(--text-secondary)' }}
+                      }
+                      title={provider.label}
+                      description={[
+                        runtimeLabel(provider.providerType),
+                        provider.chatModel || 'No chat model set',
+                      ].join(' · ')}
+                      meta={
+                        <>
+                          {provider.isDefault ? (
+                            <Chip size="sm" color="accent">
+                              Default
+                            </Chip>
+                          ) : null}
+                          {provider.enabled && !provider.tokenConfigured ? (
+                            <StatusTag tone="warning">Credentials missing</StatusTag>
+                          ) : null}
+                          <StatusTag tone={provider.enabled ? 'success' : 'muted'}>
+                            {provider.enabled ? 'Enabled' : 'Disabled'}
+                          </StatusTag>
+                        </>
+                      }
+                      actions={
+                        <>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            isDisabled={testingKey === provider.providerKey}
+                            onPress={() => void handleTest(provider.providerKey)}
                           >
-                            Provider type <span className="text-danger">*</span>
-                          </Label>
-                          <Select.Trigger className={selectTriggerCls}>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox>
-                              {supportedProviders.map((provider) => (
-                                <ListBox.Item key={provider.type} id={provider.type}>
-                                  {provider.label}
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
-
-                        <FormField
-                          label="Label"
-                          placeholder="Primary OpenAI"
-                          required
-                          value={form.label}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, label: event.target.value }))
-                          }
-                        />
-                        <FormField
-                          label="Chat model"
-                          placeholder={providerTypeMeta?.defaultModel ?? 'gpt-4o-mini'}
-                          required
-                          value={form.chatModel}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, chatModel: event.target.value }))
-                          }
-                        />
-                      </div>
-                    )}
-
-                    {providerStep === 1 && (
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <FormField
-                          containerClassName="md:col-span-2"
-                          label="Base URL"
-                          placeholder={providerTypeMeta?.defaultUrl ?? 'https://api.openai.com/v1'}
-                          required
-                          value={form.baseUrl}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, baseUrl: event.target.value }))
-                          }
-                        />
-                        <FormField
-                          label="API path"
-                          placeholder="Optional override"
-                          value={form.apiPath}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, apiPath: event.target.value }))
-                          }
-                        />
-                        <FormField
-                          label="API version"
-                          placeholder="Optional"
-                          value={form.apiVersion}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, apiVersion: event.target.value }))
-                          }
-                        />
-                        <FormField
-                          label="Region"
-                          placeholder="Optional"
-                          value={form.region}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, region: event.target.value }))
-                          }
-                        />
-                        <FormField
-                          label="Organization"
-                          placeholder="Optional"
-                          value={form.organization}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, organization: event.target.value }))
-                          }
-                        />
-                        <FormField
-                          containerClassName="md:col-span-2"
-                          label="API token"
-                          type="password"
-                          description={
-                            editingProvider?.tokenConfigured
-                              ? 'Leave blank to keep the current token.'
-                              : 'Required for hosted providers.'
-                          }
-                          placeholder={
-                            editingProvider?.tokenConfigured
-                              ? 'Current token already configured'
-                              : 'Paste provider token'
-                          }
-                          value={form.token}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, token: event.target.value }))
-                          }
-                        />
-                      </div>
-                    )}
-
-                    {providerStep === 2 && (
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <FormField
-                          label="Embedding model"
-                          placeholder="Optional"
-                          value={form.embeddingModel}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              embeddingModel: event.target.value,
-                            }))
-                          }
-                        />
-                        <FormField
-                          label="Temperature"
-                          type="number"
-                          min="0"
-                          max="2"
-                          step="0.1"
-                          value={form.temperature}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, temperature: event.target.value }))
-                          }
-                        />
-                        <FormField
-                          label="Timeout (s)"
-                          type="number"
-                          min="1"
-                          value={form.timeoutSeconds}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              timeoutSeconds: event.target.value,
-                            }))
-                          }
-                        />
-                        <FormField
-                          label="Context tokens"
-                          type="number"
-                          min="1"
-                          value={form.maxContextTokens}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              maxContextTokens: event.target.value,
-                            }))
-                          }
-                        />
-                        <FormField
-                          label="Output tokens"
-                          type="number"
-                          min="1"
-                          value={form.maxOutputTokens}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              maxOutputTokens: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                    )}
-
-                    {providerStep === 2 && (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <Switch
-                          isSelected={form.enabled}
-                          onChange={(next) => setForm((current) => ({ ...current, enabled: next }))}
+                            {testingKey === provider.providerKey ? 'Testing...' : 'Test'}
+                          </Button>
+                          <RowActionsMenu
+                            label={`Open actions for provider ${provider.label}`}
+                            items={[
+                              {
+                                id: 'edit',
+                                label: 'Edit provider',
+                                icon: <PencilEdit01Icon size={15} />,
+                                onAction: () => openEditModal(provider),
+                              },
+                              {
+                                id: 'delete',
+                                label: 'Delete provider',
+                                icon: <Delete01Icon size={15} />,
+                                variant: 'danger',
+                                onAction: () => {
+                                  void handleDelete(provider);
+                                },
+                              },
+                            ]}
+                          />
+                        </>
+                      }
+                    >
+                      {provider.baseUrl ? (
+                        <p
+                          className="truncate text-xs text-muted-foreground"
+                          title={provider.baseUrl}
                         >
-                          <Switch.Content>
-                            <Switch.Control>
-                              <Switch.Thumb />
-                            </Switch.Control>
-                            Provider enabled
-                          </Switch.Content>
-                        </Switch>
-                        <Switch
-                          isSelected={form.isDefault}
-                          onChange={(next) =>
-                            setForm((current) => ({ ...current, isDefault: next }))
-                          }
-                        >
-                          <Switch.Content>
-                            <Switch.Control>
-                              <Switch.Thumb />
-                            </Switch.Control>
-                            Set as default provider
-                          </Switch.Content>
-                        </Switch>
-                      </div>
-                    )}
-                  </form>
-                </div>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button type="button" variant="secondary" onPress={modal.close}>
-                  Cancel
-                </Button>
-                {providerStep > 0 && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onPress={() => setProviderStep((current) => Math.max(current - 1, 0))}
-                  >
-                    Back
-                  </Button>
-                )}
-                {providerStep < 2 ? (
-                  <Button type="button" variant="primary" onPress={handleProviderPrimaryAction}>
-                    Next
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="primary"
-                    isDisabled={saving}
-                    onPress={handleProviderPrimaryAction}
-                  >
-                    {saving
-                      ? 'Saving...'
-                      : editingProviderKey
-                        ? 'Save Provider'
-                        : 'Create Provider'}
-                  </Button>
-                )}
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+                          {provider.baseUrl}
+                        </p>
+                      ) : null}
+                    </ResourceList.Item>
+                  ))}
+                </ResourceList>
+              )}
+              <TablePager
+                page={currentPage}
+                pageSize={PAGE_SIZE}
+                total={filteredProviders.length}
+                onPageChange={setPage}
+                noun="providers"
+              />
+            </Card>
+          )}
+        </section>
 
-      {confirmDialog}
-    </div>
+        <DetailSheet state={modal}>
+          <DetailSheet.Backdrop isDismissable={false}>
+            <DetailSheet.Container size="lg">
+              <DetailSheet.Dialog>
+                <DetailSheet.Header>
+                  <DetailSheet.Heading>
+                    {editingProviderKey ? 'Edit provider' : 'Add provider'}
+                  </DetailSheet.Heading>
+                  <DetailSheet.CloseTrigger />
+                </DetailSheet.Header>
+                <DetailSheet.Body>
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Configure provider identity, endpoint, and runtime behavior in three steps.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Chip
+                        variant={providerStep === 0 ? 'primary' : 'soft'}
+                        color={providerStep === 0 ? 'accent' : 'default'}
+                      >
+                        1. Identity
+                      </Chip>
+                      <Chip
+                        variant={providerStep === 1 ? 'primary' : 'soft'}
+                        color={providerStep === 1 ? 'accent' : 'default'}
+                      >
+                        2. Endpoint
+                      </Chip>
+                      <Chip
+                        variant={providerStep === 2 ? 'primary' : 'soft'}
+                        color={providerStep === 2 ? 'accent' : 'default'}
+                      >
+                        3. Runtime
+                      </Chip>
+                    </div>
+                    <form
+                      id="ai-provider-form"
+                      className="space-y-4"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void handleSave();
+                      }}
+                    >
+                      {formError ? (
+                        <FormAlert title="Provider not saved" description={formError} />
+                      ) : null}
+
+                      {providerStep === 0 && (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <FormField
+                            label="Provider key"
+                            description="Stable identifier used by the backend."
+                            placeholder="primary-openai"
+                            required
+                            disabled={Boolean(editingProviderKey)}
+                            value={form.providerKey}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                providerKey: event.target.value,
+                              }))
+                            }
+                          />
+
+                          <Select
+                            className="w-full min-w-0"
+                            isDisabled={Boolean(editingProviderKey)}
+                            variant="secondary"
+                            value={form.providerType}
+                            onChange={(value) => handleProviderTypeChange(String(value))}
+                          >
+                            <Label className="text-sm font-medium">
+                              Provider type <span className="text-destructive">*</span>
+                            </Label>
+                            <Select.Trigger className={selectTriggerCls}>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox>
+                                {supportedProviders.map((provider) => (
+                                  <ListBox.Item key={provider.type} id={provider.type}>
+                                    {provider.label}
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                ))}
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+
+                          <FormField
+                            label="Label"
+                            placeholder="Primary OpenAI"
+                            required
+                            value={form.label}
+                            onChange={(event) =>
+                              setForm((current) => ({ ...current, label: event.target.value }))
+                            }
+                          />
+                          <FormField
+                            label="Chat model"
+                            placeholder={providerTypeMeta?.defaultModel ?? 'gpt-4o-mini'}
+                            required
+                            value={form.chatModel}
+                            onChange={(event) =>
+                              setForm((current) => ({ ...current, chatModel: event.target.value }))
+                            }
+                          />
+                        </div>
+                      )}
+
+                      {providerStep === 1 && (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <FormField
+                            containerClassName="md:col-span-2"
+                            label="Base URL"
+                            placeholder={
+                              providerTypeMeta?.defaultUrl ?? 'https://api.openai.com/v1'
+                            }
+                            required
+                            value={form.baseUrl}
+                            onChange={(event) =>
+                              setForm((current) => ({ ...current, baseUrl: event.target.value }))
+                            }
+                          />
+                          <FormField
+                            label="API path"
+                            placeholder="Optional override"
+                            value={form.apiPath}
+                            onChange={(event) =>
+                              setForm((current) => ({ ...current, apiPath: event.target.value }))
+                            }
+                          />
+                          <FormField
+                            label="API version"
+                            placeholder="Optional"
+                            value={form.apiVersion}
+                            onChange={(event) =>
+                              setForm((current) => ({ ...current, apiVersion: event.target.value }))
+                            }
+                          />
+                          <FormField
+                            label="Region"
+                            placeholder="Optional"
+                            value={form.region}
+                            onChange={(event) =>
+                              setForm((current) => ({ ...current, region: event.target.value }))
+                            }
+                          />
+                          <FormField
+                            label="Organization"
+                            placeholder="Optional"
+                            value={form.organization}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                organization: event.target.value,
+                              }))
+                            }
+                          />
+                          <FormField
+                            containerClassName="md:col-span-2"
+                            label="API token"
+                            type="password"
+                            description={
+                              editingProvider?.tokenConfigured
+                                ? 'Leave blank to keep the current token.'
+                                : 'Required for hosted providers.'
+                            }
+                            placeholder={
+                              editingProvider?.tokenConfigured
+                                ? 'Current token already configured'
+                                : 'Paste provider token'
+                            }
+                            value={form.token}
+                            onChange={(event) =>
+                              setForm((current) => ({ ...current, token: event.target.value }))
+                            }
+                          />
+                        </div>
+                      )}
+
+                      {providerStep === 2 && (
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                          <FormField
+                            label="Embedding model"
+                            placeholder="Optional"
+                            value={form.embeddingModel}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                embeddingModel: event.target.value,
+                              }))
+                            }
+                          />
+                          <FormField
+                            label="Temperature"
+                            type="number"
+                            min="0"
+                            max="2"
+                            step="0.1"
+                            value={form.temperature}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                temperature: event.target.value,
+                              }))
+                            }
+                          />
+                          <FormField
+                            label="Timeout (s)"
+                            type="number"
+                            min="1"
+                            value={form.timeoutSeconds}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                timeoutSeconds: event.target.value,
+                              }))
+                            }
+                          />
+                          <FormField
+                            label="Context tokens"
+                            type="number"
+                            min="1"
+                            value={form.maxContextTokens}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                maxContextTokens: event.target.value,
+                              }))
+                            }
+                          />
+                          <FormField
+                            label="Output tokens"
+                            type="number"
+                            min="1"
+                            value={form.maxOutputTokens}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                maxOutputTokens: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      )}
+
+                      {providerStep === 2 && (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <Switch
+                            isSelected={form.enabled}
+                            onChange={(next) =>
+                              setForm((current) => ({ ...current, enabled: next }))
+                            }
+                          >
+                            <Switch.Content>
+                              <Switch.Control>
+                                <Switch.Thumb />
+                              </Switch.Control>
+                              Provider enabled
+                            </Switch.Content>
+                          </Switch>
+                          <Switch
+                            isSelected={form.isDefault}
+                            onChange={(next) =>
+                              setForm((current) => ({ ...current, isDefault: next }))
+                            }
+                          >
+                            <Switch.Content>
+                              <Switch.Control>
+                                <Switch.Thumb />
+                              </Switch.Control>
+                              Set as default provider
+                            </Switch.Content>
+                          </Switch>
+                        </div>
+                      )}
+                    </form>
+                  </div>
+                </DetailSheet.Body>
+                <DetailSheet.Footer>
+                  <Button type="button" variant="secondary" onPress={modal.close}>
+                    Cancel
+                  </Button>
+                  {providerStep > 0 && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onPress={() => setProviderStep((current) => Math.max(current - 1, 0))}
+                    >
+                      Back
+                    </Button>
+                  )}
+                  {providerStep < 2 ? (
+                    <Button type="button" variant="primary" onPress={handleProviderPrimaryAction}>
+                      Next
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      isDisabled={saving}
+                      onPress={handleProviderPrimaryAction}
+                    >
+                      {saving
+                        ? 'Saving...'
+                        : editingProviderKey
+                          ? 'Save Provider'
+                          : 'Create Provider'}
+                    </Button>
+                  )}
+                </DetailSheet.Footer>
+              </DetailSheet.Dialog>
+            </DetailSheet.Container>
+          </DetailSheet.Backdrop>
+        </DetailSheet>
+
+        {confirmDialog}
+      </div>
+    </AdminPageShell>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import { AlertDialog } from '@/components/ui/alert-dialog';
 
 import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
 import { ArtifactScansTable } from '@/components/scans/artifact-scans-table';
@@ -34,7 +35,6 @@ import {
 import { deferEffect } from '@/lib/defer-effect';
 import {
   Alert,
-  AlertDialog,
   Button,
   Card,
   Disclosure,
@@ -58,6 +58,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useConditionalInterval } from '@/hooks/use-conditional-interval';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { fullDate } from '@/lib/time';
 
 type MetricTone = 'neutral' | 'danger' | 'success';
 
@@ -403,7 +404,7 @@ export default function ImageScansPage() {
   if (!imageName)
     return (
       <PageContainer>
-        <Card className="p-6 text-sm text-danger">This image reference is invalid.</Card>
+        <Card className="p-6 text-sm text-destructive">This image reference is invalid.</Card>
       </PageContainer>
     );
 
@@ -432,90 +433,83 @@ export default function ImageScansPage() {
         }
       />
       <AlertDialog
-        isOpen={Boolean(pendingDelete)}
+        open={Boolean(pendingDelete)}
+        dismissible={false}
         onOpenChange={(isOpen) => {
           if (!isOpen && !deleting) setPendingDelete(null);
         }}
       >
-        <AlertDialog.Backdrop variant="blur">
-          <AlertDialog.Container placement="center">
-            <AlertDialog.Dialog className="sm:max-w-[440px]">
-              {!deleting ? <AlertDialog.CloseTrigger /> : null}
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>
-                  {deleting
-                    ? 'Deleting scan history…'
-                    : pendingDelete?.kind === 'image'
-                      ? 'Delete image scan group?'
-                      : pendingDelete?.kind === 'tag'
-                        ? 'Delete tag scan history?'
-                        : 'Delete scan history item?'}
-                </AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body>
-                {deleting ? (
-                  <div
-                    aria-busy="true"
-                    aria-live="polite"
-                    className="flex items-start gap-3 rounded-xl border border-danger/20 bg-danger/5 p-3"
-                    role="status"
-                  >
-                    <Spinner aria-label="Deleting scan history" color="danger" size="md" />
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-sm font-medium text-foreground">
-                        Deleting {pendingScanCount} scan {pendingScanCount === 1 ? 'run' : 'runs'}…
-                      </p>
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        Large histories can take a little while. Keep this window open until the
-                        deletion finishes.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    {pendingDelete?.kind === 'image' ? (
-                      <>
-                        This removes <strong>{imageName}</strong>, including every tag and scan run
-                        in this workspace. This cannot be undone.
-                      </>
-                    ) : pendingDelete?.kind === 'tag' ? (
-                      <>
-                        This removes <strong>{pendingDelete?.artifact.image_tag}</strong> and all{' '}
-                        {pendingDelete?.artifact.scan_count ?? 0} of its historical scan runs. This
-                        cannot be undone.
-                      </>
-                    ) : (
-                      <>
-                        This removes scan <strong>{pendingDelete?.scan.id.slice(0, 8)}…</strong>{' '}
-                        from{' '}
-                        <strong>
-                          {imageName}:{pendingDelete?.scan.image_tag}
-                        </strong>
-                        . This cannot be undone.
-                      </>
-                    )}
+        <AlertDialog.Content tone="destructive" blur>
+          <AlertDialog.Title>
+            {deleting
+              ? 'Deleting scan history…'
+              : pendingDelete?.kind === 'image'
+                ? 'Delete image scan group?'
+                : pendingDelete?.kind === 'tag'
+                  ? 'Delete tag scan history?'
+                  : 'Delete scan history item?'}
+          </AlertDialog.Title>
+          <div>
+            {deleting ? (
+              <div
+                aria-busy="true"
+                aria-live="polite"
+                className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-3"
+                role="status"
+              >
+                <Spinner aria-label="Deleting scan history" color="danger" size="md" />
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    Deleting {pendingScanCount} scan {pendingScanCount === 1 ? 'run' : 'runs'}…
                   </p>
+                  <AlertDialog.Description>
+                    Large histories can take a little while. Keep this window open until the
+                    deletion finishes.
+                  </AlertDialog.Description>
+                </div>
+              </div>
+            ) : (
+              <AlertDialog.Description>
+                {pendingDelete?.kind === 'image' ? (
+                  <>
+                    This removes <strong>{imageName}</strong>, including every tag and scan run in
+                    this workspace. This cannot be undone.
+                  </>
+                ) : pendingDelete?.kind === 'tag' ? (
+                  <>
+                    This removes <strong>{pendingDelete?.artifact.image_tag}</strong> and all{' '}
+                    {pendingDelete?.artifact.scan_count ?? 0} of its historical scan runs. This
+                    cannot be undone.
+                  </>
+                ) : (
+                  <>
+                    This removes the scan from{' '}
+                    <strong>{pendingDelete ? fullDate(pendingDelete.scan.created_at) : ''}</strong>{' '}
+                    from{' '}
+                    <strong>
+                      {imageName}:{pendingDelete?.scan.image_tag}
+                    </strong>
+                    . This cannot be undone.
+                  </>
                 )}
-              </AlertDialog.Body>
-              <AlertDialog.Footer>
-                {!deleting ? (
-                  <Button slot="close" variant="tertiary">
-                    Cancel
-                  </Button>
-                ) : null}
-                <Button
-                  isDisabled={deleting}
-                  isPending={deleting}
-                  onPress={() => void confirmDelete()}
-                  variant="danger"
-                >
-                  {deleting ? 'Deleting scan history…' : 'Delete'}
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
+              </AlertDialog.Description>
+            )}
+          </div>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel disabled={deleting} />
+            <AlertDialog.Action
+              disabled={deleting}
+              loading={deleting}
+              onClick={(event) => {
+                // These flows retain failures in place and close only after success.
+                event.preventDefault();
+                void confirmDelete();
+              }}
+            >
+              {deleting ? 'Deleting scan history…' : 'Delete'}
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
       </AlertDialog>
       {queuedDeletions.size > 0 ? (
         <Alert className="items-center gap-3 py-3" status="warning">
@@ -609,7 +603,7 @@ export default function ImageScansPage() {
             </SearchField>
             <Select
               aria-label="Latest state"
-              className="min-w-[180px]"
+              className="w-full sm:w-44"
               value={status || '__all__'}
               onChange={(value) => setStatus(value === '__all__' ? '' : String(value ?? ''))}
               variant="secondary"
@@ -630,7 +624,7 @@ export default function ImageScansPage() {
             </Select>
             <Select
               aria-label="Current risk"
-              className="min-w-[170px]"
+              className="w-full sm:w-44"
               value={critical || '__all__'}
               onChange={(value) =>
                 setCritical((value === '__all__' ? '' : (value ?? '')) as '' | 'yes' | 'no')
@@ -651,7 +645,7 @@ export default function ImageScansPage() {
             </Select>
             <Select
               aria-label="Policy result"
-              className="min-w-[180px]"
+              className="w-full sm:w-44"
               value={policy || '__all__'}
               onChange={(value) =>
                 setPolicy((value === '__all__' ? '' : (value ?? '')) as '' | 'fail')
@@ -675,7 +669,7 @@ export default function ImageScansPage() {
             <Disclosure.Body className={filterDisclosureBodyClassName}>
               <Select
                 aria-label="Time range"
-                className="min-w-[180px] flex-1"
+                className="w-full sm:flex-1"
                 value={range || '__all__'}
                 onChange={(value) =>
                   setRange((value === '__all__' ? '' : (value ?? '')) as '' | RecentActivityRange)
@@ -716,9 +710,11 @@ export default function ImageScansPage() {
           </Disclosure.Content>
         </Disclosure>
       </Card>
-      {error ? <Card className="border-danger/40 p-4 text-sm text-danger">{error}</Card> : null}
+      {error ? (
+        <Card className="border-destructive/40 p-4 text-sm text-destructive">{error}</Card>
+      ) : null}
       <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-divider px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div>
             <h2 className="text-sm font-semibold">Tags</h2>
             <p className="mt-1 text-xs text-muted-foreground">

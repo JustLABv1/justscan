@@ -1,27 +1,58 @@
 'use client';
 
-import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
-import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
-import { StatusAlert } from '@/components/ui/form-alert';
+import { AdminPageShell } from '@/components/admin/admin-page-shell';
 import { ScannerRuntimePanel } from '@/components/admin/scanner-runtime-panel';
+import { Button, ResourceList } from '@/components/ui';
+import { StatusAlert } from '@/components/ui/form-alert';
+import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
+import { StatusDot, StatusTag, type StatusDotTone } from '@/components/ui/status-dot';
 import { getScannerHealth } from '@/lib/api/dashboard';
-import type { ScannerHealth } from '@/lib/api/types/dashboard';
+import type { ScannerHealth, ScannerHealthWorker } from '@/lib/api/types/dashboard';
 import { deferEffect } from '@/lib/defer-effect';
-import { fullDate } from '@/lib/time';
-import { Button, Card } from '@/components/ui';
+import { summarizeError } from '@/lib/labels';
+import { fullDate, timeAgo } from '@/lib/time';
 import { useCallback, useEffect, useState } from 'react';
 
 function formatDbAge(hours?: number | null): string {
   if (hours == null || Number.isNaN(hours)) return 'Unknown';
-  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m`;
-  if (hours < 24) return `${hours >= 10 ? hours.toFixed(0) : hours.toFixed(1)}h`;
-  return `${(hours / 24).toFixed(1)}d`;
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
+  if (hours < 24) return `${hours >= 10 ? hours.toFixed(0) : hours.toFixed(1)} h`;
+  return `${(hours / 24).toFixed(1)} days`;
 }
 
-function statusColor(status: 'healthy' | 'stale' | 'error'): 'success' | 'warning' | 'danger' {
-  if (status === 'healthy') return 'success';
-  if (status === 'stale') return 'warning';
-  return 'danger';
+const WORKER_STATUS: Record<
+  ScannerHealthWorker['status'],
+  { label: string; tone: StatusDotTone; rowTone: 'default' | 'warning' | 'danger' }
+> = {
+  healthy: { label: 'Healthy', tone: 'success', rowTone: 'default' },
+  stale: { label: 'Stale', tone: 'warning', rowTone: 'warning' },
+  error: { label: 'Error', tone: 'danger', rowTone: 'danger' },
+};
+
+function DbFreshness({
+  label,
+  updatedAt,
+  downloadedAt,
+}: {
+  label: string;
+  updatedAt?: string | null;
+  downloadedAt?: string | null;
+}) {
+  if (!updatedAt && !downloadedAt) {
+    return <span>{label} not downloaded yet</span>;
+  }
+  const title = [
+    updatedAt ? `Published ${fullDate(updatedAt)}` : null,
+    downloadedAt ? `Downloaded ${fullDate(downloadedAt)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <span title={title}>
+      {label} published {timeAgo(updatedAt)}
+      {downloadedAt ? `, downloaded ${timeAgo(downloadedAt)}` : ''}
+    </span>
+  );
 }
 
 export function ScannerTab() {
@@ -44,139 +75,106 @@ export function ScannerTab() {
   useEffect(() => deferEffect(load), [load]);
 
   return (
-    <div className="space-y-4">
-      {error ? (
-        <StatusAlert status="danger" title="Scanner health failed to load" description={error} />
-      ) : null}
+    <AdminPageShell
+      actions={
+        <Button size="sm" variant="secondary" onPress={load} isDisabled={loading}>
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        {error ? (
+          <StatusAlert status="danger" title="Scanner health failed to load" description={error} />
+        ) : null}
 
-      <Card className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold">Scanner Health</h2>
-            <p className="text-sm text-muted-foreground">
-              Live worker cache status from the current backend instance.
-            </p>
-          </div>
-          <Button variant="secondary" onPress={load} isDisabled={loading}>
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </Button>
-        </div>
+        {health && !health.local_scanner_enabled ? (
+          <StatusAlert
+            status="warning"
+            title="Local scanner is disabled"
+            description={
+              health.message ||
+              'This backend instance is running without the built-in local scanner.'
+            }
+          />
+        ) : null}
 
-        {health && (
+        {health && health.local_scanner_enabled ? (
           <>
-            {!health.local_scanner_enabled ? (
-              <StatusAlert
-                status="warning"
-                title="Local scanner is disabled"
-                description={
-                  health.message ||
-                  'This backend instance is running without the built-in local scanner.'
-                }
+            <StatStrip className="lg:grid-cols-4">
+              <StatStripItem
+                label="Healthy workers"
+                value={health.healthy_workers}
+                tone="success"
               />
-            ) : (
-              <>
-                <StatStrip>
-                  <StatStripItem
-                    label="Healthy workers"
-                    value={health.healthy_workers}
-                    tone="success"
-                  />
-                  <StatStripItem
-                    label="Stale workers"
-                    value={health.stale_workers}
-                    tone={health.stale_workers > 0 ? 'warning' : undefined}
-                  />
-                  <StatStripItem
-                    label="Oldest vulnerability DB"
-                    value={formatDbAge(health.oldest_vuln_db_age_hours)}
-                  />
-                  <StatStripItem
-                    label="Oldest Java DB"
-                    value={formatDbAge(health.oldest_java_db_age_hours)}
-                  />
-                </StatStrip>
+              <StatStripItem
+                label="Stale workers"
+                value={health.stale_workers}
+                tone={health.stale_workers > 0 ? 'warning' : undefined}
+              />
+              <StatStripItem
+                label="Oldest vulnerability DB"
+                value={formatDbAge(health.oldest_vuln_db_age_hours)}
+                hint={`Healthy within ${health.max_allowed_age_hours} h`}
+              />
+              <StatStripItem
+                label="Oldest Java DB"
+                value={formatDbAge(health.oldest_java_db_age_hours)}
+              />
+            </StatStrip>
 
-                <Card variant="secondary">
-                  <Card.Content>
-                    <p className="text-xs text-muted-foreground">
-                      Status is based on when each worker last downloaded its local DB copy. A
-                      worker is healthy if it downloaded within the last{' '}
-                      {health.max_allowed_age_hours}h.
-                    </p>
-                  </Card.Content>
-                </Card>
-
-                <div className="space-y-2">
-                  {health.workers.map((worker) => (
-                    <Card key={worker.worker_id} variant="secondary" className="space-y-3">
-                      <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <StatusTag>Worker {worker.worker_id}</StatusTag>
-                          <StatusTag
-                            className="capitalize"
-                            tone={toneFromChipColor(statusColor(worker.status))}
-                          >
-                            {worker.status}
-                          </StatusTag>
-                          <span className="text-xs text-muted-foreground">
-                            Trivy {worker.trivy_version || 'unknown'}
-                          </span>
-                        </div>
-                        <span className="text-xs text-muted-foreground" title={worker.cache_dir}>
-                          {worker.cache_dir}
+            <section className="space-y-2" aria-labelledby="scanner-workers-heading">
+              <div>
+                <h2 id="scanner-workers-heading" className="text-base font-medium">
+                  Workers
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  A worker is healthy when it downloaded its vulnerability database within the last{' '}
+                  {health.max_allowed_age_hours} hours.
+                </p>
+              </div>
+              <ResourceList>
+                {health.workers.map((worker) => {
+                  const status = WORKER_STATUS[worker.status] ?? WORKER_STATUS.error;
+                  return (
+                    <ResourceList.Item
+                      key={worker.worker_id}
+                      media={<StatusDot tone={status.tone} />}
+                      title={`Worker ${worker.worker_id}`}
+                      tone={status.rowTone}
+                      description={
+                        <span title={worker.cache_dir}>
+                          Trivy {worker.trivy_version || 'version unknown'} · {worker.cache_dir}
                         </span>
+                      }
+                      meta={<StatusTag tone={status.tone}>{status.label}</StatusTag>}
+                    >
+                      <div className="flex flex-col gap-0.5 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-4">
+                        <DbFreshness
+                          label="Vulnerability DB"
+                          updatedAt={worker.vuln_db_updated_at}
+                          downloadedAt={worker.vuln_db_downloaded_at}
+                        />
+                        <DbFreshness
+                          label="Java DB"
+                          updatedAt={worker.java_db_updated_at}
+                          downloadedAt={worker.java_db_downloaded_at}
+                        />
                       </div>
-
-                      <div className="grid gap-3 md:grid-cols-2 text-xs">
-                        <Card variant="secondary">
-                          <Card.Content className="space-y-1">
-                            <p className="text-muted-foreground">Vulnerability DB</p>
-                            <p>Snapshot age: {formatDbAge(worker.vuln_db_age_hours)}</p>
-                            <p className="text-muted-foreground">
-                              Updated:{' '}
-                              {worker.vuln_db_updated_at
-                                ? fullDate(worker.vuln_db_updated_at)
-                                : 'Unknown'}
-                            </p>
-                            <p className="text-muted-foreground">
-                              Downloaded:{' '}
-                              {worker.vuln_db_downloaded_at
-                                ? fullDate(worker.vuln_db_downloaded_at)
-                                : 'Unknown'}
-                            </p>
-                          </Card.Content>
-                        </Card>
-                        <Card variant="secondary">
-                          <Card.Content className="space-y-1">
-                            <p className="text-muted-foreground">Java DB</p>
-                            <p>Snapshot age: {formatDbAge(worker.java_db_age_hours)}</p>
-                            <p className="text-muted-foreground">
-                              Updated:{' '}
-                              {worker.java_db_updated_at
-                                ? fullDate(worker.java_db_updated_at)
-                                : 'Unknown'}
-                            </p>
-                            <p className="text-muted-foreground">
-                              Downloaded:{' '}
-                              {worker.java_db_downloaded_at
-                                ? fullDate(worker.java_db_downloaded_at)
-                                : 'Unknown'}
-                            </p>
-                          </Card.Content>
-                        </Card>
-                      </div>
-
-                      {worker.error && <p className="text-xs text-danger">{worker.error}</p>}
-                    </Card>
-                  ))}
-                </div>
-              </>
-            )}
+                      {worker.error ? (
+                        <p className="mt-1 text-xs text-destructive" title={worker.error}>
+                          {summarizeError(worker.error)}
+                        </p>
+                      ) : null}
+                    </ResourceList.Item>
+                  );
+                })}
+              </ResourceList>
+            </section>
           </>
-        )}
-      </Card>
+        ) : null}
 
-      <ScannerRuntimePanel />
-    </div>
+        <ScannerRuntimePanel />
+      </div>
+    </AdminPageShell>
   );
 }

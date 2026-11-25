@@ -253,3 +253,170 @@
 .cn-font-heading {
   font-family: var(--font-heading);
 }
+
+/* Stacked data tables preserve one set of selection and action controls. */
+@media screen and (width < 48rem) {
+  [data-stacked-table='md'] table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    table-layout: auto;
+  }
+  [data-stacked-table='md'] thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    visibility: hidden;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  [data-stacked-table='md'] tbody {
+    display: block;
+  }
+  [data-stacked-table='md'] tbody > tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  [data-stacked-table='md'] tbody > tr:last-child {
+    border-bottom: 0;
+  }
+  [data-stacked-table='md'] tbody > tr > td {
+    display: block;
+    flex: 1 1 100%;
+    width: auto !important;
+    max-width: 100% !important;
+    min-width: 0;
+    padding: 0 !important;
+    white-space: normal !important;
+    text-align: start !important;
+    overflow-wrap: anywhere;
+  }
+  [data-stacked-table='md'] tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
+  [data-stacked-table='md'] tbody > tr > td[data-mobile-inline] {
+    flex: 0 0 auto;
+  }
+  [data-stacked-table='md'] [data-slot='table-scroll-container'] {
+    overflow: visible;
+  }
+}
+@media screen and (width < 64rem) {
+  [data-stacked-table='lg'] table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    table-layout: auto;
+  }
+  [data-stacked-table='lg'] thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    visibility: hidden;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  [data-stacked-table='lg'] tbody {
+    display: block;
+  }
+  [data-stacked-table='lg'] tbody > tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  [data-stacked-table='lg'] tbody > tr:last-child {
+    border-bottom: 0;
+  }
+  [data-stacked-table='lg'] tbody > tr > td {
+    display: block;
+    flex: 1 1 100%;
+    width: auto !important;
+    max-width: 100% !important;
+    min-width: 0;
+    padding: 0 !important;
+    white-space: normal !important;
+    text-align: start !important;
+    overflow-wrap: anywhere;
+  }
+  [data-stacked-table='lg'] tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
+  [data-stacked-table='lg'] tbody > tr > td[data-mobile-inline] {
+    flex: 0 0 auto;
+  }
+  [data-stacked-table='lg'] [data-slot='table-scroll-container'] {
+    overflow: visible;
+  }
+}
+@media screen and (width < 80rem) {
+  [data-stacked-table='xl'] table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    table-layout: auto;
+  }
+  [data-stacked-table='xl'] thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    visibility: hidden;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  [data-stacked-table='xl'] tbody {
+    display: block;
+  }
+  [data-stacked-table='xl'] tbody > tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  [data-stacked-table='xl'] tbody > tr:last-child {
+    border-bottom: 0;
+  }
+  [data-stacked-table='xl'] tbody > tr > td {
+    display: block;
+    flex: 1 1 100%;
+    width: auto !important;
+    max-width: 100% !important;
+    min-width: 0;
+    padding: 0 !important;
+    white-space: normal !important;
+    text-align: start !important;
+    overflow-wrap: anywhere;
+  }
+  [data-stacked-table='xl'] tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
+  [data-stacked-table='xl'] tbody > tr > td[data-mobile-inline] {
+    flex: 0 0 auto;
+  }
+  [data-stacked-table='xl'] [data-slot='table-scroll-container'] {
+    overflow: visible;
+  }
+}

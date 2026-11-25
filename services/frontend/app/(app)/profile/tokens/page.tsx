@@ -1,12 +1,11 @@
 'use client';
 
-import type { ReactNode } from 'react';
-
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { FormField } from '@/components/ui/form-field';
-import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
-import { StatusLabel, StatusTag } from '@/components/ui/status-dot';
+import { FormAlert, StatusAlert } from '@/components/ui/form-alert';
+import { StatusTag } from '@/components/ui/status-dot';
+import { JOB_STATUS_LABELS, labelFor } from '@/lib/labels';
 import { createUserToken, listUserTokens, PersonalToken, revokeUserToken } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { fullDate, timeAgo, timeUntil } from '@/lib/time';
@@ -14,19 +13,13 @@ import {
   Alert,
   Button,
   Card,
-  EmptyState,
   Label,
   Modal,
-  Table,
+  ResourceList,
+  Skeleton,
   useOverlayState,
 } from '@/components/ui';
-import {
-  Copy01Icon,
-  Delete01Icon,
-  FolderLibraryIcon,
-  Key01Icon,
-  Settings01Icon,
-} from 'hugeicons-react';
+import { Copy01Icon, Delete01Icon, Key01Icon, PlusSignIcon, Settings01Icon } from 'hugeicons-react';
 import { useEffect, useRef, useState } from 'react';
 
 const EXPIRY_OPTIONS = [
@@ -37,113 +30,49 @@ const EXPIRY_OPTIONS = [
   { label: 'No expiry', value: 0 },
 ];
 
-function SectionCard({
-  eyebrow,
-  title,
-  description,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  children: ReactNode;
-}) {
-  return (
-    <Card className="rounded-xl p-6 md:p-7 space-y-5">
-      <Card.Header className="block p-0">
-        <p
-          className="text-xs font-semibold uppercase tracking-[0.22em]"
-          style={{ color: 'var(--text-faint)' }}
-        >
-          {eyebrow}
-        </p>
-        <Card.Title className="mt-2 text-xl font-semibold tracking-tight text-foreground">
-          {title}
-        </Card.Title>
-        <Card.Description className="mt-1.5 text-sm leading-6 text-muted-foreground">
-          {description}
-        </Card.Description>
-      </Card.Header>
-      <Card.Content className="p-0 pt-5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-        {children}
-      </Card.Content>
-    </Card>
-  );
+/** "created yesterday" rather than "created Yesterday"; dates keep their capitals. */
+function lowerRelative(text: string) {
+  return /^(Just now|Yesterday)$/.test(text) ? text.toLowerCase() : text;
 }
 
-function InlineAlert({ message, tone = 'warn' }: { message: string; tone?: 'warn' | 'danger' }) {
-  return (
-    <Alert status={tone === 'danger' ? 'danger' : 'warning'}>
-      <Alert.Indicator />
-
-      <Alert.Content>
-        <Alert.Title>{message}</Alert.Title>
-      </Alert.Content>
-    </Alert>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: ReactNode;
-  mono?: boolean;
-}) {
-  return (
-    <div
-      className="flex items-start justify-between gap-4 rounded-xl px-4 py-3"
-      style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
-    >
-      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-        {label}
-      </span>
-      <span
-        className={`text-right text-sm text-foreground ${mono ? 'font-mono break-all' : ''}`.trim()}
-      >
-        {value}
-      </span>
-    </div>
-  );
+function isNoExpiryToken(token: PersonalToken, now = new Date()) {
+  return new Date(token.expires_at).getFullYear() - now.getFullYear() >= 4;
 }
 
 function TokensLoadingState() {
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_360px]">
-        <div className="skeleton h-[320px] rounded-xl" />
-        <div className="skeleton h-[320px] rounded-xl" />
-      </div>
-      <div className="skeleton h-[340px] rounded-xl" />
-      <div className="skeleton h-44 rounded-xl" />
+    <div className="space-y-4" role="status" aria-label="Loading tokens">
+      <Skeleton className="h-64 rounded-xl" />
+      <Skeleton className="h-44 rounded-xl" />
     </div>
   );
 }
 
-function TokenStatusBadge({ token }: { token: PersonalToken }) {
-  const now = new Date();
-  const expiresAt = new Date(token.expires_at);
-  const isNoExpiry = expiresAt.getFullYear() - now.getFullYear() >= 4;
+function tokenStatus(token: PersonalToken, now = new Date()): 'active' | 'expired' | 'revoked' {
+  if (token.disabled) return 'revoked';
+  if (!isNoExpiryToken(token, now) && new Date(token.expires_at) < now) return 'expired';
+  return 'active';
+}
 
-  if (token.disabled) return <StatusLabel tone="danger" label="Revoked" />;
-  if (!isNoExpiry && expiresAt < now) return <StatusLabel tone="warning" label="Expired" />;
-  return <StatusLabel tone="success" label="Active" />;
+function TokenStatusBadge({ token }: { token: PersonalToken }) {
+  const status = tokenStatus(token);
+  return (
+    <StatusTag
+      tone={status === 'revoked' ? 'danger' : status === 'expired' ? 'warning' : 'success'}
+    >
+      {labelFor(JOB_STATUS_LABELS, status)}
+    </StatusTag>
+  );
 }
 
 function TokenExpiry({ token }: { token: PersonalToken }) {
-  const expiresAt = new Date(token.expires_at);
-  const now = new Date();
-  const isNoExpiry = expiresAt.getFullYear() - now.getFullYear() >= 4;
-  if (isNoExpiry) return <span className="text-muted-foreground text-sm">Never</span>;
+  if (isNoExpiryToken(token)) return <span>never expires</span>;
+  const expired = new Date(token.expires_at) < new Date();
   return (
-    <span className="text-sm text-muted-foreground" title={fullDate(token.expires_at)}>
-      {expiresAt < now ? (
-        <>Expired {timeAgo(token.expires_at)}</>
-      ) : (
-        <>Expires {timeUntil(token.expires_at)}</>
-      )}
+    <span title={fullDate(token.expires_at)}>
+      {expired
+        ? `expired ${lowerRelative(timeAgo(token.expires_at))}`
+        : `expires ${timeUntil(token.expires_at)}`}
     </span>
   );
 }
@@ -175,11 +104,11 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
                 <Modal.Icon className="bg-primary/10 text-primary">
                   <Key01Icon size={18} />
                 </Modal.Icon>
-                <Modal.Heading className="text-foreground font-semibold">
-                  Token Created
+                <Modal.Heading className="font-semibold text-foreground">
+                  Token created
                 </Modal.Heading>
               </div>
-              <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
+              <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground" />
             </Modal.Header>
             <Modal.Body className="px-6 py-5 space-y-4">
               <Alert status="warning">
@@ -190,9 +119,7 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
                   </Alert.Title>
                 </Alert.Content>
               </Alert>
-              <div className="rounded-xl p-3 font-mono text-xs break-all relative bg-surface-secondary">
-                {rawToken}
-              </div>
+              <div className="break-all rounded-xl bg-muted p-3 font-mono text-xs">{rawToken}</div>
               <Button
                 type="button"
                 onPress={handleCopy}
@@ -200,7 +127,7 @@ function TokenRevealDialog({ state, rawToken }: TokenRevealDialogProps) {
                 variant="primary"
               >
                 <Copy01Icon size={15} />
-                {copied ? 'Copied!' : 'Copy Token'}
+                {copied ? 'Copied' : 'Copy token'}
               </Button>
             </Modal.Body>
           </Modal.Dialog>
@@ -248,20 +175,15 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
                 <Modal.Icon className="bg-default text-foreground">
                   <Settings01Icon size={18} />
                 </Modal.Icon>
-                <Modal.Heading className="font-semibold">New API Token</Modal.Heading>
+                <Modal.Heading className="font-semibold">New API token</Modal.Heading>
               </div>
               <Modal.CloseTrigger />
             </Modal.Header>
             <Modal.Body>
               <form id="create-token-form" onSubmit={handleSubmit} className="space-y-4">
-                {error && (
-                  <Alert status="danger">
-                    <Alert.Indicator />
-                    <Alert.Content>
-                      <Alert.Title>{error}</Alert.Title>
-                    </Alert.Content>
-                  </Alert>
-                )}
+                {error ? (
+                  <FormAlert title="Token could not be created" description={error} />
+                ) : null}
                 <FormField
                   label="Token name"
                   placeholder="e.g. GitLab CI/CD, Local dev"
@@ -272,9 +194,7 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
                   maxLength={128}
                 />
                 <div className="space-y-1.5">
-                  <Label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                    Expiration
-                  </Label>
+                  <Label className="text-sm font-medium text-foreground">Expiration</Label>
                   <div className="flex flex-wrap gap-1.5">
                     {EXPIRY_OPTIONS.map((opt) => (
                       <Button
@@ -290,10 +210,7 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
                 </div>
               </form>
             </Modal.Body>
-            <Modal.Footer
-              className="px-6 py-4 flex justify-end gap-2"
-              style={{ borderTop: '1px solid var(--border-subtle)' }}
-            >
+            <Modal.Footer>
               <Button
                 type="button"
                 onPress={() => state.close()}
@@ -309,7 +226,7 @@ function CreateTokenDialog({ state, onCreated }: CreateTokenDialogProps) {
                 className="btn-primary inline-flex items-center gap-2"
                 variant="primary"
               >
-                Create Token
+                Create token
               </Button>
             </Modal.Footer>
           </Modal.Dialog>
@@ -373,12 +290,13 @@ export default function TokensPage() {
   }
 
   const now = new Date();
-  const activeTokens = tokens.filter((token) => {
-    if (token.disabled) return false;
-    const expiresAt = new Date(token.expires_at);
-    const isNoExpiry = expiresAt.getFullYear() - now.getFullYear() >= 4;
-    return isNoExpiry || expiresAt >= now;
-  });
+  const activeTokens = tokens.filter((token) => tokenStatus(token, now) === 'active');
+  const statusRank = { active: 0, expired: 1, revoked: 2 } as const;
+  const sortedTokens = [...tokens].sort(
+    (a, b) =>
+      statusRank[tokenStatus(a, now)] - statusRank[tokenStatus(b, now)] ||
+      Date.parse(b.created_at) - Date.parse(a.created_at)
+  );
   const revokedTokens = tokens.filter((token) => token.disabled).length;
   const expiringSoon = tokens.filter((token) => {
     if (token.disabled) return false;
@@ -389,143 +307,102 @@ export default function TokensPage() {
   }).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {confirmDialog}
 
       {loading ? (
         <TokensLoadingState />
       ) : loadError ? (
-        <Alert status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>{loadError}</Alert.Title>
+        <StatusAlert
+          status="danger"
+          title="Tokens could not be loaded"
+          description={loadError}
+          action={
             <Button size="sm" variant="secondary" isPending={loading} onPress={() => void load()}>
               Retry
             </Button>
-          </Alert.Content>
-        </Alert>
+          }
+        />
       ) : (
         <>
-          <StatStrip className="lg:grid-cols-4">
-            <StatStripItem
-              label="Total tokens"
-              value={tokens.length}
-              hint="All tokens ever issued"
-            />
-            <StatStripItem
-              label="Active now"
-              value={activeTokens.length}
-              hint="Not revoked or expired"
-              tone="success"
-            />
-            <StatStripItem
-              label="Expiring soon"
-              value={expiringSoon}
-              hint="Within the next 30 days"
-              tone={expiringSoon > 0 ? 'warning' : undefined}
-            />
-            <StatStripItem label="Revoked" value={revokedTokens} hint="Kept for audit visibility" />
-          </StatStrip>
-
           <Card>
-            <Card.Header>
-              <div className="flex flex-cols items-center justify-between">
-                <div>
-                  <Card.Title>Tokens</Card.Title>
-                  <Card.Description>
-                    Personal API tokens and JustScan CLI sessions. Revoke a CLI session here if a
-                    device is lost. For shared CI/CD pipelines, prefer organization tokens.
-                  </Card.Description>
-                </div>
-
-                <Button
-                  variant="secondary"
-                  onPress={() => {
-                    createModal.open();
-                  }}
-                >
-                  Create new Token
-                </Button>
+            <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
+              <div>
+                <Card.Title>Tokens</Card.Title>
+                <Card.Description>
+                  Personal API tokens and JustScan CLI sessions. Revoke a CLI session here if a
+                  device is lost. For shared CI/CD pipelines, prefer organization tokens.
+                </Card.Description>
+                {tokens.length > 0 ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {[
+                      `${activeTokens.length.toLocaleString()} active`,
+                      expiringSoon > 0
+                        ? `${expiringSoon.toLocaleString()} expiring within 30 days`
+                        : null,
+                      revokedTokens > 0 ? `${revokedTokens.toLocaleString()} revoked` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                ) : null}
               </div>
+              <Button variant="secondary" onPress={() => createModal.open()}>
+                <PlusSignIcon size={14} />
+                New token
+              </Button>
             </Card.Header>
-
-            <Table variant="secondary">
-              <Table.ScrollContainer>
-                <Table.Content aria-label="Personal API tokens" className="min-w-[820px]">
-                  <Table.Header>
-                    <Table.Column isRowHeader>Name</Table.Column>
-                    <Table.Column>Type</Table.Column>
-                    <Table.Column>Created</Table.Column>
-                    <Table.Column>Expiry</Table.Column>
-                    <Table.Column>Status</Table.Column>
-                    <Table.Column>Actions</Table.Column>
-                  </Table.Header>
-                  <Table.Body
-                    renderEmptyState={() => (
-                      <EmptyState className="flex h-full w-full flex-col items-center justify-center gap-4 text-center">
-                        <FolderLibraryIcon className="size-6 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">No results found</span>
-                      </EmptyState>
-                    )}
-                  >
-                    {tokens.map((token) => (
-                      <Table.Row
-                        key={token.id}
-                        id={token.id}
-                        className="hover:bg-[var(--row-hover)]"
-                      >
-                        <Table.Cell>
-                          <div className="min-w-0">
-                            <p className="font-medium text-foreground break-words">
-                              {token.description}
-                            </p>
-                            <p className="mt-1 text-xs text-muted-foreground md:hidden">
-                              Created {timeAgo(token.created_at)}
-                            </p>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <StatusTag>
-                            {token.type === 'cli_session' ? 'CLI session' : 'Personal token'}
-                          </StatusTag>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <span className="text-sm text-muted-foreground hidden md:inline">
-                            {timeAgo(token.created_at)}
+            <Card.Content>
+              {tokens.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-10 text-center">
+                  <Key01Icon size={24} className="text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    You have no personal tokens or CLI sessions yet.
+                  </p>
+                </div>
+              ) : (
+                <ResourceList aria-label="Personal API tokens">
+                  {sortedTokens.map((token) => (
+                    <ResourceList.Item
+                      key={token.id}
+                      media={<Key01Icon size={16} className="text-muted-foreground" />}
+                      title={token.description}
+                      description={
+                        <>
+                          {token.type === 'cli_session' ? 'CLI session' : 'Personal token'}
+                          {' · '}
+                          <span title={fullDate(token.created_at)}>
+                            created {lowerRelative(timeAgo(token.created_at))}
                           </span>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="text-sm text-muted-foreground">
-                            <TokenExpiry token={token} />
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <TokenStatusBadge token={token} />
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex justify-end">
-                            {!token.disabled ? (
-                              <Button
-                                aria-label={`Revoke ${token.description}`}
-                                onPress={() => void handleRevoke(token)}
-                                isPending={revokingId === token.id}
-                                isDisabled={revokingId !== null}
-                                isIconOnly
-                                variant="secondary"
-                              >
-                                <Delete01Icon size={15} />
-                              </Button>
-                            ) : (
-                              <span />
-                            )}
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+                          {!token.disabled ? (
+                            <>
+                              {' · '}
+                              <TokenExpiry token={token} />
+                            </>
+                          ) : null}
+                        </>
+                      }
+                      meta={<TokenStatusBadge token={token} />}
+                      actions={
+                        !token.disabled ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            aria-label={`Revoke ${token.description}`}
+                            onPress={() => void handleRevoke(token)}
+                            isPending={revokingId === token.id}
+                            isDisabled={revokingId !== null}
+                          >
+                            <Delete01Icon size={15} />
+                            Revoke
+                          </Button>
+                        ) : null
+                      }
+                    />
+                  ))}
+                </ResourceList>
+              )}
+            </Card.Content>
           </Card>
 
           <Card>
@@ -533,13 +410,16 @@ export default function TokensPage() {
               <Card.Title>Using personal tokens</Card.Title>
               <Card.Description>
                 Set the token as a bearer credential in the Authorization header. For shared
-                pipeline automation, create an org token instead and call the org-scoped pipeline
-                scan endpoint.
+                pipeline automation, create an organization token instead and call the org-scoped
+                pipeline scan endpoint.
               </Card.Description>
             </Card.Header>
-            <Card.Content className="gap-3">
-              <InlineAlert message="A newly created token is shown only once. Copy it immediately and move it into a secret manager before closing the reveal dialog." />
-              <pre className="text-xs font-mono p-4 rounded-xl bg-surface-secondary overflow-x-auto">
+            <Card.Content className="space-y-3">
+              <StatusAlert
+                status="warning"
+                description="A new token is shown only once. Copy it straight into a secret manager before closing the dialog."
+              />
+              <pre className="overflow-x-auto rounded-xl bg-muted p-4 font-mono text-xs">
                 {`curl -X POST https://justscan.example.com/api/v1/scans \\
   -H "Authorization: Bearer <your-token>" \\
   -H "Content-Type: application/json" \\

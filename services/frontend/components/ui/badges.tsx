@@ -4,6 +4,7 @@ import { Chip } from '@/components/ui';
 
 import { useWorkScope } from '@/hooks/use-work-scope';
 import type { OwnerType } from '@/lib/api';
+import { humanize } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 
 type BadgeTone = 'default' | 'accent' | 'info' | 'success' | 'warning' | 'danger';
@@ -58,22 +59,22 @@ const STATUS_CONFIG: Record<string, BadgeConfig> = {
   degraded: { tone: 'warning' },
   stale: { tone: 'warning' },
   completed: { tone: 'success' },
-  completed_partial: { tone: 'warning', label: 'completed partially' },
+  completed_partial: { tone: 'warning', label: 'Completed partially' },
   failed: { tone: 'danger' },
   running: { tone: 'info', animated: true },
-  pending: { tone: 'default', label: 'queued in JustScan', animated: true },
+  pending: { tone: 'default', label: 'Queued in JustScan', animated: true },
   cancelled: { tone: 'warning' },
-  preparing_image: { tone: 'info', label: 'preparing image', animated: true },
-  scanning_image: { tone: 'info', label: 'scanning image', animated: true },
-  processing_results: { tone: 'info', label: 'processing results', animated: true },
-  finalizing_report: { tone: 'info', label: 'finalizing report', animated: true },
-  importing_results: { tone: 'info', label: 'importing results', animated: true },
-  warming_cache: { tone: 'info', label: 'warming cache', animated: true },
-  indexing_artifact: { tone: 'warning', label: 'waiting for xray status', animated: true },
-  queued_in_justscan: { tone: 'default', label: 'queued in JustScan', animated: true },
-  queued_in_xray: { tone: 'info', label: 'requesting xray scan', animated: true },
-  blocked_by_xray_policy: { tone: 'warning', label: 'blocked by xray policy' },
-  waiting_for_xray: { tone: 'warning', label: 'waiting for xray', animated: true },
+  preparing_image: { tone: 'info', label: 'Preparing image', animated: true },
+  scanning_image: { tone: 'info', label: 'Scanning image', animated: true },
+  processing_results: { tone: 'info', label: 'Processing results', animated: true },
+  finalizing_report: { tone: 'info', label: 'Finalizing report', animated: true },
+  importing_results: { tone: 'info', label: 'Importing results', animated: true },
+  warming_cache: { tone: 'info', label: 'Warming cache', animated: true },
+  indexing_artifact: { tone: 'warning', label: 'Waiting for Xray status', animated: true },
+  queued_in_justscan: { tone: 'default', label: 'Queued in JustScan', animated: true },
+  queued_in_xray: { tone: 'info', label: 'Requesting Xray scan', animated: true },
+  blocked_by_xray_policy: { tone: 'warning', label: 'Blocked by Xray policy' },
+  waiting_for_xray: { tone: 'warning', label: 'Waiting for Xray', animated: true },
 };
 
 export function normalizeStatus(status?: string) {
@@ -124,16 +125,16 @@ export function resolveDisplayStatus(
 export function formatStatusLabel(status: string) {
   const normalizedStatus = normalizeStatus(status);
   const labels: Record<string, string> = {
-    blocked_by_xray_policy: 'blocked by xray policy',
-    completed_partial: 'completed partially',
-    waiting_for_xray: 'waiting for xray',
-    warming_cache: 'warming cache',
-    indexing_artifact: 'waiting for xray status',
-    queued_in_justscan: 'queued in JustScan',
-    queued_in_xray: 'requesting xray scan',
+    blocked_by_xray_policy: 'Blocked by Xray policy',
+    completed_partial: 'Completed partially',
+    waiting_for_xray: 'Waiting for Xray',
+    warming_cache: 'Warming cache',
+    indexing_artifact: 'Waiting for Xray status',
+    queued_in_justscan: 'Queued in JustScan',
+    queued_in_xray: 'Requesting Xray scan',
   };
 
-  return labels[normalizedStatus] ?? normalizedStatus.replace(/_/g, ' ');
+  return labels[normalizedStatus] ?? humanize(normalizedStatus);
 }
 
 export function StatusBadge({
@@ -183,19 +184,74 @@ const SEVERITY_COUNT_TONES: Record<'critical' | 'high' | 'medium' | 'low', Badge
   low: 'default',
 };
 
+const SEVERITY_LEVEL_LABELS = {
+  critical: 'Critical',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+} as const;
+
 export function SevCount({
   count,
   level,
+  labeled = false,
 }: {
   count: number;
   level: 'critical' | 'high' | 'medium' | 'low';
+  /** Show "3 High" instead of a bare number. Use where no column header names the severity. */
+  labeled?: boolean;
 }) {
   const tone = count > 0 ? SEVERITY_COUNT_TONES[level] : 'default';
+  const description = `${count.toLocaleString()} ${SEVERITY_LEVEL_LABELS[level].toLowerCase()}`;
 
   return (
-    <Chip className="min-w-10 justify-center tabular-nums" color={tone} size="sm" variant="soft">
-      {count}
+    <Chip
+      aria-label={description}
+      className="min-w-10 justify-center tabular-nums"
+      color={tone}
+      size="sm"
+      title={description}
+      variant="soft"
+    >
+      {labeled ? `${count.toLocaleString()} ${SEVERITY_LEVEL_LABELS[level]}` : count}
     </Chip>
+  );
+}
+
+/**
+ * Severity counts for one scan or image: only the non-zero levels, labelled,
+ * or a short muted text when there is nothing to count.
+ */
+export function SeverityCounts({
+  critical,
+  high,
+  medium,
+  low,
+  emptyLabel = 'No findings',
+}: {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  emptyLabel?: string;
+}) {
+  const levels = (
+    [
+      ['critical', critical],
+      ['high', high],
+      ['medium', medium],
+      ['low', low],
+    ] as const
+  ).filter(([, count]) => count > 0);
+  if (levels.length === 0) {
+    return <span className="text-xs text-muted-foreground">{emptyLabel}</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {levels.map(([level, count]) => (
+        <SevCount key={level} count={count} level={level} labeled />
+      ))}
+    </div>
   );
 }
 

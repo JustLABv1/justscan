@@ -33,21 +33,24 @@ import {
   Button,
   Card,
   Modal,
-  Pagination,
+  ResourceList,
   SearchField,
   Separator,
+  Spinner,
   Table,
+  TablePager,
   useOverlayState,
 } from '@/components/ui';
-import { Delete01Icon, SecurityLockIcon, Shield01Icon } from 'hugeicons-react';
+import { pluralize, shortDigest } from '@/lib/labels';
+import { Copy01Icon, Delete01Icon, SecurityLockIcon, Shield01Icon } from 'hugeicons-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const STATUS_LABEL: Record<string, string> = {
-  accepted: 'Accepted Risk',
-  wont_fix: "Won't Fix",
-  false_positive: 'False Positive',
-  xray_ignore: 'Xray Ignore',
+  accepted: 'Accepted risk',
+  wont_fix: "Won't fix",
+  false_positive: 'False positive',
+  xray_ignore: 'Xray ignore rule',
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -60,6 +63,32 @@ function StatusBadge({ status }: { status: string }) {
           ? 'accent'
           : 'neutral';
   return <StatusLabel tone={tone} label={STATUS_LABEL[status] ?? status} />;
+}
+
+/** A short digest with the full value on hover and a copy button. */
+function DigestLine({ digest, label = 'Digest' }: { digest: string; label?: string }) {
+  const toast = useToast();
+  return (
+    <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+      <span className="truncate" title={digest}>
+        {label} <span className="font-mono">{shortDigest(digest)}</span>
+      </span>
+      <Button
+        aria-label={`Copy ${label.toLowerCase()}`}
+        className="shrink-0"
+        size="icon-xs"
+        variant="tertiary"
+        onPress={() => {
+          void navigator.clipboard
+            .writeText(digest)
+            .then(() => toast.success('Digest copied'))
+            .catch(() => toast.error('Could not copy the digest'));
+        }}
+      >
+        <Copy01Icon size={13} />
+      </Button>
+    </span>
+  );
 }
 
 const LIMIT = 50;
@@ -287,18 +316,6 @@ export default function SuppressionsPage() {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
-  const paginationItems = useMemo(() => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const items: Array<number | 'ellipsis'> = [1];
-    if (page > 3) items.push('ellipsis');
-    const start = Math.max(2, page - 1);
-    const end = Math.min(totalPages - 1, page + 1);
-    for (let i = start; i <= end; i += 1) items.push(i);
-    if (page < totalPages - 2) items.push('ellipsis');
-    items.push(totalPages);
-    return items;
-  }, [page, totalPages]);
   const availableShareTargets = shareTarget
     ? orgs.filter(
         (org) =>
@@ -326,11 +343,7 @@ export default function SuppressionsPage() {
     <PageContainer>
       <PageHeader
         title="Suppressions"
-        description={
-          total > 0
-            ? `${total} active suppression${total !== 1 ? 's' : ''}`
-            : 'Manage vulnerability suppressions across all images.'
-        }
+        description="Manage vulnerability suppressions across all images."
       />
 
       <>
@@ -347,7 +360,7 @@ export default function SuppressionsPage() {
                 active: (statusFilter || 'all') === option.id,
               }))}
             >
-              {total.toLocaleString()} {total === 1 ? 'suppression' : 'suppressions'}
+              {pluralize(total, 'suppression')}
             </FilterChips>
             <SearchField name="suppressions-search" variant="secondary" className="w-full">
               <SearchField.Group>
@@ -372,221 +385,192 @@ export default function SuppressionsPage() {
           </Card.Header>
           <LoadableCollectionState
             emptyState={
-              <Card className="overflow-hidden">
-                <div className="flex flex-col items-center gap-3 py-16 text-center">
-                  <SecurityLockIcon size={32} className="text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    {searchQuery || statusFilter
-                      ? 'No suppressions match your filters.'
-                      : 'No suppressions found.'}
-                  </p>
-                  {!searchQuery && !statusFilter && (
-                    <p className="text-xs text-muted-foreground">
-                      Suppressions allow you to acknowledge known vulnerabilities in a scan.
-                    </p>
-                  )}
-                </div>
-              </Card>
+              <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">
+                <SecurityLockIcon size={32} className="text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">
+                  {searchQuery || statusFilter
+                    ? 'No suppressions match your filters'
+                    : 'No suppressions yet'}
+                </p>
+                <p className="max-w-md text-sm text-muted-foreground">
+                  {searchQuery || statusFilter
+                    ? 'Try another status or search term.'
+                    : 'Suppress a finding from a scan to acknowledge a known vulnerability.'}
+                </p>
+                {searchQuery || statusFilter ? (
+                  <Button
+                    variant="secondary"
+                    onPress={() => {
+                      setSearchQuery('');
+                      setStatusFilter('');
+                      setPage(1);
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : null}
+              </div>
             }
             error={error || undefined}
             errorTitle="Suppressions loading failed"
             isEmpty={suppressions.length === 0}
             loading={loading}
             loadingFallback={
-              <Card className="overflow-hidden">
-                <div className="flex justify-center py-16" role="status">
-                  <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
-                  <span className="sr-only">Loading suppressions</span>
-                </div>
-              </Card>
+              <div className="flex justify-center py-16" role="status">
+                <Spinner size="sm" />
+                <span className="sr-only">Loading suppressions</span>
+              </div>
             }
             retry={() => void load(page, statusFilter, searchQuery)}
           >
             <div>
               <Table variant="secondary">
-                <Table.ScrollContainer className="rounded-none border-0">
-                  <Table.Content aria-label="Suppressions" className="min-w-[1040px] [&_td]:py-3">
-                    <Table.Header>
-                      <Table.Column isRowHeader>Vulnerability</Table.Column>
-                      <Table.Column>Status</Table.Column>
-                      <Table.Column>Reason</Table.Column>
-                      <Table.Column>Ownership</Table.Column>
-                      <Table.Column className="w-px whitespace-nowrap text-right">
-                        Actions
-                      </Table.Column>
-                    </Table.Header>
-                    <Table.Body>
-                      {suppressions.map((s) => (
-                        <Table.Row id={s.id} key={s.id} className="hover:bg-[var(--row-hover)]">
-                          <Table.Cell>
-                            <div className="space-y-1.5">
-                              <a
-                                href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-mono text-xs text-primary hover:underline"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {s.vuln_id}
-                              </a>
-                              <p
-                                className="font-mono text-xs text-muted-foreground"
-                                title={s.image_digest}
-                              >
-                                {s.image_digest.length > 28
-                                  ? `${s.image_digest.slice(0, 28)}…`
-                                  : s.image_digest}
-                              </p>
-                              <Button
-                                variant="tertiary"
-                                onPress={() => openAppliesImagesModal(s)}
-                                size="sm"
-                              >
-                                {(s.applies_image_count ?? 0).toLocaleString()} matching image
-                                {(s.applies_image_count ?? 0) === 1 ? '' : 's'}
-                              </Button>
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="space-y-1.5">
-                              <StatusBadge status={s.status} />
-                              <SuppressionSourceBadge source={s.source} />
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="min-w-48 max-w-sm text-sm text-muted-foreground">
-                              <span className="line-clamp-2">{s.justification || '—'}</span>
-                              {(s.xray_policy_name || s.xray_watch_name) && (
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {[s.xray_policy_name, s.xray_watch_name]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                </p>
-                              )}
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="space-y-1">
-                              <p className="text-xs text-muted-foreground">{s.username || '—'}</p>
-                              <OwnershipBadge
-                                ownerType={s.owner_type}
-                                ownerOrgId={s.owner_org_id}
-                                orgNamesById={orgNamesById}
-                              />
-                              <p
-                                className="text-xs text-muted-foreground"
-                                title={fullDate(s.created_at)}
-                              >
-                                Created {timeAgo(s.created_at)}
-                              </p>
-                              {s.expires_at ? (
-                                <span
-                                  className={
-                                    now !== null && new Date(s.expires_at) < now
-                                      ? 'text-destructive'
-                                      : 'text-muted-foreground'
-                                  }
-                                  title={fullDate(s.expires_at)}
-                                >
-                                  {formatDateOnly(s.expires_at)}
-                                </span>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">Never expires</span>
-                              )}
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            {canManageAccess(s) || canMutateSuppression(s) ? (
-                              <div className="flex items-center justify-end">
-                                <RowActionsMenu
-                                  label={`Actions for ${s.vuln_id}`}
-                                  items={[
-                                    ...(canManageAccess(s)
-                                      ? [
-                                          {
-                                            id: 'manage-access',
-                                            label: 'Manage access',
-                                            icon: <Shield01Icon size={14} />,
-                                            onAction: () => openShareModal(s),
-                                          },
-                                        ]
-                                      : []),
-                                    ...(canMutateSuppression(s)
-                                      ? [
-                                          {
-                                            id: 'remove',
-                                            label: 'Remove suppression',
-                                            icon: <Delete01Icon size={14} />,
-                                            variant: 'danger' as const,
-                                            pending: deletingId === s.id,
-                                            disabled: deletingId !== null && deletingId !== s.id,
-                                            onAction: () => {
-                                              void handleDelete(s);
-                                            },
-                                          },
-                                        ]
-                                      : []),
-                                  ]}
-                                />
-                              </div>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Read only</span>
-                            )}
-                          </Table.Cell>
-                        </Table.Row>
-                      ))}
-                    </Table.Body>
-                  </Table.Content>
-                </Table.ScrollContainer>
-                {totalPages > 1 ? (
-                  <Table.Footer className="flex flex-wrap items-center justify-between px-4 py-3 gap-3">
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      Showing {total === 0 ? 0 : (page - 1) * LIMIT + 1}-
-                      {Math.min(page * LIMIT, total)} of {total}
-                    </span>
-                    <Pagination size="sm" className="justify-self-center">
-                      <Pagination.Content>
-                        <Pagination.Item>
-                          <Pagination.Previous
-                            isDisabled={page === 1}
-                            onPress={() => setPage((previous) => Math.max(1, previous - 1))}
-                          >
-                            <Pagination.PreviousIcon />
-                            <span>Previous</span>
-                          </Pagination.Previous>
-                        </Pagination.Item>
-                        {paginationItems.map((item, index) =>
-                          item === 'ellipsis' ? (
-                            <Pagination.Item key={`suppressions-ellipsis-${index}`}>
-                              <Pagination.Ellipsis />
-                            </Pagination.Item>
-                          ) : (
-                            <Pagination.Item key={`suppressions-page-${item}`}>
-                              <Pagination.Link
-                                isActive={item === page}
-                                onPress={() => setPage(item)}
-                              >
-                                {item}
-                              </Pagination.Link>
-                            </Pagination.Item>
-                          )
-                        )}
-                        <Pagination.Item>
-                          <Pagination.Next
-                            isDisabled={page === totalPages}
-                            onPress={() =>
-                              setPage((previous) => Math.min(totalPages, previous + 1))
-                            }
-                          >
-                            <span>Next</span>
-                            <Pagination.NextIcon />
-                          </Pagination.Next>
-                        </Pagination.Item>
-                      </Pagination.Content>
-                    </Pagination>
-                    <div />
-                  </Table.Footer>
-                ) : null}
+                <Table.Responsive>
+                  <Table.ScrollContainer className="rounded-none border-0">
+                    <Table.Content aria-label="Suppressions" className="[&_td]:py-3">
+                      <Table.Header>
+                        <Table.Column isRowHeader>Vulnerability</Table.Column>
+                        <Table.Column className="hidden md:table-cell">Status</Table.Column>
+                        <Table.Column>Reason</Table.Column>
+                        <Table.Column className="w-px whitespace-nowrap text-right">
+                          <span className="sr-only">Actions</span>
+                        </Table.Column>
+                      </Table.Header>
+                      <Table.Body>
+                        {suppressions.map((s) => {
+                          const imageCount = s.applies_image_count ?? 0;
+                          const expired =
+                            s.expires_at !== null && now !== null && new Date(s.expires_at) < now;
+                          return (
+                            <Table.Row id={s.id} key={s.id}>
+                              <Table.Cell data-label="Vulnerability">
+                                <div className="flex min-w-0 flex-col items-start gap-1">
+                                  <a
+                                    href={`https://nvd.nist.gov/vuln/detail/${s.vuln_id}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-mono text-sm font-medium text-primary hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {s.vuln_id}
+                                  </a>
+                                  <button
+                                    type="button"
+                                    className="text-left text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
+                                    onClick={() => openAppliesImagesModal(s)}
+                                    title={
+                                      s.image_digest
+                                        ? `Image digest ${shortDigest(s.image_digest)}`
+                                        : undefined
+                                    }
+                                  >
+                                    Applies to {pluralize(imageCount, 'image')}
+                                  </button>
+                                </div>
+                              </Table.Cell>
+                              <Table.Cell data-label="Status" className="hidden md:table-cell">
+                                <div className="flex flex-col items-start gap-1.5">
+                                  <StatusBadge status={s.status} />
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <SuppressionSourceBadge source={s.source} />
+                                    <OwnershipBadge
+                                      ownerType={s.owner_type}
+                                      ownerOrgId={s.owner_org_id}
+                                      orgNamesById={orgNamesById}
+                                    />
+                                  </div>
+                                </div>
+                              </Table.Cell>
+                              <Table.Cell data-label="Reason">
+                                <div className="max-w-xl space-y-1 text-sm">
+                                  <p
+                                    className="line-clamp-2 text-foreground"
+                                    title={s.justification || undefined}
+                                  >
+                                    {s.justification || 'No reason given'}
+                                  </p>
+                                  {s.xray_policy_name || s.xray_watch_name ? (
+                                    <p className="text-xs text-muted-foreground">
+                                      {[s.xray_policy_name, s.xray_watch_name]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    </p>
+                                  ) : null}
+                                  <p className="text-xs text-muted-foreground">
+                                    {s.username ? `${s.username} · ` : ''}
+                                    <span title={fullDate(s.created_at)}>
+                                      Added {timeAgo(s.created_at)}
+                                    </span>
+                                    {' · '}
+                                    {s.expires_at ? (
+                                      <span
+                                        className={expired ? 'text-destructive' : undefined}
+                                        title={fullDate(s.expires_at)}
+                                      >
+                                        {expired ? 'Expired' : 'Expires'}{' '}
+                                        {formatDateOnly(s.expires_at)}
+                                      </span>
+                                    ) : (
+                                      'Never expires'
+                                    )}
+                                  </p>
+                                </div>
+                              </Table.Cell>
+                              <Table.Cell data-label="Actions">
+                                {canManageAccess(s) || canMutateSuppression(s) ? (
+                                  <div className="flex items-center justify-end">
+                                    <RowActionsMenu
+                                      label={`Actions for ${s.vuln_id}`}
+                                      items={[
+                                        ...(canManageAccess(s)
+                                          ? [
+                                              {
+                                                id: 'manage-access',
+                                                label: 'Manage access',
+                                                icon: <Shield01Icon size={14} />,
+                                                onAction: () => openShareModal(s),
+                                              },
+                                            ]
+                                          : []),
+                                        ...(canMutateSuppression(s)
+                                          ? [
+                                              {
+                                                id: 'remove',
+                                                label: 'Remove suppression',
+                                                icon: <Delete01Icon size={14} />,
+                                                variant: 'danger' as const,
+                                                pending: deletingId === s.id,
+                                                disabled:
+                                                  deletingId !== null && deletingId !== s.id,
+                                                onAction: () => {
+                                                  void handleDelete(s);
+                                                },
+                                              },
+                                            ]
+                                          : []),
+                                      ]}
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="whitespace-nowrap text-xs text-muted-foreground">
+                                    Read only
+                                  </span>
+                                )}
+                              </Table.Cell>
+                            </Table.Row>
+                          );
+                        })}
+                      </Table.Body>
+                    </Table.Content>
+                  </Table.ScrollContainer>
+                </Table.Responsive>
+                <TablePager
+                  page={page}
+                  pageSize={LIMIT}
+                  total={total}
+                  onPageChange={setPage}
+                  noun="suppressions"
+                />
               </Table>
             </div>
           </LoadableCollectionState>
@@ -621,55 +605,36 @@ export default function SuppressionsPage() {
           <Modal.Container size="lg" placement="center">
             <Modal.Dialog className="surface-modal overflow-hidden">
               <Modal.Header>
-                <Modal.Heading className="text-foreground font-semibold">
-                  Applies to Images
+                <Modal.Heading className="font-semibold text-foreground">
+                  Matching images
                 </Modal.Heading>
-                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
+                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground" />
               </Modal.Header>
               <Modal.Body className="py-5 space-y-4">
                 {imagesError ? (
                   <FormAlert description={imagesError} title="Images loading failed" />
                 ) : null}
-                <div className="flex flex-col gap-2">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                      Suppression
+                {imagesTarget ? (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">{imagesTarget.vuln_id}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {imagesLoading
+                        ? 'Looking for matching images…'
+                        : `${pluralize(imagesTotal, 'image')} in this workspace match this suppression.`}
                     </p>
+                    {imagesTarget.image_digest ? (
+                      <DigestLine digest={imagesTarget.image_digest} label="Suppression digest" />
+                    ) : null}
                   </div>
-                  {imagesTarget ? (
-                    <Card variant="secondary" className="py-3">
-                      <p className="text-sm font-medium text-foreground">{imagesTarget.vuln_id}</p>
-                      <p
-                        className="font-mono text-xs text-muted-foreground"
-                        title={imagesTarget.image_digest}
-                      >
-                        {imagesTarget.image_digest.length > 64
-                          ? `${imagesTarget.image_digest.slice(0, 64)}…`
-                          : imagesTarget.image_digest}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {imagesTotal.toLocaleString()} matching image
-                        {imagesTotal === 1 ? '' : 's'} in current workspace
-                      </p>
-                    </Card>
-                  ) : null}
-                </div>
+                ) : null}
 
                 <Separator />
 
                 <div className="flex flex-col gap-2">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                      Matching Images
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Images currently visible in this workspace for the suppression digest.
-                    </p>
-                  </div>
-
                   {imagesLoading ? (
-                    <div className="flex justify-center py-8">
-                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+                    <div className="flex justify-center py-8" role="status">
+                      <Spinner size="sm" />
+                      <span className="sr-only">Loading matching images</span>
                     </div>
                   ) : imagesError ? (
                     <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -689,36 +654,20 @@ export default function SuppressionsPage() {
                   ) : appliedImages.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No matching images were found.</p>
                   ) : (
-                    <div className="max-h-[320px] overflow-y-auto flex flex-col gap-3">
+                    <ResourceList className="max-h-80 overflow-y-auto">
                       {appliedImages.map((image) => (
-                        <Card
+                        <ResourceList.Item
                           key={`${image.image_name}:${image.image_tag}:${image.image_digest}`}
-                          variant="secondary"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-foreground">
-                                {image.image_name}:{image.image_tag}
-                              </p>
-                              <p
-                                className="font-mono text-xs text-muted-foreground truncate"
-                                title={image.image_digest}
-                              >
-                                {image.image_digest.length > 64
-                                  ? `${image.image_digest.slice(0, 64)}…`
-                                  : image.image_digest}
-                              </p>
-                              <p
-                                className="text-xs text-muted-foreground"
-                                title={fullDate(image.latest_seen_at)}
-                              >
-                                Last seen: {timeAgo(image.latest_seen_at)}
-                              </p>
-                            </div>
+                          title={`${image.image_name}:${image.image_tag}`}
+                          description={
+                            <span title={fullDate(image.latest_seen_at)}>
+                              Last seen {timeAgo(image.latest_seen_at)}
+                            </span>
+                          }
+                          actions={
                             <Button
                               size="sm"
                               variant="secondary"
-                              className="shrink-0"
                               isDisabled={!image.latest_scan_id}
                               onPress={() => {
                                 if (!image.latest_scan_id) return;
@@ -726,12 +675,14 @@ export default function SuppressionsPage() {
                                 router.push(`/scans/details/${image.latest_scan_id}`);
                               }}
                             >
-                              Open Scan
+                              Open scan
                             </Button>
-                          </div>
-                        </Card>
+                          }
+                        >
+                          {image.image_digest ? <DigestLine digest={image.image_digest} /> : null}
+                        </ResourceList.Item>
                       ))}
-                    </div>
+                    </ResourceList>
                   )}
                 </div>
               </Modal.Body>

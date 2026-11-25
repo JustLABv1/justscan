@@ -3,7 +3,6 @@
 import { ChoiceCards } from '@/components/panelui/choice-cards';
 import { Container, GitBranch, Infinity, Layers, ListChecks, Regex } from 'lucide-react';
 import { FilterChips } from '@/components/ui/filter-chips';
-import { StatStrip, StatStripItem } from '@/components/ui/stat-strip';
 import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { OwnershipTransfer } from '@/components/ownership-transfer';
@@ -49,21 +48,25 @@ import {
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
 import { canManageOrg, canMutateOrg } from '@/lib/org-permissions';
-import { timeAgo } from '@/lib/time';
+import { fullDate, timeAgo } from '@/lib/time';
+import { labelFor, VISIBILITY_LABELS } from '@/lib/labels';
 import {
   Alert,
   Button,
+  buttonVariants,
   Card,
   Checkbox,
+  Chip,
   Description,
   Input,
   Label,
   ListBox,
   Modal,
+  DetailSheet,
   SearchField,
   Select,
+  ResourceList,
   Spinner,
-  Table,
   TextArea,
   useOverlayState,
 } from '@/components/ui';
@@ -90,7 +93,7 @@ const visibilityOptions = [
   },
   {
     id: 'authenticated',
-    label: 'Authenticated',
+    label: 'Signed-in users',
     description: 'Any signed-in JustScan user can view it.',
   },
   {
@@ -108,11 +111,6 @@ const statusPageSteps = ['Details', 'Sources', 'Configure', 'Review'] as const;
 type TrackingMode = 'git' | 'images' | 'mixed';
 type ImageScopeMode = 'all' | 'exact' | 'pattern';
 type DetailsErrors = Partial<Record<'name' | 'slug' | 'staleAfterHours', string>>;
-const exactSelectionBadgeStyle = {
-  background: 'color-mix(in srgb, var(--primary) 12%, transparent)',
-  border: '1px solid color-mix(in srgb, var(--primary) 22%, transparent)',
-  color: 'color-mix(in srgb, var(--primary) 62%, white)',
-};
 
 type ParsedImagePattern = {
   pattern: string;
@@ -247,6 +245,11 @@ export default function StatusPagesPage() {
         .some((value) => value.toLowerCase().includes(query));
     });
   }, [pages, searchQuery, visibilityFilter]);
+  // Filters only earn their space once there are enough pages to sift through.
+  const showFilters = pages.length >= 5 || Boolean(searchQuery) || visibilityFilter !== 'all';
+  // The list renders only after a client-side fetch, so reading the origin here
+  // cannot cause a hydration mismatch.
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -771,7 +774,7 @@ export default function StatusPagesPage() {
         description="Publish current image-tag health internally or externally."
         actions={
           <Button onPress={openCreate} isDisabled={!canMutateActiveScope}>
-            <PlusSignIcon size={15} /> New Status Page
+            <PlusSignIcon size={15} /> New status page
           </Button>
         }
       />
@@ -780,204 +783,165 @@ export default function StatusPagesPage() {
         <StatusAlert status="danger" title="Status pages failed to load" description={error} />
       ) : null}
 
-      {!loading && pages.length > 0 ? (
-        <StatStrip>
-          {[
-            { key: 'all', label: 'Status pages', value: pages.length, hint: 'Current workspace' },
-            ...visibilityOptions.map((option) => ({
-              key: option.id,
-              label: option.label,
-              value: pages.filter((page) => page.visibility === option.id).length,
-              hint:
-                option.id === 'public'
-                  ? 'Visible without signing in'
-                  : option.id === 'private'
-                    ? 'Owner and organization access'
-                    : 'Signed-in users',
-            })),
-          ].map((metric) => (
-            <StatStripItem
-              key={metric.key}
-              label={metric.label}
-              value={metric.value}
-              hint={metric.hint}
-              selected={metric.key !== 'all' && visibilityFilter === metric.key}
-              onPress={() => setVisibilityFilter(metric.key as 'all' | StatusPage['visibility'])}
-            />
-          ))}
-        </StatStrip>
-      ) : null}
-      <div className="space-y-4">
-        <Card className="gap-0 overflow-hidden py-0">
-          <Card.Header className="space-y-3 border-b p-4">
-            <FilterChips
-              label="Status page visibility"
-              onSelect={(id) => setVisibilityFilter(id as 'all' | StatusPage['visibility'])}
-              items={[{ id: 'all', label: 'All pages' }, ...visibilityOptions].map((option) => ({
-                id: option.id,
-                label: option.label,
-                active: visibilityFilter === option.id,
-              }))}
-            />
-            <SearchField
-              name="status-pages-search"
-              aria-label="Search status pages"
-              variant="secondary"
-              className="w-full"
-            >
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search name, slug, or description..."
-                />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-          </Card.Header>
-          {loading ? (
-            <div className="surface-card flex justify-center rounded-xl border border-divider/70 py-16">
-              <Spinner size="lg" />
+      {loading ? (
+        <div className="flex justify-center py-16" role="status">
+          <Spinner size="lg" />
+          <span className="sr-only">Loading status pages</span>
+        </div>
+      ) : pages.length === 0 ? (
+        error ? null : (
+          <EmptyState
+            action={
+              canMutateActiveScope
+                ? { label: 'Create status page', onClick: openCreate }
+                : undefined
+            }
+            description="Create one to publish current image-tag health for a curated or global set of workloads."
+            icon={<EyeIcon size={28} />}
+            title="No status pages yet"
+          />
+        )
+      ) : (
+        <div className="space-y-4">
+          {showFilters ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <FilterChips
+                label="Status page visibility"
+                onSelect={(id) => setVisibilityFilter(id as 'all' | StatusPage['visibility'])}
+                items={[{ id: 'all', label: 'All' }, ...visibilityOptions].map((option) => ({
+                  id: option.id,
+                  label: option.label,
+                  count:
+                    option.id === 'all'
+                      ? pages.length
+                      : pages.filter((page) => page.visibility === option.id).length,
+                  active: visibilityFilter === option.id,
+                }))}
+              />
+              <SearchField
+                name="status-pages-search"
+                aria-label="Search status pages"
+                variant="secondary"
+                className="w-full sm:ml-auto sm:max-w-xs"
+              >
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search status pages..."
+                  />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
             </div>
-          ) : filteredPages.length === 0 ? (
-            <EmptyState
-              action={
-                pages.length > 0 || !canMutateActiveScope
-                  ? undefined
-                  : { label: 'Create status page', onClick: openCreate }
-              }
-              description={
-                pages.length > 0
-                  ? 'No status pages match the current filters. Adjust visibility or search terms to widen the results.'
-                  : 'No status pages exist yet. Create one to publish current image-tag health for a curated or global set of workloads.'
-              }
-              eyebrow="Status pages"
-              icon={<EyeIcon size={28} />}
-              title={pages.length > 0 ? 'No matching pages' : 'No status pages yet'}
-            />
+          ) : null}
+          {filteredPages.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl px-4 py-10 text-center ring-1 ring-foreground/10">
+              <p className="text-sm text-muted-foreground">No status pages match these filters.</p>
+              <Button
+                size="sm"
+                variant="secondary"
+                onPress={() => {
+                  setSearchQuery('');
+                  setVisibilityFilter('all');
+                }}
+              >
+                Clear filters
+              </Button>
+            </div>
           ) : (
-            <div>
-              <Card.Content className="p-0">
-                <Table variant="secondary">
-                  <Table.ScrollContainer className="rounded-none border-0">
-                    <Table.Content aria-label="Status pages" className="min-w-[1120px] [&_td]:py-3">
-                      <Table.Header>
-                        <Table.Column isRowHeader>Name</Table.Column>
-                        <Table.Column>Visibility</Table.Column>
-                        <Table.Column>Scope</Table.Column>
-                        <Table.Column>Slug</Table.Column>
-                        <Table.Column>Access</Table.Column>
-                        <Table.Column>Updated</Table.Column>
-                        <Table.Column className="w-px whitespace-nowrap text-right">
-                          Actions
-                        </Table.Column>
-                      </Table.Header>
-                      <Table.Body>
-                        {filteredPages.map((page) => (
-                          <Table.Row
-                            key={page.id}
-                            id={page.id}
-                            className="hover:bg-[var(--row-hover)]"
-                          >
-                            <Table.Cell>
-                              <div>
-                                <p className="font-medium text-foreground">{page.name}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                                  {page.description || 'No description'}
-                                </p>
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <StatusTag
-                                className="capitalize"
-                                tone={toneFromChipColor(visibilityTone(page.visibility))}
-                              >
-                                {page.visibility}
-                              </StatusTag>
-                            </Table.Cell>
-                            <Table.Cell className="text-xs text-muted-foreground">
-                              {describeScope(page)}
-                            </Table.Cell>
-                            <Table.Cell className="font-mono text-xs text-muted-foreground dark:text-foreground">
-                              /status/{page.slug}
-                            </Table.Cell>
-                            <Table.Cell>
-                              <div className="mt-1.5">
-                                <OwnershipBadge
-                                  ownerType={page.owner_type}
-                                  ownerOrgId={page.owner_org_id}
-                                  orgNamesById={orgNamesById}
-                                />
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell className="text-xs text-muted-foreground">
-                              {timeAgo(page.updated_at)}
-                            </Table.Cell>
-                            <Table.Cell>
-                              <div className="flex justify-end">
-                                <RowActionsMenu
-                                  label={`Open actions menu for ${page.name}`}
-                                  items={[
-                                    {
-                                      id: 'open',
-                                      label: 'Open page',
-                                      icon: <EyeIcon size={15} />,
-                                      onAction: () => window.open(`/status/${page.slug}`, '_blank'),
-                                    },
-                                    ...(canManageStatusPage(page)
-                                      ? [
-                                          {
-                                            id: 'share',
-                                            label: 'Manage access',
-                                            icon: <Shield01Icon size={15} />,
-                                            onAction: () => openShareModal(page),
-                                          },
-                                          {
-                                            id: 'edit',
-                                            label: 'Edit status page',
-                                            icon: <PencilEdit01Icon size={15} />,
-                                            onAction: () => openEdit(page),
-                                          },
-                                          {
-                                            id: 'delete',
-                                            label: 'Delete status page',
-                                            icon: <Delete01Icon size={15} />,
-                                            variant: 'danger' as const,
-                                            onAction: () => {
-                                              void handleDelete(page.id);
-                                            },
-                                          },
-                                        ]
-                                      : []),
-                                  ]}
-                                />
-                              </div>
-                            </Table.Cell>
-                          </Table.Row>
-                        ))}
-                      </Table.Body>
-                    </Table.Content>
-                  </Table.ScrollContainer>
-                </Table>
-              </Card.Content>
-            </div>
+            <ResourceList aria-label="Status pages">
+              {filteredPages.map((page) => {
+                const path = `/status/${page.slug}`;
+                return (
+                  <ResourceList.Item
+                    key={page.id}
+                    title={page.name}
+                    description={page.description || describeScope(page)}
+                    meta={
+                      <>
+                        <StatusTag tone={toneFromChipColor(visibilityTone(page.visibility))}>
+                          {labelFor(VISIBILITY_LABELS, page.visibility)}
+                        </StatusTag>
+                        <OwnershipBadge
+                          ownerType={page.owner_type}
+                          ownerOrgId={page.owner_org_id}
+                          orgNamesById={orgNamesById}
+                        />
+                      </>
+                    }
+                    actions={
+                      <>
+                        <a
+                          href={path}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={buttonVariants({ size: 'sm', variant: 'secondary' })}
+                        >
+                          Open page
+                        </a>
+                        {canManageStatusPage(page) ? (
+                          <RowActionsMenu
+                            label={`Open actions menu for ${page.name}`}
+                            items={[
+                              {
+                                id: 'share',
+                                label: 'Manage access',
+                                icon: <Shield01Icon size={15} />,
+                                onAction: () => openShareModal(page),
+                              },
+                              {
+                                id: 'edit',
+                                label: 'Edit status page',
+                                icon: <PencilEdit01Icon size={15} />,
+                                onAction: () => openEdit(page),
+                              },
+                              {
+                                id: 'delete',
+                                label: 'Delete status page',
+                                icon: <Delete01Icon size={15} />,
+                                variant: 'danger' as const,
+                                onAction: () => {
+                                  void handleDelete(page.id);
+                                },
+                              },
+                            ]}
+                          />
+                        ) : null}
+                      </>
+                    }
+                  >
+                    <p className="truncate text-xs text-muted-foreground">
+                      {page.description ? `${describeScope(page)} · ` : ''}
+                      <span title={fullDate(page.updated_at)}>
+                        Updated {timeAgo(page.updated_at)}
+                      </span>
+                      {' · '}
+                      <span title={`${origin}${path}`}>
+                        {origin ? `${origin.replace(/^https?:\/\//, '')}${path}` : path}
+                      </span>
+                    </p>
+                  </ResourceList.Item>
+                );
+              })}
+            </ResourceList>
           )}
-        </Card>
-      </div>
+        </div>
+      )}
 
-      <Modal state={modal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="xl" placement="center">
-            <Modal.Dialog className="overflow-hidden">
-              <Modal.Header>
-                <Modal.Heading className="text-foreground font-semibold">
-                  {editing ? 'Edit Status Page' : 'Create Status Page'}
-                </Modal.Heading>
-                <Modal.CloseTrigger className="text-muted-foreground hover:text-foreground dark:hover:text-foreground" />
-              </Modal.Header>
+      <DetailSheet state={modal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="xl">
+            <DetailSheet.Dialog className="overflow-hidden">
+              <DetailSheet.Header>
+                <DetailSheet.Heading className="text-foreground font-semibold">
+                  {editing ? 'Edit status page' : 'Create status page'}
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger className="text-muted-foreground hover:text-foreground" />
+              </DetailSheet.Header>
 
-              <Modal.Body className="min-h-0 overflow-y-auto overscroll-contain py-5">
+              <DetailSheet.Body>
                 <form id="status-page-form" onSubmit={handleSubmit} className="space-y-6">
                   {formError && (
                     <Alert status="danger">
@@ -1035,7 +999,7 @@ export default function StatusPagesPage() {
                             required
                           />
                           {detailsErrors.name && (
-                            <p className="text-xs text-danger" role="alert">
+                            <p className="text-xs text-destructive" role="alert">
                               {detailsErrors.name}
                             </p>
                           )}
@@ -1056,7 +1020,7 @@ export default function StatusPagesPage() {
                             aria-invalid={Boolean(detailsErrors.slug)}
                           />
                           {detailsErrors.slug && (
-                            <p className="text-xs text-danger" role="alert">
+                            <p className="text-xs text-destructive" role="alert">
                               {detailsErrors.slug}
                             </p>
                           )}
@@ -1140,7 +1104,7 @@ export default function StatusPagesPage() {
                             aria-invalid={Boolean(detailsErrors.staleAfterHours)}
                           />
                           {detailsErrors.staleAfterHours && (
-                            <p className="text-xs text-danger" role="alert">
+                            <p className="text-xs text-destructive" role="alert">
                               {detailsErrors.staleAfterHours}
                             </p>
                           )}
@@ -1198,7 +1162,7 @@ export default function StatusPagesPage() {
                         ))}
                       </ChoiceCards>
                       {(trackingMode === 'images' || trackingMode === 'mixed') && (
-                        <div className="space-y-4 border-t border-divider pt-6">
+                        <div className="space-y-4 border-t border-border pt-6">
                           <p className="text-sm font-semibold text-foreground">
                             Do you want to manually choose every image?
                           </p>
@@ -1277,7 +1241,7 @@ export default function StatusPagesPage() {
                         </SearchField.Group>
                       </SearchField>
 
-                      <div className="max-h-52 divide-y divide-divider overflow-y-auto rounded-xl border border-divider bg-surface">
+                      <div className="max-h-52 divide-y divide-border overflow-y-auto rounded-xl border border-border bg-surface">
                         {filteredGitRepositories.length === 0 ? (
                           <p className="p-4 text-sm text-muted-foreground">
                             No accessible Git repositories match this search.
@@ -1395,7 +1359,7 @@ export default function StatusPagesPage() {
                                 follow this repository once a discovery run completes.
                               </p>
                             ) : (
-                              <div className="max-h-52 divide-y divide-divider overflow-y-auto rounded-xl border border-divider bg-surface">
+                              <div className="max-h-52 divide-y divide-border overflow-y-auto rounded-xl border border-border bg-surface">
                                 {images.map((image) => {
                                   const selected = selectedImageNames.has(image.image_name);
                                   const checkboxId = `git-status-image-${repositoryId}-${image.image_name}`;
@@ -1437,7 +1401,7 @@ export default function StatusPagesPage() {
                               </div>
                             )}
                             {isPickingImages && selectedImageNames.size === 0 && (
-                              <p className="text-xs text-danger">
+                              <p className="text-xs text-destructive">
                                 Select at least one image, or check All images.
                               </p>
                             )}
@@ -1609,28 +1573,12 @@ export default function StatusPagesPage() {
                               ) : (
                                 <div className="mt-3 flex flex-wrap gap-2">
                                   {regexMatchedOptions.slice(0, 10).map((option) => (
-                                    <span
-                                      key={option.id}
-                                      className="rounded-full px-2.5 py-1 text-xs font-mono"
-                                      style={{
-                                        background: 'rgba(59,130,246,0.12)',
-                                        border: '1px solid rgba(59,130,246,0.2)',
-                                        color: '#93c5fd',
-                                      }}
-                                    >
+                                    <Chip key={option.id} color="accent" size="sm" variant="soft">
                                       {option.label}
-                                    </span>
+                                    </Chip>
                                   ))}
                                   {regexMatchedOptions.length > 10 && (
-                                    <span
-                                      className="rounded-full px-2.5 py-1 text-xs font-semibold text-muted-foreground"
-                                      style={{
-                                        background: 'var(--status-pill-bg)',
-                                        border: '1px solid var(--surface-border)',
-                                      }}
-                                    >
-                                      +{regexMatchedOptions.length - 10} more
-                                    </span>
+                                    <Chip size="sm">+{regexMatchedOptions.length - 10} more</Chip>
                                   )}
                                 </div>
                               )}
@@ -1769,9 +1717,9 @@ export default function StatusPagesPage() {
                     </>
                   )}
                 </form>
-              </Modal.Body>
+              </DetailSheet.Body>
 
-              <Modal.Footer
+              <DetailSheet.Footer
                 className="flex items-center justify-between gap-3 px-6 py-4"
                 style={{ borderTop: '1px solid var(--border-subtle)' }}
               >
@@ -1808,27 +1756,24 @@ export default function StatusPagesPage() {
                         !scopeIsValid ||
                         (editing ? !canManageStatusPage(editing) : !canMutateActiveScope)
                       }
-                      className="btn-primary"
+                      isPending={saving}
                     >
-                      {saving && (
-                        <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      )}
                       {editing ? 'Save status page' : 'Create status page'}
                     </Button>
                   )}
                 </div>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
       <Modal state={shareModal}>
         <Modal.Backdrop isDismissable={false}>
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
                 <Modal.Heading className="text-foreground font-semibold">
-                  Manage Status Page Access
+                  Manage status page access
                 </Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
@@ -1863,8 +1808,9 @@ export default function StatusPagesPage() {
                     </p>
                   </div>
                   {sharesLoading ? (
-                    <div className="flex justify-center py-6">
-                      <div className="size-5 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+                    <div className="flex justify-center py-6" role="status">
+                      <Spinner size="sm" />
+                      <span className="sr-only">Loading access grants</span>
                     </div>
                   ) : shares.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No organization grants yet.</p>
@@ -1959,10 +1905,7 @@ export default function StatusPagesPage() {
                   warning="Displayed scans and policy results will use the destination organization."
                 />
               </Modal.Body>
-              <Modal.Footer
-                className="px-6 py-4 flex justify-end"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
+              <Modal.Footer>
                 <Button className="btn-secondary" onPress={shareModal.close}>
                   Close
                 </Button>

@@ -75,13 +75,16 @@ import type * as ReactTypes from 'react';
 import type { ElementType as RenderElementType } from 'react';
 
 /** Draws a part as another element, or composes it with a component: `render={<a href="/" />}`. */
-type RenderProp<Tag extends RenderElementType> = { render?: useRender.ComponentProps<Tag>['render'] };
+type RenderProp<Tag extends RenderElementType> = {
+  render?: useRender.ComponentProps<Tag>['render'];
+};
 
 const dialogVariants = tv({
   slots: {
     backdrop:
       'fixed inset-0 z-50 bg-black/40 transition-opacity duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0 motion-reduce:transition-none',
-    viewport: 'fixed inset-0 z-50 grid place-items-center overflow-hidden p-4 max-sm:items-end max-sm:p-2',
+    viewport:
+      'fixed inset-0 z-50 grid place-items-center overflow-hidden p-4 max-sm:items-end max-sm:p-2',
     shell: [
       'relative flex max-h-[calc(100dvh-2rem)] w-full min-h-0 flex-col text-popover-foreground outline-none max-sm:max-h-[calc(100dvh-1rem)]',
       // A dialog opened from this one steps it back, smaller and veiled, so
@@ -125,7 +128,8 @@ const dialogVariants = tv({
     // side, and a heading or a row reaching into it shows through the thumb.
     list: '-mx-2 flex flex-col outline-none',
     listGroup: 'flex flex-col [&+&]:mt-2',
-    listGroupLabel: 'sticky top-0 z-10 bg-popover px-2 pb-1.5 pt-2 text-xs font-medium text-muted-foreground',
+    listGroupLabel:
+      'sticky top-0 z-10 bg-popover px-2 pb-1.5 pt-2 text-xs font-medium text-muted-foreground',
     listItem: [
       'flex h-10 shrink-0 cursor-pointer select-none items-center gap-3 rounded-xl px-2 text-sm outline-none',
       // Room for the pinned heading above it when the arrow keys scroll it into view.
@@ -183,7 +187,11 @@ interface DialogContextValue {
   variant: 'inset' | 'plain';
 }
 
-const DialogContext = createContext<DialogContextValue>({ inline: false, showClose: true, variant: 'inset' });
+const DialogContext = createContext<DialogContextValue>({
+  inline: false,
+  showClose: true,
+  variant: 'inset',
+});
 
 export interface DialogProps {
   children?: ReactNode;
@@ -192,7 +200,7 @@ export interface DialogProps {
   /** Whether it starts open, when the caller does not hold it. */
   defaultOpen?: boolean;
   /** Called when it opens or closes. */
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: ComponentProps<typeof Primitive.Root>['onOpenChange'];
   /**
    * Whether a press outside it closes it. Turn it off while a form in it has
    * changes that would be lost; Escape and the close button still work.
@@ -201,12 +209,18 @@ export interface DialogProps {
   dismissible?: boolean;
 }
 
-function DialogRoot({ children, open, defaultOpen, onOpenChange, dismissible = true }: DialogProps) {
+function DialogRoot({
+  children,
+  open,
+  defaultOpen,
+  onOpenChange,
+  dismissible = true,
+}: DialogProps) {
   return (
     <Primitive.Root
       open={open}
       defaultOpen={defaultOpen}
-      onOpenChange={onOpenChange ? (next) => onOpenChange(next) : undefined}
+      onOpenChange={onOpenChange}
       disablePointerDismissal={!dismissible}
     >
       {children}
@@ -236,6 +250,8 @@ DialogTrigger.displayName = 'Dialog.Trigger';
 
 export interface DialogContentProps extends Omit<ComponentProps<'div'>, 'children'> {
   children?: ReactNode;
+  initialFocus?: ComponentProps<typeof Primitive.Popup>['initialFocus'];
+  finalFocus?: ComponentProps<typeof Primitive.Popup>['finalFocus'];
   /**
    * `inset` sets the task in a panel inside a darker band that holds the
    * footer. `plain` is one surface with the footer ruled off. Default `inset`.
@@ -252,6 +268,8 @@ export interface DialogContentProps extends Omit<ComponentProps<'div'>, 'childre
    * there. For previews; `open` is ignored.
    */
   inline?: boolean;
+  backdropClassName?: string;
+  viewportClassName?: string;
 }
 
 const isFooter = (child: ReactNode) => isValidElement(child) && child.type === DialogFooter;
@@ -263,6 +281,8 @@ function DialogContent({
   showClose = true,
   blur = false,
   inline = false,
+  backdropClassName,
+  viewportClassName,
   className,
   children,
   ...props
@@ -287,7 +307,12 @@ function DialogContent({
 
   if (inline) {
     return (
-      <div data-slot="dialog-content" data-variant={variant} className={slots.shell({ className })} {...props}>
+      <div
+        data-slot="dialog-content"
+        data-variant={variant}
+        className={slots.shell({ className })}
+        {...props}
+      >
         {inside}
       </div>
     );
@@ -295,8 +320,8 @@ function DialogContent({
 
   return (
     <Primitive.Portal>
-      <Primitive.Backdrop className={slots.backdrop()} />
-      <Primitive.Viewport className={slots.viewport()}>
+      <Primitive.Backdrop className={slots.backdrop({ className: backdropClassName })} />
+      <Primitive.Viewport className={slots.viewport({ className: viewportClassName })}>
         <Primitive.Popup
           data-slot="dialog-content"
           data-variant={variant}
@@ -339,7 +364,9 @@ function DialogHeader({
         children: (
           <>
             {title !== undefined ? <DialogTitle>{title}</DialogTitle> : null}
-            {description !== undefined ? <DialogDescription>{description}</DialogDescription> : null}
+            {description !== undefined ? (
+              <DialogDescription>{description}</DialogDescription>
+            ) : null}
             {children}
           </>
         ),
@@ -356,8 +383,11 @@ export interface DialogTitleProps extends ComponentProps<'h2'> {}
 function DialogTitle({ className, ...props }: DialogTitleProps) {
   const { inline } = useContext(DialogContext);
   const slots = dialogVariants();
-  if (inline) return <h2 data-slot="dialog-title" className={slots.title({ className })} {...props} />;
-  return <Primitive.Title data-slot="dialog-title" className={slots.title({ className })} {...props} />;
+  if (inline)
+    return <h2 data-slot="dialog-title" className={slots.title({ className })} {...props} />;
+  return (
+    <Primitive.Title data-slot="dialog-title" className={slots.title({ className })} {...props} />
+  );
 }
 DialogTitle.displayName = 'Dialog.Title';
 
@@ -367,9 +397,16 @@ export interface DialogDescriptionProps extends ComponentProps<'p'> {}
 function DialogDescription({ className, ...props }: DialogDescriptionProps) {
   const { inline } = useContext(DialogContext);
   const slots = dialogVariants();
-  if (inline) return <p data-slot="dialog-description" className={slots.description({ className })} {...props} />;
+  if (inline)
+    return (
+      <p data-slot="dialog-description" className={slots.description({ className })} {...props} />
+    );
   return (
-    <Primitive.Description data-slot="dialog-description" className={slots.description({ className })} {...props} />
+    <Primitive.Description
+      data-slot="dialog-description"
+      className={slots.description({ className })}
+      {...props}
+    />
   );
 }
 DialogDescription.displayName = 'Dialog.Description';
@@ -412,7 +449,10 @@ function DialogFooter({ className, render, ...props }: DialogFooterProps & Rende
     defaultTagName: 'div',
     render,
     props: mergeProps(
-      { 'data-slot': 'dialog-footer', className: dialogVariants({ variant }).footer({ className }) },
+      {
+        'data-slot': 'dialog-footer',
+        className: dialogVariants({ variant }).footer({ className }),
+      },
       props
     ),
   });
@@ -464,10 +504,19 @@ export interface DialogListProps extends ComponentProps<'div'> {}
  * A list of one-line choices in the body. The arrow keys, Home and End move
  * between its items, and it opens scrolled to the selected one.
  */
-function DialogList({ className, onKeyDown, children, render, ...props }: DialogListProps & RenderProp<'div'>) {
+function DialogList({
+  className,
+  onKeyDown,
+  children,
+  render,
+  ref,
+  ...props
+}: DialogListProps & RenderProp<'div'>) {
   const list = useRef<HTMLDivElement>(null);
   const items = () => [
-    ...(list.current?.querySelectorAll<HTMLElement>('[data-slot=dialog-list-item]:not([aria-disabled=true])') ?? []),
+    ...(list.current?.querySelectorAll<HTMLElement>(
+      '[data-slot=dialog-list-item]:not([aria-disabled=true])'
+    ) ?? []),
   ];
 
   useEffect(() => {
@@ -500,17 +549,19 @@ function DialogList({ className, onKeyDown, children, render, ...props }: Dialog
   return useRender({
     defaultTagName: 'div',
     render,
-    props: mergeProps(
-      {
-        ref: list,
-        role: 'listbox',
-        'data-slot': 'dialog-list',
-        className: dialogVariants().list({ className }),
-        onKeyDown: move,
-        children: <>{children}</>,
-      },
-      props
-    ),
+    ref: [list, ref ?? null],
+    props: {
+      ...mergeProps(
+        {
+          role: 'listbox',
+          'data-slot': 'dialog-list',
+          className: dialogVariants().list({ className }),
+          children: <>{children}</>,
+        },
+        props
+      ),
+      onKeyDown: move,
+    },
   });
 }
 DialogList.displayName = 'Dialog.List';
@@ -521,7 +572,13 @@ export interface DialogListGroupProps extends Omit<ComponentProps<'div'>, 'title
 }
 
 /** A run of items in `Dialog.List` under a heading of their own. */
-function DialogListGroup({ label, className, children, render, ...props }: DialogListGroupProps & RenderProp<'div'>) {
+function DialogListGroup({
+  label,
+  className,
+  children,
+  render,
+  ...props
+}: DialogListGroupProps & RenderProp<'div'>) {
   const slots = dialogVariants();
   const id = useId();
   return useRender({

@@ -13,7 +13,7 @@ export const fieldLabelClassName = 'block text-sm font-medium text-foreground';
 
 export const fieldDescriptionClassName = 'text-xs text-muted-foreground';
 
-export const fieldErrorClassName = 'text-xs font-medium text-danger';
+export const fieldErrorClassName = 'text-xs font-medium text-destructive';
 
 export function joinClassNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');

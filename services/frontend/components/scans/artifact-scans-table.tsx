@@ -290,7 +290,7 @@ function ArtifactHistoryRows({
               id={`${artifact.latest_scan_id}-${row.id}`}
               textValue={`${row.kind} scan history`}
             >
-              <Table.Cell colSpan={8}>
+              <Table.Cell colSpan={6}>
                 <div className="px-4 py-3 text-xs text-muted-foreground">
                   {row.kind === 'loading' ? 'Loading scan history…' : 'No scan history found.'}
                 </div>
@@ -304,7 +304,7 @@ function ArtifactHistoryRows({
               id={`${artifact.latest_scan_id}-history-pages`}
               textValue="Scan history pages"
             >
-              <Table.Cell colSpan={8}>
+              <Table.Cell colSpan={6}>
                 <div className="flex justify-center px-2 py-2">
                   <Pagination size="sm">
                     <Pagination.Content>
@@ -356,24 +356,26 @@ function ArtifactHistoryRows({
             textValue={`${scan.image_name}:${scan.image_tag}`}
             onClick={openScan}
           >
-            <Table.Cell onClick={(event) => event.stopPropagation()}>
+            <Table.Cell data-mobile-inline onClick={(event) => event.stopPropagation()}>
               <ScanSelectionCheckbox
                 ariaLabel={`Select scan ${scan.id}`}
                 isSelected={selectedScans.has(scan.id)}
                 onChange={(selected) => onSelectScan(scan.id, selected)}
               />
             </Table.Cell>
-            <Table.Cell />
-            <Table.Cell>
+            <Table.Cell data-mobile-inline />
+            <Table.Cell data-label="Scan">
               <Link
-                className="font-mono text-xs text-muted-foreground hover:text-primary"
+                className="whitespace-nowrap text-xs text-muted-foreground hover:text-primary"
                 href={`/scans/details/${scan.id}`}
                 onClick={(event) => event.stopPropagation()}
+                title={fullDate(scan.created_at)}
               >
-                {scan.id.slice(0, 8)}…
+                Scan {timeAgo(scan.created_at)}
               </Link>
+              <ScanTagBadgeList tags={scan.tags} />
             </Table.Cell>
-            <Table.Cell>
+            <Table.Cell data-label="Status">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge
                   currentStep={scan.current_step}
@@ -385,7 +387,7 @@ function ArtifactHistoryRows({
                     className="text-xs text-muted-foreground"
                     title="Approximate position among visible queued scans for this provider in this workspace"
                   >
-                    Queue ~#{scan.queue_position}
+                    About {ordinal(scan.queue_position)} in queue
                   </span>
                 )}
                 <PolicyFailureChip summary={scan.compliance_summary} />
@@ -395,16 +397,13 @@ function ArtifactHistoryRows({
                 {timeAgo(scan.created_at)}
               </p>
             </Table.Cell>
-            <Table.Cell>
+            <Table.Cell data-label="Findings">
               <div className="flex items-center gap-1.5">
                 <SevCount count={scan.critical_count} level="critical" />
                 <SevCount count={scan.high_count} level="high" />
                 <SevCount count={scan.medium_count} level="medium" />
                 <SevCount count={scan.low_count} level="low" />
               </div>
-            </Table.Cell>
-            <Table.Cell>
-              <ScanTagBadgeList tags={scan.tags} />
             </Table.Cell>
             <Table.Cell onClick={(event) => event.stopPropagation()}>
               <div className="flex justify-end">
@@ -482,6 +481,16 @@ function ArtifactHistoryRows({
       }}
     </Table.Collection>
   );
+}
+
+/** 1 → "1st", 2 → "2nd", 11 → "11th". */
+function ordinal(value: number) {
+  const mod100 = value % 100;
+  const suffix =
+    mod100 >= 11 && mod100 <= 13
+      ? 'th'
+      : (({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[value % 10] ?? 'th');
+  return `${value}${suffix}`;
 }
 
 export function ArtifactScansTable({
@@ -597,287 +606,305 @@ export function ArtifactScansTable({
   );
 
   return (
-    <Table>
-      <Table.ScrollContainer>
-        <Table.Content
-          aria-label="Latest scans by image and tag"
-          className={hideImageName ? 'min-w-[760px] table-auto' : 'min-w-[980px] table-auto'}
-          expandedKeys={expandedKeys}
-          treeColumn="expander"
-          onExpandedChange={setExpandedKeys}
-        >
-          <Table.Header>
-            <Table.Column className="w-8 pr-0">
-              <ScanSelectionCheckbox
-                ariaLabel="Select all latest scans on this page"
-                isSelected={allLatestSelected}
-                onChange={(selected) => {
-                  onSelectedScansChange((current) => {
-                    const next = new Set(current);
-                    latestScanIDs.forEach((scanId) =>
-                      selected ? next.add(scanId) : next.delete(scanId)
-                    );
-                    return next;
-                  });
-                }}
-              />
-            </Table.Column>
-            <Table.Column id="expander" className="w-9" />
-            <Table.Column isRowHeader>{hideImageName ? 'Tag' : 'Image & tag'}</Table.Column>
-            <Table.Column>Latest scan</Table.Column>
-            <Table.Column>Findings</Table.Column>
-            <Table.Column>Labels</Table.Column>
-            <Table.Column>Actions</Table.Column>
-          </Table.Header>
-          <Table.Body>
-            {loading ? (
-              Array.from({ length: 5 }, (_, index) => (
-                <Table.Row id={`loading-${index}`} key={`loading-${index}`}>
-                  <Table.Cell colSpan={7}>
-                    <div className="h-16 animate-pulse rounded-md" />
+    <Table.Responsive>
+      <div className="flex items-center gap-2 rounded-t-lg border border-border bg-muted/30 px-4 py-3 text-sm lg:hidden">
+        <ScanSelectionCheckbox
+          ariaLabel="Select all latest scans on this page"
+          isDisabled={loading || latestScanIDs.length === 0}
+          isSelected={allLatestSelected}
+          onChange={(selected) => {
+            onSelectedScansChange((current) => {
+              const next = new Set(current);
+              latestScanIDs.forEach((scanId) =>
+                selected ? next.add(scanId) : next.delete(scanId)
+              );
+              return next;
+            });
+          }}
+        />
+        <span>Select latest scans on this page</span>
+      </div>
+      <Table>
+        <Table.ScrollContainer>
+          <Table.Content
+            aria-label="Latest scans by image and tag"
+            className="table-auto [&_td]:align-top"
+            expandedKeys={expandedKeys}
+            treeColumn="expander"
+            onExpandedChange={setExpandedKeys}
+          >
+            <Table.Header>
+              <Table.Column className="w-8 pr-0" aria-label="Select scans">
+                <div className="hidden md:block">
+                  <ScanSelectionCheckbox
+                    ariaLabel="Select all latest scans on this page"
+                    isSelected={allLatestSelected}
+                    onChange={(selected) => {
+                      onSelectedScansChange((current) => {
+                        const next = new Set(current);
+                        latestScanIDs.forEach((scanId) =>
+                          selected ? next.add(scanId) : next.delete(scanId)
+                        );
+                        return next;
+                      });
+                    }}
+                  />
+                </div>
+              </Table.Column>
+              <Table.Column id="expander" className="w-9" />
+              <Table.Column isRowHeader>{hideImageName ? 'Tag' : 'Image & tag'}</Table.Column>
+              <Table.Column>Latest scan</Table.Column>
+              <Table.Column>Findings</Table.Column>
+              <Table.Column>Actions</Table.Column>
+            </Table.Header>
+            <Table.Body>
+              {loading ? (
+                Array.from({ length: 5 }, (_, index) => (
+                  <Table.Row id={`loading-${index}`} key={`loading-${index}`}>
+                    <Table.Cell colSpan={6}>
+                      <div className="h-16 animate-pulse rounded-md" />
+                    </Table.Cell>
+                  </Table.Row>
+                ))
+              ) : artifacts.length === 0 ? (
+                <Table.Row id="empty">
+                  <Table.Cell colSpan={6}>
+                    <div className="py-5">
+                      <EmptyState
+                        icon={<Shield01Icon size={28} />}
+                        title={
+                          emptyState?.title ??
+                          (hasActiveFilters ? 'No image tags match your filters' : 'No scans yet')
+                        }
+                        description={
+                          emptyState?.description ??
+                          (hasActiveFilters
+                            ? 'Adjust or clear filters above to widen the results.'
+                            : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.')
+                        }
+                      />
+                    </div>
                   </Table.Cell>
                 </Table.Row>
-              ))
-            ) : artifacts.length === 0 ? (
-              <Table.Row id="empty">
-                <Table.Cell colSpan={7}>
-                  <div className="py-5">
-                    <EmptyState
-                      icon={<Shield01Icon size={28} />}
-                      title={
-                        emptyState?.title ??
-                        (hasActiveFilters ? 'No image tags match your filters' : 'No scans yet')
-                      }
-                      description={
-                        emptyState?.description ??
-                        (hasActiveFilters
-                          ? 'Adjust or clear filters above to widen the results.'
-                          : 'Scan a Docker image to discover vulnerabilities, SBOMs, and more.')
-                      }
-                    />
-                  </div>
-                </Table.Cell>
-              </Table.Row>
-            ) : (
-              <Table.Collection
-                items={artifacts}
-                dependencies={[selectedScans, queuedArtifactKeys]}
-              >
-                {(artifact) => {
-                  const key = artifactKey(artifact.image_name, artifact.image_tag);
-                  const deletionQueued = queuedArtifactKeys?.has(key) ?? false;
-                  const openLatestScan = () =>
-                    router.push(`/scans/details/${artifact.latest_scan_id}`);
-                  return (
-                    <Table.Row
-                      id={key}
-                      className="cursor-pointer"
-                      textValue={`${artifact.image_name}:${artifact.image_tag}`}
-                      onClick={openLatestScan}
-                    >
-                      <Table.Cell onClick={(event) => event.stopPropagation()}>
-                        <ScanSelectionCheckbox
-                          ariaLabel={`Select all scans for ${artifact.image_name}:${artifact.image_tag}`}
-                          isDisabled={selectingArtifactKeys.has(key)}
-                          isSelected={selectedScans.has(artifact.latest_scan_id)}
-                          onChange={(selected) => void setArtifactSelection(artifact, selected)}
-                        />
-                      </Table.Cell>
-                      <Table.Cell onClick={(event) => event.stopPropagation()}>
-                        {({ hasChildItems, isDisabled, isExpanded, isTreeColumn }) =>
-                          hasChildItems && isTreeColumn ? (
-                            <Button
-                              isIconOnly
-                              aria-label={
-                                isExpanded
-                                  ? `Collapse history for ${artifact.image_name}:${artifact.image_tag}`
-                                  : `Expand history for ${artifact.image_name}:${artifact.image_tag}`
-                              }
-                              isDisabled={isDisabled}
-                              size="sm"
-                              slot="chevron"
-                              variant="ghost"
-                            >
-                              {isExpanded ? (
-                                <ArrowDown01Icon size={14} className="text-primary" />
-                              ) : (
-                                <ArrowRight01Icon size={14} />
-                              )}
-                            </Button>
-                          ) : null
-                        }
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Link
-                          aria-label={`Open latest scan for ${artifact.image_name}:${artifact.image_tag}`}
-                          className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                          href={`/scans/details/${artifact.latest_scan_id}`}
-                        >
-                          <ArtifactReference
-                            {...artifact}
-                            deletionQueued={deletionQueued}
-                            hideImageName={hideImageName}
+              ) : (
+                <Table.Collection
+                  items={artifacts}
+                  dependencies={[selectedScans, queuedArtifactKeys, expandedKeys]}
+                >
+                  {(artifact) => {
+                    const key = artifactKey(artifact.image_name, artifact.image_tag);
+                    const deletionQueued = queuedArtifactKeys?.has(key) ?? false;
+                    const openLatestScan = () =>
+                      router.push(`/scans/details/${artifact.latest_scan_id}`);
+                    return (
+                      <Table.Row
+                        id={key}
+                        className="cursor-pointer"
+                        textValue={`${artifact.image_name}:${artifact.image_tag}`}
+                        onClick={openLatestScan}
+                      >
+                        <Table.Cell data-mobile-inline onClick={(event) => event.stopPropagation()}>
+                          <ScanSelectionCheckbox
+                            ariaLabel={`Select all scans for ${artifact.image_name}:${artifact.image_tag}`}
+                            isDisabled={selectingArtifactKeys.has(key)}
+                            isSelected={selectedScans.has(artifact.latest_scan_id)}
+                            onChange={(selected) => void setArtifactSelection(artifact, selected)}
                           />
-                        </Link>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Link
-                          aria-label={`Open latest scan ${artifact.latest_scan_id}`}
-                          className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                          href={`/scans/details/${artifact.latest_scan_id}`}
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <StatusBadge
-                              currentStep={artifact.latest_current_step}
-                              status={artifact.latest_status}
-                              externalStatus={artifact.latest_external_status}
+                        </Table.Cell>
+                        <Table.Cell data-mobile-inline onClick={(event) => event.stopPropagation()}>
+                          {({ hasChildItems, isDisabled, isExpanded, isTreeColumn }) =>
+                            hasChildItems && isTreeColumn ? (
+                              <Button
+                                isIconOnly
+                                aria-label={
+                                  isExpanded
+                                    ? `Collapse history for ${artifact.image_name}:${artifact.image_tag}`
+                                    : `Expand history for ${artifact.image_name}:${artifact.image_tag}`
+                                }
+                                isDisabled={isDisabled}
+                                size="sm"
+                                aria-expanded={isExpanded}
+                                onPress={() => {
+                                  const next = new Set(expandedKeys);
+                                  if (isExpanded) next.delete(key);
+                                  else next.add(key);
+                                  setExpandedKeys(next);
+                                }}
+                                variant="ghost"
+                              >
+                                {isExpanded ? (
+                                  <ArrowDown01Icon size={14} className="text-primary" />
+                                ) : (
+                                  <ArrowRight01Icon size={14} />
+                                )}
+                              </Button>
+                            ) : null
+                          }
+                        </Table.Cell>
+                        <Table.Cell data-label="Image / tag">
+                          <Link
+                            aria-label={`Open latest scan for ${artifact.image_name}:${artifact.image_tag}`}
+                            className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                            href={`/scans/details/${artifact.latest_scan_id}`}
+                          >
+                            <ArtifactReference
+                              {...artifact}
+                              deletionQueued={deletionQueued}
+                              hideImageName={hideImageName}
                             />
-                            <PolicyFailureChip summary={artifact.compliance_summary} />
-                            <IntelligenceSummaryChip
-                              compact
-                              summary={artifact.intelligence_summary}
-                            />
-                          </div>
-                          <p className="mt-1 font-mono text-xs text-muted-foreground">
-                            {artifact.latest_scan_id.slice(0, 8)}…{' '}
-                            <span className="font-sans" title={fullDate(artifact.latest_scan_at)}>
-                              · {timeAgo(artifact.latest_scan_at)}
-                            </span>
-                          </p>
-                        </Link>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Link
-                          aria-label={`Open findings for ${artifact.image_name}:${artifact.image_tag}`}
-                          className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                          href={`/scans/details/${artifact.latest_scan_id}`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <SevCount count={artifact.critical_count} level="critical" />
-                            <SevCount count={artifact.high_count} level="high" />
-                            <SevCount count={artifact.medium_count} level="medium" />
-                            <SevCount count={artifact.low_count} level="low" />
-                          </div>
-                        </Link>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Link
-                          aria-label={`Open latest scan labels for ${artifact.image_name}:${artifact.image_tag}`}
-                          className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                          href={`/scans/details/${artifact.latest_scan_id}`}
-                        >
-                          <ScanTagBadgeList tags={artifact.tags} />
-                        </Link>
-                      </Table.Cell>
-                      <Table.Cell onClick={(event) => event.stopPropagation()}>
-                        <div className="flex justify-end">
-                          <RowActionsMenu
-                            label={`Open actions menu for ${artifact.image_name}:${artifact.image_tag}`}
-                            items={[
-                              {
-                                id: 'open',
-                                label: 'Open latest scan',
-                                icon: <FileSearchIcon size={14} aria-hidden />,
-                                onAction: openLatestScan,
-                              },
-                              {
-                                id: 'open-new-tab',
-                                label: 'Open in new tab',
-                                icon: <LinkSquare02Icon size={14} aria-hidden />,
-                                onAction: () =>
-                                  window.open(
-                                    `/scans/details/${artifact.latest_scan_id}`,
-                                    '_blank',
-                                    'noopener,noreferrer'
-                                  ),
-                              },
-                              ...(allowMutationActions &&
-                              (artifact.latest_status === 'pending' ||
-                                artifact.latest_status === 'running')
-                                ? [
-                                    {
-                                      id: 'cancel',
-                                      label: 'Cancel latest scan',
-                                      icon: <Cancel01Icon size={14} aria-hidden />,
-                                      onAction: () => onCancel(artifact.latest_scan_id, key),
-                                    },
-                                  ]
-                                : []),
-                              ...(allowMutationActions && artifact.latest_status === 'failed'
-                                ? [
-                                    {
-                                      id: 'retry',
-                                      label: 'Retry failed scan',
-                                      icon: <Refresh01Icon size={14} aria-hidden />,
-                                      onAction: () => onRetry(artifact.latest_scan_id, key),
-                                    },
-                                  ]
-                                : []),
-                              ...(onDeleteArtifact
-                                ? [
-                                    {
-                                      id: 'delete-artifact',
-                                      label: deletionQueued
-                                        ? 'Deletion queued'
-                                        : 'Delete tag history',
-                                      icon: <Delete01Icon size={14} aria-hidden />,
-                                      variant: 'danger' as const,
-                                      disabled: deletionQueued,
-                                      onAction: () => onDeleteArtifact(artifact),
-                                    },
-                                  ]
-                                : allowMutationActions
+                            <ScanTagBadgeList tags={artifact.tags} />
+                          </Link>
+                        </Table.Cell>
+                        <Table.Cell data-label="Latest scan">
+                          <Link
+                            aria-label={`Open latest scan ${artifact.latest_scan_id}`}
+                            className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                            href={`/scans/details/${artifact.latest_scan_id}`}
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <StatusBadge
+                                currentStep={artifact.latest_current_step}
+                                status={artifact.latest_status}
+                                externalStatus={artifact.latest_external_status}
+                              />
+                              <PolicyFailureChip summary={artifact.compliance_summary} />
+                              <IntelligenceSummaryChip
+                                compact
+                                summary={artifact.intelligence_summary}
+                              />
+                            </div>
+                            <p
+                              className="mt-1 text-xs text-muted-foreground"
+                              title={fullDate(artifact.latest_scan_at)}
+                            >
+                              Last scanned {timeAgo(artifact.latest_scan_at)}
+                            </p>
+                          </Link>
+                        </Table.Cell>
+                        <Table.Cell data-label="Findings">
+                          <Link
+                            aria-label={`Open findings for ${artifact.image_name}:${artifact.image_tag}`}
+                            className="block -mx-2 -my-1 rounded-md px-2 py-1 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                            href={`/scans/details/${artifact.latest_scan_id}`}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <SevCount count={artifact.critical_count} level="critical" />
+                              <SevCount count={artifact.high_count} level="high" />
+                              <SevCount count={artifact.medium_count} level="medium" />
+                              <SevCount count={artifact.low_count} level="low" />
+                            </div>
+                          </Link>
+                        </Table.Cell>
+                        <Table.Cell onClick={(event) => event.stopPropagation()}>
+                          <div className="flex justify-end">
+                            <RowActionsMenu
+                              label={`Open actions menu for ${artifact.image_name}:${artifact.image_tag}`}
+                              items={[
+                                {
+                                  id: 'open',
+                                  label: 'Open latest scan',
+                                  icon: <FileSearchIcon size={14} aria-hidden />,
+                                  onAction: openLatestScan,
+                                },
+                                {
+                                  id: 'open-new-tab',
+                                  label: 'Open in new tab',
+                                  icon: <LinkSquare02Icon size={14} aria-hidden />,
+                                  onAction: () =>
+                                    window.open(
+                                      `/scans/details/${artifact.latest_scan_id}`,
+                                      '_blank',
+                                      'noopener,noreferrer'
+                                    ),
+                                },
+                                ...(allowMutationActions &&
+                                (artifact.latest_status === 'pending' ||
+                                  artifact.latest_status === 'running')
                                   ? [
                                       {
-                                        id: 'share-workspace',
-                                        label: 'Share with workspace',
-                                        icon: <Shield01Icon size={14} aria-hidden />,
-                                        onAction: () =>
-                                          onShareToWorkspace([artifact.latest_scan_id]),
-                                      },
-                                      {
-                                        id: 'transfer-workspace',
-                                        label: 'Transfer ownership',
-                                        icon: <ArrowRight01Icon size={14} aria-hidden />,
-                                        onAction: () =>
-                                          onTransferToWorkspace([artifact.latest_scan_id]),
-                                      },
-                                      {
-                                        id: 'delete',
-                                        label: 'Delete latest scan',
-                                        icon: <Delete01Icon size={14} aria-hidden />,
-                                        variant: 'danger' as const,
-                                        onAction: () => onDelete(artifact.latest_scan_id, key),
+                                        id: 'cancel',
+                                        label: 'Cancel latest scan',
+                                        icon: <Cancel01Icon size={14} aria-hidden />,
+                                        onAction: () => onCancel(artifact.latest_scan_id, key),
                                       },
                                     ]
                                   : []),
-                            ]}
-                          />
-                        </div>
-                      </Table.Cell>
-                      <ArtifactHistoryRows
-                        allowHistoryDelete={allowHistoryDelete}
-                        allowMutationActions={allowMutationActions}
-                        artifact={artifact}
-                        refreshToken={childRefreshKey[key] ?? historyRefreshKey ?? 0}
-                        liveToken={historyLiveToken ?? 0}
-                        onCancel={(scanId) => onCancel(scanId, key)}
-                        onDelete={(scanId) => onDelete(scanId, key)}
-                        onDeleteHistoryScan={onDeleteHistoryScan}
-                        onRetry={(scanId) => onRetry(scanId, key)}
-                        onSelectScan={setScanSelection}
-                        onShareToWorkspace={onShareToWorkspace}
-                        onTransferToWorkspace={onTransferToWorkspace}
-                        selectedScans={selectedScans}
-                      />
-                    </Table.Row>
-                  );
-                }}
-              </Table.Collection>
-            )}
-          </Table.Body>
-        </Table.Content>
-      </Table.ScrollContainer>
-    </Table>
+                                ...(allowMutationActions && artifact.latest_status === 'failed'
+                                  ? [
+                                      {
+                                        id: 'retry',
+                                        label: 'Retry failed scan',
+                                        icon: <Refresh01Icon size={14} aria-hidden />,
+                                        onAction: () => onRetry(artifact.latest_scan_id, key),
+                                      },
+                                    ]
+                                  : []),
+                                ...(onDeleteArtifact
+                                  ? [
+                                      {
+                                        id: 'delete-artifact',
+                                        label: deletionQueued
+                                          ? 'Deletion queued'
+                                          : 'Delete tag history',
+                                        icon: <Delete01Icon size={14} aria-hidden />,
+                                        variant: 'danger' as const,
+                                        disabled: deletionQueued,
+                                        onAction: () => onDeleteArtifact(artifact),
+                                      },
+                                    ]
+                                  : allowMutationActions
+                                    ? [
+                                        {
+                                          id: 'share-workspace',
+                                          label: 'Share with workspace',
+                                          icon: <Shield01Icon size={14} aria-hidden />,
+                                          onAction: () =>
+                                            onShareToWorkspace([artifact.latest_scan_id]),
+                                        },
+                                        {
+                                          id: 'transfer-workspace',
+                                          label: 'Transfer ownership',
+                                          icon: <ArrowRight01Icon size={14} aria-hidden />,
+                                          onAction: () =>
+                                            onTransferToWorkspace([artifact.latest_scan_id]),
+                                        },
+                                        {
+                                          id: 'delete',
+                                          label: 'Delete latest scan',
+                                          icon: <Delete01Icon size={14} aria-hidden />,
+                                          variant: 'danger' as const,
+                                          onAction: () => onDelete(artifact.latest_scan_id, key),
+                                        },
+                                      ]
+                                    : []),
+                              ]}
+                            />
+                          </div>
+                        </Table.Cell>
+                        <ArtifactHistoryRows
+                          allowHistoryDelete={allowHistoryDelete}
+                          allowMutationActions={allowMutationActions}
+                          artifact={artifact}
+                          refreshToken={childRefreshKey[key] ?? historyRefreshKey ?? 0}
+                          liveToken={historyLiveToken ?? 0}
+                          onCancel={(scanId) => onCancel(scanId, key)}
+                          onDelete={(scanId) => onDelete(scanId, key)}
+                          onDeleteHistoryScan={onDeleteHistoryScan}
+                          onRetry={(scanId) => onRetry(scanId, key)}
+                          onSelectScan={setScanSelection}
+                          onShareToWorkspace={onShareToWorkspace}
+                          onTransferToWorkspace={onTransferToWorkspace}
+                          selectedScans={selectedScans}
+                        />
+                      </Table.Row>
+                    );
+                  }}
+                </Table.Collection>
+              )}
+            </Table.Body>
+          </Table.Content>
+        </Table.ScrollContainer>
+      </Table>
+    </Table.Responsive>
   );
 }

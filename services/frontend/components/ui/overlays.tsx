@@ -5,13 +5,23 @@ import * as Aria from 'react-aria-components';
 import { X } from 'lucide-react';
 import { Tooltip as TooltipPrimitive, Popover as PopoverPrimitive } from 'radix-ui';
 import {
-  Dialog as DialogRoot,
-  DialogPortal,
-  DialogOverlay,
-  DialogContent,
+  Dialog as PanelDialog,
+  DialogHeader,
+  DialogBody,
+  DialogFooter,
   DialogTitle,
   DialogClose,
-} from './dialog';
+} from '@/components/panelui/dialog';
+import {
+  Sheet as PanelSheet,
+  SheetHeader,
+  SheetBody,
+  SheetFooter,
+  SheetTitle,
+  SheetClose,
+  type SheetSide,
+} from '@/components/panelui/sheet';
+import { OverlayPortalContext } from './overlay-portal';
 import { cn } from '@/lib/utils';
 import { Indicator } from './primitives';
 
@@ -20,217 +30,299 @@ export function useOverlayState(
 ) {
   const [localOpen, setLocalOpen] = React.useState(options.defaultOpen ?? false);
   const isOpen = options.isOpen ?? localOpen;
-  const setOpen = (open: boolean) => {
-    setLocalOpen(open);
-    options.onOpenChange?.(open);
-  };
+  const onOpenChange = options.onOpenChange;
+  const setOpen = React.useCallback(
+    (open: boolean) => {
+      setLocalOpen(open);
+      onOpenChange?.(open);
+    },
+    [onOpenChange]
+  );
   return {
     isOpen,
     setOpen,
-    open: () => setOpen(true),
-    close: () => setOpen(false),
+    open: React.useCallback(() => setOpen(true), [setOpen]),
+    close: React.useCallback(() => setOpen(false), [setOpen]),
     toggle: () => setOpen(!isOpen),
   };
 }
 type OverlayState = ReturnType<typeof useOverlayState>;
-const OverlayContext = React.createContext<OverlayState | null>(null);
+type RootProps = {
+  children: React.ReactNode;
+  state?: OverlayState;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  side?: SheetSide;
+};
+const OverlayContext = React.createContext<{
+  state: OverlayState;
+  kind: 'dialog' | 'sheet';
+  side?: SheetSide;
+} | null>(null);
+
 function Root({
   children,
   state,
   isOpen,
   onOpenChange,
-}: {
-  children: React.ReactNode;
-  state?: OverlayState;
-  isOpen?: boolean;
-  onOpenChange?: (open: boolean) => void;
-}) {
+  side,
+  kind = 'dialog',
+}: RootProps & { kind?: 'dialog' | 'sheet' }) {
   const local = useOverlayState({ isOpen, onOpenChange });
-  return <OverlayContext.Provider value={state ?? local}>{children}</OverlayContext.Provider>;
+  const value = React.useMemo(
+    () => ({ state: state ?? local, kind, side }),
+    [state, local, kind, side]
+  );
+  return <OverlayContext.Provider value={value}>{children}</OverlayContext.Provider>;
 }
+const SurfaceContext = React.createContext({ className: '', size: 'md' });
+const BackdropContext = React.createContext({ className: '' });
+const subscribeMobile = (notify: () => void) => {
+  const query = window.matchMedia('(max-width: 639px)');
+  query.addEventListener('change', notify);
+  return () => query.removeEventListener('change', notify);
+};
+const mobileSnapshot = () => window.matchMedia('(max-width: 639px)').matches;
+const serverMobileSnapshot = () => false;
 type BackdropProps = React.ComponentProps<'div'> & {
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   isDismissable?: boolean;
   variant?: string;
 };
-const DismissContext = React.createContext(true);
+/** Compatibility composition: PanelUI owns the portal, focus scope and backdrop. */
 function Backdrop({
-  className,
+  className = '',
   isDismissable = true,
   variant: _variant,
   isOpen,
   onOpenChange,
   children,
-  ...props
 }: BackdropProps) {
-  const state = React.useContext(OverlayContext);
+  const overlay = React.useContext(OverlayContext);
+  const mobile = React.useSyncExternalStore(subscribeMobile, mobileSnapshot, serverMobileSnapshot);
+  const open = isOpen ?? overlay?.state.isOpen ?? false;
+  const setOpen = onOpenChange ?? overlay?.state.setOpen;
+  const backdropValue = React.useMemo(() => ({ className }), [className]);
+  const content = (
+    <BackdropContext.Provider value={backdropValue}>{children}</BackdropContext.Provider>
+  );
+  if (overlay?.kind === 'sheet') {
+    return (
+      <PanelSheet
+        open={open}
+        onOpenChange={setOpen}
+        side={overlay.side ?? (mobile ? 'bottom' : 'right')}
+        dismissible={isDismissable}
+      >
+        {content}
+      </PanelSheet>
+    );
+  }
   return (
-    <DialogRoot
-      open={isOpen ?? state?.isOpen ?? false}
-      onOpenChange={onOpenChange ?? state?.setOpen}
+    <PanelDialog
+      open={open}
+      dismissible={isDismissable}
+      onOpenChange={(next, details) => {
+        // Existing form callers disable both Escape and outside dismissal, but explicit Cancel/Close still work.
+        if (
+          !next &&
+          !isDismissable &&
+          details.reason !== 'close-press' &&
+          details.reason !== 'imperative-action'
+        ) {
+          details.cancel();
+          return;
+        }
+        setOpen?.(next);
+      }}
     >
-      <DismissContext.Provider value={isDismissable}>
-        <DialogPortal>
-          <DialogOverlay>
-            <div
-              className={cn(
-                'fixed inset-0 flex items-center justify-center overflow-y-auto p-4',
-                className
-              )}
-              {...props}
-            >
-              {children}
-            </div>
-          </DialogOverlay>
-        </DialogPortal>
-      </DismissContext.Provider>
-    </DialogRoot>
+      {content}
+    </PanelDialog>
   );
 }
 function Container({
-  className,
+  className = '',
   size = 'md',
   placement: _placement,
   scroll: _scroll,
-  ...props
+  children,
 }: React.ComponentProps<'div'> & { size?: string; placement?: string; scroll?: string }) {
-  return (
-    <div
-      className={cn(
-        'relative my-auto w-full',
-        size === 'sm'
-          ? 'max-w-sm'
-          : size === 'lg'
-            ? 'max-w-3xl'
-            : size === 'xl'
-              ? 'max-w-5xl'
-              : 'max-w-lg',
-        className
-      )}
-      {...props}
-    />
-  );
+  const value = React.useMemo(() => ({ className, size }), [className, size]);
+  return <SurfaceContext.Provider value={value}>{children}</SurfaceContext.Provider>;
+}
+const DIALOG_WIDTHS: Record<string, string> = {
+  sm: 'max-w-sm',
+  md: 'max-w-lg',
+  lg: 'max-w-3xl',
+  xl: 'max-w-5xl',
+  cover: 'max-w-5xl',
+  full: 'max-w-6xl',
+};
+const SHEET_WIDTHS: Record<string, string> = {
+  sm: 'sm:w-[24rem]',
+  md: 'sm:w-[32rem]',
+  lg: 'sm:w-[48rem]',
+  xl: 'sm:w-[64rem]',
+  cover: 'sm:w-[64rem]',
+  full: 'sm:w-[72rem]',
+};
+/** Programmatically opened overlays restore focus to the initiating control. */
+function usePopupPortal() {
+  const [container, setContainer] = React.useState<HTMLDivElement | null>(null);
+  const popupNode = React.useRef<HTMLDivElement | null>(null);
+  const ref = React.useCallback((node: HTMLDivElement | null) => {
+    popupNode.current = node;
+    setContainer(node);
+  }, []);
+  const initialFocus = React.useCallback((interaction: string) => {
+    // Preserve touch keyboard behavior; keyboard/mouse forms start at the first field, not Close.
+    if (interaction === 'touch') return true;
+    return (
+      popupNode.current?.querySelector<HTMLElement>(
+        'input:not([type="hidden"]):not(:disabled), textarea:not(:disabled), [contenteditable="true"]'
+      ) ?? true
+    );
+  }, []);
+  return { container, ref, initialFocus };
 }
 function Dialog({
-  onInteractOutside,
-  onEscapeKeyDown,
-  onOpenAutoFocus,
-  onCloseAutoFocus,
+  className,
+  children,
   ...props
-}: React.ComponentProps<typeof DialogContent>) {
-  const dismissable = React.useContext(DismissContext);
-  const previousFocus = React.useRef<HTMLElement | null>(null);
+}: React.ComponentProps<typeof PanelDialog.Content>) {
+  const surface = React.useContext(SurfaceContext);
+  const backdrop = React.useContext(BackdropContext);
+  const { container, ref: popupRef, initialFocus } = usePopupPortal();
   return (
-    <DialogContent
-      {...props}
-      onOpenAutoFocus={(event) => {
-        previousFocus.current =
-          document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        onOpenAutoFocus?.(event);
-      }}
-      onCloseAutoFocus={(event) => {
-        onCloseAutoFocus?.(event);
-        if (!event.defaultPrevented && previousFocus.current?.isConnected) {
-          event.preventDefault();
-          previousFocus.current.focus();
-        }
-      }}
-      onInteractOutside={(event) => {
-        if (!dismissable) event.preventDefault();
-        onInteractOutside?.(event);
-      }}
-      onEscapeKeyDown={(event) => {
-        if (!dismissable) event.preventDefault();
-        onEscapeKeyDown?.(event);
-      }}
-    />
+    <OverlayPortalContext.Provider value={container}>
+      <PanelDialog.Content
+        showClose={false}
+        ref={popupRef}
+        initialFocus={initialFocus}
+        backdropClassName={backdrop.className}
+        viewportClassName={backdrop.className}
+        className={cn(
+          DIALOG_WIDTHS[surface.size] ?? DIALOG_WIDTHS.md,
+          surface.className,
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </PanelDialog.Content>
+    </OverlayPortalContext.Provider>
   );
 }
-function Header({ className, ...props }: React.ComponentProps<'div'>) {
+function SheetDialog({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof PanelSheet.Content>) {
+  const surface = React.useContext(SurfaceContext);
+  const backdrop = React.useContext(BackdropContext);
+  const { container, ref: popupRef, initialFocus } = usePopupPortal();
   return (
-    <div
-      className={cn('flex shrink-0 items-start justify-between gap-3 p-4 pb-3', className)}
-      {...props}
-    />
+    <OverlayPortalContext.Provider value={container}>
+      <PanelSheet.Content
+        showClose={false}
+        ref={popupRef}
+        initialFocus={initialFocus}
+        backdropClassName={backdrop.className}
+        viewportClassName={backdrop.className}
+        className={cn(
+          'max-sm:w-full max-sm:max-w-none max-sm:max-h-[calc(100dvh-1rem)] sm:max-w-[calc(100vw-1.5rem)]',
+          SHEET_WIDTHS[surface.size] ?? SHEET_WIDTHS.md,
+          surface.className,
+          className,
+          backdrop.className
+        )}
+        {...props}
+      >
+        {children}
+      </PanelSheet.Content>
+    </OverlayPortalContext.Provider>
   );
 }
-function Body({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('min-h-0 overflow-y-auto px-4 py-1', className)} {...props} />;
+function Header({ className, ...props }: React.ComponentProps<typeof DialogHeader>) {
+  return <DialogHeader className={cn('relative pe-14', className)} {...props} />;
 }
-function Footer({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('flex shrink-0 justify-end gap-2 p-4 pt-3', className)} {...props} />;
-}
-function Heading(props: React.ComponentProps<typeof DialogTitle>) {
-  return <DialogTitle {...props} />;
+function SheetHeadingHeader({ className, ...props }: React.ComponentProps<typeof SheetHeader>) {
+  return <SheetHeader className={cn('relative pe-14', className)} {...props} />;
 }
 function CloseTrigger({ className, children, ...props }: React.ComponentProps<typeof DialogClose>) {
   return (
     <DialogClose
+      icon={children === undefined}
       aria-label="Close"
       className={cn(
-        'ml-auto rounded-sm p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+        'absolute end-4 top-4 z-10 grid size-8 place-items-center rounded-full bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-ring [&_svg]:size-4',
         className
       )}
       {...props}
     >
-      {children ?? <X className="size-4" />}
+      {children}
     </DialogClose>
   );
 }
-function Icon({ status: _status, ...props }: React.ComponentProps<'span'> & { status?: string }) {
-  return <span {...props} />;
+function SheetCloseTrigger({ className, ...props }: React.ComponentProps<typeof SheetClose>) {
+  return (
+    <SheetClose
+      icon
+      aria-label="Close"
+      className={cn('absolute end-4 top-4 z-10', className)}
+      {...props}
+    />
+  );
+}
+function Icon({
+  status: _status,
+  className,
+  ...props
+}: React.ComponentProps<'span'> & { status?: string }) {
+  return (
+    <span
+      className={cn(
+        'grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground',
+        className
+      )}
+      {...props}
+    />
+  );
 }
 export const Modal = Object.assign(Root, {
   Backdrop,
   Container,
   Dialog,
   Header,
-  Body,
-  Footer,
-  Heading,
+  Body: DialogBody,
+  Footer: DialogFooter,
+  Heading: DialogTitle,
+  Description: PanelDialog.Description,
   CloseTrigger,
   Icon,
 });
-export const AlertDialog = Modal;
-export const Drawer = Object.assign(
-  function Drawer(props: React.ComponentProps<typeof Root>) {
-    return <Root {...props} />;
+/** Contextual inspection/editing: right sheet on desktop, bottom sheet on phones. */
+export const DetailSheet = Object.assign(
+  function DetailSheet(props: RootProps) {
+    return <Root {...props} kind="sheet" />;
   },
   {
-    Backdrop: ({ className, ...props }: BackdropProps) => (
-      <Backdrop
-        className={cn('justify-end p-0', typeof className === 'string' && className)}
-        {...props}
-      />
-    ),
-    Content: ({
-      className,
-      placement = 'right',
-      ...props
-    }: React.ComponentProps<typeof Container>) => (
-      <Container
-        className={cn(
-          'fixed inset-y-0 my-0 h-full max-w-lg',
-          placement === 'left' ? 'left-0' : 'right-0',
-          className
-        )}
-        {...props}
-      />
-    ),
-    Dialog: ({ className, ...props }: React.ComponentProps<typeof DialogContent>) => (
-      <Dialog
-        className={cn('h-dvh max-h-dvh rounded-none', typeof className === 'string' && className)}
-        {...props}
-      />
-    ),
-    Header,
-    Body,
-    Footer,
-    Heading,
-    CloseTrigger,
+    Backdrop,
+    Container,
+    Content: Container,
+    Dialog: SheetDialog,
+    Header: SheetHeadingHeader,
+    Body: SheetBody,
+    Footer: SheetFooter,
+    Heading: SheetTitle,
+    Description: PanelSheet.Description,
+    CloseTrigger: SheetCloseTrigger,
+    Icon,
   }
 );
+export const Drawer = DetailSheet;
+export { AlertDialog } from './alert-dialog';
 export const Tooltip = Object.assign(
   function Tooltip({
     children,

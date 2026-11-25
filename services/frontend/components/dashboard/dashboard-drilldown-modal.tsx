@@ -3,12 +3,12 @@
 import { StatusTag, toneFromChipColor } from '@/components/ui/status-dot';
 import { RecentActivityRange, RecentActivityRangePicker } from '@/components/scans/recent-activity';
 import { IntelligenceSummaryChip } from '@/components/vulnerability-intelligence-status';
-import { StatusBadge } from '@/components/ui/badges';
+import { SeverityCounts, StatusBadge } from '@/components/ui/badges';
 import { RecentScanRowSkeleton } from '@/components/ui/skeleton';
 import { Scan, WatchlistItem } from '@/lib/api';
 import { timeAgo } from '@/lib/time';
 import { getWatchlistPosture } from '@/lib/watchlist-posture';
-import { Button, Card, Link as UiLink, Modal, useOverlayState } from '@/components/ui';
+import { Button, Card, Link as UiLink, DetailSheet, useOverlayState } from '@/components/ui';
 import { CheckmarkCircle02Icon, Clock01Icon, Shield01Icon } from 'hugeicons-react';
 
 export type DashboardDrilldownKey = 'total' | 'completed' | 'watchlist' | 'watchlist_attention';
@@ -17,7 +17,7 @@ const drilldownHeaderMeta = {
   total: { Icon: Shield01Icon, className: 'bg-default text-foreground' },
   completed: { Icon: CheckmarkCircle02Icon, className: 'bg-success/10 text-success-foreground' },
   watchlist: { Icon: Clock01Icon, className: 'bg-warning/10 text-warning-foreground' },
-  watchlist_attention: { Icon: Clock01Icon, className: 'bg-danger/10 text-danger' },
+  watchlist_attention: { Icon: Clock01Icon, className: 'bg-destructive/10 text-destructive' },
 } satisfies Record<DashboardDrilldownKey, { Icon: typeof Shield01Icon; className: string }>;
 
 function WatchlistModalRow({ item }: { item: WatchlistItem }) {
@@ -97,7 +97,7 @@ function WatchlistModalList({
   if (watchlistError) {
     return (
       <Card variant="secondary">
-        <Card.Content className="py-8 text-center text-sm text-danger">
+        <Card.Content className="py-8 text-center text-sm text-destructive">
           {watchlistError}
         </Card.Content>
       </Card>
@@ -208,42 +208,13 @@ function CompactScanRow({ scan, showActions = false }: { scan: Scan; showActions
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">Started {timeAgo(eventTime)}</span>
             <IntelligenceSummaryChip compact summary={scan.intelligence_summary} />
-            {scan.critical_count > 0 && (
-              <span
-                className="rounded-md px-1.5 py-0.5 text-xs font-mono"
-                style={{
-                  color: '#f87171',
-                  background: 'rgba(239,68,68,0.12)',
-                  border: '1px solid rgba(239,68,68,0.2)',
-                }}
-              >
-                C:{scan.critical_count}
-              </span>
-            )}
-            {scan.high_count > 0 && (
-              <span
-                className="rounded-md px-1.5 py-0.5 text-xs font-mono"
-                style={{
-                  color: '#fb923c',
-                  background: 'rgba(249,115,22,0.12)',
-                  border: '1px solid rgba(249,115,22,0.2)',
-                }}
-              >
-                H:{scan.high_count}
-              </span>
-            )}
-            {scan.medium_count > 0 && (
-              <span
-                className="rounded-md px-1.5 py-0.5 text-xs font-mono"
-                style={{
-                  color: '#fbbf24',
-                  background: 'rgba(245,158,11,0.12)',
-                  border: '1px solid rgba(245,158,11,0.2)',
-                }}
-              >
-                M:{scan.medium_count}
-              </span>
-            )}
+            <SeverityCounts
+              critical={scan.critical_count}
+              high={scan.high_count}
+              medium={scan.medium_count}
+              low={scan.low_count ?? 0}
+              emptyLabel=""
+            />
           </div>
         </div>
 
@@ -356,28 +327,28 @@ export function DashboardDrilldownModal({
     : [];
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop isDismissable>
-        <Modal.Container size="lg" placement="center">
-          <Modal.Dialog className="surface-modal overflow-hidden w-[min(920px,calc(100vw-1.5rem))] max-w-none">
-            <Modal.Header>
+    <DetailSheet state={state}>
+      <DetailSheet.Backdrop isDismissable>
+        <DetailSheet.Container size="xl">
+          <DetailSheet.Dialog className="overflow-hidden">
+            <DetailSheet.Header>
               <div className="flex min-w-0 items-start gap-3">
-                <Modal.Icon className={drilldownHeaderMeta[activeCard].className}>
+                <DetailSheet.Icon className={drilldownHeaderMeta[activeCard].className}>
                   {(() => {
                     const HeaderIcon = drilldownHeaderMeta[activeCard].Icon;
                     return <HeaderIcon className="size-5" />;
                   })()}
-                </Modal.Icon>
+                </DetailSheet.Icon>
                 <div>
-                  <Modal.Heading className="text-base font-semibold sm:text-lg">
+                  <DetailSheet.Heading className="text-base font-semibold sm:text-lg">
                     {heading}
-                  </Modal.Heading>
+                  </DetailSheet.Heading>
                   <p className="mt-1 text-sm text-muted-foreground">{description}</p>
                 </div>
               </div>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="min-h-0 py-5">
+              <DetailSheet.CloseTrigger />
+            </DetailSheet.Header>
+            <DetailSheet.Body className="min-h-0 py-5">
               {isWatchlist ? (
                 <WatchlistBody
                   watchlistError={watchlistError}
@@ -400,9 +371,7 @@ export function DashboardDrilldownModal({
                   </div>
 
                   {scansError ? (
-                    <p className="py-8 text-center text-sm" style={{ color: '#f87171' }}>
-                      {scansError}
-                    </p>
+                    <p className="py-8 text-center text-sm text-destructive">{scansError}</p>
                   ) : scansLoading ? (
                     <div className="space-y-1.5">
                       {Array.from({ length: 6 }).map((_, index) => (
@@ -420,17 +389,17 @@ export function DashboardDrilldownModal({
                   )}
                 </>
               )}
-            </Modal.Body>
-            <Modal.Footer>
+            </DetailSheet.Body>
+            <DetailSheet.Footer>
               <DrilldownPrimaryAction
                 href={primaryHref}
                 label={primaryLabel}
                 onClose={() => state.close()}
               />
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+            </DetailSheet.Footer>
+          </DetailSheet.Dialog>
+        </DetailSheet.Container>
+      </DetailSheet.Backdrop>
+    </DetailSheet>
   );
 }

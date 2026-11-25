@@ -1,6 +1,8 @@
 'use client';
 import { useToast } from '@/components/toast';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
+import { JOB_STATUS_LABELS, labelFor, pluralize, splitImageRef } from '@/lib/labels';
+import { SeverityCounts } from '@/components/ui/badges';
 import {
   createHelmScans,
   createShare,
@@ -38,7 +40,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-function StatusBadge({ status }: { status: string }) {
+function RunScanStatus({ status }: { status: string }) {
   const tone: StatusDotTone =
     status === 'completed'
       ? 'success'
@@ -50,23 +52,9 @@ function StatusBadge({ status }: { status: string }) {
             ? 'warning'
             : 'neutral';
   return (
-    <StatusTag tone={tone} className="text-sm capitalize text-foreground">
-      {status === 'pending' ? 'queued' : status}
+    <StatusTag tone={tone} className="text-sm text-foreground">
+      {labelFor(JOB_STATUS_LABELS, status)}
     </StatusTag>
-  );
-}
-
-const severityTextClass = {
-  critical: 'text-destructive',
-  high: 'text-warning-foreground',
-  medium: 'text-warning-foreground',
-  low: 'text-muted-foreground',
-} as const;
-
-function SeverityCount({ count, level }: { count: number; level: keyof typeof severityTextClass }) {
-  if (!count) return <span className="text-xs text-muted-foreground">-</span>;
-  return (
-    <span className={`text-sm font-medium tabular-nums ${severityTextClass[level]}`}>{count}</span>
   );
 }
 
@@ -259,9 +247,9 @@ export default function HelmRunDetailPage() {
 
   if (!runId) {
     return (
-      <div className="p-6">
+      <PageContainer>
         <PageHeader
-          title="Helm Run"
+          title="Helm run"
           description="Invalid Helm run ID."
           breadcrumbs={[{ label: 'Helm', href: '/helm' }, { label: 'Run' }]}
         />
@@ -272,12 +260,12 @@ export default function HelmRunDetailPage() {
             <Alert.Description>The requested Helm run could not be resolved.</Alert.Description>
           </Alert.Content>
         </Alert>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <PageContainer>
       <PageHeader
         title={latestRun?.chart_name || displayUrl || 'Helm run'}
         titleCom={latestRun ? <StatusTag>{isOCI ? 'OCI' : 'HTTP'}</StatusTag> : null}
@@ -390,7 +378,7 @@ export default function HelmRunDetailPage() {
               >
                 {latestRun?.chart_name || displayUrl || 'Helm run'}
               </p>
-              <p className="mt-1 truncate font-mono text-xs text-muted-foreground" title={chartUrl}>
+              <p className="mt-1 truncate text-xs text-muted-foreground" title={chartUrl}>
                 {displayUrl}
               </p>
             </div>
@@ -404,7 +392,6 @@ export default function HelmRunDetailPage() {
                 Started {timeAgo(latestRun.created_at)}
               </span>
             )}
-            {latestRun && <span className="font-mono">Run {latestRun.id}</span>}
           </div>
         </Card.Content>
       </Card>
@@ -429,7 +416,7 @@ export default function HelmRunDetailPage() {
 
       {loading && (
         <Card>
-          <Card.Content className="px-6 py-10">
+          <Card.Content className="py-10">
             <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
               <Spinner size="sm" />
               Loading Helm run...
@@ -440,99 +427,106 @@ export default function HelmRunDetailPage() {
 
       {!loading && items.length === 0 && (
         <Card>
-          <Card.Content className="px-6 py-10 text-center text-sm text-muted-foreground">
+          <Card.Content className="py-10 text-center text-sm text-muted-foreground">
             No scans found for this Helm run.
           </Card.Content>
         </Card>
       )}
 
       {!loading && items.length > 0 && (
-        <Table>
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Helm run image scans" className="min-w-[1120px]">
-              <Table.Header>
-                <Table.Column isRowHeader>Image</Table.Column>
-                <Table.Column>Tag</Table.Column>
-                <Table.Column>Source</Table.Column>
-                <Table.Column className="text-center">Attempts</Table.Column>
-                <Table.Column className="text-center">C</Table.Column>
-                <Table.Column className="text-center">H</Table.Column>
-                <Table.Column className="text-center">M</Table.Column>
-                <Table.Column className="text-center">L</Table.Column>
-                <Table.Column className="text-right">Status</Table.Column>
-                <Table.Column className="text-right">Action</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {items.map((item) => {
-                  const scan = item.latest_scan;
-                  const retrying = retryingScanId === scan.id;
-                  return (
-                    <Table.Row key={item.key} id={item.key} className="hover:bg-[var(--row-hover)]">
-                      <Table.Cell>
-                        <Link
-                          href={`/scans/details/${scan.id}`}
-                          className="block truncate font-mono text-sm"
-                          title={scan.image_name}
-                        >
-                          {scan.image_name}
-                        </Link>
-                      </Table.Cell>
-                      <Table.Cell className="truncate font-mono text-xs text-muted-foreground">
-                        {scan.image_tag || 'latest'}
-                      </Table.Cell>
-                      <Table.Cell className="truncate text-xs text-muted-foreground">
-                        <span title={scan.helm_source_path ?? ''}>
-                          {scan.helm_source_path ? scan.helm_source_path.split(' › ')[0] : '-'}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell className="text-center font-mono text-xs text-muted-foreground">
-                        {item.attempt_count}
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
-                        <SeverityCount count={scan.critical_count ?? 0} level="critical" />
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
-                        <SeverityCount count={scan.high_count ?? 0} level="high" />
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
-                        <SeverityCount count={scan.medium_count ?? 0} level="medium" />
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
-                        <SeverityCount count={scan.low_count ?? 0} level="low" />
-                      </Table.Cell>
-                      <Table.Cell className="text-right">
-                        <StatusBadge status={scan.status} />
-                      </Table.Cell>
-                      <Table.Cell className="text-right">
-                        {scan.status === 'failed' ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            onPress={() => handleRetryScan(scan.id)}
-                            isDisabled={retrying}
-                            isPending={retrying}
-                          >
-                            Retry failed
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            onPress={() => router.push(`/scans/details/${scan.id}`)}
-                          >
-                            View
-                          </Button>
-                        )}
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+        <Table.Responsive>
+          <Table>
+            <Table.ScrollContainer>
+              <Table.Content aria-label="Helm run image scans">
+                <Table.Header>
+                  <Table.Column isRowHeader>Image</Table.Column>
+                  <Table.Column>Status</Table.Column>
+                  <Table.Column>Findings</Table.Column>
+                  <Table.Column className="w-px text-right">
+                    <span className="sr-only">Actions</span>
+                  </Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {items.map((item) => {
+                    const scan = item.latest_scan;
+                    const retrying = retryingScanId === scan.id;
+                    const { host, name } = splitImageRef(scan.image_name);
+                    const imageRef = `${scan.image_name}:${scan.image_tag || 'latest'}`;
+                    const source = scan.helm_source_path
+                      ? scan.helm_source_path.split(' › ')[0]
+                      : '';
+                    return (
+                      <Table.Row key={item.key} id={item.key} className="hover:bg-muted/50">
+                        <Table.Cell data-label="Image">
+                          <div className="min-w-0 max-w-xs space-y-0.5 lg:max-w-md xl:max-w-xl">
+                            <Link
+                              href={`/scans/details/${scan.id}`}
+                              className="block truncate text-sm font-medium text-foreground hover:underline"
+                              title={imageRef}
+                            >
+                              {name}:{scan.image_tag || 'latest'}
+                            </Link>
+                            <p
+                              className="truncate text-xs text-muted-foreground"
+                              title={scan.helm_source_path || host || undefined}
+                            >
+                              {[host, source ? `from ${source}` : null]
+                                .filter(Boolean)
+                                .join(' · ') || 'No source recorded'}
+                            </p>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell data-label="Status" className="whitespace-nowrap">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <RunScanStatus status={scan.status} />
+                            {item.attempt_count > 1 ? (
+                              <StatusTag>{pluralize(item.attempt_count, 'attempt')}</StatusTag>
+                            ) : null}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell data-label="Findings">
+                          {scan.status === 'completed' ? (
+                            <SeverityCounts
+                              critical={scan.critical_count ?? 0}
+                              high={scan.high_count ?? 0}
+                              medium={scan.medium_count ?? 0}
+                              low={scan.low_count ?? 0}
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell data-label="Actions" className="text-right">
+                          {scan.status === 'failed' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onPress={() => handleRetryScan(scan.id)}
+                              isDisabled={retrying}
+                              isPending={retrying}
+                            >
+                              Retry
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onPress={() => router.push(`/scans/details/${scan.id}`)}
+                            >
+                              View
+                            </Button>
+                          )}
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </Table.Responsive>
       )}
 
       {!loading && Object.keys(bySource).length > 1 && (
@@ -552,29 +546,32 @@ export default function HelmRunDetailPage() {
                   (sum, item) => sum + (item.latest_scan.high_count ?? 0),
                   0
                 );
+                const medium = sourceItems.reduce(
+                  (sum, item) => sum + (item.latest_scan.medium_count ?? 0),
+                  0
+                );
+                const low = sourceItems.reduce(
+                  (sum, item) => sum + (item.latest_scan.low_count ?? 0),
+                  0
+                );
                 return (
-                  <div key={source} className="flex items-center gap-3">
-                    <span
-                      className="text-xs font-mono text-muted-foreground w-72 truncate"
-                      title={source}
-                    >
+                  <div
+                    key={source}
+                    className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm" title={source}>
                       {source}
                     </span>
-                    <span className="text-xs text-muted-foreground">
-                      {sourceItems.length} image{sourceItems.length === 1 ? '' : 's'}
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {pluralize(sourceItems.length, 'image')}
                     </span>
-                    {(critical > 0 || high > 0) && (
-                      <div className="flex items-center gap-1">
-                        {critical > 0 && <StatusTag tone="danger">{critical}C</StatusTag>}
-                        {high > 0 && <StatusTag tone="warning">{high}H</StatusTag>}
-                      </div>
-                    )}
+                    <SeverityCounts critical={critical} high={high} medium={medium} low={low} />
                   </div>
                 );
               })}
           </Card.Content>
         </Card>
       )}
-    </div>
+    </PageContainer>
   );
 }

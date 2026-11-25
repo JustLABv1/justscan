@@ -51,7 +51,9 @@ import {
   Label,
   ListBox,
   Modal,
+  DetailSheet,
   Select,
+  Spinner,
   Switch,
   Tabs,
   useOverlayState,
@@ -484,26 +486,18 @@ function OrgDetailContent() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="size-7 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+      <div className="flex h-64 items-center justify-center" role="status">
+        <Spinner />
+        <span className="sr-only">Loading organization</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6">
-        <div
-          className="rounded-xl px-4 py-3 text-sm"
-          style={{
-            background: 'rgba(239,68,68,0.08)',
-            border: '1px solid rgba(239,68,68,0.18)',
-            color: '#f87171',
-          }}
-        >
-          {error}
-        </div>
-      </div>
+      <PageContainer size="default">
+        <FormAlert title="Organization could not be loaded" description={error} />
+      </PageContainer>
     );
   }
 
@@ -648,15 +642,17 @@ function OrgDetailContent() {
       </div>
 
       {/* Policy editor modal */}
-      <Modal state={policyModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container size="lg" placement="center">
-            <Modal.Dialog className="overflow-hidden">
-              <Modal.Header>
-                <Modal.Heading>{editingPolicy ? 'Edit Policy' : 'New Policy'}</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body className="py-5 max-h-[60vh] overflow-y-auto">
+      <DetailSheet state={policyModal}>
+        <DetailSheet.Backdrop isDismissable={false}>
+          <DetailSheet.Container size="lg" placement="center">
+            <DetailSheet.Dialog className="overflow-hidden">
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
+                  {editingPolicy ? 'Edit Policy' : 'New Policy'}
+                </DetailSheet.Heading>
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body className="py-5 max-h-[60vh] overflow-y-auto">
                 <form id="policy-form" onSubmit={handleSavePolicy} className="space-y-5">
                   {policyError ? (
                     <FormAlert title="Policy could not be saved" description={policyError} />
@@ -697,12 +693,10 @@ function OrgDetailContent() {
 
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-muted-foreground dark:text-foreground">
-                        Rules
-                      </label>
+                      <label className="text-sm font-medium text-foreground">Rules</label>
                       <Button type="button" onPress={addRule} size="sm" variant="secondary">
                         <PlusSignIcon size={12} />
-                        Add Rule
+                        Add rule
                       </Button>
                     </div>
 
@@ -901,19 +895,19 @@ function OrgDetailContent() {
                     )}
                   </div>
                 </form>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button onPress={policyModal.close} variant="secondary">
                   Cancel
                 </Button>
                 <Button type="submit" form="policy-form" isPending={policySaving}>
                   {editingPolicy ? 'Save Changes' : 'Create Policy'}
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
 
       <Modal state={inviteModal}>
         <Modal.Backdrop isDismissable={false}>

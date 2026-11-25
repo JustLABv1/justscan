@@ -20,7 +20,7 @@ interface FilterDisclosureTriggerProps {
 }
 
 export const filterDisclosureBodyClassName =
-  'mt-2 flex flex-wrap items-center gap-2 border-t border-divider pt-2';
+  'mt-2 flex flex-wrap items-center gap-2 border-t border-border pt-2';
 
 export function FilterDisclosureTrigger({
   activeCount = 0,

@@ -1,7 +1,9 @@
 'use client';
 import { useConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
+import { SeverityCounts } from '@/components/ui/badges';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { StatusAlert } from '@/components/ui/form-alert';
 import { FilterChips } from '@/components/ui/filter-chips';
@@ -37,7 +39,8 @@ import {
   getHelmImageSourceLabel,
   parseHelmImageRef,
 } from '@/lib/helm-image-overrides';
-import { timeAgo } from '@/lib/time';
+import { SCAN_PROVIDER_LABELS, labelFor, pluralize } from '@/lib/labels';
+import { fullDate, timeAgo } from '@/lib/time';
 import {
   Alert,
   Button,
@@ -48,7 +51,7 @@ import {
   Input,
   Label,
   ListBox,
-  Pagination,
+  TablePager,
   SearchField,
   Select,
   Switch,
@@ -64,6 +67,7 @@ import {
   FileValidationIcon,
   PackageIcon,
   Refresh01Icon,
+  Search01Icon,
   Share01Icon,
 } from 'hugeicons-react';
 import Link from 'next/link';
@@ -89,11 +93,6 @@ const PLATFORMS = [
   { id: 'linux/ppc64le', label: 'linux/ppc64le' },
   { id: 'windows/amd64', label: 'windows/amd64' },
 ];
-
-const PROVIDER_LABEL: Record<string, string> = {
-  trivy: 'Trivy',
-  artifactory_xray: 'Artifactory Xray',
-};
 
 function credentialMatchesChart(
   credential: HelmRegistryCredential,
@@ -365,7 +364,7 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
 
       await loadHistory();
       toast.success(
-        `${result.scans.length} image${result.scans.length === 1 ? '' : 's'} queued in Helm run ${result.run.id.slice(0, 8)}`
+        `${result.scans.length} image${result.scans.length === 1 ? '' : 's'} queued for scanning`
       );
       router.push(`/helm/runs/${result.run.id}`);
     } catch (err: unknown) {
@@ -486,7 +485,7 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
   }
 
   return (
-    <div className="space-y-5 px-4 py-6 md:px-6 xl:py-7">
+    <PageContainer size={mode === 'new' ? 'default' : 'full'}>
       <PageHeader
         title={mode === 'new' ? 'New Helm scan' : 'Helm runs'}
         description={
@@ -726,7 +725,7 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
                               {selectableRegistries.map((registry) => (
                                 <ListBox.Item key={registry.id} id={registry.id}>
                                   {registry.name} ·{' '}
-                                  {PROVIDER_LABEL[registry.scan_provider] ?? registry.scan_provider}
+                                  {labelFor(SCAN_PROVIDER_LABELS, registry.scan_provider)}
                                 </ListBox.Item>
                               ))}
                             </ListBox>
@@ -858,92 +857,71 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
 
               {step === 'images' ? (
                 <>
-                  <Table>
-                    <Table.ScrollContainer>
-                      <Table.Content aria-label="Extracted Helm images" className="min-w-[840px]">
-                        <Table.Header>
-                          <Table.Column className="w-10">
+                  <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+                    <div className="flex min-h-12 items-center gap-2 border-b border-border px-4 py-2">
+                      <Checkbox
+                        aria-label={
+                          selected.size === extracted.images.length ? 'Deselect all' : 'Select all'
+                        }
+                        isSelected={
+                          extracted.images.length > 0 && selected.size === extracted.images.length
+                        }
+                        isIndeterminate={
+                          selected.size > 0 && selected.size < extracted.images.length
+                        }
+                        onChange={toggleAll}
+                      >
+                        <Checkbox.Control>
+                          <Checkbox.Indicator />
+                        </Checkbox.Control>
+                        <span className="text-sm text-muted-foreground">
+                          {selected.size} of {pluralize(extracted.images.length, 'image')} selected
+                        </span>
+                      </Checkbox>
+                    </div>
+                    <ul aria-label="Extracted Helm images" className="divide-y divide-border">
+                      {editableImages.map((img) => {
+                        const checked = selected.has(img.id);
+                        const parsed = parseHelmImageRef(img.edited_ref);
+                        return (
+                          <li
+                            key={img.id}
+                            className={`flex items-start gap-3 px-4 py-3 ${checked ? '' : 'opacity-60'}`}
+                          >
                             <Checkbox
-                              aria-label={
-                                selected.size === extracted.images.length
-                                  ? 'Deselect all'
-                                  : 'Select all'
-                              }
-                              isSelected={selected.size === extracted.images.length}
-                              isIndeterminate={
-                                selected.size > 0 && selected.size < extracted.images.length
-                              }
-                              slot="selection"
-                              onChange={toggleAll}
+                              aria-label={`Include ${img.edited_ref || 'image'}`}
+                              isSelected={checked}
+                              onChange={() => toggleRow(img.id)}
+                              className="mt-2"
                             >
-                              <Checkbox.Content>
-                                <Checkbox.Control>
-                                  <Checkbox.Indicator />
-                                </Checkbox.Control>
-                              </Checkbox.Content>
+                              <Checkbox.Control>
+                                <Checkbox.Indicator />
+                              </Checkbox.Control>
                             </Checkbox>
-                          </Table.Column>
-                          <Table.Column isRowHeader>Image</Table.Column>
-                          <Table.Column>Tag</Table.Column>
-                          <Table.Column>Source</Table.Column>
-                        </Table.Header>
-                        <Table.Body>
-                          {editableImages.map((img) => {
-                            const checked = selected.has(img.id);
-                            const parsed = parseHelmImageRef(img.edited_ref);
-                            return (
-                              <Table.Row
-                                key={img.id}
-                                id={img.id}
-                                className="cursor-pointer hover:bg-[var(--row-hover)]"
-                                onClick={() => toggleRow(img.id)}
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <Input
+                                variant="secondary"
+                                aria-label="Image reference"
+                                value={img.edited_ref}
+                                onChange={(event) => updateEditedRef(img.id, event.target.value)}
+                                placeholder="registry.example.com/org/image:tag"
+                                className="w-full font-mono"
+                              />
+                              <p
+                                className="truncate text-xs text-muted-foreground"
+                                title={getHelmImageSourceLabel(img)}
                               >
-                                <Table.Cell onClick={(event) => event.stopPropagation()}>
-                                  <Checkbox
-                                    aria-label={`Select ${img.edited_ref || 'image'}`}
-                                    isSelected={checked}
-                                    slot="selection"
-                                    onChange={() => toggleRow(img.id)}
-                                  >
-                                    <Checkbox.Content>
-                                      <Checkbox.Control>
-                                        <Checkbox.Indicator />
-                                      </Checkbox.Control>
-                                    </Checkbox.Content>
-                                  </Checkbox>
-                                </Table.Cell>
-                                <Table.Cell className="min-w-[420px]">
-                                  <div className="w-full space-y-1">
-                                    <Input
-                                      variant="secondary"
-                                      value={img.edited_ref}
-                                      onChange={(event) =>
-                                        updateEditedRef(img.id, event.target.value)
-                                      }
-                                      onClick={(event) => event.stopPropagation()}
-                                      placeholder="registry.example.com/org/image:tag"
-                                      className="w-full font-mono"
-                                    />
-                                    <p className="truncate text-xs text-muted-foreground">
-                                      {parsed.name || 'Enter an image reference'}
-                                    </p>
-                                  </div>
-                                </Table.Cell>
-                                <Table.Cell className="font-mono text-xs text-muted-foreground">
-                                  {parsed.tag || '-'}
-                                </Table.Cell>
-                                <Table.Cell className="text-xs text-muted-foreground">
-                                  <span title={getHelmImageSourceLabel(img)}>
-                                    {img.source_file}
-                                  </span>
-                                </Table.Cell>
-                              </Table.Row>
-                            );
-                          })}
-                        </Table.Body>
-                      </Table.Content>
-                    </Table.ScrollContainer>
-                  </Table>
+                                {parsed.name
+                                  ? `${parsed.name}${parsed.tag ? ` · tag ${parsed.tag}` : ''}`
+                                  : 'Enter an image reference'}
+                                {img.source_file ? ` · from ${img.source_file}` : ''}
+                              </p>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
 
                   <p className="text-xs text-muted-foreground">
                     Override any extracted image reference before queueing. The selected rows will
@@ -1021,7 +999,7 @@ export function HelmWorkspace({ mode = 'history' }: { mode?: 'history' | 'new' }
         />
       )}
       {confirmDialog}
-    </div>
+    </PageContainer>
   );
 }
 
@@ -1042,22 +1020,11 @@ function statusTone(status: string): StatusDotTone {
   }
 }
 
-const countToneClass = {
-  success: 'text-success-foreground',
-  warning: 'text-warning-foreground',
-  danger: 'text-destructive',
-} as const;
-
-function CountCell({ value, tone }: { value: number; tone?: keyof typeof countToneClass }) {
-  if (!value) return <span className="text-xs text-muted-foreground">-</span>;
-  return (
-    <span
-      className={`text-sm font-medium tabular-nums ${tone ? countToneClass[tone] : 'text-foreground'}`}
-    >
-      {value}
-    </span>
-  );
-}
+const RUN_STATUS_LABEL: Record<Exclude<HelmRunHistoryStatus, 'all'>, string> = {
+  running: 'Running',
+  failed: 'Failed',
+  completed: 'Completed',
+};
 
 function getRunStatus(run: HelmScanRunSummary): Exclude<HelmRunHistoryStatus, 'all'> {
   if (run.active_images > 0) return 'running';
@@ -1168,9 +1135,6 @@ function HelmRunHistory({
     (effectivePage - 1) * HELM_RUN_HISTORY_PAGE_SIZE,
     effectivePage * HELM_RUN_HISTORY_PAGE_SIZE
   );
-  const visibleStart =
-    sortedRuns.length === 0 ? 0 : (effectivePage - 1) * HELM_RUN_HISTORY_PAGE_SIZE + 1;
-  const visibleEnd = Math.min(effectivePage * HELM_RUN_HISTORY_PAGE_SIZE, sortedRuns.length);
 
   if (loading && runs.length === 0) {
     return (
@@ -1197,7 +1161,17 @@ function HelmRunHistory({
     );
   }
 
-  const columnCount = isAdmin ? 10 : 9;
+  if (runs.length === 0) {
+    return (
+      <EmptyState
+        icon={<Search01Icon size={24} />}
+        title="No Helm runs yet"
+        description="Scan a chart to extract its container images and track the results here."
+        action={{ label: 'Scan a chart', onClick: () => router.push('/helm/new') }}
+      />
+    );
+  }
+
   const statusSegments: {
     id: HelmRunHistoryStatus;
     label: string;
@@ -1228,7 +1202,7 @@ function HelmRunHistory({
   return (
     <>
       <Card className="gap-0 overflow-hidden py-0">
-        <div className="space-y-3 border-b border-border p-3">
+        <div className="space-y-3 border-b border-border p-4">
           <FilterChips
             label="Filter Helm runs by status"
             items={statusSegments.map((segment) => ({
@@ -1264,258 +1238,243 @@ function HelmRunHistory({
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
-        </div>
-        <Table variant="secondary">
-          <Table.ScrollContainer>
-            <Table.Content
-              aria-label="Recent Helm runs"
-              className="min-w-[680px] md:min-w-[900px]"
-              sortDescriptor={sortDescriptor}
-              onSortChange={setSortDescriptor}
+          <div className="flex items-center gap-2 lg:hidden">
+            <Select
+              aria-label="Sort Helm runs"
+              className="min-w-0 flex-1"
+              value={String(sortDescriptor.column)}
+              onChange={(column) =>
+                setSortDescriptor((current) => ({ ...current, column: String(column) }))
+              }
             >
-              <Table.Header>
-                <Table.Column id="chart" allowsSorting isRowHeader>
-                  {({ sortDirection }) => (
-                    <Table.SortableColumnHeader sortDirection={sortDirection}>
-                      Chart
-                    </Table.SortableColumnHeader>
-                  )}
-                </Table.Column>
-                <Table.Column id="status" allowsSorting>
-                  {({ sortDirection }) => (
-                    <Table.SortableColumnHeader sortDirection={sortDirection}>
-                      Status
-                    </Table.SortableColumnHeader>
-                  )}
-                </Table.Column>
-                <Table.Column id="images" allowsSorting className="text-right">
-                  {({ sortDirection }) => (
-                    <Table.SortableColumnHeader sortDirection={sortDirection}>
-                      Images
-                    </Table.SortableColumnHeader>
-                  )}
-                </Table.Column>
-                <Table.Column id="completed" allowsSorting className="text-right">
-                  {({ sortDirection }) => (
-                    <Table.SortableColumnHeader sortDirection={sortDirection}>
-                      Done
-                    </Table.SortableColumnHeader>
-                  )}
-                </Table.Column>
-                <Table.Column id="failed" allowsSorting className="text-right">
-                  {({ sortDirection }) => (
-                    <Table.SortableColumnHeader sortDirection={sortDirection}>
-                      Failed
-                    </Table.SortableColumnHeader>
-                  )}
-                </Table.Column>
-                <Table.Column id="high" allowsSorting className="hidden text-right lg:table-cell">
-                  {({ sortDirection }) => (
-                    <Table.SortableColumnHeader sortDirection={sortDirection}>
-                      High
-                    </Table.SortableColumnHeader>
-                  )}
-                </Table.Column>
-                <Table.Column
-                  id="critical"
-                  allowsSorting
-                  className="hidden text-right lg:table-cell"
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="chart">Chart</ListBox.Item>
+                  <ListBox.Item id="status">Status</ListBox.Item>
+                  <ListBox.Item id="images">Progress</ListBox.Item>
+                  <ListBox.Item id="critical">Findings</ListBox.Item>
+                  <ListBox.Item id="started">Started</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            <Button
+              variant="secondary"
+              aria-label={`Sort ${sortDescriptor.direction === 'ascending' ? 'descending' : 'ascending'}`}
+              onPress={() =>
+                setSortDescriptor((current) => ({
+                  ...current,
+                  direction: current.direction === 'ascending' ? 'descending' : 'ascending',
+                }))
+              }
+            >
+              {sortDescriptor.direction === 'ascending' ? 'Ascending' : 'Descending'}
+            </Button>
+          </div>
+        </div>
+        {sortedRuns.length === 0 ? (
+          <div className="p-4">
+            <EmptyState
+              icon={<Search01Icon size={24} />}
+              title="No Helm runs match your filters"
+              description="Try a different search or show all statuses."
+              action={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                  setPage(1);
+                },
+              }}
+            />
+          </div>
+        ) : (
+          <Table.Responsive>
+            <Table variant="secondary">
+              <Table.ScrollContainer>
+                <Table.Content
+                  aria-label="Recent Helm runs"
+                  sortDescriptor={sortDescriptor}
+                  onSortChange={setSortDescriptor}
                 >
-                  {({ sortDirection }) => (
-                    <Table.SortableColumnHeader sortDirection={sortDirection}>
-                      Critical
-                    </Table.SortableColumnHeader>
-                  )}
-                </Table.Column>
-                <Table.Column id="started" allowsSorting>
-                  {({ sortDirection }) => (
-                    <Table.SortableColumnHeader sortDirection={sortDirection}>
-                      Started
-                    </Table.SortableColumnHeader>
-                  )}
-                </Table.Column>
-                {isAdmin ? (
-                  <Table.Column id="owner" allowsSorting className="hidden lg:table-cell">
-                    {({ sortDirection }) => (
-                      <Table.SortableColumnHeader sortDirection={sortDirection}>
-                        Owner
-                      </Table.SortableColumnHeader>
-                    )}
-                  </Table.Column>
-                ) : null}
-                <Table.Column className="text-right">Action</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {sortedRuns.length === 0 ? (
-                  <Table.Row id="empty">
-                    <Table.Cell colSpan={columnCount}>
-                      <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-                        {runs.length === 0
-                          ? 'No Helm runs yet. Queue one above to start tracking chart history by run ID.'
-                          : 'No Helm runs match your search or filter.'}
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                ) : (
-                  pagedRuns.map((run) => {
-                    const status = getRunStatus(run);
-                    return (
-                      <Table.Row key={run.id} id={run.id} className="hover:bg-[var(--row-hover)]">
-                        <Table.Cell>
-                          <div className="min-w-0 space-y-1">
-                            <Link
-                              href={`/helm/runs/${run.id}`}
-                              className="block truncate text-sm font-semibold"
-                              title={run.chart_name || run.chart_url}
-                            >
-                              {getRunChartLabel(run)}
-                            </Link>
-                            <p
-                              className="truncate text-xs text-muted-foreground"
-                              title={run.chart_url}
-                            >
-                              {run.chart_url.replace(/^oci:\/\//, '')}
-                              {run.chart_version ? ` · v${run.chart_version}` : ''}
-                            </p>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <StatusLabel
-                            className="capitalize"
-                            tone={statusTone(status)}
-                            label={status}
-                          />
-                        </Table.Cell>
-                        <Table.Cell className="text-right">
-                          <CountCell value={run.total_images} />
-                        </Table.Cell>
-                        <Table.Cell className="text-right">
-                          <CountCell value={run.completed_images} tone="success" />
-                        </Table.Cell>
-                        <Table.Cell className="text-right">
-                          <CountCell value={run.failed_images} tone="danger" />
-                        </Table.Cell>
-                        <Table.Cell className="hidden text-right lg:table-cell">
-                          <CountCell value={run.high_count} tone="warning" />
-                        </Table.Cell>
-                        <Table.Cell className="hidden text-right lg:table-cell">
-                          <CountCell value={run.critical_count} tone="danger" />
-                        </Table.Cell>
-                        <Table.Cell className="text-xs text-muted-foreground">
-                          {timeAgo(run.created_at)}
-                        </Table.Cell>
-                        {isAdmin ? (
-                          <Table.Cell className="hidden text-xs text-muted-foreground lg:table-cell">
-                            {run.owner_username || '-'}
+                  <Table.Header>
+                    <Table.Column id="chart" allowsSorting isRowHeader>
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Chart
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column id="status" allowsSorting>
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Status
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column id="images" allowsSorting className="hidden md:table-cell">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Progress
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column id="critical" allowsSorting>
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Findings
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column id="started" allowsSorting className="hidden md:table-cell">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          Started
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column className="w-px text-right">
+                      <span className="sr-only">Actions</span>
+                    </Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {pagedRuns.map((run) => {
+                      const status = getRunStatus(run);
+                      const progress = [
+                        `${run.completed_images}/${run.total_images} images`,
+                        run.failed_images > 0 ? `${run.failed_images} failed` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ');
+                      return (
+                        <Table.Row key={run.id} id={run.id} className="hover:bg-muted/50">
+                          <Table.Cell data-label="Chart">
+                            <div className="min-w-0 max-w-xs space-y-0.5 xl:max-w-md">
+                              <Link
+                                href={`/helm/runs/${run.id}`}
+                                className="block truncate text-sm font-medium text-foreground hover:underline"
+                                title={run.chart_name || run.chart_url}
+                              >
+                                {getRunChartLabel(run)}
+                              </Link>
+                              <p
+                                className="truncate text-xs text-muted-foreground"
+                                title={run.chart_url}
+                              >
+                                {[
+                                  run.chart_version ? `v${run.chart_version}` : null,
+                                  run.chart_url.replace(/^oci:\/\//, ''),
+                                  isAdmin && run.owner_username ? run.owner_username : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </p>
+                            </div>
                           </Table.Cell>
-                        ) : null}
-                        <Table.Cell className="text-right">
-                          <div className="flex justify-end">
-                            <RowActionsMenu
-                              label={`Open actions for ${getRunChartLabel(run)}`}
-                              items={[
-                                {
-                                  id: 'open',
-                                  label: 'Open run',
-                                  icon: <EyeIcon size={15} />,
-                                  onAction: () => router.push(`/helm/runs/${run.id}`),
-                                },
-                                {
-                                  id: 'report',
-                                  label: 'Generate report',
-                                  icon: <FileValidationIcon size={15} />,
-                                  disabled: run.active_images > 0 || run.total_images === 0,
-                                  onAction: () =>
-                                    router.push(
-                                      `/reports/print?helmRun=${encodeURIComponent(run.id)}`
-                                    ),
-                                },
-                                {
-                                  id: 'share',
-                                  label: actionRunId === run.id ? 'Sharing...' : 'Share all scans',
-                                  icon: <Share01Icon size={15} />,
-                                  disabled:
-                                    actionRunId === run.id ||
-                                    run.total_images === 0 ||
-                                    (run.completed_images === 0 && run.failed_images === 0),
-                                  onAction: () => onShareRun(run),
-                                },
-                                {
-                                  id: 'copy-share-link',
-                                  label:
-                                    actionRunId === run.id
-                                      ? 'Preparing link...'
-                                      : 'Copy share link',
-                                  icon: <CopyLinkIcon size={15} />,
-                                  disabled:
-                                    actionRunId === run.id ||
-                                    run.total_images === 0 ||
-                                    (run.completed_images === 0 && run.failed_images === 0),
-                                  onAction: () => onCopyShareLink(run),
-                                },
-                                {
-                                  id: 'delete',
-                                  label: actionRunId === run.id ? 'Deleting...' : 'Delete run',
-                                  icon: <Delete01Icon size={15} />,
-                                  variant: 'danger',
-                                  disabled: actionRunId === run.id,
-                                  onAction: () => onDeleteRun(run),
-                                },
-                              ]}
+                          <Table.Cell data-label="Status" className="whitespace-nowrap">
+                            <StatusLabel
+                              tone={statusTone(status)}
+                              label={RUN_STATUS_LABEL[status]}
                             />
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    );
-                  })
-                )}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-          <Table.Footer className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
-              Showing {visibleStart}-{visibleEnd} of {sortedRuns.length}
-            </span>
-            <Pagination size="sm" className="justify-self-center">
-              <Pagination.Content>
-                <Pagination.Item>
-                  <Pagination.Previous
-                    isDisabled={effectivePage === 1}
-                    onPress={() => setPage((previous) => Math.max(1, previous - 1))}
-                  >
-                    <Pagination.PreviousIcon />
-                    <span>Previous</span>
-                  </Pagination.Previous>
-                </Pagination.Item>
-                {Array.from({ length: totalPages }).map((_, index) => {
-                  const nextPage = index + 1;
-                  return (
-                    <Pagination.Item key={nextPage}>
-                      <Pagination.Link
-                        isActive={nextPage === effectivePage}
-                        onPress={() => setPage(nextPage)}
-                      >
-                        {nextPage}
-                      </Pagination.Link>
-                    </Pagination.Item>
-                  );
-                })}
-                <Pagination.Item>
-                  <Pagination.Next
-                    isDisabled={effectivePage === totalPages}
-                    onPress={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-                  >
-                    <span>Next</span>
-                    <Pagination.NextIcon />
-                  </Pagination.Next>
-                </Pagination.Item>
-              </Pagination.Content>
-            </Pagination>
-            <span className="justify-self-end text-xs text-muted-foreground whitespace-nowrap">
-              {runs.length} total
-            </span>
-          </Table.Footer>
-        </Table>
+                          </Table.Cell>
+                          <Table.Cell
+                            data-label="Progress"
+                            className="whitespace-nowrap text-sm text-muted-foreground tabular-nums"
+                          >
+                            {progress}
+                          </Table.Cell>
+                          <Table.Cell data-label="Findings">
+                            <SeverityCounts
+                              critical={run.critical_count}
+                              high={run.high_count}
+                              medium={run.medium_count}
+                              low={run.low_count}
+                            />
+                          </Table.Cell>
+                          <Table.Cell
+                            data-label="Started"
+                            className="whitespace-nowrap text-xs text-muted-foreground"
+                          >
+                            <span title={fullDate(run.created_at)}>{timeAgo(run.created_at)}</span>
+                          </Table.Cell>
+                          <Table.Cell data-label="Actions" className="text-right">
+                            <div className="flex justify-end">
+                              <RowActionsMenu
+                                label={`Open actions for ${getRunChartLabel(run)}`}
+                                items={[
+                                  {
+                                    id: 'open',
+                                    label: 'Open run',
+                                    icon: <EyeIcon size={15} />,
+                                    onAction: () => router.push(`/helm/runs/${run.id}`),
+                                  },
+                                  {
+                                    id: 'report',
+                                    label: 'Generate report',
+                                    icon: <FileValidationIcon size={15} />,
+                                    disabled: run.active_images > 0 || run.total_images === 0,
+                                    onAction: () =>
+                                      router.push(
+                                        `/reports/print?helmRun=${encodeURIComponent(run.id)}`
+                                      ),
+                                  },
+                                  {
+                                    id: 'share',
+                                    label:
+                                      actionRunId === run.id ? 'Sharing...' : 'Share all scans',
+                                    icon: <Share01Icon size={15} />,
+                                    disabled:
+                                      actionRunId === run.id ||
+                                      run.total_images === 0 ||
+                                      (run.completed_images === 0 && run.failed_images === 0),
+                                    onAction: () => onShareRun(run),
+                                  },
+                                  {
+                                    id: 'copy-share-link',
+                                    label:
+                                      actionRunId === run.id
+                                        ? 'Preparing link...'
+                                        : 'Copy share link',
+                                    icon: <CopyLinkIcon size={15} />,
+                                    disabled:
+                                      actionRunId === run.id ||
+                                      run.total_images === 0 ||
+                                      (run.completed_images === 0 && run.failed_images === 0),
+                                    onAction: () => onCopyShareLink(run),
+                                  },
+                                  {
+                                    id: 'delete',
+                                    label: actionRunId === run.id ? 'Deleting...' : 'Delete run',
+                                    icon: <Delete01Icon size={15} />,
+                                    variant: 'danger',
+                                    disabled: actionRunId === run.id,
+                                    onAction: () => onDeleteRun(run),
+                                  },
+                                ]}
+                              />
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      );
+                    })}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </Table.Responsive>
+        )}
+        {sortedRuns.length > 0 ? (
+          <TablePager
+            page={effectivePage}
+            pageSize={HELM_RUN_HISTORY_PAGE_SIZE}
+            total={sortedRuns.length}
+            onPageChange={setPage}
+            noun="runs"
+          />
+        ) : null}
       </Card>
     </>
   );

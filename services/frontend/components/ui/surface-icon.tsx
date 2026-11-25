@@ -10,7 +10,7 @@ const toneClasses: Record<SurfaceIconTone, string> = {
   accent: 'bg-primary/10 text-primary',
   success: 'bg-success/10 text-success-foreground',
   warning: 'bg-warning/10 text-warning-foreground',
-  danger: 'bg-danger/10 text-danger',
+  danger: 'bg-destructive/10 text-destructive',
 };
 
 const sizeClasses: Record<SurfaceIconSize, string> = {

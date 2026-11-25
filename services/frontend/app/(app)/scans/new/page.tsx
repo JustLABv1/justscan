@@ -8,7 +8,7 @@ import {
   joinClassNames,
   nativeFieldClassName,
 } from '@/components/ui/form-styles';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { useWorkScope } from '@/hooks/use-work-scope';
 import {
   type ArtifactoryRepository,
@@ -618,7 +618,7 @@ export default function NewScanPage() {
     !orgFeatureBlockMessage &&
     validateCreateForm() === '';
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-6">
+    <PageContainer size="default">
       <PageHeader
         title="New Scan"
         description="Enter an image and start scanning. The source is detected for you."
@@ -939,22 +939,14 @@ export default function NewScanPage() {
                         </div>
                         {additionalImageEntries.length > 0 ? (
                           <div
-                            className="rounded-xl p-3"
-                            style={{
-                              background: 'rgba(255,255,255,0.03)',
-                              border: '1px solid var(--surface-border)',
-                            }}
+                            className="rounded-xl p-3 border border-border bg-muted/30"
                           >
                             <div className="flex items-center justify-between gap-3">
                               <p className="text-xs font-medium text-muted-foreground">
                                 Queued image targets
                               </p>
                               <span
-                                className="rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground"
-                                style={{
-                                  background: 'rgba(255,255,255,0.05)',
-                                  border: '1px solid var(--surface-border)',
-                                }}
+                                className="rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground border border-border bg-muted/50"
                               >
                                 {additionalImageEntries.length}
                               </span>
@@ -963,11 +955,7 @@ export default function NewScanPage() {
                               {additionalImageEntries.map((image) => (
                                 <div
                                   key={image}
-                                  className="flex items-start justify-between gap-3 rounded-xl px-3 py-2"
-                                  style={{
-                                    background: 'rgba(255,255,255,0.03)',
-                                    border: '1px solid var(--surface-border)',
-                                  }}
+                                  className="flex items-start justify-between gap-3 rounded-xl px-3 py-2 border border-border bg-muted/30"
                                 >
                                   <span className="min-w-0 break-all font-mono text-xs text-muted-foreground dark:text-foreground">
                                     {image}
@@ -1054,6 +1042,6 @@ export default function NewScanPage() {
           </div>
         </Card>
       </form>
-    </div>
+    </PageContainer>
   );
 }

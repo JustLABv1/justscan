@@ -44,7 +44,7 @@ export function RowActionsMenu({ label, items }: { label: string; items: RowActi
                 {item.pending ? (
                   <Spinner aria-label="Working" color="current" size="sm" />
                 ) : item.icon ? (
-                  <span className={`shrink-0 ${item.variant === 'danger' ? 'text-danger' : ''}`}>
+                  <span className={`shrink-0 ${item.variant === 'danger' ? 'text-destructive' : ''}`}>
                     {item.icon}
                   </span>
                 ) : null}

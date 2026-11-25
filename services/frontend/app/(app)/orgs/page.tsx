@@ -26,28 +26,44 @@ import {
   Card,
   ListBox,
   Modal,
+  ResourceList,
   SearchField,
   Select,
-  Table,
+  Spinner,
   useOverlayState,
-  type SortDescriptor,
 } from '@/components/ui';
-import { Delete01Icon, PlusSignIcon, UserAdd01Icon } from 'hugeicons-react';
-import Link from 'next/link';
+import { EmptyState } from '@/components/ui/empty-state';
+import { labelFor, pluralize, ROLE_LABELS } from '@/lib/labels';
+import { Delete01Icon, PlusSignIcon, UserAdd01Icon, UserGroupIcon } from 'hugeicons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type OrgWithCount = Org;
 
 type OrgSortKey = 'name' | 'policies' | 'members' | 'updated';
-type WorkspaceAvatarColor = 'default' | 'accent' | 'success' | 'warning' | 'danger';
+const SORT_OPTIONS: Array<{ id: OrgSortKey; label: string }> = [
+  { id: 'name', label: 'Name' },
+  { id: 'members', label: 'Most members' },
+  { id: 'policies', label: 'Most policies' },
+  { id: 'updated', label: 'Recently updated' },
+];
 
+type WorkspaceAvatarColor = 'accent' | 'success' | 'warning' | 'danger';
 const workspaceColors: WorkspaceAvatarColor[] = ['accent', 'success', 'warning', 'danger'];
 const hashWorkspaceName = (name: string) =>
   Array.from(name).reduce((accumulator, character) => accumulator + character.charCodeAt(0), 0);
-const workspaceColorFor = (kind: 'personal' | 'org', name: string): WorkspaceAvatarColor =>
-  kind === 'personal'
-    ? 'default'
-    : workspaceColors[hashWorkspaceName(name) % workspaceColors.length];
+
+function OrgAvatar({ name }: { name: string }) {
+  return (
+    <Avatar
+      className="shrink-0"
+      color={workspaceColors[hashWorkspaceName(name) % workspaceColors.length]}
+      size="sm"
+      variant="soft"
+    >
+      <Avatar.Fallback>{name.trim().charAt(0).toUpperCase() || 'O'}</Avatar.Fallback>
+    </Avatar>
+  );
+}
 
 export default function OrgsPage() {
   const currentUser = getUser() as { role?: string } | null;
@@ -64,10 +80,7 @@ export default function OrgsPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
-    column: 'name',
-    direction: 'ascending',
-  });
+  const [sortKey, setSortKey] = useState<OrgSortKey>('name');
   const modal = useOverlayState();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const toast = useToast();
@@ -103,30 +116,18 @@ export default function OrgsPage() {
   }, [orgs, searchQuery]);
 
   const sortedOrgs = useMemo(() => {
-    const direction = sortDescriptor.direction === 'descending' ? -1 : 1;
-    const column = String(sortDescriptor.column || 'name') as OrgSortKey;
-
     return [...filteredOrgs].sort((first, second) => {
-      if (column === 'policies') {
-        return ((first.policy_count ?? 0) - (second.policy_count ?? 0)) * direction;
+      if (sortKey === 'policies') return (second.policy_count ?? 0) - (first.policy_count ?? 0);
+      if (sortKey === 'members') return (second.member_count ?? 0) - (first.member_count ?? 0);
+      if (sortKey === 'updated') {
+        return (
+          (Date.parse(second.updated_at || '') || 0) - (Date.parse(first.updated_at || '') || 0)
+        );
       }
-
-      if (column === 'members') {
-        return ((first.member_count ?? 0) - (second.member_count ?? 0)) * direction;
-      }
-
-      if (column === 'updated') {
-        const firstUpdated = Date.parse(first.updated_at || '') || 0;
-        const secondUpdated = Date.parse(second.updated_at || '') || 0;
-        return (firstUpdated - secondUpdated) * direction;
-      }
-
-      return first.name.localeCompare(second.name) * direction;
+      return first.name.localeCompare(second.name);
     });
-  }, [filteredOrgs, sortDescriptor]);
-
-  const sortByValue = String(sortDescriptor.column || 'name');
-  const sortDirectionValue = sortDescriptor.direction === 'descending' ? 'desc' : 'asc';
+  }, [filteredOrgs, sortKey]);
+  const showToolbar = orgs.length > 5 || Boolean(searchQuery);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -173,7 +174,7 @@ export default function OrgsPage() {
     try {
       const result = await acceptOrgInvite(invite.id);
       toast.success(
-        `Joined ${result.org_name || invite.org_name || 'organization'} as ${result.role}`
+        `Joined ${result.org_name || invite.org_name || 'organization'} as ${labelFor(ROLE_LABELS, result.role).toLowerCase()}`
       );
       await load();
     } catch (err: unknown) {
@@ -198,382 +199,206 @@ export default function OrgsPage() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer size="default">
       <PageHeader
         title="Organizations"
-        description={
-          orgs.length > 0
-            ? `${orgs.length} organization${orgs.length !== 1 ? 's' : ''}`
-            : 'Manage organization workspaces, members, and invites.'
-        }
+        description="Manage organization workspaces, members, and invites."
         actions={
           <Button onPress={modal.open} variant="primary">
-            <PlusSignIcon size={15} /> New Organization
+            <PlusSignIcon size={15} /> New organization
           </Button>
         }
       />
 
       {inviteError ? <FormAlert description={inviteError} title="Invite action failed" /> : null}
 
-      {pendingInvites.length > 0 && (
-        <Card className="p-3">
-          <div className="flex items-center gap-3">
-            <div
-              className="size-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{
-                background: 'rgba(245,158,11,0.12)',
-                border: '1px solid rgba(245,158,11,0.22)',
-              }}
-            >
-              <UserAdd01Icon size={20} color="#f59e0b" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-foreground">Pending Invites</h2>
-              <p className="text-sm text-muted-foreground">
-                Review organization invitations tied to your account email.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            {pendingInvites.map((invite) => {
-              const busy = inviteActionId === invite.id;
-              return (
-                <Card key={invite.id} className="bg-surface-secondary">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold text-foreground truncate">
-                          {invite.org_name || 'Organization'}
-                        </p>
-                        <span
-                          className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-                          style={{
-                            background: 'color-mix(in srgb, var(--primary) 12%, transparent)',
-                            border: '1px solid color-mix(in srgb, var(--primary) 22%, transparent)',
-                            color: 'color-mix(in srgb, var(--primary) 78%, white)',
+      {pendingInvites.length > 0 ? (
+        <Card>
+          <Card.Header>
+            <Card.Title className="flex items-center gap-2">
+              <UserAdd01Icon size={16} className="text-warning" />
+              {pendingInvites.length === 1
+                ? 'You have an invitation'
+                : `You have ${pendingInvites.length} invitations`}
+            </Card.Title>
+            <Card.Description>Invitations sent to your account email.</Card.Description>
+          </Card.Header>
+          <Card.Content>
+            <ResourceList>
+              {pendingInvites.map((invite) => {
+                const busy = inviteActionId === invite.id;
+                const inviter = invite.invited_by_username || invite.invited_by_email;
+                return (
+                  <ResourceList.Item
+                    key={invite.id}
+                    tone="warning"
+                    media={<OrgAvatar name={invite.org_name || 'Organization'} />}
+                    title={invite.org_name || 'Organization'}
+                    description={[
+                      `Join as ${labelFor(ROLE_LABELS, invite.role).toLowerCase()}`,
+                      inviter ? `invited by ${inviter}` : null,
+                      `expires ${formatDateOnly(invite.expires_at)}`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    actions={
+                      <>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          isDisabled={busy}
+                          isPending={busy}
+                          onPress={() => {
+                            void handleAcceptInvite(invite);
                           }}
                         >
-                          {invite.role}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Invited by{' '}
-                        {invite.invited_by_username || invite.invited_by_email || 'a teammate'}
+                          Accept
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          isDisabled={busy}
+                          onPress={() => {
+                            void handleDeclineInvite(invite);
+                          }}
+                        >
+                          Decline
+                        </Button>
+                      </>
+                    }
+                  >
+                    {invite.org_description ? (
+                      <p className="line-clamp-2 text-sm text-muted-foreground">
+                        {invite.org_description}
                       </p>
-                    </div>
-                    <span
-                      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground"
-                      style={{ background: 'var(--row-divider)' }}
-                    >
-                      Expires {formatDateOnly(invite.expires_at)}
-                    </span>
-                  </div>
-
-                  {invite.org_description && (
-                    <p className="text-sm text-muted-foreground dark:text-foreground">
-                      {invite.org_description}
-                    </p>
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="primary"
-                      isDisabled={busy}
-                      isPending={busy}
-                      onPress={() => {
-                        void handleAcceptInvite(invite);
-                      }}
-                    >
-                      {busy && (
-                        <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      )}
-                      Accept
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="border border-border dark:border-border"
-                      isDisabled={busy}
-                      onPress={() => {
-                        void handleDeclineInvite(invite);
-                      }}
-                    >
-                      Decline
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+                    ) : null}
+                  </ResourceList.Item>
+                );
+              })}
+            </ResourceList>
+          </Card.Content>
         </Card>
-      )}
+      ) : null}
 
       <LoadableCollectionState
         emptyState={
-          <Card className="py-20 flex flex-col items-center gap-3">
-            <div
-              className="size-14 rounded-xl flex items-center justify-center"
-              style={{
-                background: 'color-mix(in srgb, var(--primary) 12%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)',
-              }}
-            >
-              <Avatar color="accent" size="lg" variant="soft">
-                <Avatar.Fallback>O</Avatar.Fallback>
-              </Avatar>
-            </div>
-            <p className="text-sm text-muted-foreground text-center max-w-xs">
-              No organizations yet. Create one to start managing compliance policies.
-            </p>
-            <Button onPress={modal.open} variant="secondary">
-              Create organization →
-            </Button>
-          </Card>
+          <EmptyState
+            icon={<UserGroupIcon size={28} />}
+            title="No organizations yet"
+            description="Create an organization to share scans, policies, and settings with your team."
+            action={{ label: 'Create organization', onClick: modal.open }}
+          />
         }
         error={error || undefined}
         errorTitle="Organization loading failed"
         isEmpty={orgs.length === 0}
         loading={loading}
         loadingFallback={
-          <div className="flex justify-center items-center h-48" role="status">
-            <div className="size-7 rounded-full border-2 border-border dark:border-border border-t-primary animate-spin" />
+          <div className="flex h-48 items-center justify-center" role="status">
+            <Spinner />
             <span className="sr-only">Loading organizations</span>
           </div>
         }
         retry={() => void load()}
       >
-        <>
-          <Card className="gap-0 overflow-hidden py-0">
-            <Card.Header className="space-y-3 border-b p-4">
-              <div className="flex items-center justify-between gap-3">
-                <Card.Title>Organizations</Card.Title>
-                <span className="text-xs text-muted-foreground">{orgs.length} memberships</span>
-              </div>
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-                <SearchField name="org-search" variant="secondary" className="min-w-0 flex-1">
-                  <SearchField.Group>
-                    <SearchField.SearchIcon />
-                    <SearchField.Input
-                      aria-label="Search organizations"
-                      placeholder="Search organizations, descriptions, or members..."
-                      value={searchQuery}
-                      onChange={(event) => setSearchQuery(event.target.value)}
-                    />
-                    <SearchField.ClearButton />
-                  </SearchField.Group>
-                </SearchField>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Select
-                    aria-label="Sort organizations by"
-                    className="w-full sm:w-[180px]"
-                    value={sortByValue}
-                    variant="secondary"
-                    onChange={(value) =>
-                      setSortDescriptor((previous) => ({
-                        ...previous,
-                        column: String(value || 'name'),
-                      }))
-                    }
-                  >
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        <ListBox.Item id="name" textValue="Name">
-                          Name
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                        <ListBox.Item id="policies" textValue="Policies">
-                          Policies
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                        <ListBox.Item id="members" textValue="Members">
-                          Members
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                        <ListBox.Item id="updated" textValue="Updated">
-                          Updated
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                  <Select
-                    aria-label="Sort organizations direction"
-                    className="w-full sm:w-[160px]"
-                    value={sortDirectionValue}
-                    variant="secondary"
-                    onChange={(value) =>
-                      setSortDescriptor((previous) => ({
-                        ...previous,
-                        direction: value === 'desc' ? 'descending' : 'ascending',
-                      }))
-                    }
-                  >
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        <ListBox.Item id="asc" textValue="Ascending">
-                          Ascending
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                        <ListBox.Item id="desc" textValue="Descending">
-                          Descending
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                </div>
-              </div>
-            </Card.Header>
+        <div className="space-y-4">
+          {showToolbar ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <SearchField name="org-search" variant="secondary" className="min-w-0 flex-1">
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    aria-label="Search organizations"
+                    placeholder="Search organizations..."
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                  />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+              <Select
+                aria-label="Sort organizations"
+                className="w-full sm:w-48"
+                value={sortKey}
+                variant="secondary"
+                onChange={(value) => setSortKey(String(value || 'name') as OrgSortKey)}
+              >
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    {SORT_OPTIONS.map((option) => (
+                      <ListBox.Item key={option.id} id={option.id} textValue={option.label}>
+                        {option.label}
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </div>
+          ) : null}
 
-            <Table variant="secondary">
-              <Table.ScrollContainer className="rounded-none border-0">
-                <Table.Content
-                  aria-label="Organizations table"
-                  className="min-w-[960px] [&_td]:py-3"
-                  sortDescriptor={sortDescriptor}
-                  onSortChange={setSortDescriptor}
+          {sortedOrgs.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl px-4 py-10 text-center ring-1 ring-foreground/10">
+              <p className="text-sm text-muted-foreground">No organizations match this search.</p>
+              <Button size="sm" variant="secondary" onPress={() => setSearchQuery('')}>
+                Clear search
+              </Button>
+            </div>
+          ) : (
+            <ResourceList aria-label="Organizations">
+              {sortedOrgs.map((org) => (
+                <ResourceList.Item
+                  key={org.id}
+                  href={`/orgs/${org.id}`}
+                  media={<OrgAvatar name={org.name} />}
+                  title={org.name}
+                  description={[
+                    pluralize(org.member_count ?? 0, 'member'),
+                    pluralize(org.policy_count ?? 0, 'policy', 'policies'),
+                    org.updated_at ? `updated ${formatDateOnly(org.updated_at)}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  meta={
+                    org.current_user_role ? (
+                      <StatusTag>{labelFor(ROLE_LABELS, org.current_user_role)}</StatusTag>
+                    ) : null
+                  }
+                  actions={
+                    isSystemAdmin || org.current_user_role === 'owner' ? (
+                      <RowActionsMenu
+                        label={`Open actions menu for ${org.name}`}
+                        items={[
+                          {
+                            id: 'delete',
+                            label: 'Delete organization',
+                            icon: <Delete01Icon size={15} />,
+                            variant: 'danger',
+                            pending: deletingId === org.id,
+                            disabled: deletingId !== null && deletingId !== org.id,
+                            onAction: () => {
+                              void handleDelete(org.id, org.name);
+                            },
+                          },
+                        ]}
+                      />
+                    ) : null
+                  }
                 >
-                  <Table.Header>
-                    <Table.Column id="name" allowsSorting isRowHeader>
-                      {({ sortDirection }) => (
-                        <Table.SortableColumnHeader sortDirection={sortDirection}>
-                          Organization
-                        </Table.SortableColumnHeader>
-                      )}
-                    </Table.Column>
-                    <Table.Column className="min-w-32" id="members" allowsSorting>
-                      {({ sortDirection }) => (
-                        <Table.SortableColumnHeader sortDirection={sortDirection}>
-                          Members
-                        </Table.SortableColumnHeader>
-                      )}
-                    </Table.Column>
-                    <Table.Column className="min-w-32" id="policies" allowsSorting>
-                      {({ sortDirection }) => (
-                        <Table.SortableColumnHeader sortDirection={sortDirection}>
-                          Policies
-                        </Table.SortableColumnHeader>
-                      )}
-                    </Table.Column>
-                    <Table.Column className="min-w-32" id="updated" allowsSorting>
-                      {({ sortDirection }) => (
-                        <Table.SortableColumnHeader sortDirection={sortDirection}>
-                          Updated
-                        </Table.SortableColumnHeader>
-                      )}
-                    </Table.Column>
-                    <Table.Column className="w-px whitespace-nowrap text-right">
-                      Actions
-                    </Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {sortedOrgs.length === 0 ? (
-                      <Table.Row id="empty">
-                        <Table.Cell colSpan={5}>
-                          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-                            No organizations match this search.
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ) : (
-                      sortedOrgs.map((org) => (
-                        <Table.Row
-                          key={org.id}
-                          id={org.id}
-                          className="transition-colors hover:bg-[var(--row-hover)]"
-                        >
-                          <Table.Cell>
-                            <div className="flex items-center gap-3">
-                              <Avatar
-                                className="shrink-0"
-                                color={workspaceColorFor('org', org.name)}
-                                size="sm"
-                                variant="soft"
-                              >
-                                <Avatar.Fallback>
-                                  {org.name.trim().charAt(0).toUpperCase() || 'O'}
-                                </Avatar.Fallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <Link
-                                  className="truncate font-medium text-foreground hover:text-primary dark:text-foreground dark:hover:text-primary"
-                                  href={`/orgs/${org.id}`}
-                                >
-                                  {org.name}
-                                </Link>
-                                <p className="truncate text-xs text-muted-foreground">
-                                  {org.description || 'No description'}
-                                </p>
-                                <div className="mt-1 flex flex-wrap gap-x-2 text-xs text-muted-foreground md:hidden">
-                                  <span>
-                                    {org.member_count ?? 0}{' '}
-                                    {(org.member_count ?? 0) === 1 ? 'member' : 'members'}
-                                  </span>
-                                  <span aria-hidden="true">·</span>
-                                  <span>
-                                    {org.policy_count ?? 0}{' '}
-                                    {org.policy_count === 1 ? 'policy' : 'policies'}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell className="min-w-32">
-                            <StatusTag>
-                              {org.member_count ?? 0}{' '}
-                              {(org.member_count ?? 0) === 1 ? 'member' : 'members'}
-                            </StatusTag>
-                          </Table.Cell>
-                          <Table.Cell className="min-w-32">
-                            <StatusTag>
-                              {org.policy_count ?? 0}{' '}
-                              {org.policy_count === 1 ? 'policy' : 'policies'}
-                            </StatusTag>
-                          </Table.Cell>
-                          <Table.Cell className="whitespace-nowrap text-xs text-muted-foreground">
-                            {formatDateOnly(org.updated_at)}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="flex justify-end">
-                              {isSystemAdmin || org.current_user_role === 'owner' ? (
-                                <RowActionsMenu
-                                  label={`Open actions menu for ${org.name}`}
-                                  items={[
-                                    {
-                                      id: 'delete',
-                                      label: 'Delete organization',
-                                      icon: <Delete01Icon size={15} />,
-                                      variant: 'danger',
-                                      pending: deletingId === org.id,
-                                      disabled: deletingId !== null && deletingId !== org.id,
-                                      onAction: () => {
-                                        void handleDelete(org.id, org.name);
-                                      },
-                                    },
-                                  ]}
-                                />
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </div>
-                          </Table.Cell>
-                        </Table.Row>
-                      ))
-                    )}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
-          </Card>
-        </>
+                  {org.description ? (
+                    <p className="truncate text-xs text-muted-foreground" title={org.description}>
+                      {org.description}
+                    </p>
+                  ) : null}
+                </ResourceList.Item>
+              ))}
+            </ResourceList>
+          )}
+        </div>
       </LoadableCollectionState>
 
       <Modal state={modal}>
@@ -581,7 +406,7 @@ export default function OrgsPage() {
           <Modal.Container size="md" placement="center">
             <Modal.Dialog className="overflow-hidden">
               <Modal.Header>
-                <Modal.Heading>New Organization</Modal.Heading>
+                <Modal.Heading>New organization</Modal.Heading>
                 <Modal.CloseTrigger />
               </Modal.Header>
               <Modal.Body className="py-5">

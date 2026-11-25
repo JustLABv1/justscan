@@ -1,8 +1,17 @@
 'use client';
 
-import { Alert, buttonVariants, Button, Card } from '@/components/ui';
-import { AlertCircleIcon, ArrowLeft01Icon, RefreshIcon } from 'hugeicons-react';
+import { buttonVariants, Button, Card } from '@/components/ui';
+import {
+  AlertCircleIcon,
+  ArrowDown01Icon,
+  ArrowLeft01Icon,
+  Copy01Icon,
+  RefreshIcon,
+  Tick02Icon,
+} from 'hugeicons-react';
 import Link from 'next/link';
+import { deferEffect } from '@/lib/defer-effect';
+import { useEffect, useState } from 'react';
 
 export function RouteLoadingState({
   title = 'Loading view',
@@ -22,8 +31,7 @@ export function RouteLoadingState({
           {Array.from({ length: 3 }).map((_, index) => (
             <div
               key={index}
-              className="rounded-xl p-5"
-              style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
+              className="rounded-xl p-5 border border-border bg-muted/40"
             >
               <div className="skeleton h-4 w-24 rounded" />
               <div className="skeleton h-8 w-20 rounded mt-3" />
@@ -32,8 +40,7 @@ export function RouteLoadingState({
           ))}
         </div>
         <div
-          className="rounded-xl p-5 space-y-3"
-          style={{ background: 'var(--row-hover)', border: '1px solid var(--surface-border)' }}
+          className="rounded-xl p-5 space-y-3 border border-border bg-muted/40"
         >
           <div className="skeleton h-4 w-40 rounded" />
           <div className="skeleton h-3 w-full rounded" />
@@ -49,60 +56,97 @@ export function RouteErrorState({
   title,
   message,
   onRetry,
+  error,
+  homeHref = '/dashboard',
+  homeLabel = 'Back to dashboard',
 }: {
   title: string;
   message: string;
   onRetry: () => void;
+  /** The error passed to the route's error boundary, shown under Technical details. */
+  error?: Error & { digest?: string };
+  homeHref?: string;
+  homeLabel?: string;
 }) {
+  const [location, setLocation] = useState('');
+  const [occurredAt, setOccurredAt] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(
+    () =>
+      deferEffect(() => {
+        setLocation(window.location.pathname + window.location.search);
+        setOccurredAt(new Date().toISOString());
+      }),
+    []
+  );
+
+  const errorText = error ? error.message || error.name || 'Unknown error' : '';
+  const details = [
+    errorText && `Error: ${errorText}`,
+    error?.digest && `Error ID: ${error.digest}`,
+    location && `Page: ${location}`,
+    occurredAt && `Time: ${occurredAt}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  async function copyDetails() {
+    try {
+      await navigator.clipboard.writeText(details);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
-    <section className="px-4 py-6 sm:px-6">
-      <Card className="bg-transparent relative mx-auto flex min-h-[calc(100dvh-10rem)] w-full max-w-5xl items-center justify-center overflow-hidden p-6 sm:p-10">
-        <div className="relative z-10 w-full max-w-3xl duration-500 animate-in fade-in zoom-in-95 slide-in-from-bottom-2">
-          <div className="rounded-xl border border-danger/25 bg-danger/10 p-5 backdrop-blur-sm sm:p-7">
-            <div className="mb-5 flex items-center gap-4">
-              <div className="grid size-14 place-items-center rounded-xl border border-danger/35 bg-danger/20 text-danger shadow-[0_0_0_0_rgba(239,68,68,0.35)] animate-pulse sm:size-16">
-                <AlertCircleIcon size={28} />
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-danger/80">
-                  Incident detected
-                </p>
-                <h2 className="mt-1 text-2xl font-semibold text-foreground sm:text-3xl">{title}</h2>
-              </div>
-            </div>
-
-            <Alert className="border border-danger/30 bg-danger/15 text-foreground" status="danger">
-              <Alert.Indicator className="text-danger">
-                <AlertCircleIcon size={18} />
-              </Alert.Indicator>
-              <Alert.Content>
-                <Alert.Description className="text-foreground">{message}</Alert.Description>
-              </Alert.Content>
-            </Alert>
-
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
-              <Link
-                href="/dashboard"
-                className={buttonVariants({
-                  variant: 'outline',
-                  className: 'inline-flex items-center gap-2',
-                })}
-              >
-                <ArrowLeft01Icon size={15} />
-                Back to dashboard
-              </Link>
-              <Button
-                className="shadow-[0_0_32px_rgba(239,68,68,0.38)]"
-                onClick={onRetry}
-                variant="danger"
-              >
-                <RefreshIcon size={15} />
-                Retry route
-              </Button>
-            </div>
-          </div>
+    <section className="flex min-h-[calc(100dvh-10rem)] items-center justify-center px-4 py-10 sm:px-6">
+      <div
+        aria-live="polite"
+        className="w-full max-w-md duration-300 animate-in fade-in slide-in-from-bottom-1"
+        role="alert"
+      >
+        <div className="grid size-10 place-items-center rounded-lg border border-border bg-muted text-destructive">
+          <AlertCircleIcon size={20} />
         </div>
-      </Card>
+        <p className="mt-6 text-sm font-medium text-muted-foreground">Something went wrong</p>
+        <h1 className="mt-1 text-xl font-semibold tracking-tight text-foreground">{title}</h1>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{message}</p>
+
+        <div className="mt-6 flex flex-wrap items-center gap-2">
+          <Button onClick={onRetry}>
+            <RefreshIcon size={15} />
+            Try again
+          </Button>
+          <Link className={buttonVariants({ variant: 'outline' })} href={homeHref}>
+            <ArrowLeft01Icon size={15} />
+            {homeLabel}
+          </Link>
+        </div>
+
+        {details ? (
+          <details className="group mt-8 rounded-lg border border-border bg-card">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+              Technical details
+              <ArrowDown01Icon className="transition-transform group-open:rotate-180" size={16} />
+            </summary>
+            <div className="space-y-3 border-t border-border px-4 py-3">
+              <pre className="max-h-48 overflow-auto font-mono text-xs leading-5 break-words whitespace-pre-wrap text-foreground">
+                {details}
+              </pre>
+              <Button onClick={copyDetails} size="sm" variant="ghost">
+                {copied ? <Tick02Icon size={14} /> : <Copy01Icon size={14} />}
+                {copied ? 'Copied' : 'Copy details'}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Include these details when you report the problem.
+              </p>
+            </div>
+          </details>
+        ) : null}
+      </div>
     </section>
   );
 }

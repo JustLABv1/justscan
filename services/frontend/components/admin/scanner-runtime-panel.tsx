@@ -1,50 +1,155 @@
 'use client';
 
 import { useToast } from '@/components/toast';
+import { Button, Input, SettingRow, SettingsSection, SettingUnit, Switch } from '@/components/ui';
 import { adminUpdateScannerSettings, getAdminSettings } from '@/lib/api/admin';
 import type { ScannerSettings } from '@/lib/api/types/registries';
-import { Button, Card, Description, Input, Label, Switch, TextField } from '@/components/ui';
 import { useEffect, useState } from 'react';
 
-export function ScannerRuntimePanel() {
+type NumberKey = {
+  [K in keyof ScannerSettings]-?: ScannerSettings[K] extends number | undefined ? K : never;
+}[keyof ScannerSettings];
+type BooleanKey = {
+  [K in keyof ScannerSettings]-?: ScannerSettings[K] extends boolean | undefined ? K : never;
+}[keyof ScannerSettings];
+
+type NumberField = {
+  key: NumberKey;
+  label: string;
+  description: string;
+  unit: string;
+  min: number;
+};
+
+const LOCAL_FIELDS: NumberField[] = [
+  {
+    key: 'concurrency',
+    label: 'Concurrent workers',
+    description: 'How many local scans run at the same time. Takes effect after a restart.',
+    unit: 'workers',
+    min: 1,
+  },
+  {
+    key: 'timeout_seconds',
+    label: 'Scan timeout',
+    description: 'A local scanner command is stopped after this long.',
+    unit: 'seconds',
+    min: 30,
+  },
+  {
+    key: 'db_max_age_hours',
+    label: 'Maximum database age',
+    description: 'Vulnerability databases older than this are reported as stale.',
+    unit: 'hours',
+    min: 1,
+  },
+];
+
+const XRAY_FIELDS: NumberField[] = [
+  {
+    key: 'xray_concurrency',
+    label: 'Slots per stage',
+    description:
+      'Preparation and result import each get this many parallel slots. Takes effect after a restart.',
+    unit: 'slots',
+    min: 1,
+  },
+  {
+    key: 'xray_max_active',
+    label: 'Maximum active scans',
+    description:
+      'Upper bound for Xray scans in progress, including ones waiting on Xray. Takes effect after a restart.',
+    unit: 'scans',
+    min: 1,
+  },
+  {
+    key: 'xray_warmup_timeout_seconds',
+    label: 'Preparation timeout',
+    description:
+      'Time allowed for resolving image metadata and warming the cache, retries included.',
+    unit: 'seconds',
+    min: 1,
+  },
+  {
+    key: 'xray_provider_timeout_seconds',
+    label: 'Wait timeout',
+    description: 'Time allowed for each wait on an Xray artifact status or summary.',
+    unit: 'seconds',
+    min: 1,
+  },
+  {
+    key: 'xray_timeout_seconds',
+    label: 'Overall timeout',
+    description: 'Time allowed from picking up the scan until its results are imported.',
+    unit: 'seconds',
+    min: 1,
+  },
+];
+
+const ENGINE_SWITCHES: Array<{ key: BooleanKey; label: string; description: string }> = [
+  {
+    key: 'enable_trivy',
+    label: 'Trivy',
+    description: 'Scan images with the built-in Trivy scanner.',
+  },
+  {
+    key: 'enable_grype',
+    label: 'Grype',
+    description: 'Offer Grype as an additional local scan engine.',
+  },
+  {
+    key: 'enable_osv_java_augmentation',
+    label: 'OSV Java augmentation',
+    description: 'Look up Java packages in OSV.dev to add findings the scanner database misses.',
+  },
+];
+
+function parseNumber(value: string | undefined, fallback: number) {
+  const parsed = parseInt(value ?? '', 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function NumberSettingsSection({
+  title,
+  description,
+  fields,
+  saved,
+  onSaved,
+}: {
+  title: string;
+  description: string;
+  fields: NumberField[];
+  saved: ScannerSettings;
+  onSaved: (patch: Partial<ScannerSettings>) => void;
+}) {
   const toast = useToast();
-  const [settings, setSettings] = useState<ScannerSettings>({});
-  const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    getAdminSettings()
-      .then((current) => {
-        setSettings({
-          xray_concurrency: parseInt(current['scanner.xray_concurrency'] ?? '2', 10),
-          xray_max_active: parseInt(current['scanner.xray_max_active'] ?? '32', 10),
-          xray_warmup_timeout_seconds: parseInt(
-            current['scanner.xray_warmup_timeout_seconds'] ?? '600',
-            10
-          ),
-          xray_provider_timeout_seconds: parseInt(
-            current['scanner.xray_provider_timeout_seconds'] ?? '900',
-            10
-          ),
-          xray_timeout_seconds: parseInt(current['scanner.xray_timeout_seconds'] ?? '3600', 10),
-
-          enable_trivy: current['scanner.enable_trivy'] !== 'false',
-          enable_grype: current['scanner.enable_grype'] !== 'false',
-          concurrency: parseInt(current['scanner.concurrency'] ?? '2', 10),
-          timeout_seconds: parseInt(current['scanner.timeout_seconds'] ?? '300', 10),
-          db_max_age_hours: parseInt(current['scanner.db_max_age_hours'] ?? '24', 10),
-          enable_osv_java_augmentation: current['scanner.enable_osv_java_augmentation'] === 'true',
-        });
-      })
-      .catch(() => toast.error('Failed to load scanner settings'))
-      .finally(() => setLoading(false));
-  }, [toast]);
+  const valueOf = (key: NumberKey) => draft[key] ?? String(saved[key] ?? '');
+  const dirty = fields.some(
+    (field) => draft[field.key] !== undefined && draft[field.key] !== String(saved[field.key] ?? '')
+  );
+  const invalid = fields.find((field) => {
+    const parsed = parseInt(valueOf(field.key), 10);
+    return Number.isNaN(parsed) || parsed < field.min;
+  });
 
   async function handleSave() {
+    if (invalid) {
+      toast.error(`${invalid.label} must be at least ${invalid.min} ${invalid.unit}.`);
+      return;
+    }
+    const patch: Partial<ScannerSettings> = {};
+    for (const field of fields) {
+      patch[field.key] = parseInt(valueOf(field.key), 10);
+    }
     setSaving(true);
     try {
-      await adminUpdateScannerSettings(settings);
-      toast.success('Scanner settings updated');
+      await adminUpdateScannerSettings(patch);
+      onSaved(patch);
+      setDraft({});
+      toast.success(`${title} settings saved`);
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to update scanner settings');
     } finally {
@@ -52,206 +157,142 @@ export function ScannerRuntimePanel() {
     }
   }
 
+  return (
+    <SettingsSection
+      title={title}
+      description={description}
+      footer={
+        dirty ? (
+          <>
+            <Button variant="ghost" size="sm" onPress={() => setDraft({})} isDisabled={saving}>
+              Discard
+            </Button>
+            <Button size="sm" onPress={handleSave} isDisabled={saving}>
+              {saving ? 'Saving...' : 'Save changes'}
+            </Button>
+          </>
+        ) : null
+      }
+    >
+      {fields.map((field) => {
+        const id = `scanner-${field.key}`;
+        return (
+          <SettingRow
+            key={field.key}
+            label={field.label}
+            description={field.description}
+            htmlFor={id}
+          >
+            <Input
+              id={id}
+              type="number"
+              min={field.min}
+              inputMode="numeric"
+              className="w-24 text-right tabular-nums"
+              value={valueOf(field.key)}
+              onChange={(event) =>
+                setDraft((current) => ({ ...current, [field.key]: event.target.value }))
+              }
+            />
+            <SettingUnit>{field.unit}</SettingUnit>
+          </SettingRow>
+        );
+      })}
+    </SettingsSection>
+  );
+}
+
+export function ScannerRuntimePanel() {
+  const toast = useToast();
+  const [settings, setSettings] = useState<ScannerSettings>({});
+  const [loading, setLoading] = useState(true);
+  const [savingSwitch, setSavingSwitch] = useState<BooleanKey | null>(null);
+
+  useEffect(() => {
+    getAdminSettings()
+      .then((current) => {
+        setSettings({
+          xray_concurrency: parseNumber(current['scanner.xray_concurrency'], 2),
+          xray_max_active: parseNumber(current['scanner.xray_max_active'], 32),
+          xray_warmup_timeout_seconds: parseNumber(
+            current['scanner.xray_warmup_timeout_seconds'],
+            600
+          ),
+          xray_provider_timeout_seconds: parseNumber(
+            current['scanner.xray_provider_timeout_seconds'],
+            900
+          ),
+          xray_timeout_seconds: parseNumber(current['scanner.xray_timeout_seconds'], 3600),
+
+          enable_trivy: current['scanner.enable_trivy'] !== 'false',
+          enable_grype: current['scanner.enable_grype'] !== 'false',
+          concurrency: parseNumber(current['scanner.concurrency'], 2),
+          timeout_seconds: parseNumber(current['scanner.timeout_seconds'], 300),
+          db_max_age_hours: parseNumber(current['scanner.db_max_age_hours'], 24),
+          enable_osv_java_augmentation: current['scanner.enable_osv_java_augmentation'] === 'true',
+        });
+      })
+      .catch(() => toast.error('Failed to load scanner settings'))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  async function handleSwitch(key: BooleanKey, label: string, enabled: boolean) {
+    const previous = settings[key];
+    setSettings((current) => ({ ...current, [key]: enabled }));
+    setSavingSwitch(key);
+    try {
+      await adminUpdateScannerSettings({ [key]: enabled });
+      toast.success(`${label} ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (error: unknown) {
+      setSettings((current) => ({ ...current, [key]: previous }));
+      toast.error(error instanceof Error ? error.message : 'Failed to update scanner settings');
+    } finally {
+      setSavingSwitch(null);
+    }
+  }
+
+  const applySaved = (patch: Partial<ScannerSettings>) =>
+    setSettings((current) => ({ ...current, ...patch }));
+
   if (loading) return null;
 
   return (
-    <Card className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold">Scanner runtime</h2>
-        <p className="text-sm text-muted-foreground">Tune engines, throughput, and database freshness.</p>
-      </div>
+    <div className="space-y-4">
+      <SettingsSection
+        title="Scan engines"
+        description="Engines available for new scans. Changes save immediately."
+      >
+        {ENGINE_SWITCHES.map((engine) => (
+          <SettingRow key={engine.key} label={engine.label} description={engine.description}>
+            <Switch
+              aria-label={engine.label}
+              isSelected={settings[engine.key] ?? engine.key !== 'enable_osv_java_augmentation'}
+              isDisabled={savingSwitch === engine.key}
+              onChange={(checked) => void handleSwitch(engine.key, engine.label, checked)}
+            >
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+            </Switch>
+          </SettingRow>
+        ))}
+      </SettingsSection>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <Switch
-          isSelected={settings.enable_trivy ?? true}
-          onChange={(checked) => setSettings((current) => ({ ...current, enable_trivy: checked }))}
-        >
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            Enable Trivy
-          </Switch.Content>
-        </Switch>
-        <Switch
-          isSelected={settings.enable_grype ?? true}
-          onChange={(checked) => setSettings((current) => ({ ...current, enable_grype: checked }))}
-        >
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            Enable Grype
-          </Switch.Content>
-        </Switch>
-        <Switch
-          isSelected={settings.enable_osv_java_augmentation ?? false}
-          onChange={(checked) =>
-            setSettings((current) => ({ ...current, enable_osv_java_augmentation: checked }))
-          }
-        >
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            OSV Java augmentation
-          </Switch.Content>
-        </Switch>
-      </div>
+      <NumberSettingsSection
+        title="Local scanner"
+        description="Throughput and database freshness for scans that run on this server."
+        fields={LOCAL_FIELDS}
+        saved={settings}
+        onSaved={applySaved}
+      />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <TextField>
-          <Label>Concurrent workers</Label>
-          <Input
-            aria-label="Concurrent workers"
-            type="number"
-            min={1}
-            variant="secondary"
-            value={String(settings.concurrency ?? 2)}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                concurrency: parseInt(event.target.value || '0', 10),
-              }))
-            }
-          />
-          <Description>Local scanner workers. Restart required.</Description>
-        </TextField>
-        <TextField>
-          <Label>Scan timeout</Label>
-          <Input
-            aria-label="Scan timeout in seconds"
-            type="number"
-            min={30}
-            variant="secondary"
-            value={String(settings.timeout_seconds ?? 300)}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                timeout_seconds: parseInt(event.target.value || '0', 10),
-              }))
-            }
-          />
-          <Description>Seconds before a local scanner command is stopped.</Description>
-        </TextField>
-        <TextField>
-          <Label>Maximum database age</Label>
-          <Input
-            aria-label="Maximum database age in hours"
-            type="number"
-            min={1}
-            variant="secondary"
-            value={String(settings.db_max_age_hours ?? 24)}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                db_max_age_hours: parseInt(event.target.value || '0', 10),
-              }))
-            }
-          />
-          <Description>Hours before a database is considered stale.</Description>
-        </TextField>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <TextField>
-          <Label>Xray slots per stage</Label>
-          <Input
-            aria-label="Xray slots per stage"
-            type="number"
-            min={1}
-            variant="secondary"
-            value={String(settings.xray_concurrency ?? 2)}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                xray_concurrency: parseInt(event.target.value || '0', 10),
-              }))
-            }
-          />
-          <Description>
-            Separate preparation and import pools, each with this many slots. Restart required.
-          </Description>
-        </TextField>
-        <TextField>
-          <Label>Maximum active Xray scans</Label>
-          <Input
-            aria-label="Maximum active Xray scans"
-            type="number"
-            min={1}
-            variant="secondary"
-            value={String(settings.xray_max_active ?? 32)}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                xray_max_active: parseInt(event.target.value || '0', 10),
-              }))
-            }
-          />
-          <Description>
-            Bounds Xray coordinators, including remote waits. Restart required.
-          </Description>
-        </TextField>
-        <TextField>
-          <Label>Xray preparation timeout</Label>
-          <Input
-            aria-label="Xray preparation timeout"
-            type="number"
-            min={1}
-            variant="secondary"
-            value={String(settings.xray_warmup_timeout_seconds ?? 600)}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                xray_warmup_timeout_seconds: parseInt(event.target.value || '0', 10),
-              }))
-            }
-          />
-          <Description>
-            Seconds for metadata resolution and cache warm-up, including retries.
-          </Description>
-        </TextField>
-        <TextField>
-          <Label>Xray provider wait timeout</Label>
-          <Input
-            aria-label="Xray provider wait timeout"
-            type="number"
-            min={1}
-            variant="secondary"
-            value={String(settings.xray_provider_timeout_seconds ?? 900)}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                xray_provider_timeout_seconds: parseInt(event.target.value || '0', 10),
-              }))
-            }
-          />
-          <Description>Seconds per artifact-status or summary wait.</Description>
-        </TextField>
-        <TextField>
-          <Label>Xray overall timeout</Label>
-          <Input
-            aria-label="Xray overall timeout"
-            type="number"
-            min={1}
-            variant="secondary"
-            value={String(settings.xray_timeout_seconds ?? 3600)}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                xray_timeout_seconds: parseInt(event.target.value || '0', 10),
-              }))
-            }
-          />
-          <Description>Seconds from worker claim through result import.</Description>
-        </TextField>
-      </div>
-
-      <div className="flex justify-end">
-        <Button variant="secondary" onPress={handleSave} isDisabled={saving}>
-          {saving ? 'Saving...' : 'Save scanner runtime'}
-        </Button>
-      </div>
-    </Card>
+      <NumberSettingsSection
+        title="Artifactory Xray"
+        description="Concurrency and time limits for scans delegated to Artifactory Xray."
+        fields={XRAY_FIELDS}
+        saved={settings}
+        onSaved={applySaved}
+      />
+    </div>
   );
 }

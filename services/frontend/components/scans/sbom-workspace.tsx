@@ -22,7 +22,7 @@ import {
   Popover,
   Tabs,
   Tooltip,
-  Drawer,
+  DetailSheet,
   Label,
   ListBox,
   SearchField,
@@ -71,7 +71,7 @@ function PackageNode({ data }: NodeProps<Node<PackageNodeData>>) {
       <Handle
         type="target"
         position={Position.Left}
-        className="!border-divider !bg-surface-secondary"
+        className="!border-border !bg-surface-secondary"
       />
       <div className="flex items-start justify-between gap-2">
         <span className="max-w-36 truncate text-sm font-medium">
@@ -85,7 +85,7 @@ function PackageNode({ data }: NodeProps<Node<PackageNodeData>>) {
       <Handle
         type="source"
         position={Position.Right}
-        className="!border-divider !bg-surface-secondary"
+        className="!border-border !bg-surface-secondary"
       />
     </div>
   );
@@ -465,104 +465,152 @@ export function SBOMWorkspace({
               </Popover>
             </div>
             <div>
+              <div className="flex items-end gap-2 border-b border-border p-3 lg:hidden">
+                <Select
+                  aria-label="Sort packages"
+                  value={String(sortDescriptor.column)}
+                  onChange={(column) => setSortDescriptor((current) => ({ ...current, column }))}
+                  className="min-w-0 flex-1"
+                >
+                  <Label>Sort packages</Label>
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="package">Package</ListBox.Item>
+                      <ListBox.Item id="version">Version</ListBox.Item>
+                      <ListBox.Item id="ecosystem">Ecosystem</ListBox.Item>
+                      <ListBox.Item id="dependency_depth">Dependency depth</ListBox.Item>
+                      <ListBox.Item id="vulnerabilities">Findings</ListBox.Item>
+                      <ListBox.Item id="license">License</ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                <Button
+                  variant="secondary"
+                  onPress={() =>
+                    setSortDescriptor((current) => ({
+                      ...current,
+                      direction: current.direction === 'ascending' ? 'descending' : 'ascending',
+                    }))
+                  }
+                >
+                  {sortDescriptor.direction === 'ascending' ? 'Ascending' : 'Descending'}
+                </Button>
+              </div>
               <Table variant="secondary">
-                <Table.ScrollContainer className="rounded-none border-0">
-                  <Table.Content
-                    aria-label="SBOM package inventory"
-                    className="min-w-[1120px] table-fixed [&_td]:px-3 [&_td]:py-3 [&_th]:px-3"
-                    sortDescriptor={sortDescriptor}
-                    onSortChange={setSortDescriptor}
-                  >
-                    <Table.Header>
-                      <Table.Column id="package" allowsSorting isRowHeader className="w-auto">
-                        Package
-                      </Table.Column>
-                      <Table.Column id="version" allowsSorting className="w-[160px]">
-                        Version
-                      </Table.Column>
-                      <Table.Column id="ecosystem" allowsSorting className="w-[112px]">
-                        Type
-                      </Table.Column>
-                      <Table.Column id="dependency_depth" allowsSorting className="w-[144px]">
-                        Relationship
-                      </Table.Column>
-                      <Table.Column id="vulnerabilities" allowsSorting className="w-[160px]">
-                        Vulnerabilities
-                      </Table.Column>
-                      <Table.Column id="license" allowsSorting className="w-[180px]">
-                        License
-                      </Table.Column>
-                    </Table.Header>
-                    <Table.Body
-                      key={loading ? 'loading' : inventoryRows.length === 0 ? 'empty' : 'packages'}
+                <Table.Responsive>
+                  <Table.ScrollContainer className="rounded-none border-0">
+                    <Table.Content
+                      aria-label="SBOM package inventory"
+                      className="min-w-[640px] table-fixed [&_td]:px-3 [&_td]:py-3 [&_td]:[overflow-wrap:anywhere] [&_th]:px-3"
+                      sortDescriptor={sortDescriptor}
+                      onSortChange={setSortDescriptor}
                     >
-                      {loading ? (
-                        <Table.Row id="loading">
-                          <Table.Cell colSpan={6}>
-                            <div className="py-10 text-center text-sm text-muted-foreground">
-                              Loading package evidence…
-                            </div>
-                          </Table.Cell>
-                        </Table.Row>
-                      ) : inventoryRows.length === 0 ? (
-                        <Table.Row id="empty">
-                          <Table.Cell colSpan={6}>
-                            <div className="py-10 text-center text-sm text-muted-foreground">
-                              No packages match these filters.
-                            </div>
-                          </Table.Cell>
-                        </Table.Row>
-                      ) : (
-                        inventoryRows.map(({ component, rowID }) => (
-                          <Table.Row key={rowID} id={rowID} className="hover:bg-surface-secondary">
-                            <Table.Cell className="max-w-0">
-                              <Button
-                                variant="ghost"
-                                className="h-auto w-full min-w-0 justify-start rounded-sm p-0 text-left"
-                                aria-label={`Open ${packageLabel(component)} ${component.version}`}
-                                onPress={() => void openComponent(component)}
-                              >
-                                <span className="min-w-0 w-full">
-                                  <span className="block truncate font-medium">
-                                    {packageLabel(component)}
-                                  </span>
-                                  <span className="block truncate font-mono text-xs text-muted-foreground">
-                                    {component.package_url || component.bom_ref || 'No package URL'}
-                                  </span>
-                                </span>
-                              </Button>
-                            </Table.Cell>
-                            <Table.Cell className="truncate font-mono text-xs">
-                              <span title={component.version}>{component.version || '—'}</span>
-                            </Table.Cell>
-                            <Table.Cell className="truncate">
-                              <StatusTag>{component.ecosystem || component.type}</StatusTag>
-                            </Table.Cell>
-                            <Table.Cell className="truncate">
-                              {component.is_root
-                                ? 'Root'
-                                : component.dependency_depth != null
-                                  ? `Depth ${component.dependency_depth}`
-                                  : 'Unknown'}
-                            </Table.Cell>
-                            <Table.Cell>
-                              <StatusTag
-                                tone={toneFromChipColor(
-                                  (component.vulnerability_count ?? 0) > 0 ? 'danger' : 'default'
-                                )}
-                              >
-                                {component.vulnerability_count ?? 0}
-                              </StatusTag>
-                            </Table.Cell>
-                            <Table.Cell className="truncate">
-                              {component.licenses?.join(', ') || component.license || '—'}
+                      <Table.Header>
+                        <Table.Column id="package" allowsSorting isRowHeader className="w-[28%]">
+                          Package
+                        </Table.Column>
+                        <Table.Column id="version" allowsSorting className="w-[16%]">
+                          Version
+                        </Table.Column>
+                        <Table.Column id="ecosystem" allowsSorting className="w-[10%]">
+                          Type
+                        </Table.Column>
+                        <Table.Column id="dependency_depth" allowsSorting className="w-[14%]">
+                          Relationship
+                        </Table.Column>
+                        <Table.Column id="vulnerabilities" allowsSorting className="w-[16%]">
+                          Vulnerabilities
+                        </Table.Column>
+                        <Table.Column id="license" allowsSorting className="w-[16%]">
+                          License
+                        </Table.Column>
+                      </Table.Header>
+                      <Table.Body
+                        key={
+                          loading ? 'loading' : inventoryRows.length === 0 ? 'empty' : 'packages'
+                        }
+                      >
+                        {loading ? (
+                          <Table.Row id="loading">
+                            <Table.Cell colSpan={6}>
+                              <div className="py-10 text-center text-sm text-muted-foreground">
+                                Loading package evidence…
+                              </div>
                             </Table.Cell>
                           </Table.Row>
-                        ))
-                      )}
-                    </Table.Body>
-                  </Table.Content>
-                </Table.ScrollContainer>
+                        ) : inventoryRows.length === 0 ? (
+                          <Table.Row id="empty">
+                            <Table.Cell colSpan={6}>
+                              <div className="py-10 text-center text-sm text-muted-foreground">
+                                No packages match these filters.
+                              </div>
+                            </Table.Cell>
+                          </Table.Row>
+                        ) : (
+                          inventoryRows.map(({ component, rowID }) => (
+                            <Table.Row
+                              key={rowID}
+                              id={rowID}
+                              className="hover:bg-surface-secondary"
+                            >
+                              <Table.Cell data-label="Package" className="max-w-0">
+                                <Button
+                                  variant="ghost"
+                                  className="h-auto w-full min-w-0 justify-start rounded-sm p-0 text-left"
+                                  aria-label={`Open ${packageLabel(component)} ${component.version}`}
+                                  onPress={() => void openComponent(component)}
+                                >
+                                  <span className="min-w-0 w-full">
+                                    <span className="block truncate font-medium">
+                                      {packageLabel(component)}
+                                    </span>
+                                    <span className="block truncate font-mono text-xs text-muted-foreground">
+                                      {component.package_url ||
+                                        component.bom_ref ||
+                                        'No package URL'}
+                                    </span>
+                                  </span>
+                                </Button>
+                              </Table.Cell>
+                              <Table.Cell
+                                data-label="Version"
+                                className="truncate font-mono text-xs"
+                              >
+                                <span title={component.version}>{component.version || '—'}</span>
+                              </Table.Cell>
+                              <Table.Cell data-label="Ecosystem" className="truncate">
+                                <StatusTag>{component.ecosystem || component.type}</StatusTag>
+                              </Table.Cell>
+                              <Table.Cell data-label="Dependency" className="truncate">
+                                {component.is_root
+                                  ? 'Root'
+                                  : component.dependency_depth != null
+                                    ? `Depth ${component.dependency_depth}`
+                                    : 'Unknown'}
+                              </Table.Cell>
+                              <Table.Cell data-label="Findings">
+                                <StatusTag
+                                  tone={toneFromChipColor(
+                                    (component.vulnerability_count ?? 0) > 0 ? 'danger' : 'default'
+                                  )}
+                                >
+                                  {component.vulnerability_count ?? 0}
+                                </StatusTag>
+                              </Table.Cell>
+                              <Table.Cell data-label="License" className="truncate">
+                                {component.licenses?.join(', ') || component.license || '—'}
+                              </Table.Cell>
+                            </Table.Row>
+                          ))
+                        )}
+                      </Table.Body>
+                    </Table.Content>
+                  </Table.ScrollContainer>
+                </Table.Responsive>
               </Table>
             </div>
           </>
@@ -653,7 +701,7 @@ export function SBOMWorkspace({
                   </ReactFlow>
                 </div>
                 {graph.truncated ? (
-                  <div className="border-t border-divider px-4 py-3 text-sm text-warning-foreground">
+                  <div className="border-t border-border px-4 py-3 text-sm text-warning-foreground">
                     Graph is capped for performance. Open a package from inventory to inspect its
                     immediate neighborhood.
                   </div>
@@ -665,21 +713,21 @@ export function SBOMWorkspace({
       </Card>
 
       {selected ? (
-        <Drawer.Backdrop isOpen={drawer.isOpen} onOpenChange={drawer.setOpen} variant="blur">
-          <Drawer.Content placement="right">
-            <Drawer.Dialog className="flex h-full w-[min(100vw,44rem)] flex-col">
-              <Drawer.Header>
+        <DetailSheet.Backdrop isOpen={drawer.isOpen} onOpenChange={drawer.setOpen} variant="blur">
+          <DetailSheet.Content size="lg">
+            <DetailSheet.Dialog className="min-h-0">
+              <DetailSheet.Header>
                 <div className="min-w-0">
-                  <Drawer.Heading>{packageLabel(selected.component)}</Drawer.Heading>
+                  <DetailSheet.Heading>{packageLabel(selected.component)}</DetailSheet.Heading>
                   <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                     {selected.component.package_url ||
                       selected.component.bom_ref ||
                       'No package URL'}
                   </p>
                 </div>
-                <Drawer.CloseTrigger />
-              </Drawer.Header>
-              <Drawer.Body className="space-y-6">
+                <DetailSheet.CloseTrigger />
+              </DetailSheet.Header>
+              <DetailSheet.Body className="space-y-6">
                 {detailError ? (
                   <Card className="border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground">
                     {detailError}
@@ -735,7 +783,7 @@ export function SBOMWorkspace({
                           {selected.vulnerabilities.map((vulnerability: Vulnerability) => (
                             <div
                               key={vulnerability.id}
-                              className="rounded-xl border border-divider p-3"
+                              className="rounded-xl border border-border p-3"
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <span className="font-mono text-sm">{vulnerability.vuln_id}</span>
@@ -766,10 +814,10 @@ export function SBOMWorkspace({
                     </section>
                   </>
                 )}
-              </Drawer.Body>
-            </Drawer.Dialog>
-          </Drawer.Content>
-        </Drawer.Backdrop>
+              </DetailSheet.Body>
+            </DetailSheet.Dialog>
+          </DetailSheet.Content>
+        </DetailSheet.Backdrop>
       ) : null}
     </div>
   );
@@ -777,7 +825,7 @@ export function SBOMWorkspace({
 
 function Detail({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="rounded-xl border border-divider p-3">
+    <div className="rounded-xl border border-border p-3">
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="mt-1 break-words">{value || '—'}</dd>
     </div>

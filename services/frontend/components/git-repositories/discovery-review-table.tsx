@@ -1,6 +1,7 @@
 'use client';
 
-import { StatusLabel } from '@/components/ui/status-dot';
+import { StatusTag } from '@/components/ui/status-dot';
+import { humanize } from '@/lib/labels';
 import { useState } from 'react';
 import { FileCode2, SearchCheck } from 'lucide-react';
 import {
@@ -10,8 +11,8 @@ import {
   Label,
   ListBox,
   SearchField,
+  ResourceList,
   Select,
-  Table,
 } from '@/components/ui';
 import type { GitRepositoryRunCandidate } from '@/lib/api';
 
@@ -59,7 +60,7 @@ export function DiscoveryReviewTable({
           {pending.length} pending · {handled.length} handled
         </span>
       </div>
-      <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row">
+      <div className="flex flex-col gap-2 border-b border-border p-4 sm:flex-row">
         <SearchField
           aria-label="Search discovery markers"
           value={query}
@@ -138,126 +139,85 @@ export function DiscoveryReviewTable({
           </div>
         </div>
       ) : null}
-      <Table>
-        <Table.ScrollContainer className="rounded-none border-0">
-          <Table.Content
-            aria-label="Discovery markers"
-            className="min-w-[680px] table-fixed [&_td]:px-4 [&_td]:py-2 [&_th]:px-4"
-          >
-            <Table.Header>
-              <Table.Column isRowHeader className="w-auto">
-                Source path
-              </Table.Column>
-              <Table.Column className="w-[160px]">Detection</Table.Column>
-              <Table.Column className="w-32">State</Table.Column>
-              <Table.Column className="w-28">
-                <span className="sr-only">Actions</span>
-              </Table.Column>
-            </Table.Header>
-            <Table.Body>
-              {items.length === 0 ? (
-                <Table.Row id="empty-markers">
-                  <Table.Cell colSpan={4}>
-                    <div className="flex flex-col items-center gap-2 py-12 text-center">
-                      <SearchCheck className="size-6 text-muted-foreground" />
-                      <p className="text-sm font-medium">
-                        {query
-                          ? 'No matching markers'
-                          : view === 'pending'
-                            ? 'Nothing needs a decision'
-                            : 'No resolved or ignored markers'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {query
-                          ? 'Try another path or detected type.'
-                          : 'Discovery decisions appear here after a dry run.'}
-                      </p>
-                      {query ? (
-                        <Button variant="ghost" size="sm" onPress={() => setQuery('')}>
-                          Clear search
-                        </Button>
-                      ) : null}
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ) : (
-                items.map((candidate) => (
-                  <Table.Row
-                    key={candidate.id}
-                    id={candidate.id}
-                    className={
-                      candidate.status === 'unresolved' && selectedIds.has(candidate.id)
-                        ? 'bg-muted/50'
-                        : ''
+      {items.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+          <SearchCheck className="size-6 text-muted-foreground" />
+          <p className="text-sm font-medium">
+            {query
+              ? 'No matching markers'
+              : view === 'pending'
+                ? 'Nothing needs a decision'
+                : 'No resolved or ignored markers'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {query
+              ? 'Try another path or detected type.'
+              : 'Discovery decisions appear here after a dry run.'}
+          </p>
+          {query ? (
+            <Button variant="ghost" size="sm" onPress={() => setQuery('')}>
+              Clear search
+            </Button>
+          ) : null}
+        </div>
+      ) : (
+        <ResourceList bordered={false} aria-label="Discovery markers">
+          {items.map((candidate) => {
+            const unresolved = candidate.status === 'unresolved';
+            return (
+              <ResourceList.Item
+                key={candidate.id}
+                selected={unresolved && selectedIds.has(candidate.id)}
+                media={
+                  unresolved ? (
+                    <Checkbox
+                      aria-label={`Select ${candidate.path}`}
+                      isSelected={selectedIds.has(candidate.id)}
+                      isDisabled={busy}
+                      onChange={(selected) => onSelect(candidate.id, selected)}
+                    >
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                    </Checkbox>
+                  ) : (
+                    <FileCode2 className="size-4 text-muted-foreground" />
+                  )
+                }
+                title={candidate.path}
+                description={`${humanize(candidate.detected_type)} · ${humanize(
+                  candidate.confidence
+                ).toLowerCase()} confidence`}
+                meta={
+                  <StatusTag
+                    tone={
+                      unresolved
+                        ? 'warning'
+                        : candidate.status === 'ignored'
+                          ? 'neutral'
+                          : 'success'
                     }
                   >
-                    <Table.Cell>
-                      {candidate.status === 'unresolved' ? (
-                        <Checkbox
-                          isSelected={selectedIds.has(candidate.id)}
-                          isDisabled={busy}
-                          onChange={(selected) => onSelect(candidate.id, selected)}
-                          className="min-h-10 w-full min-w-0 py-1"
-                        >
-                          <Checkbox.Control>
-                            <Checkbox.Indicator />
-                          </Checkbox.Control>
-                          <span className="min-w-0 whitespace-normal break-all font-mono text-xs">
-                            {candidate.path}
-                          </span>
-                        </Checkbox>
-                      ) : (
-                        <div className="flex min-w-0 items-center gap-2 py-2">
-                          <FileCode2 className="size-4 shrink-0 text-muted-foreground" />
-                          <code className="whitespace-normal break-all text-xs">
-                            {candidate.path}
-                          </code>
-                        </div>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <p className="whitespace-normal text-xs">
-                        {candidate.detected_type.replaceAll('_', ' ')}
-                      </p>
-                      <p className="mt-1 whitespace-normal text-xs text-muted-foreground">
-                        {candidate.confidence} confidence
-                      </p>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <StatusLabel
-                        tone={
-                          candidate.status === 'unresolved'
-                            ? 'warning'
-                            : candidate.status === 'ignored'
-                              ? 'neutral'
-                              : 'success'
-                        }
-                        label={
-                          candidate.status === 'unresolved'
-                            ? 'Needs review'
-                            : candidate.status.replaceAll('_', ' ')
-                        }
-                      />
-                    </Table.Cell>
-                    <Table.Cell>
-                      {candidate.status === 'unresolved' ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          isDisabled={busy}
-                          onPress={() => onReview(candidate)}
-                        >
-                          Resolve
-                        </Button>
-                      ) : null}
-                    </Table.Cell>
-                  </Table.Row>
-                ))
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
+                    {unresolved ? 'Needs review' : humanize(candidate.status)}
+                  </StatusTag>
+                }
+                actions={
+                  unresolved ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      isDisabled={busy}
+                      onPress={() => onReview(candidate)}
+                    >
+                      Resolve
+                    </Button>
+                  ) : null
+                }
+              />
+            );
+          })}
+        </ResourceList>
+      )}
       <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
         {items.length} {view === 'pending' ? 'pending' : 'handled'} markers shown
         {view === 'pending' && selectedCount > selectedVisible

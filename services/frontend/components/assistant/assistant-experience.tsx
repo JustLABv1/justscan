@@ -361,6 +361,7 @@ export function AssistantExperience({
       await refreshConversations(conversation?.id === id ? undefined : conversation?.id);
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete conversation');
+      throw error;
     }
   }
 
@@ -589,7 +590,7 @@ export function AssistantExperience({
           {sending ? 'Working...' : 'Send'}
         </Button>
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-divider pt-3">
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
         <div className="flex min-w-0 items-center gap-2">
           <Button isIconOnly size="sm" variant="ghost" onPress={startNewConversation}>
             <PlusSignIcon size={14} />
@@ -679,49 +680,30 @@ export function AssistantExperience({
       <div className="flex h-full min-h-0 w-full flex-1 gap-4 overflow-hidden">
         <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
           <AlertDialog
-            isOpen={Boolean(conversationPendingDelete)}
-            onOpenChange={(isOpen) => {
-              if (!isOpen) {
-                setConversationPendingDelete(null);
-              }
+            open={Boolean(conversationPendingDelete)}
+            onOpenChange={(open) => {
+              if (!open) setConversationPendingDelete(null);
             }}
           >
-            <AlertDialog.Backdrop variant="blur">
-              <AlertDialog.Container placement="center">
-                <AlertDialog.Dialog className="sm:max-w-[420px]">
-                  <AlertDialog.CloseTrigger />
-                  <AlertDialog.Header>
-                    <AlertDialog.Icon status="danger" />
-                    <AlertDialog.Heading>Delete conversation?</AlertDialog.Heading>
-                  </AlertDialog.Header>
-                  <AlertDialog.Body>
-                    <p className="text-sm leading-6 text-muted-foreground dark:text-foreground">
-                      This removes{' '}
-                      <strong>{conversationPendingDelete?.title ?? 'this conversation'}</strong> and
-                      its message history from this scope.
-                    </p>
-                  </AlertDialog.Body>
-                  <AlertDialog.Footer>
-                    <Button slot="close" variant="tertiary">
-                      Cancel
-                    </Button>
-                    <Button
-                      onPress={() => {
-                        if (!conversationPendingDelete) {
-                          return;
-                        }
-                        void handleDeleteConversation(conversationPendingDelete.id);
-                        setConversationPendingDelete(null);
-                      }}
-                      slot="close"
-                      variant="danger"
-                    >
-                      Delete
-                    </Button>
-                  </AlertDialog.Footer>
-                </AlertDialog.Dialog>
-              </AlertDialog.Container>
-            </AlertDialog.Backdrop>
+            <AlertDialog.Content tone="destructive" size="sm">
+              <AlertDialog.Title>Delete conversation?</AlertDialog.Title>
+              <AlertDialog.Description>
+                This removes{' '}
+                <strong>{conversationPendingDelete?.title ?? 'this conversation'}</strong> and its
+                message history from this scope.
+              </AlertDialog.Description>
+              <AlertDialog.Footer>
+                <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+                <AlertDialog.Action
+                  onClick={async () => {
+                    if (!conversationPendingDelete) return;
+                    await handleDeleteConversation(conversationPendingDelete.id);
+                  }}
+                >
+                  Delete
+                </AlertDialog.Action>
+              </AlertDialog.Footer>
+            </AlertDialog.Content>
           </AlertDialog>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -754,9 +736,7 @@ export function AssistantExperience({
                         <Avatar className="mb-6 size-14" color="accent" variant="soft">
                           <Avatar.Fallback>AI</Avatar.Fallback>
                         </Avatar>
-                        <p className="text-sm font-medium tracking-[0.08em] text-muted-foreground">
-                          {greetingLabel}
-                        </p>
+                        <p className="text-sm font-medium text-muted-foreground">{greetingLabel}</p>
                         <h2 className="mt-4 max-w-3xl text-balance text-4xl font-semibold tracking-tight md:text-5xl">
                           {hasMeaningfulContext
                             ? `How can I help with ${scopeLabel}?`
@@ -1025,10 +1005,7 @@ function renderMessageContent(content: string) {
     .map((block, index) => {
       if (/^#{1,6}\s+/.test(block)) {
         return (
-          <p
-            className="text-base font-semibold text-foreground"
-            key={`${block}-${index}`}
-          >
+          <p className="text-base font-semibold text-foreground" key={`${block}-${index}`}>
             {renderInlineMarkdown(block.replace(/^#{1,6}\s+/, ''))}
           </p>
         );
@@ -1070,17 +1047,14 @@ function renderInlineMarkdown(value: string): ReactNode[] {
 
     if (match[2]) {
       result.push(
-        <strong
-          className="font-semibold text-foreground"
-          key={`${fullMatch}-${start}`}
-        >
+        <strong className="font-semibold text-foreground" key={`${fullMatch}-${start}`}>
           {match[2]}
         </strong>
       );
     } else if (match[3]) {
       result.push(
         <code
-          className="rounded bg-background/5 px-1.5 py-0.5 font-mono text-[0.95em] text-foreground dark:bg-white/10 dark:text-foreground"
+          className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground"
           key={`${fullMatch}-${start}`}
         >
           {match[3]}
@@ -1105,11 +1079,7 @@ function renderInlineMarkdown(value: string): ReactNode[] {
 function renderLinkNode(href: string, label: string, key: string) {
   if (/^\/[a-z0-9?=/_-]+$/i.test(href)) {
     return (
-      <Link
-        className="text-primary hover:text-primary dark:text-primary dark:hover:text-primary"
-        href={href}
-        key={key}
-      >
+      <Link className="text-primary underline-offset-4 hover:underline" href={href} key={key}>
         {label}
       </Link>
     );
@@ -1117,7 +1087,7 @@ function renderLinkNode(href: string, label: string, key: string) {
   if (/^https?:\/\//i.test(href)) {
     return (
       <a
-        className="text-primary hover:text-primary dark:text-primary dark:hover:text-primary"
+        className="text-primary underline-offset-4 hover:underline"
         href={href}
         key={key}
         rel="noreferrer"

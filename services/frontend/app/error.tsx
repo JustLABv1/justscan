@@ -3,6 +3,7 @@
 import { RouteErrorState } from '@/components/route-state';
 
 export default function Error({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -10,9 +11,12 @@ export default function Error({
 }) {
   return (
     <RouteErrorState
-      title="Page failed to load"
-      message="JustScan could not finish rendering this page. Retry the route or return to the dashboard."
+      title="This page didn’t load"
+      message="Something went wrong while loading this page. Try again, or go back to the home page."
+      error={error}
       onRetry={reset}
+      homeHref="/"
+      homeLabel="Go home"
     />
   );
 }

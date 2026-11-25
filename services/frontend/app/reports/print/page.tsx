@@ -1,7 +1,7 @@
 'use client';
 import {
   Button,
-  Drawer,
+  DetailSheet,
   Label,
   NumberField,
   SearchField,
@@ -9,7 +9,8 @@ import {
   useOverlayState,
 } from '@/components/ui';
 import { getToken, req, type ApiRequestOptions, subscribeToAuth } from '@/lib/api';
-import Image from 'next/image';
+import { humanize, labelFor, SCAN_PROVIDER_LABELS } from '@/lib/labels';
+import { PrintReportBrand, PrintReportFooter } from '@/components/public/print-report-chrome';
 import { useSearchParams } from 'next/navigation';
 import {
   Fragment,
@@ -275,28 +276,6 @@ function SevBadge({ s }: { s: string }) {
   );
 }
 
-function BrandMark({ size = 34 }: { size?: number }) {
-  const imageSize = Math.round(size * 1.55);
-  return (
-    <span
-      className="report-brand-mark"
-      style={{
-        height: size,
-        width: size,
-      }}
-    >
-      <Image
-        src="/justscan-logo.png"
-        alt="JustScan logo"
-        width={imageSize}
-        height={imageSize}
-        style={{ filter: 'invert(1)', height: imageSize, maxWidth: 'none', width: imageSize }}
-        priority={size > 20}
-      />
-    </span>
-  );
-}
-
 function worstSeverity(scan: Scan): string {
   if (scan.critical_count > 0) return 'CRITICAL';
   if (scan.high_count > 0) return 'HIGH';
@@ -329,7 +308,7 @@ function statusChipColors(status: string): { background: string; color: string; 
 }
 
 function formatStatusLabel(status: string): string {
-  return status.replace(/_/g, ' ').toUpperCase();
+  return humanize(status);
 }
 
 function normalizeVulnId(value?: string | null): string {
@@ -680,7 +659,9 @@ function ReportFilterControls({
         </NumberField.Group>
       </NumberField>
 
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Severity</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Severity
+      </p>
       {SEVS.map((s) => (
         <label
           key={s}
@@ -724,9 +705,7 @@ function ReportFilterControls({
               >
                 {({ isSelected }) => (
                   <>
-                    <Switch.Control
-                      className={`shrink-0 ${isSelected ? 'bg-info' : 'bg-muted'}`}
-                    >
+                    <Switch.Control className={`shrink-0 ${isSelected ? 'bg-info' : 'bg-muted'}`}>
                       <Switch.Thumb className="bg-white" />
                     </Switch.Control>
                     <Switch.Content className="min-w-0">
@@ -740,11 +719,7 @@ function ReportFilterControls({
         </div>
       ))}
 
-      <Button
-        className="mt-5 w-full "
-        variant="primary"
-        onPress={() => window.print()}
-      >
+      <Button className="mt-5 w-full " variant="primary" onPress={() => window.print()}>
         Save as PDF
       </Button>
     </div>
@@ -753,6 +728,18 @@ function ReportFilterControls({
 
 function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => void }) {
   const drawer = useOverlayState();
+  const closeDrawer = drawer.close;
+
+  useEffect(() => {
+    if (!drawer.isOpen) return;
+    const desktop = window.matchMedia('(min-width: 1280px)');
+    const closeOnDesktop = () => {
+      if (desktop.matches) closeDrawer();
+    };
+    closeOnDesktop();
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => desktop.removeEventListener('change', closeOnDesktop);
+  }, [drawer.isOpen, closeDrawer]);
 
   return (
     <>
@@ -766,34 +753,31 @@ function FilterPanel({ f, onChange }: { f: Filters; onChange: (f: Filters) => vo
         </Button>
       </div>
 
-      <Drawer.Backdrop
+      <DetailSheet.Backdrop
         className="report-filter-drawer print:hidden"
         isOpen={drawer.isOpen}
         onOpenChange={drawer.setOpen}
         variant="blur"
       >
-        <Drawer.Content placement="right">
-          <Drawer.Dialog
-            aria-label="Report filters"
-            className="flex h-full w-[min(92vw,22rem)] flex-col bg-white"
-          >
-            <Drawer.Header className="flex items-center justify-between border-b border-border px-5 py-4">
+        <DetailSheet.Content size="sm">
+          <DetailSheet.Dialog aria-label="Report filters" className="min-h-0">
+            <DetailSheet.Header>
               <div>
-                <Drawer.Heading className="font-semibold text-foreground">
+                <DetailSheet.Heading className="font-semibold text-foreground">
                   Report filters
-                </Drawer.Heading>
+                </DetailSheet.Heading>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Changes apply immediately to the printable report.
                 </p>
               </div>
-              <Drawer.CloseTrigger className="text-muted-foreground hover:text-foreground" />
-            </Drawer.Header>
-            <Drawer.Body className="flex-1 px-5 py-4">
+              <DetailSheet.CloseTrigger className="text-muted-foreground hover:text-foreground" />
+            </DetailSheet.Header>
+            <DetailSheet.Body>
               <ReportFilterControls f={f} onChange={onChange} showHeading={false} />
-            </Drawer.Body>
-          </Drawer.Dialog>
-        </Drawer.Content>
-      </Drawer.Backdrop>
+            </DetailSheet.Body>
+          </DetailSheet.Dialog>
+        </DetailSheet.Content>
+      </DetailSheet.Backdrop>
     </>
   );
 }
@@ -813,7 +797,7 @@ function ReportVulnerabilitySection({
           fontWeight: 700,
           color: '#111827',
           marginBottom: 10,
-          textTransform: 'uppercase',
+          textTransform: 'none',
           letterSpacing: '0.05em',
           borderBottom: '2px solid var(--primary)',
           paddingBottom: 6,
@@ -840,16 +824,15 @@ function ReportVulnerabilitySection({
             }}
           >
             <colgroup>
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '27%' }} />
-              <col style={{ width: '18%' }} />
-              <col style={{ width: '18%' }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '28%' }} />
+              <col style={{ width: '32%' }} />
               <col style={{ width: '14%' }} />
               <col style={{ width: '9%' }} />
             </colgroup>
             <thead>
               <tr style={{ background: '#f9fafb' }}>
-                {['CVE ID', 'Package', 'Installed', 'Fixed In', 'Severity', 'CVSS'].map((h) => (
+                {['CVE ID', 'Package', 'Version', 'Severity', 'CVSS'].map((h) => (
                   <th
                     key={h}
                     style={{
@@ -859,7 +842,7 @@ function ReportVulnerabilitySection({
                       fontWeight: 600,
                       color: '#374151',
                       fontSize: 12,
-                      textTransform: 'uppercase',
+                      textTransform: 'none',
                       letterSpacing: '0.04em',
                     }}
                   >
@@ -908,34 +891,35 @@ function ReportVulnerabilitySection({
                         style={{
                           padding: '6px 8px',
                           border: '1px solid #e5e7eb',
-                          fontFamily: 'monospace',
                           fontSize: 12,
-                          color: '#6b7280',
                           overflowWrap: 'anywhere',
                         }}
                       >
                         {finding.packages.map((item) => (
-                          <div key={`${item.name}-${item.installedVersion}`}>
-                            {item.installedVersion || '-'}
-                          </div>
-                        ))}
-                      </td>
-                      <td
-                        style={{
-                          padding: '6px 8px',
-                          border: '1px solid #e5e7eb',
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                          color: '#15803d',
-                          fontWeight: finding.packages.some((item) => item.fixedVersion)
-                            ? 600
-                            : 400,
-                          overflowWrap: 'anywhere',
-                        }}
-                      >
-                        {finding.packages.map((item) => (
-                          <div key={`${item.name}-${item.fixedVersion}`}>
-                            {item.fixedVersion || '-'}
+                          <div
+                            key={`${item.name}-${item.installedVersion}-${item.fixedVersion}`}
+                            style={{ marginBottom: finding.packages.length > 1 ? 6 : 0 }}
+                          >
+                            {finding.packages.length > 1 && (
+                              <div style={{ fontWeight: 600 }}>{item.name || 'Package'}</div>
+                            )}
+                            <div style={{ color: '#6b7280' }}>
+                              Installed:{' '}
+                              <span style={{ fontFamily: 'monospace' }}>
+                                {item.installedVersion || '—'}
+                              </span>
+                            </div>
+                            <div style={{ color: item.fixedVersion ? '#15803d' : '#6b7280' }}>
+                              Fixed in:{' '}
+                              <span
+                                style={{
+                                  fontFamily: 'monospace',
+                                  fontWeight: item.fixedVersion ? 600 : 400,
+                                }}
+                              >
+                                {item.fixedVersion || 'No fix reported'}
+                              </span>
+                            </div>
                           </div>
                         ))}
                       </td>
@@ -967,7 +951,7 @@ function ReportVulnerabilitySection({
                       filters.showPolicyDetails ||
                       finding.affectedImages.length > 0) && (
                       <tr style={{ background: detailBackground }}>
-                        <td colSpan={6} className="report-detail-cell">
+                        <td colSpan={5} className="report-detail-cell">
                           <div style={{ marginBottom: 5 }}>
                             <strong style={{ color: '#111827' }}>Affected images:</strong>{' '}
                             {finding.affectedImages.join(' · ')}
@@ -1051,7 +1035,7 @@ function ReportVulnerabilitySection({
                                         fontSize: '12px',
                                         fontWeight: 700,
                                         color: '#92400e',
-                                        textTransform: 'uppercase',
+                                        textTransform: 'none',
                                         letterSpacing: '0.06em',
                                       }}
                                     >
@@ -1244,19 +1228,6 @@ function ScanSection({
           >
             {imageRef}
           </p>
-          {scan.image_digest && (
-            <p
-              style={{
-                fontFamily: 'monospace',
-                fontSize: 12,
-                color: '#9ca3af',
-                margin: '0 0 6px',
-                wordBreak: 'break-all',
-              }}
-            >
-              {scan.image_digest}
-            </p>
-          )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {scan.critical_count > 0 && (
               <span
@@ -1270,7 +1241,7 @@ function ScanSection({
                   border: '1px solid #fca5a5',
                 }}
               >
-                C: {scan.critical_count}
+                Critical: {scan.critical_count}
               </span>
             )}
             {scan.high_count > 0 && (
@@ -1285,7 +1256,7 @@ function ScanSection({
                   border: '1px solid #fed7aa',
                 }}
               >
-                H: {scan.high_count}
+                High: {scan.high_count}
               </span>
             )}
             {scan.medium_count > 0 && (
@@ -1300,7 +1271,7 @@ function ScanSection({
                   border: '1px solid #fde68a',
                 }}
               >
-                M: {scan.medium_count}
+                Medium: {scan.medium_count}
               </span>
             )}
             {scan.low_count > 0 && (
@@ -1315,7 +1286,7 @@ function ScanSection({
                   border: '1px solid #bfdbfe',
                 }}
               >
-                L: {scan.low_count}
+                Low: {scan.low_count}
               </span>
             )}
           </div>
@@ -1365,6 +1336,9 @@ function ScanSection({
           <tbody>
             {(
               [
+                ...(scan.image_digest
+                  ? [['Digest', scan.image_digest, true] as [string, string, boolean]]
+                  : []),
                 ...(filters.showScanId
                   ? [['Scan ID', scan.id, true] as [string, string, boolean]]
                   : []),
@@ -1410,7 +1384,7 @@ function ScanSection({
                   [
                     'Provider / Source',
                     [
-                      scan.scan_provider === 'artifactory_xray' ? 'Artifactory Xray' : 'Trivy',
+                      labelFor(SCAN_PROVIDER_LABELS, scan.scan_provider || 'trivy'),
                       scan.scan_source === 'uploaded_archive'
                         ? 'Uploaded archive'
                         : filters.hideRegistryData
@@ -1585,7 +1559,8 @@ function ScanSection({
           <strong style={{ color: '#111827' }}>Policy summary</strong>
           {scan.compliance_summary && (
             <p style={{ margin: '4px 0 0', color: '#374151' }}>
-              Organization policies: {scan.compliance_summary.status.toUpperCase()} ·{' '}
+              Organization policies:{' '}
+              {scan.compliance_summary.status === 'pass' ? 'Passed' : 'Failed'} ·{' '}
               {scan.compliance_summary.pass_count} passed · {scan.compliance_summary.fail_count}{' '}
               failed
               {scan.compliance_summary.failed_policy_names?.length
@@ -1624,7 +1599,7 @@ function ScanSection({
             fontWeight: 700,
             color: '#374151',
             marginBottom: 8,
-            textTransform: 'uppercase',
+            textTransform: 'none',
             letterSpacing: '0.05em',
           }}
         >
@@ -1665,13 +1640,14 @@ function ScanSection({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr auto',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) auto',
             gap: 6,
             alignItems: 'center',
           }}
         >
           <input
             aria-label="Custom field label"
+            className="min-w-0 w-full"
             type="text"
             value={newCustomField.label}
             onChange={(e) => setNewCustomField((f) => ({ ...f, label: e.target.value }))}
@@ -1686,6 +1662,7 @@ function ScanSection({
           />
           <input
             aria-label="Custom field value"
+            className="min-w-0 w-full"
             type="text"
             value={newCustomField.value}
             onChange={(e) => setNewCustomField((f) => ({ ...f, value: e.target.value }))}
@@ -1732,7 +1709,7 @@ function ScanSection({
               fontWeight: 700,
               color: '#111827',
               marginBottom: 10,
-              textTransform: 'uppercase',
+              textTransform: 'none',
               letterSpacing: '0.05em',
               borderBottom: '2px solid var(--primary)',
               paddingBottom: 6,
@@ -1841,7 +1818,7 @@ function ScanSection({
                       fontSize: 12,
                       fontWeight: 700,
                       color: '#5b21b6',
-                      textTransform: 'uppercase',
+                      textTransform: 'none',
                       letterSpacing: '0.06em',
                     }}
                   >
@@ -2115,11 +2092,11 @@ function ScanSection({
                       </td>
                       <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>
                         {v.suppression
-                          ? (statusLabel[v.suppression.status] ?? v.suppression.status)
+                          ? (statusLabel[v.suppression.status] ?? humanize(v.suppression.status))
                           : '-'}
                       </td>
                       <td style={{ padding: '4px 8px', border: '1px solid #e5e7eb' }}>
-                        {v.suppression?.source ?? 'local'}
+                        {humanize(v.suppression?.source ?? 'local')}
                       </td>
                       <td
                         style={{
@@ -2178,7 +2155,7 @@ function PrintReport() {
     showComments: true,
     showDescription: true,
     showReferences: true,
-    showScanId: true,
+    showScanId: false,
     showStarted: true,
     showCompleted: true,
     showTrivyVersion: true,
@@ -2333,13 +2310,14 @@ function PrintReport() {
             word-break: break-word;
           }
           .report-table-scroll { overflow: visible; }
+          thead { display: table-header-group; }
+          tr { break-inside: avoid; page-break-inside: avoid; }
         }
         * { box-sizing: border-box; }
         html, body, #__next { margin: 0; padding: 0; min-height: 100%; background: #fff !important; color: #111827; color-scheme: light; }
         body { font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); }
-        .report-brand-mark { align-items: center; display: inline-flex; flex-shrink: 0; justify-content: center; overflow: hidden; }
         .report-detail-cell { padding: 5px 10px 8px; border: 1px solid #e5e7eb; border-top: none; color: #4b5563; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word; }
-        .report-workspace { margin: 0 auto; max-width: 178mm; padding: 24px 16px 32px; }
+        .report-workspace { --primary: #374151; --primary-foreground: #ffffff; margin: 0 auto; max-width: 178mm; padding: 24px 16px 32px; }
         .report-document { width: 100%; }
         .report-table-scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .report-filter-panel { display: none; }
@@ -2371,36 +2349,7 @@ function PrintReport() {
               }}
             >
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
-                  <BrandMark />
-                  <div>
-                    <p
-                      style={{
-                        margin: 0,
-                        color: '#111827',
-                        fontSize: 16,
-                        fontWeight: 800,
-                        letterSpacing: '-0.02em',
-                      }}
-                    >
-                      JustScan
-                    </p>
-                    <a
-                      href="https://justlab.app/en/justscan"
-                      style={{
-                        display: 'block',
-                        marginTop: 1,
-                        color: '#6b7280',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        letterSpacing: '0.02em',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      justlab.app/en/justscan
-                    </a>
-                  </div>
-                </div>
+                <PrintReportBrand />
                 <div style={{ borderLeft: '5px solid var(--primary)', paddingLeft: 16 }}>
                   <h1
                     style={{
@@ -2492,7 +2441,7 @@ function PrintReport() {
                     fontWeight: 700,
                     color: '#111827',
                     marginBottom: 10,
-                    textTransform: 'uppercase',
+                    textTransform: 'none',
                     letterSpacing: '0.05em',
                     borderBottom: '2px solid var(--primary)',
                     paddingBottom: 6,
@@ -2510,6 +2459,11 @@ function PrintReport() {
                       tableLayout: 'fixed',
                     }}
                   >
+                    <colgroup>
+                      {[34, 22, 11, 11, 11, 11].map((width, index) => (
+                        <col key={index} style={{ width: `${width}%` }} />
+                      ))}
+                    </colgroup>
                     <thead>
                       <tr style={{ background: '#f9fafb' }}>
                         {['Image', 'Status', 'Critical', 'High', 'Medium', 'Low'].map((h) => (
@@ -2522,7 +2476,7 @@ function PrintReport() {
                               fontWeight: 600,
                               color: '#374151',
                               fontSize: 12,
-                              textTransform: 'uppercase',
+                              textTransform: 'none',
                               letterSpacing: '0.04em',
                             }}
                           >
@@ -2622,33 +2576,11 @@ function PrintReport() {
             ))}
 
             {/* Footer */}
-            <div
-              style={{
-                borderTop: '1px solid #e5e7eb',
-                paddingTop: 12,
-                marginTop: 8,
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: 12,
-                color: '#9ca3af',
-              }}
-            >
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  color: '#6b7280',
-                  fontWeight: 600,
-                }}
-              >
-                <BrandMark size={18} />
-                JustScan Security Report · https://justlab.app/en/justscan
-              </span>
+            <PrintReportFooter>
               <span style={{ maxWidth: '65%', textAlign: 'right', overflowWrap: 'anywhere' }}>
                 {data.map((d) => `${d.scan.image_name}:${d.scan.image_tag}`).join(', ')}
               </span>
-            </div>
+            </PrintReportFooter>
           </div>
           <FilterPanel f={filters} onChange={setFilters} />
         </div>

@@ -6,11 +6,11 @@ import {
   Description,
   Label,
   ListBox,
-  Modal,
+  DetailSheet,
   Select,
   SearchField,
+  ResourceList,
   Switch,
-  Table,
   TextArea,
   useOverlayState,
 } from '@/components/ui';
@@ -21,7 +21,6 @@ import {
   PlayIcon,
   PlusSignIcon,
 } from 'hugeicons-react';
-import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useConfirmDialog } from '@/components/confirm-dialog';
@@ -47,7 +46,12 @@ import {
   type Registry,
 } from '@/lib/api';
 import { deferEffect } from '@/lib/defer-effect';
+import { cronToHuman } from '@/lib/cron';
 import { fullDate, timeAgo } from '@/lib/time';
+import {
+  DISCOVERY_MODE_LABELS,
+  repositoryDisplayName,
+} from '@/components/git-repositories/repository-name';
 
 type Draft = Required<
   Pick<
@@ -376,7 +380,7 @@ export default function GitRepositoriesPage() {
         retry={() => void load()}
       >
         <Card className="overflow-hidden gap-0 py-0">
-          <div className="space-y-3 border-b border-border p-3">
+          <div className="space-y-3 border-b border-border p-4">
             <FilterChips
               label="Repository schedule filter"
               items={scheduleSegments.map((segment) => ({
@@ -403,169 +407,140 @@ export default function GitRepositoriesPage() {
               </SearchField.Group>
             </SearchField>
           </div>
-          <Table>
-            <Table.ScrollContainer className="rounded-none border-0">
-              <Table.Content
-                aria-label="Git repositories"
-                className="min-w-[960px] table-fixed [&_td]:px-4 [&_td]:py-3 [&_th]:px-4"
-              >
-                <Table.Header>
-                  <Table.Column isRowHeader className="w-auto">
-                    Repository
-                  </Table.Column>
-                  <Table.Column className="w-[160px]">Ref / discovery</Table.Column>
-                  <Table.Column className="w-[200px]">Schedule</Table.Column>
-                  <Table.Column className="w-[144px]">Last run</Table.Column>
-                  <Table.Column className="w-16">
-                    <span className="sr-only">Actions</span>
-                  </Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {visibleRepositories.length === 0 ? (
-                    <Table.Row id="no-matches">
-                      <Table.Cell colSpan={5}>
-                        <div className="space-y-2 py-12 text-center">
-                          <p className="text-sm font-medium">No matching repositories</p>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onPress={() => {
-                              setQuery('');
-                              setScheduleFilter('all');
-                            }}
-                          >
-                            Clear filters
-                          </Button>
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ) : null}
-                  {visibleRepositories.map((repository) => (
-                    <Table.Row key={repository.id} id={repository.id}>
-                      <Table.Cell>
-                        <div className="space-y-1">
-                          <Link
-                            className="block truncate rounded-sm font-medium text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-                            href={`/git-repositories/${repository.id}`}
-                          >
-                            {repository.name}
-                          </Link>
-                          <p className="truncate font-mono text-xs text-muted-foreground">
-                            {repository.clone_url}
-                          </p>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <code className="block truncate text-sm" title={repository.ref}>
+          {visibleRepositories.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                icon={<GitBranchIcon />}
+                title="No matching repositories"
+                description="Try a different search or clear the schedule filter."
+                action={{
+                  label: 'Clear filters',
+                  onClick: () => {
+                    setQuery('');
+                    setScheduleFilter('all');
+                  },
+                }}
+              />
+            </div>
+          ) : (
+            <ResourceList bordered={false} aria-label="Git repositories">
+              {visibleRepositories.map((repository) => (
+                <ResourceList.Item
+                  key={repository.id}
+                  media={<GitBranchIcon size={18} className="text-muted-foreground" />}
+                  href={`/git-repositories/${repository.id}`}
+                  title={repositoryDisplayName(repository)}
+                  titleTooltip={repository.clone_url}
+                  description={<span title={repository.clone_url}>{repository.clone_url}</span>}
+                  meta={
+                    <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-start sm:gap-4">
+                      <div className="min-w-0 space-y-0.5 lg:w-40">
+                        <p
+                          className="truncate font-mono text-sm text-foreground"
+                          title={repository.ref}
+                        >
                           {repository.ref}
-                        </code>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {
-                            {
-                              auto: 'Automatic',
-                              kustomize: 'Kustomize',
-                              manifests: 'Manifests',
-                              registry: 'Registry references',
-                              gitlab_ci: 'GitLab CI',
-                            }[repository.discovery_mode]
-                          }
                         </p>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <StatusLabel
-                          tone={repository.enabled ? 'success' : 'neutral'}
-                          label={repository.enabled ? 'Scheduled' : 'Manual'}
-                          detail={
-                            repository.enabled ? (
-                              <span className="font-mono">
-                                {repository.schedule} · {repository.timezone}
-                              </span>
-                            ) : (
-                              'On demand'
-                            )
-                          }
-                        />
-                      </Table.Cell>
-                      <Table.Cell>
+                        <p className="text-xs text-muted-foreground">
+                          {DISCOVERY_MODE_LABELS[repository.discovery_mode] ??
+                            repository.discovery_mode}
+                        </p>
+                      </div>
+                      <StatusLabel
+                        className="min-w-0 lg:w-48"
+                        tone={repository.enabled ? 'success' : 'neutral'}
+                        label={repository.enabled ? 'Scheduled' : 'Manual only'}
+                        title={
+                          repository.enabled
+                            ? `${repository.schedule} (${repository.timezone || 'UTC'})`
+                            : undefined
+                        }
+                        detail={
+                          repository.enabled
+                            ? cronToHuman(repository.schedule, {
+                                timezone: repository.timezone,
+                              })
+                            : 'Runs on demand'
+                        }
+                      />
+                      <div className="min-w-0 lg:w-32">
                         {repository.last_run_at ? (
-                          <span
-                            className="text-sm text-muted-foreground"
+                          <StatusLabel
+                            tone="neutral"
+                            label="Last run"
                             title={fullDate(repository.last_run_at)}
-                          >
-                            {timeAgo(repository.last_run_at)}
-                          </span>
+                            detail={timeAgo(repository.last_run_at)}
+                          />
                         ) : (
-                          <StatusLabel tone="warning" label="Not run yet" />
+                          <StatusLabel tone="warning" label="Never run" />
                         )}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <RowActionsMenu
-                          label={`Actions for ${repository.name}`}
-                          items={[
-                            {
-                              id: 'run',
-                              label: 'Run scan',
-                              icon: <PlayIcon size={15} />,
-                              pending: pendingAction === `run:${repository.id}:changed`,
-                              disabled:
-                                pendingAction !== null &&
-                                pendingAction !== `run:${repository.id}:changed`,
-                              onAction: () => void run(repository),
-                            },
-                            {
-                              id: 'full',
-                              label: 'Full rescan',
-                              icon: <PlayIcon size={15} />,
-                              pending: pendingAction === `run:${repository.id}:all`,
-                              disabled:
-                                pendingAction !== null &&
-                                pendingAction !== `run:${repository.id}:all`,
-                              onAction: () => void run(repository, 'all'),
-                            },
-                            {
-                              id: 'edit',
-                              label: 'Edit settings',
-                              icon: <PencilEdit01Icon size={15} />,
-                              onAction: () => edit(repository),
-                            },
-                            {
-                              id: 'delete',
-                              label: 'Delete',
-                              icon: <Delete01Icon size={15} />,
-                              variant: 'danger',
-                              pending: pendingAction === `delete:${repository.id}`,
-                              disabled:
-                                pendingAction !== null &&
-                                pendingAction !== `delete:${repository.id}`,
-                              onAction: () => void remove(repository),
-                            },
-                          ]}
-                        />
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+                      </div>
+                    </div>
+                  }
+                  actions={
+                    <RowActionsMenu
+                      label={`Actions for ${repositoryDisplayName(repository)}`}
+                      items={[
+                        {
+                          id: 'run',
+                          label: 'Run scan',
+                          icon: <PlayIcon size={15} />,
+                          pending: pendingAction === `run:${repository.id}:changed`,
+                          disabled:
+                            pendingAction !== null &&
+                            pendingAction !== `run:${repository.id}:changed`,
+                          onAction: () => void run(repository),
+                        },
+                        {
+                          id: 'full',
+                          label: 'Full rescan',
+                          icon: <PlayIcon size={15} />,
+                          pending: pendingAction === `run:${repository.id}:all`,
+                          disabled:
+                            pendingAction !== null && pendingAction !== `run:${repository.id}:all`,
+                          onAction: () => void run(repository, 'all'),
+                        },
+                        {
+                          id: 'edit',
+                          label: 'Edit settings',
+                          icon: <PencilEdit01Icon size={15} />,
+                          onAction: () => edit(repository),
+                        },
+                        {
+                          id: 'delete',
+                          label: 'Delete',
+                          icon: <Delete01Icon size={15} />,
+                          variant: 'danger',
+                          pending: pendingAction === `delete:${repository.id}`,
+                          disabled:
+                            pendingAction !== null && pendingAction !== `delete:${repository.id}`,
+                          onAction: () => void remove(repository),
+                        },
+                      ]}
+                    />
+                  }
+                />
+              ))}
+            </ResourceList>
+          )}
         </Card>
       </LoadableCollectionState>
       {dialog}
-      <Modal>
-        <Modal.Backdrop
+      <DetailSheet>
+        <DetailSheet.Backdrop
           isDismissable={false}
           isOpen={overlay.isOpen}
           onOpenChange={overlay.setOpen}
         >
-          <Modal.Container size="lg">
-            <Modal.Dialog>
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>
+          <DetailSheet.Container size="lg">
+            <DetailSheet.Dialog>
+              <DetailSheet.CloseTrigger />
+              <DetailSheet.Header>
+                <DetailSheet.Heading>
                   {editingRepository ? 'Edit Git repository' : 'Connect Git repository'}
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="grid gap-4">
+                </DetailSheet.Heading>
+              </DetailSheet.Header>
+              <DetailSheet.Body className="grid gap-4">
                 <FormField
                   label="Name"
                   value={draft.name}
@@ -636,7 +611,7 @@ export default function GitRepositoriesPage() {
                   </Description>
                 </div>
                 {draft.discovery_mode === 'registry' ? (
-                  <div className="grid gap-3 rounded-xl border border-divider/70 bg-surface-secondary p-3">
+                  <div className="grid gap-3 rounded-xl border border-border bg-surface-secondary p-3">
                     <Select
                       aria-label="Registry reference source"
                       className="w-full"
@@ -848,19 +823,19 @@ export default function GitRepositoriesPage() {
                     <Label>Enable scheduled scans</Label>
                   </Switch.Content>
                 </Switch>
-              </Modal.Body>
-              <Modal.Footer>
+              </DetailSheet.Body>
+              <DetailSheet.Footer>
                 <Button slot="close" variant="tertiary">
                   Cancel
                 </Button>
                 <Button isPending={saving} onPress={() => void save()}>
                   {editingRepository ? 'Save changes' : 'Connect repository'}
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </DetailSheet.Footer>
+            </DetailSheet.Dialog>
+          </DetailSheet.Container>
+        </DetailSheet.Backdrop>
+      </DetailSheet>
     </PageContainer>
   );
 }

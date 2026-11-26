@@ -6,6 +6,7 @@ RUN go mod download github.com/aquasecurity/trivy@${TRIVY_VERSION} \
     && chmod -R u+w /src
 WORKDIR /src
 RUN go get github.com/go-jose/go-jose/v4@v4.1.6 oras.land/oras-go/v2@v2.6.4 \
+    github.com/containerd/containerd/v2@v2.4.2 golang.org/x/net@v0.62.0 \
     && CGO_ENABLED=0 go build -trimpath \
     -ldflags="-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=${TRIVY_VERSION#v}" \
     -o /usr/local/bin/trivy ./cmd/trivy

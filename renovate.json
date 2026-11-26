@@ -66,6 +66,19 @@
       "minimumReleaseAge": "2 days"
     },
     {
+      "description": "Keep the Go toolchain in one PR: the go.mod go directive and the golang builder images must move together, or Docker builds fail with 'go.mod requires go >= x'",
+      "matchDatasources": ["golang-version"],
+      "groupName": "go toolchain",
+      "minimumReleaseAge": "2 days"
+    },
+    {
+      "description": "golang builder images in Dockerfiles join the go toolchain group",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["golang"],
+      "groupName": "go toolchain",
+      "minimumReleaseAge": "2 days"
+    },
+    {
       "description": "Indirect Go modules (for example golang.org/x/net via Kubernetes) are skipped by default; update them weekly in their own group so direct updates are not held back",
       "matchManagers": ["gomod"],
       "matchDepTypes": ["indirect"],

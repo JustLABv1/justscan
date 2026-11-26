@@ -46,11 +46,14 @@ jobs:
             backend_image:
               - 'services/backend/Dockerfile'
               - 'services/backend/docker-entrypoint.sh'
+              - 'services/backend/go.mod'
             cli_image:
               - 'services/cli/Dockerfile'
+              - 'services/cli/go.mod'
             combined_image:
               - 'Dockerfile'
               - 'docker-entrypoint.sh'
+              - 'services/backend/go.mod'
 
   frontend-compile:
     name: Frontend — Compile Check

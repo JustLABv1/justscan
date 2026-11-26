@@ -1,5 +1,5 @@
-# syntax=docker/dockerfile:1.28
-FROM golang:1.27.3-bookworm AS builder
+# syntax=docker/dockerfile:1.29
+FROM golang:1.27.4-bookworm AS builder
 LABEL org.opencontainers.image.source = "https://github.com/JustLabV1/JustScan"
 
 WORKDIR /app/backend
@@ -69,24 +69,26 @@ ENV BACKEND_SCANNER_ENABLE_TRIVY=false
 ENV BACKEND_SCANNER_ENABLE_GRYPE=false
 
 # Rebuild the pinned scanner release with patched transitive dependencies.
-FROM golang:1.27.3-bookworm AS trivy-bin
+FROM golang:1.27.4-bookworm AS trivy-bin
 ARG TRIVY_VERSION=v0.76.1
 RUN go mod download github.com/aquasecurity/trivy@${TRIVY_VERSION} \
     && cp -a /go/pkg/mod/github.com/aquasecurity/trivy@${TRIVY_VERSION} /src \
     && chmod -R u+w /src
 WORKDIR /src
 RUN go get github.com/go-jose/go-jose/v4@v4.1.6 oras.land/oras-go/v2@v2.6.4 \
+    github.com/containerd/containerd/v2@v2.4.2 golang.org/x/net@v0.62.0 \
     && CGO_ENABLED=0 go build -trimpath \
     -ldflags="-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=${TRIVY_VERSION#v}" \
     -o /usr/local/bin/trivy ./cmd/trivy
 
-FROM golang:1.27.3-bookworm AS grype-bin
+FROM golang:1.27.4-bookworm AS grype-bin
 ARG GRYPE_VERSION=v0.121.0
 RUN go mod download github.com/anchore/grype@${GRYPE_VERSION} \
     && cp -a /go/pkg/mod/github.com/anchore/grype@${GRYPE_VERSION} /src \
     && chmod -R u+w /src
 WORKDIR /src
 RUN go get github.com/go-jose/go-jose/v4@v4.1.6 \
+    github.com/containerd/containerd/v2@v2.4.2 golang.org/x/net@v0.62.0 \
     && CGO_ENABLED=0 go build -trimpath \
     -tags=containers_image_openpgp,exclude_graphdriver_btrfs \
     -ldflags="-s -w -X main.version=${GRYPE_VERSION#v}" -o /grype ./cmd/grype

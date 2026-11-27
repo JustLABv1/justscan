@@ -12,7 +12,7 @@ RUN go get github.com/go-jose/go-jose/v4@v4.1.6 oras.land/oras-go/v2@v2.6.4 \
     -o /usr/local/bin/trivy ./cmd/trivy
 
 # Stage 1: Build the frontend
-FROM node:26.12.1-alpine3.24 AS frontend-builder
+FROM node:26.13.1-alpine3.24 AS frontend-builder
 USER root
 WORKDIR /app/frontend
 
@@ -32,7 +32,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm run build
 
 # Stage 2: Build the documentation service
-FROM node:26.12.1-alpine3.24 AS docs-builder
+FROM node:26.13.1-alpine3.24 AS docs-builder
 USER root
 WORKDIR /app/docs
 
@@ -70,8 +70,10 @@ COPY --from=frontend-builder /usr/local/bin/node /usr/local/bin/node
 WORKDIR /app
 
 # Require the fixed curl release for CVE-2026-92392 (pulled in by Git).
-# Install necessary packages
+# Temporarily allow the fixed OpenSSL libraries from Alpine 3.22.
+# Remove the repository exception once Alpine 3.24 ships 3.5.9-r2 or newer.
 RUN apk add --upgrade --no-cache \
+    --repository "@openssl-fix https://dl-cdn.alpinelinux.org/alpine/v3.22/main" \
     ca-certificates \
     libstdc++ \
     libatomic \
@@ -80,8 +82,8 @@ RUN apk add --upgrade --no-cache \
     tini \
     postgresql-client \
     tzdata \
-    libcrypto3 \
-    libssl3
+    "libcrypto3@openssl-fix>=3.5.9-r2" \
+    "libssl3@openssl-fix>=3.5.9-r2"
 
 # Fail the build if the target architecture is missing a Node runtime library.
 RUN node --version

@@ -1,4 +1,4 @@
-FROM node:26.12.1-alpine3.24 AS builder
+FROM node:26.13.1-alpine3.24 AS builder
 
 USER root
 WORKDIR /app
@@ -13,7 +13,12 @@ RUN pnpm build
 
 # Keep package managers and build headers out of the runtime layers.
 FROM alpine:3.24 AS runner
-RUN apk add --no-cache ca-certificates libstdc++ libatomic \
+# Temporarily allow the fixed OpenSSL libraries from Alpine 3.22.
+# Remove the repository exception once Alpine 3.24 ships 3.5.9-r2 or newer.
+RUN apk add --upgrade --no-cache \
+    --repository "@openssl-fix https://dl-cdn.alpinelinux.org/alpine/v3.22/main" \
+    ca-certificates libstdc++ libatomic \
+    "libcrypto3@openssl-fix>=3.5.9-r2" "libssl3@openssl-fix>=3.5.9-r2" \
     && addgroup -g 1000 node \
     && adduser -D -u 1000 -G node node
 COPY --from=builder /usr/local/bin/node /usr/local/bin/node

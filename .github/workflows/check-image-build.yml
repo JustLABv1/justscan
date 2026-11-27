@@ -169,6 +169,7 @@ jobs:
           context: services/frontend
           file: services/frontend/Dockerfile
           pull: true
+          no-cache-filters: runner
           push: false
 
   docs-image-build:
@@ -187,6 +188,7 @@ jobs:
           context: services/docs
           file: services/docs/Dockerfile
           pull: true
+          no-cache-filters: runner
           push: false
 
   backend-image-build:

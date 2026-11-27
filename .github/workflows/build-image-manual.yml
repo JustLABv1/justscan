@@ -64,6 +64,7 @@ jobs:
           context: services/frontend
           file: services/frontend/Dockerfile
           pull: true
+          no-cache-filters: runner
           push: true
           tags: |
             ${{ env.IMAGE }}:frontend-${{ github.event.inputs.branch }}
@@ -78,6 +79,7 @@ jobs:
           context: services/docs
           file: services/docs/Dockerfile
           pull: true
+          no-cache-filters: runner
           push: true
           tags: |
             ${{ env.IMAGE }}:docs-${{ github.event.inputs.branch }}
